@@ -163,11 +163,18 @@ values (`rockforms.ts` builds the forms, the stone material paints them).
   a tunnel, the square, a leap's landing) is a groomed lane, a step whiter and smoother than the powder beside it; a
   wild one (a bowl, a chute, a gully, a tree run, a ravine, the terraces, a fork's channels) and every bank are
   powder; ice is the sim's. Never a long straight line down the fall line, nothing regular across it: a groomed
-  lane's own corduroy and painted powder pillows were tried and read as speed lines, scanlines and smudges, so they
-  are held off (`CORDUROY_RIB`, `PILLOW_FACE`, `PILLOW_HOLLOW` in the snow's GLSL) until relief comes from geometry
-  before paint. A leap's landing keeps its corduroy (above).
+  lane's own corduroy and painted powder pillows were tried and read as speed lines, scanlines and smudges, so the
+  corduroy stays held off (`CORDUROY_RIB`) and the pillows are relief the light draws (below). A leap's landing keeps
+  its corduroy, a lighter step, and Low its fine ribs off.
+- **The wind's relief (round 8).** Powder lies in pillows a few metres across, 30 degrees off the fall line, and
+  round 7's sastrugi lie in fields, broken into lengths. Both are forms the light draws, not paint: each turns toward
+  the key light or away from it, casts its own shadow by a low light on the key's bearing, and takes a sheen where a
+  flank mirrors the sun. They are whole on the banks, gentle on the floor a sled rides and under the lens (where
+  motion would smear them into streaks), and a whisper on a groomed lane; the sastrugi go in a cast shadow, and so
+  does the relief's own shadow wherever the ground is turned from the light. A face the light stands well over keeps
+  its light under them. Low keeps round 7's painted slab and no relief.
 - **Glints are facets.** A glint flashes only while a crystal's facet mirrors the light to the eye, so the glitter
-  turns with the lens and gathers toward the sun, in the light's own colour.
+  turns with the lens and gathers toward the sun (harder by day, round 8), in the light's own colour.
 - **The runners know the surface:** a trench with a berm of thrown snow either side in powder, a shallower cut in a
   groomed lane, a frost scratch on ice; a ghost's is the same, fainter. A perfect landing throws a ring of powder
   flat over the snow and leaves a veil over the crater, more snow than any fall; thrown snow is never darker than
@@ -328,8 +335,16 @@ stays clear of the ghosts' mint on every mountain at every stop (`tests/palette.
 A mountain may have a second hour, opened by an Almanac page and picked on the title (`ALT_HOURS`, round 8): Pinecrest
 at Dusk runs from the day's gold through the dusk by 1900 m to the first night by 3300 m, a deep blue over a rose
 band with stars and the town's lamps the light at the line; Sakura in the Evening is a low warm sun through the
-orchards, the blue hour over the Blossom Leap and Temple Town's paper lanterns under a night sky. An hour is a
-palette, not a mode, so every tier draws it, Low through its poster.
+orchards, the blue hour over the Blossom Leap and Temple Town's paper lanterns under a night sky. Frostfang at Noon
+is the glacier's glare: a low polar sun in a ring of sun dogs, diamond dust in the air, a deep cobalt sky over a
+white-hot horizon the Fang stands dark against, white snow with long hard blue shadows; a silver afternoon over the
+fields and the glare ahead over the Fang out of the cavern. Ember Peak at Night is the deck lit from below: no coin,
+a dark ceiling red low toward the fire, the cone running with lava, cold lilac snow with a plum-teal shade, and the
+lava, the lamps and the forges the orange. Lanternfall at First Light is the end of the night: the sun under the far
+range and the lanterns burning low at the Crown, a rose-violet underside to the deck, the sun's rim rose over
+Firstlight's street and a violet-blue morning at the line; the snow lilac and silver all the way. An hour is a
+palette, not a mode, so every tier draws it, Low through its poster. The title offers the day or the hour by its name
+under Ride, beside the mirror, each with a swatch of its sky; a ghost rides the player's hour with them.
 
 | Biome | Props |
 | --- | --- |
@@ -402,8 +417,10 @@ palette, not a mode, so every tier draws it, Low through its poster.
   edge, with a rank of tall poles behind them for depth. The lens breathes: it opens with a surge, punches out with a
   dash and holds while it runs, and draws in a little as the run slows. On hard snow the runners chatter, through the
   sled and the lens, hardest on ice and gone in powder.
-- **Spirit Flow.** The flow level (0 to 6) changes the picture's state as it climbs: the colour richer from level 1, a
-  flame off the scarf from 2 (the rider's vermillion burning into the lantern's marigold, never mint), wind lines in
+- **Spirit Flow.** The flow level (0 to 6) changes the picture's state as it climbs: the colour richer from level 1,
+  the scarf alight from 2 (the cloth itself burning from the rider's vermillion at the knot to marigold at the tip,
+  soft tongues streaming along it in a flame's orange that stops short of the fuel's marigold, no outline, thinner
+  while a flip hides the scarf; never mint, never over the body), wind lines in
   the air from 3, sparks off the flame and the ghosts at their brightest at 5 and 6. A level gained is a breath in (the
   lens draws in and opens out, the colour lifts, the flame flares, a ring of sparks); a level lost a gutter out (the
   lens sags, the colour drains, the flame flickers and drops embers). Under the run a bed of air rises a step a level.
@@ -425,7 +442,7 @@ Round 7 adds an Ultra tier and a second table (the first stands for what it list
 
 | Effect | Ultra | High | Medium | Low |
 | --- | --- | --- | --- | --- |
-| Anti-aliasing | 4x MSAA and the edge walk | 2x MSAA and the edge walk | the edge walk | the canvas's own MSAA |
+| Anti-aliasing (round 8) | rebuilt from the frames before (the scene at 2x MSAA), the rider drawn again at 4x | the same, the rider at 2x | the edge walk | the canvas's own MSAA |
 | Ambient occlusion | 3 slices by 3 steps, with contact shadows | 1 slice by 2 steps | off | off |
 | Shafts cut by depth | 12 taps at half the frame | 8 taps at half | 6 taps at a quarter | off |
 | Shadow map | 4096 over 44 m | 2048 over 34 m | 1024 over 26 m | none |
@@ -492,6 +509,21 @@ Round 7:
   the world is built in mirror writing to meet it (the boards' letters, the medallions' glyphs) and every label is laid
   out as the player sees the screen, so nothing reads backwards and nothing else changes. The title is never mirrored:
   its key art is composed for the logo's side.
+- **Photo mode is the picture and one bar (round 8).** From pause (Photo, beside Home) or the results (a camera beside
+  Home) the run holds exactly where it stood and the lens is the player's: it turns round the rider's chest from 1.3
+  to 32 m, its pivot carried up to 12 m off the rider, and never stands in the snow, a rock or a tree. The HUD, the
+  cards and the riders' tags leave the picture, and so does what belongs to the chase lens at speed (the streaks, the
+  punch and flash, the corners closing, Spirit Flow's pulse); the grade, the light and the moment stay, and there is
+  no filter. The bar is ink at the foot of the screen (the whole width on a phone, in three rows): Done, the lens as a
+  focal length and the tilt, the grid of thirds, focus on the rider (High and Ultra), back to the first frame, With
+  Run Card and Save Photo (vermillion, the one primary). It and the help step back while the view moves.
+- **A photo is the canvas at its size, as a PNG.** With Run Card adds the run's card in the lower left in the game's
+  own type: "GHOST SLED" small, the mountain in italic 900, the time and the place (gold-white for a win), the rider's
+  name in vermillion, on ink at 86% with an 18 px corner. Nothing is shared or sent. On a mirror mountain the photo is
+  turned over with the picture.
+- **A sticker held is a frame from its run** where one was kept: the moment as the player saw it (a set piece at its
+  height, a legend in reach, a trick at its grab or the top of the flight, a charm's arch, the finish's swing), to the
+  card's edge, the name on the same ink band. The painted card in its mountain's sky stays for a sticker with no frame.
 - **The Long Night's beat between legs** is one ink panel low at the reading edge over the finish town: the leg and its
   mountain in the italic of speed words, the night deepening, then what rides in (the lantern in marigold, the get-up
   pips, the charms by name) and a bar draining to the next leg. It is never a menu: it goes on by itself.
@@ -827,7 +859,8 @@ mint: the aurora that comes down is violet and rose with an ice-white hem. Each 
 | The Tall Lamplighter (Lanternfall) | A robed figure 9.5 m tall with a faceless cowl walks the lamp grove 40 m ahead, his pole out over the lane; the lane is his lantern's light on the snow |
 
 **The climax.** From the last lip the way to the line takes light ahead of the sled, in a wave that reaches the line
-first: strings of five lanterns over the run every 34 m. Beams stand over the line and shells break over it as the
+first: strings of five lanterns over the run every 34 m, the last of them 40 m short of the line so the FINISH board
+reads clear behind them (round 8). Beams stand over the line and shells break over it as the
 sled arrives. Everything is keyed to the sled's place and speed, never the clock.
 
 ## 15. Round 7: the direction, mountain by mountain
@@ -1022,11 +1055,13 @@ stays the dark shape in the street.
   drops to an ember shedding sparks while it gutters.
 - **Low** is a poster of it: one cloud sheet, lanterns as flat squares, flames as flat painted shapes with one
   paler value, no canal, the lamps' light as painted pools.
-- **As built in round 8.** The great lantern hangs over the square 35 m past the line; as the finish lens swings round
+- **As built in round 8.** The great lantern burns banked low until it is lit (dark, it hung behind the FINISH board on
+  the approach as a violet mass), and hangs over the square 35 m past the line; as the finish lens swings round
   to the rider's front the lamplighters walk it along its yoke to the side the lens looks back across, so in the
   results it burns over the rider's head (shafts on Medium and High). The night itself stays round 7's: a darker road
-  with stronger pools was read three times, against this section, as a flat violet with a gold floor. A next attempt
-  keeps the snow's own lilac in a pool and lifts its value toward silver, marigold only at the heart and the lamp.
+  with stronger pools was read three times, against this section, as a flat violet with a gold floor. A lamp's pool
+  keeps the snow's own lilac and lifts its value toward silver, the lamp's marigold only at its heart; Low paints it in
+  two soft steps of silver and a small warm heart.
 
 ### Tiers, designed
 
@@ -1068,8 +1103,10 @@ stays the dark shape in the street.
 - **Edges that look made.** Every kit piece catches its arrises with a chamfer on Medium and High; on High and
   Ultra a convex edge near the lens catches a hairline of the key light and an inner crease darkens, never on the
   rider and never a white outline. Lettering is cut solid, never dotted.
-- **Anti-aliasing is round 7's.** A temporal reconstruction was built and is held back (`?taa`): it steadied the
-  world but softened the rider, and the hero comes first (DECISIONS 363).
+- **Thin things hold still in motion (round 8).** High and Ultra rebuild each frame from the ones before it; the hero
+  is drawn crisp over it at the tier's MSAA, never from its history, and what moves on its own (lifts, birds, figures,
+  flags) is drawn after the rebuild, so nothing trails. (After round 7 the rebuild was held back because it softened
+  the rider, DECISIONS 363; round 8 finished it, 379.)
 
 ## 16. Round 8: the look and the hook
 
