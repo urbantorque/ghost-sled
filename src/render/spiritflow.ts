@@ -345,13 +345,16 @@ export class SpiritFlow {
   private flame: Points;
   private wind: Mesh;
   private sparks: Points;
-  // The flame's tongues, held in the rider's own frame: an offset from the scarf's knot, the way it rises (m/s), its age,
-  // life and size. Slot 0 of the drawn buffer is the glow on the tip.
+  // The flame's tongues: where along the scarf each was born (u, 0 at the knot to 1 at the tip), how far it has risen
+  // off that point (m), the way it rises (m/s), its age, life and size. Slot 0 of the drawn buffer is the glow on the
+  // tip. (Round 8, the flow pass: held as an offset from the knot, a tongue stayed where the scarf had been and read as
+  // a campfire on the snow beside the sled; riding its own point of the scarf, the scarf itself burns.)
   private fp = new Float32Array(FLAME_MAX.high * 3);
   private fv = new Float32Array(FLAME_MAX.high * 3);
   private fa = new Float32Array(FLAME_MAX.high);
   private fl = new Float32Array(FLAME_MAX.high);
   private fs = new Float32Array(FLAME_MAX.high);
+  private fu = new Float32Array(FLAME_MAX.high);
   private fn = 0;
   private fAcc = 0;
   private winds: Wind[] = [];
@@ -485,6 +488,7 @@ export class SpiritFlow {
           this.fa[i] = this.fa[j];
           this.fl[i] = this.fl[j];
           this.fs[i] = this.fs[j];
+          this.fu[i] = this.fu[j];
         }
         continue;
       }
@@ -498,24 +502,25 @@ export class SpiritFlow {
       const rate = FLAME_RATE[this.tier] * (this.gutter > 0 && L.trail < 0.05 ? 0.35 : 0.3 + 0.7 * L.trail) * (1 + 0.8 * this.flare);
       this.fAcc += rate * dt;
       const life0 = trailLife(L);
-      const size0 = (0.11 + 0.06 * L.trail + 0.04 * L.top) * (1 + 0.5 * this.flare) * (this.tier === 'low' ? 1.7 : 1);
+      const size0 = (0.15 + 0.07 * L.trail + 0.05 * L.top) * (1 + 0.5 * this.flare) * (this.tier === 'low' ? 1.6 : 1);
       while (this.fAcc >= 1 && this.fn < cap) {
         this.fAcc -= 1;
         const k = this.fn++;
-        // Mostly off the tip, some along the scarf's last third, so the tip itself reads as alight.
+        // Along the whole tail, more toward the tip, so the scarf reads as alight along its length and not a fire beside it.
         const r = Math.random();
-        const sp = o.scarfAt(1 - 0.34 * r * r, tmpA);
-        this.fp[k * 3] = sp.x - o.knot.x + (Math.random() - 0.5) * 0.04;
-        this.fp[k * 3 + 1] = sp.y - o.knot.y + (Math.random() - 0.5) * 0.04;
-        this.fp[k * 3 + 2] = sp.z - o.knot.z + (Math.random() - 0.5) * 0.04;
+        this.fu[k] = 1 - 0.7 * r * r;
+        this.fp[k * 3] = (Math.random() - 0.5) * 0.04;
+        this.fp[k * 3 + 1] = (Math.random() - 0.5) * 0.04;
+        this.fp[k * 3 + 2] = (Math.random() - 0.5) * 0.04;
         // Up, swaying a little either side; never back toward the lens (it would read as hanging under the scarf).
         const sway = (Math.random() - 0.5) * 0.7;
         this.fv[k * 3] = -o.dir.z * sway;
-        this.fv[k * 3 + 1] = 0.9 + Math.random() * 1.1 + 0.6 * L.top;
+        this.fv[k * 3 + 1] = 1.2 + Math.random() * 1.3 + 0.6 * L.top;
         this.fv[k * 3 + 2] = o.dir.x * sway;
         this.fa[k] = 0;
         this.fl[k] = life0 * (0.7 + 0.6 * Math.random()) * (this.gutter > 0 && L.trail < 0.05 ? 0.6 : 1);
-        this.fs[k] = size0 * (0.75 + 0.5 * Math.random());
+        // (Smaller toward the knot: the flame grows toward the tip.)
+        this.fs[k] = size0 * (0.75 + 0.5 * Math.random()) * (0.55 + 0.45 * this.fu[k]);
       }
       if (this.fAcc > 1) this.fAcc = 1;
     } else this.fAcc = 0;
@@ -544,9 +549,10 @@ export class SpiritFlow {
     ra[2] = 0;
     for (let k = 0; k < this.fn; k++) {
       const v = k + 1;
-      pa[v * 3] = this.fp[k * 3] + o.knot.x;
-      pa[v * 3 + 1] = this.fp[k * 3 + 1] + o.knot.y;
-      pa[v * 3 + 2] = this.fp[k * 3 + 2] + o.knot.z;
+      const at = o.scarfAt(this.fu[k], tmpB);
+      pa[v * 3] = this.fp[k * 3] + at.x;
+      pa[v * 3 + 1] = this.fp[k * 3 + 1] + at.y;
+      pa[v * 3 + 2] = this.fp[k * 3 + 2] + at.z;
       const t = this.fa[k] / this.fl[k];
       // Each tongue grows a moment, then narrows to nothing as it climbs; a flicker in its size (never under reduced motion).
       const jit = o.reduced ? 1 : 0.85 + 0.3 * Math.abs(Math.sin(o.time * 37 + k * 1.7));
@@ -701,7 +707,7 @@ export class SpiritFlow {
         this.sAcc -= 1;
         // Off a point along the ribbon's first half, keeping less of the rider's speed so they fall behind past the lens.
         const j = Math.floor(Math.random() * this.fn);
-        tmpA.set(this.fp[j * 3], this.fp[j * 3 + 1], this.fp[j * 3 + 2]).add(o.knot);
+        tmpA.set(this.fp[j * 3], this.fp[j * 3 + 1], this.fp[j * 3 + 2]).add(o.scarfAt(this.fu[j], tmpC));
         const ember = this.gutter > 0 && Math.random() < 0.7;
         const keep = ember ? 0.7 : 0.55 + Math.random() * 0.2;
         this.spark(tmpA, o.vel.x * keep + (Math.random() - 0.5) * 2, o.vel.y * keep + (ember ? -0.5 : 0.4 + Math.random()), o.vel.z * keep + (Math.random() - 0.5) * 2, ember ? 0.45 : 0.4 + Math.random() * 0.35, ember ? 0 : 1);
