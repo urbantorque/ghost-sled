@@ -74,14 +74,20 @@ async (page) => {
       return { more: true, z: zNow() };
     };
     // Exact steps until the sled reaches z (at most n of them), then the tick it is on.
+    // (Round 8's review lanes: the frame's cost, draw calls and triangles summed over every pass of the last frame
+    // drawn, as frames.js reports it.)
+    const gl = window.__gs.world && window.__gs.world.renderer;
+    if (gl && gl.info) gl.info.autoReset = false;
     window.__stTo = (z, n) => {
       for (let i = 0; i < n; i++) {
         const now = zNow();
         if (now < 0 || now >= z) break;
+        if (gl && gl.info) gl.info.reset();
         vc.step(1000 / 60);
       }
       const r = window.__gs.run;
-      return { z: zNow(), tick: r ? r.sim.tick : -1 };
+      const info = gl && gl.info ? { calls: gl.info.render.calls, tris: gl.info.render.triangles } : {};
+      return { z: zNow(), tick: r ? r.sim.tick : -1, ...info };
     };
   });
   const shots = [];
@@ -94,7 +100,7 @@ async (page) => {
     if (st.z < 0) break;
     const name = `m${c.m}-z${String(z).padStart(4, '0')}.png`;
     await page.screenshot({ path: `${c.out}${name}` });
-    shots.push({ z, at: Math.round(st.z * 10) / 10, tick: st.tick });
+    shots.push({ z, at: Math.round(st.z * 10) / 10, tick: st.tick, calls: st.calls, tris: st.tris });
   }
   await page.goto('about:blank');
   return JSON.stringify({ m: c.m, tier: c.tier, demo: c.demo, shots, errors });
