@@ -1289,7 +1289,10 @@ export function makeSnowMaterial(): ShaderMaterial {
             vec3 ng = normalize(vNormalW);
             vec2 toL = normalize(uSunDir.xz + vec2(0.0001, 0.0));
             float sinT = dot(ng, uSunDir);
-            float lift = clamp(sinT / sqrt(max(1.0 - sinT * sinT, 0.01)), 0.18, RELIEF_TAN);
+            // (A face the light stands well over keeps most of it: held at the low slope there, a firelit bank on Ember
+            // went lavender with the forms' shadows, the motion critic.)
+            float tanT = sinT / sqrt(max(1.0 - sinT * sinT, 0.01));
+            float lift = clamp(tanT, 0.18, max(RELIEF_TAN, tanT * 0.6));
             relSh = mix(1.0, reliefShadow(p, h0, ap, as, toL, lift, rgP, rgS, uSnowFx > 0.0), (1.0 - smoothstep(40.0, 90.0, dist)) * smoothstep(0.08, 0.22, sinT) * (1.0 - 0.5 * floorK));
             relC = smoothstep(0.7, 0.9, rq.r) * rp.a * as / max(RELIEF_SASTRUGI, 0.001);
             relL = (1.0 - smoothstep(0.05, 0.4, rq.r)) * rp.a * as / max(RELIEF_SASTRUGI, 0.001);
@@ -1534,7 +1537,9 @@ export function makeSnowMaterial(): ShaderMaterial {
           vec3 coolG = mix(vec3(0.9), uSnowShade / max(uSnowLit, vec3(0.05)), 0.38);
           float fineG = smoothstep(0.26, 0.44, abs(fract(vWorldPos.z / 0.8) - 0.5)) * (1.0 - smoothstep(0.03, 0.09, fwz));
           float broadG = smoothstep(0.16, 0.34, abs(fract(vWorldPos.z / 5.5 + 0.05 * sin(vWorldPos.x * 0.21)) - 0.5));
-          col = mix(col, col * coolG, gk * (0.14 + 0.2 * fineG + 0.3 * broadG * (1.0 - smoothstep(0.5, 1.2, fwz))));
+          // (Round 8, the flow lane's critics: the broad swaths read as dunes and stair treads, starkest on Low. They are a
+          // lighter step now, and Low keeps the fine ribs off.)
+          col = mix(col, col * coolG, gk * (0.14 + 0.2 * fineG * mix(0.0, 1.0, uSnowFx) + 0.12 * broadG * (1.0 - smoothstep(0.5, 1.2, fwz))));
         }
         col += uHemi * 0.07 * (0.5 + 0.5 * n.y);
         // Terrain gets almost no rim: the ground is always seen at grazing angles, where a rim term
