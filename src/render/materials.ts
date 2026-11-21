@@ -4,6 +4,7 @@ import { FAR_GLSL, farUniforms } from './farshadow';
 import { localUniforms, setLocalLightTier } from './lights';
 import { Palette, setPoster, tierLook } from './palette';
 import { ICE_MIRROR_GLSL, iceMirror } from './postfx/reflect';
+import { relief, startReliefBake } from './snowrelief';
 
 // One shared stylized lighting model for every surface (ART.md section 2). All materials share the
 // same uniform objects by reference, so a mood change updates the whole world at once.
@@ -734,44 +735,25 @@ function lightsUniforms() {
 }
 
 /** Round 8, snow as the hero material (the snow lane, V1): the snow's own near-lens surface, in the gouache's
- *  three values (ART.md 15 rule 3: painted detail, never noise). Powder lies in soft pillows with cool hollows
- *  and warm crests; a groomed lane is corduroy in swaths; the grain under the lens is a stipple of small dabs,
+ *  three values (ART.md 15 rule 3: painted detail, never noise). Powder lies in pillows the wind laid and the
+ *  sastrugi it carved, forms the key light draws with their own shadows (the second attempt, snowrelief.ts); a
+ *  groomed lane is a smoother, whiter lane in swaths; the grain under the lens is a stipple of small dabs,
  *  each tilted its own way; a glint is a facet whose mirror of the light turns to the eye, so glints move with
  *  the view and gather toward the sun; light bleeds cool through the snow at a shadow's edge. Needs hash13 and
  *  uSunDir (LIGHT_GLSL). */
 export const SNOW_SURF_GLSL = /* glsl */ `
   // (Off for now, the main lane's call after the stills' critics: a groomed lane's corduroy read as speed lines
   // down the fall line and as scanlines across it, and the powder's painted faces and hollows as smudges and
-  // camouflage on a tall phone frame. The surfaces, the pillows' warm crests and relief in the light stay; these
-  // turn back on here. notes/r8-snow.md, "What a second attempt should try".)
+  // camouflage on a tall phone frame; the corduroy turns back on here. The painted pillows are gone: the second
+  // attempt makes them forms the light draws, notes/r8-snow2.md.)
   const float CORDUROY_RIB = 0.0;
-  const float PILLOW_FACE = 0.0;
-  const float PILLOW_HOLLOW = 0.0;
-  /** Value noise with its gradient (value, d/dx, d/dy) in one pass, on vnoise's own lattice. */
-  vec3 vnoiseD(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    vec2 du = 6.0 * f * (1.0 - f);
-    float a = hash13(vec3(i, 0.0));
-    float b = hash13(vec3(i + vec2(1.0, 0.0), 0.0));
-    float c = hash13(vec3(i + vec2(0.0, 1.0), 0.0));
-    float d = hash13(vec3(i + vec2(1.0, 1.0), 0.0));
-    float k = a - b - c + d;
-    return vec3(a + (b - a) * u.x + (c - a) * u.y + k * u.x * u.y, du * (vec2(b - a, c - a) + k * u.yx));
-  }
-  /** Powder laid by the wind in soft pillows, a metre or two across the wind and two or three times that along
-   *  it, lying as the ripples do (about 30 degrees off the fall line, so never converging like speed lines): x
-   *  how high (0 a hollow, 1 a crest), yz its slope per metre of world x and z. */
-  vec3 snowPillows(vec2 p) {
-    const vec2 RA = vec2(0.866, 0.5);
-    const vec2 RB = vec2(-0.5, 0.866);
-    vec2 q = vec2(dot(p, RA), dot(p, RB));
-    vec3 a = vnoiseD(q * vec2(0.62, 0.24) + vec2(3.7, 1.3));
-    vec3 b = vnoiseD(q * vec2(1.45, 0.6) + vec2(11.3, 5.9));
-    vec2 g = a.yz * vec2(0.62, 0.24) * 0.7 + b.yz * vec2(1.45, 0.6) * 0.3;
-    return vec3(a.x * 0.7 + b.x * 0.3, RA * g.x + RB * g.y);
-  }
+  /** Round 8, second attempt (snowrelief.ts): the relief's height in metres, powder's pillows and the sastrugi. */
+  // (uReliefK: x the pillows' and y the sastrugi's height, z the light the forms turn to and from, w the sheen on them.)
+  #define RELIEF_PILLOW uReliefK.x
+  #define RELIEF_SASTRUGI uReliefK.y
+  /** The slope of the light the relief is drawn by: the key's own bearing, never higher than about 18 degrees, as a
+   *  painter lowers the light to model a form (under a high noon sun a pillow was barely there). */
+  const float RELIEF_TAN = 0.32;
   /** A groomed lane: the groomer's swaths 4.3 m wide down the lane, each a soft value step of its own (never an
    *  edge: long straight lines down the fall line read as speed lines, ART.md 4), and corduroy ribs 30 cm apart
    *  lying across the fall line, as on a leap's landing. across is metres across the lane (the corridor's own
@@ -806,6 +788,39 @@ export const SNOW_SURF_GLSL = /* glsl */ `
   float facetMirror(vec3 n, vec2 tilt, vec3 v) {
     return max(dot(reflect(-uSunDir, normalize(n + vec3(tilt.x, 0.0, tilt.y))), v), 0.0);
   }
+  /** Round 8, second attempt (the snow2 lane): the wind's relief as forms the light draws (snowrelief.ts). Two
+   *  baked tiles, world-anchored: powder's pillows (RGB its height and slope, A where sastrugi lie) and the
+   *  sastrugi (RGB). The relief's height at p (world xz) with the pillows at ap metres and the sastrugi at as,
+   *  read with the base point's own derivatives (gp, gs: the tiles' uv a pixel either way). */
+  const vec2 R_PU = vec2(0.866, 0.5);
+  const vec2 R_PV = vec2(-0.5, 0.866);
+  const vec2 R_SU = vec2(0.42, 0.91);
+  const vec2 R_SV = vec2(-0.91, 0.42);
+  vec2 reliefUvP(vec2 p) { return vec2(dot(p, R_PU), dot(p, R_PV)) * (1.0 / 56.0); }
+  vec2 reliefUvS(vec2 p) { return vec2(dot(p, R_SU), dot(p, R_SV)) * (1.0 / 14.0); }
+  float reliefH(vec2 p, float ap, float as, vec4 gp, vec4 gs) {
+    vec4 a = textureGrad(uReliefP, reliefUvP(p), gp.xy, gp.zw);
+    float s = as > 0.0 ? textureGrad(uReliefS, reliefUvS(p), gs.xy, gs.zw).r * a.a : 0.0;
+    return ap * a.r + as * s;
+  }
+  /** How much of the key light reaches p past the relief upwind of it (1 all, 0 none): the height is marched toward
+   *  the light a few steps, and the light must clear every one at the light's height over the ground's own rise
+   *  (lift: the light's slope less the ground's toward it). Crisp at the form, soft further out, long under a low
+   *  sun. Low takes two steps over the pillows alone. */
+  float reliefShadow(vec2 p, float h0, float ap, float as, vec2 toL, float lift, vec4 gp, vec4 gs, bool fine) {
+    float m = 1.0;
+    if (fine) {
+      m = min(m, lift - (reliefH(p + toL * 0.3, ap, as, gp, gs) - h0) / 0.3);
+      m = min(m, lift - (reliefH(p + toL * 0.75, ap, as, gp, gs) - h0) / 0.75);
+      m = min(m, lift - (reliefH(p + toL * 1.35, ap, as, gp, gs) - h0) / 1.35);
+      m = min(m, lift - (reliefH(p + toL * 2.2, ap, as, gp, gs) - h0) / 2.2);
+      m = min(m, lift - (reliefH(p + toL * 3.4, ap, as, gp, gs) - h0) / 3.4);
+    } else {
+      m = min(m, lift - (reliefH(p + toL * 0.7, ap, 0.0, gp, gs) - h0) / 0.7);
+      m = min(m, lift - (reliefH(p + toL * 1.8, ap, 0.0, gp, gs) - h0) / 1.8);
+    }
+    return smoothstep(-0.05, 0.05, m);
+  }
   /** The cool light that bleeds through snow at a shadow's edge: the shade's own hue, richer, at about the lit
    *  snow's brightness (on Ember its plum, on Sakura its lavender). */
   vec3 snowBleed(vec3 lit, vec3 shade) {
@@ -816,11 +831,13 @@ export const SNOW_SURF_GLSL = /* glsl */ `
 `;
 
 export function makeSnowMaterial(): ShaderMaterial {
+  // (Round 8, second attempt: the wind's relief tiles, baked once on idle after the first frame. snowrelief.ts.)
+  startReliefBake(() => shared.uSnowFx.value > 0);
   return new ShaderMaterial({
     lights: true,
     // (Round 8, the light lane: the lamps' air, LIGHT_GLSL fogged. The snow already reads the local lights.)
     defines: { LAMP_AIR: 1 },
-    uniforms: { ...lightsUniforms(), ...shared, ...bands, ...rock, ...lake, ...iceMirror },
+    uniforms: { ...lightsUniforms(), ...shared, ...bands, ...rock, ...lake, ...iceMirror, ...relief },
     vertexShader: /* glsl */ `
       ${SHADOW_VERT_PARS}
       attribute float aEdge;
@@ -899,6 +916,10 @@ export function makeSnowMaterial(): ShaderMaterial {
       /** Terrain (aGroom, round 8): how groomed the corridor's lane is here (snowsurf.ts). */
       varying float vGroom;
       uniform float uSnowFx;
+      uniform sampler2D uReliefP;
+      uniform sampler2D uReliefS;
+      uniform vec4 uRelief;
+      uniform vec4 uReliefK;
       ${POSTER_GLSL}
       /** A distance band across the corridor at three.js z0 (centre x0, half-width hw), halfD metres
        *  deep each way: 1 on it, feathering out over its last metre and a half at the banks. Never
@@ -932,14 +953,7 @@ export function makeSnowMaterial(): ShaderMaterial {
         vec2 q = vec2(p.x * 0.55, p.y * 0.22);
         return vnoise(q) * 0.65 + vnoise(q * 2.7 + 13.1) * 0.35;
       }
-      /** Wind-carved sastrugi on the banks: a sawtooth across the wind (a long gentle windward rise and
-       *  a short steep lee drop under a crisp crest), the crests wandering. 0..1 at p (metres). */
-      float sastrugi(vec2 p) {
-        const vec2 W = vec2(0.42, 0.91);
-        vec2 sp = vec2(dot(p, W), dot(p, vec2(-W.y, W.x)));
-        float s = fract(sp.x * 0.62 + vnoise(sp * vec2(0.09, 0.22)) * 2.4 + vnoise(sp * vec2(0.4, 0.9) + 3.0) * 0.25);
-        return smoothstep(0.0, 0.84, s) * (1.0 - smoothstep(0.84, 1.0, s));
-      }
+      // (Round 7's sastrugi are baked now, with round 8's pillows: snowrelief.ts sastrugiHeight.)
       ${SNOW_SURF_GLSL}
       /** Old sled tracks down the corridor's packed middle lane: pairs of faint runner grooves that
        *  wander a little and come and go. lat is metres from the centreline, z the three.js z, w the
@@ -1139,6 +1153,9 @@ export function makeSnowMaterial(): ShaderMaterial {
         shadow = posterShadow(shadow);
         vec3 dpx = dFdx(vWorldPos);
         vec3 dpy = dFdy(vWorldPos);
+        // (The relief tiles' uv a pixel either way, taken here outside any branch: snowrelief.ts.)
+        vec4 rgP = vec4(reliefUvP(dpx.xz), reliefUvP(dpy.xz));
+        vec4 rgS = vec4(reliefUvS(dpx.xz), reliefUvS(dpy.xz));
         float dist = length(cameraPosition - vWorldPos);
         // Metres of snow one pixel spans (taken here, outside any branch, where derivatives are valid).
         float footprint = length(fwidth(vWorldPos.xz));
@@ -1181,23 +1198,19 @@ export function makeSnowMaterial(): ShaderMaterial {
         float groomK = vGroom * (1.0 - smoothstep(-2.2, -0.4, vEdge)) * (1.0 - ice) * (1.0 - bare);
         float powderK = (1.0 - groomK) * (1.0 - ice) * (1.0 - bare) * (1.0 - smoothstep(0.85, 1.0, vPaint.z));
         packed *= 1.0 - groomK;
-        // The pillows' height and slope, the grain's dab and the swaths', kept for the light below.
-        vec3 pil = vec3(0.5, 0.0, 0.0);
-        float pilK = 0.0;
+        // The grain's dab, kept for the light below.
         vec4 grain = vec4(0.0);
         float grainK = 0.0;
-        // Sastrugi on the banks: wind-carved ridges with crisp crests, in patches. Medium and High.
-        float sastC = 0.0;
-        float sastL = 0.0;
-        // (Round 7: they reach in across the run too, fainter, so the snow under the lens is carved snow.)
-        float bankS = mix(0.5, 1.0, smoothstep(-1.0, 6.0, vEdge)) * (1.0 - smoothstep(30.0, 70.0, dist)) * (1.0 - smoothstep(0.2, 0.5, footprint)) * uSnowFx * (1.0 - ice) * (1.0 - 0.8 * packed) * (1.0 - 0.85 * groomK);
-        // Round 7, wind slab: broad carved drifts some seven metres from crest to crest, lying across the
-        // wind like the sastrugi, in fields. A long windward rise, a crest that takes the light, a short
-        // lee face in the shade's blue. Painted relief in three values: it gives the near and the middle
-        // snow a lie and a grain to pass at speed, and stays too soft and too cool to read as a hazard.
-        float slabC = 0.0;
-        float slabL = 0.0;
-        float slabK = (1.0 - smoothstep(60.0, 150.0, dist)) * (1.0 - smoothstep(0.5, 1.4, footprint)) * (1.0 - ice) * (1.0 - bare) * (1.0 - 0.75 * packed) * (1.0 - 0.7 * groomK);
+        // Round 8, second attempt: the wind's relief (snowrelief.ts), which replaces round 7's painted slab and
+        // sastrugi and the first attempt's painted pillows with forms the light draws. relSh: how much of the key
+        // light its own forms let through; relC and relL a sastrugi's crest and the crease under its lee; relTop
+        // a pillow's crown.
+        float relSh = 1.0;
+        float relC = 0.0;
+        float relL = 0.0;
+        float relTop = 0.0;
+        // (The relief's slope, world xz.)
+        vec2 relG = vec2(0.0);
         if (detail > 0.0) {
           vec2 p = vWorldPos.xz;
           float h0 = dunes(p);
@@ -1205,18 +1218,38 @@ export function makeSnowMaterial(): ShaderMaterial {
           float hz = dunes(p + vec2(0.0, 0.35));
           // The broad dunes lie gentler under the lens, where at full tilt they rolled like sand.
           vec3 pert = vec3(h0 - hx, 0.0, h0 - hz) * 1.05 * detail * mix(0.5, 1.0, smoothstep(5.0, 24.0, dist)) * (1.0 - 0.6 * groomK);
-          // Round 8: powder's pillows, a hand deep, out to where they would be a few pixels across. Their slope
-          // tilts the normal (so the key light and the sheen break over them) and their height paints the value
-          // below (so they read in a flat noon light too).
-          pilK = powderK * (1.0 - smoothstep(0.3, 0.8, fwz)) * (1.0 - smoothstep(25.0, 45.0, dist)) * (1.0 - smoothstep(0.5, 3.5, vEdge));
-          if (pilK > 0.0) {
-            // (Low paints the pillows' value from their broad octave alone and leaves the normal be.)
-            if (uSnowFx > 0.0) {
-              pil = snowPillows(p);
-              pert.xz -= pil.yz * 0.45 * pilK;
-            } else {
-              pil = vnoiseD(vec2(dot(p, vec2(0.866, 0.5)), dot(p, vec2(-0.5, 0.866))) * vec2(0.62, 0.24) + vec2(3.7, 1.3));
-            }
+          // Round 8, second attempt: the wind's relief, forms the light draws (snowrelief.ts). Powder's pillows lie
+          // whole on every bank and in the wild places, gentler on the floor a sled rides and a whisper on a
+          // groomed lane; the sastrugi in their fields, off a groomed lane's floor. Never on ice, bare ground, a
+          // kicker or a leap's landing (its corduroy is its own). Low reads the pillows alone, with two steps of
+          // their shadow.
+          float floorK = 1.0 - smoothstep(-2.0, 0.5, vEdge);
+          float relK = uRelief.x * (1.0 - ice) * (1.0 - bare) * (1.0 - smoothstep(55.0, 110.0, dist)) * (1.0 - smoothstep(0.02, 0.3, vKick.x)) * (1.0 - smoothstep(0.1, 0.6, vPaint.z)) * (1.0 - pond);
+          // (Softer under the lens, where the frame's motion would smear it into streaks: the forms are for the middle
+          // distance, and a tall phone frame keeps fewer, larger, softer ones under the rider.)
+          relK *= mix(0.4, 1.0, smoothstep(3.0, 12.0, dist));
+          if (relK > 0.0) {
+            float ap = RELIEF_PILLOW * relK * mix(1.0, mix(0.5, 0.05, groomK), floorK);
+            float as = RELIEF_SASTRUGI * relK * mix(1.0, mix(0.3, 0.0, groomK), floorK) * uSnowFx;
+            vec4 rp = textureGrad(uReliefP, reliefUvP(p), rgP.xy, rgP.zw);
+            vec4 rq = as > 0.0 ? textureGrad(uReliefS, reliefUvS(p), rgS.xy, rgS.zw) : vec4(0.0, 0.5, 0.5, 0.0);
+            vec2 sP = (rp.gb * 2.0 - 1.0) * uRelief.y;
+            vec2 sS = (rq.gb * 2.0 - 1.0) * uRelief.z;
+            relG = ap * (R_PU * sP.x + R_PV * sP.y) + as * rp.a * (R_SU * sS.x + R_SV * sS.y);
+            pert.xz -= relG;
+            float h0 = ap * rp.r + as * rq.r * rp.a;
+            // (The light's slope over the ground's own plane, held low: so the relief casts as a low sun would on
+            // whatever the ground does, and never shades the ground itself, which is the key light's to shade. Ground
+            // turned from the light, or grazed by it, is in its own shade already and takes no relief shadow: laid over a
+            // whole grazed bank they made a blue puddle of it.)
+            vec3 ng = normalize(vNormalW);
+            vec2 toL = normalize(uSunDir.xz + vec2(0.0001, 0.0));
+            float sinT = dot(ng, uSunDir);
+            float lift = clamp(sinT / sqrt(max(1.0 - sinT * sinT, 0.01)), 0.18, RELIEF_TAN);
+            relSh = mix(1.0, reliefShadow(p, h0, ap, as, toL, lift, rgP, rgS, uSnowFx > 0.0), (1.0 - smoothstep(40.0, 90.0, dist)) * smoothstep(0.08, 0.22, sinT));
+            relC = smoothstep(0.7, 0.9, rq.r) * rp.a * as / max(RELIEF_SASTRUGI, 0.001);
+            relL = (1.0 - smoothstep(0.05, 0.4, rq.r)) * rp.a * as / max(RELIEF_SASTRUGI, 0.001);
+            relTop = smoothstep(0.55, 0.85, rp.r) * ap / max(RELIEF_PILLOW, 0.001);
           }
           // The grain under the lens: each dab tilted its own way (Medium and High).
           grainK = uSnowFx * (1.0 - ice) * (1.0 - smoothstep(0.018, 0.04, fwr)) * (1.0 - smoothstep(0.12, 0.3, fwz)) * (1.0 - smoothstep(5.0, 9.0, dist)) * (1.0 - smoothstep(-1.0, 1.0, vEdge));
@@ -1258,28 +1291,6 @@ export function makeSnowMaterial(): ShaderMaterial {
             // A thin bright line along each ripple crest, where the wind packed it.
             crestR = smoothstep(0.62, 0.7, r0) * smoothstep(0.84, 0.72, r0) * k;
           }
-          if (slabK > 0.0) {
-            vec2 sp = p * 0.22 + vec2(7.3, 1.9);
-            float s0 = sastrugi(sp);
-            float k = slabK * (0.3 + 0.7 * smoothstep(0.3, 0.62, vnoise(p * vec2(0.033, 0.017) + 5.5)));
-            if (uSnowFx > 0.0) pert.xz += vec2(s0 - sastrugi(sp + vec2(0.035, 0.0)), s0 - sastrugi(sp + vec2(0.0, 0.035))) * 0.55 * k;
-            slabC = smoothstep(0.7, 0.86, s0) * k;
-            slabL = (1.0 - smoothstep(0.02, 0.36, s0)) * k;
-          }
-          if (bankS > 0.0) {
-            // About 15 cm of relief: the gentle windward faces take the light, the short lee faces drop
-            // into shade under a bright crest line.
-            float s0 = sastrugi(p);
-            float sx = sastrugi(p + vec2(0.12, 0.0));
-            float sz = sastrugi(p + vec2(0.0, 0.12));
-            // In fields, and each ridge broken into short carved lengths (unbroken they combed the bank).
-            float k = bankS * smoothstep(0.38, 0.66, vnoise(p * vec2(0.07, 0.035) + 2.2)) * smoothstep(0.28, 0.62, vnoise(p * vec2(0.55, 0.24) + 7.7));
-            pert.xz += vec2(s0 - sx, s0 - sz) * 0.9 * k;
-            sastC = smoothstep(0.72, 0.84, s0) * k;
-            // The crease under each lee face holds a little cold blue whatever the light (it reads in a
-            // flat, fully lit bank too, where the tilt alone barely moves the toon ramp).
-            sastL = (1.0 - smoothstep(0.05, 0.4, s0)) * k;
-          }
           n = normalize(n + pert);
         }
         vec3 lit = uSnowLit;
@@ -1298,7 +1309,10 @@ export function makeSnowMaterial(): ShaderMaterial {
         // strength washes the whole foreground out to one value.
         lit *= 0.88 * mix(1.0, 0.94, dayK);
         float ndl = dot(n, uSunDir);
-        float t = smoothstep(-0.12, 0.42, ndl) * mix(0.18, 1.0, shadow);
+        // (Round 8, second attempt: the relief's own shadows take most of the light, never all: the sky still
+        // lights the snow in them, as it does in a cast shadow's.)
+        float shadowR = shadow * mix(1.0, relSh, 0.8);
+        float t = smoothstep(-0.12, 0.42, ndl) * mix(0.18, 1.0, shadowR);
         // The painted clouds' shadows: big, very soft, slow cool patches drifting over the slope (about
         // 40 m across, sliding at under 2 m/s). They only take part of the light, so the sled's contact
         // shadow and every cast shadow stay darker than they are, and the bands are laid over them.
@@ -1330,7 +1344,7 @@ export function makeSnowMaterial(): ShaderMaterial {
         // blue, and the light breaks over them a little more crisply than on the groomed run (gouache
         // drifts have an edge to their light).
         float driftK = smoothstep(10.5, 16.0, vEdge);
-        t = mix(t, smoothstep(0.0, 0.2, ndl) * mix(0.18, 1.0, shadow), driftK * 0.45);
+        t = mix(t, smoothstep(0.0, 0.2, ndl) * mix(0.18, 1.0, shadowR), driftK * 0.45);
         // (Low's poster: the light in flat values. POSTER_GLSL; the identity on every other tier.)
         t = posterValue(t);
         vec3 col = mix(shade, lit * sunSnow, t);
@@ -1338,6 +1352,11 @@ export function makeSnowMaterial(): ShaderMaterial {
         col += lit * sunSnow * smoothstep(0.55, 0.95, vSnow.y) * 0.09 * t;
         // The lit side keeps a gentle Lambert falloff, so dunes and ripples hold their form.
         col *= mix(1.0, 0.8 + 0.28 * smoothstep(0.1, 0.95, ndl), t);
+        // (Round 8, second attempt: the relief's forms turn to the light and from it whatever its height, and in the
+        // shade too, where the sky toward the sun is the brighter: so a pillow reads in a flat noon light and in a
+        // bank's shadow, soft and broad.)
+        float relFace = clamp(-dot(relG, normalize(uSunDir.xz + vec2(0.0001, 0.0))), -0.4, 0.4);
+        col *= 1.0 + relFace * mix(0.2, 0.6, t) * uReliefK.z;
         if (uKey2.a > 0.0) {
           // The aurora is the night's key light (Frostfang): curtains of its light, a couple of hundred
           // metres long, sweep slowly across the slope. Where one lies the snow that faces the sky takes
@@ -1365,29 +1384,9 @@ export function makeSnowMaterial(): ShaderMaterial {
         col *= 1.0 + dot(rip, vec2(0.866, 0.5)) * sign(sunAcross) * max(abs(sunAcross), 0.6);
         // (Round 8: a crest the wind packed takes the light warm, the lee under it the shade's own blue.)
         vec3 warmC = mix(sunN, vec3(1.0, 0.9, 0.76), 0.55);
-        col += lit * sunSnow * mix(vec3(1.0), warmC, 0.6) * (crestR * (0.07 + 0.07 * powderK) + sastC * 0.14 + slabC * 0.1) * t;
-        col = mix(col, col * mix(vec3(0.9), uSnowShade / max(uSnowLit, vec3(0.05)), 0.55), sastL * 0.32 + slabL * 0.4);
-        // Round 8, the surfaces' own light (SNOW_SURF_GLSL), in three values.
-        vec3 coolR = uSnowShade / max(uSnowLit, vec3(0.05));
-        if (pilK > 0.0) {
-          // Powder, painted as gouache paints form: each pillow's face turned from the light is one flat cool
-          // value, cut from its lit face at the turn with a soft brushed edge (the toon ramp is full across a lit
-          // slope, so the tilt alone barely shows); the hollows between them hold a deeper step of the shade's
-          // blue and the crests a warm cream. Three values and two edges, never a soft wash of noise. Low paints
-          // the hollows and crests alone.
-          float rakeP = -dot(pil.yz, sunXZ) * mix(1.0, 0.6, smoothstep(0.5, 0.9, uSunDir.y));
-          // (How much of the pillows' value a pixel spans: the edges are a brushstroke, never a stair.)
-          float pw = length(pil.yz) * max(fwz * 0.5, fwx) + 0.03;
-          // (In the palette's own contrast: a low-contrast morning or a moonlit night paints them faintly, where at
-          // full strength they read as camouflage. Pinecrest's shade is about 0.6 of its lit snow, Sakura's 0.8.)
-          float palK = clamp((1.0 - dot(uSnowShade, vec3(0.3, 0.59, 0.11)) / max(dot(uSnowLit, vec3(0.3, 0.59, 0.11)), 0.05)) / 0.4, 0.25, 1.0) * mix(0.4, 1.0, dayK);
-          float faceSh = smoothstep(-0.1 + pw, -0.1 - pw, rakeP) * uSnowFx;
-          float hollow = smoothstep(0.36 + pw * 0.6, 0.36 - pw * 0.6, pil.x);
-          float crestP = smoothstep(0.66 - pw * 0.6, 0.66 + pw * 0.6, pil.x);
-          col = mix(col, col * mix(vec3(0.92), coolR, 0.6), faceSh * PILLOW_FACE * palK * pilK * mix(0.15, 1.0, shadow));
-          col = mix(col, col * mix(vec3(0.88), coolR, 0.8), hollow * PILLOW_HOLLOW * palK * pilK * mix(0.25, 1.0, shadow));
-          col += lit * sunSnow * warmC * crestP * (1.0 - faceSh) * 0.09 * t * pilK;
-        }
+        col += lit * sunSnow * mix(vec3(1.0), warmC, 0.6) * (crestR * (0.07 + 0.07 * powderK) + relC * 0.14 + relTop * 0.05) * t;
+        col = mix(col, col * mix(vec3(0.9), uSnowShade / max(uSnowLit, vec3(0.05)), 0.55), relL * 0.08 * t);
+        // Round 8, a groomed lane's own light (SNOW_SURF_GLSL).
         if (groomK > 0.01 && dist < 140.0) {
           // A groomed lane: the swaths' steps and seams read far down the run, the ribs under the lens (Medium
           // and High), and the lane a step whiter and smoother than the powder beside it.
@@ -1405,7 +1404,7 @@ export function makeSnowMaterial(): ShaderMaterial {
         }
         if (grainK > 0.0) {
           // The grain under the lens: each dab a step of its own, lit on the side it tilts to the sun.
-          col *= 1.0 + (max(grain.x, 0.0) * 0.04 + dot(grain.yz, sunXZ) * 0.04) * grain.w * grainK * mix(0.5, 1.0, shadow);
+          col *= 1.0 + (max(grain.x, 0.0) * 0.04 + dot(grain.yz, sunXZ) * 0.04) * grain.w * grainK * mix(0.5, 1.0, shadowR);
         }
         // Light bleeding cool through the snow at a cast shadow's edge. By day; at night the shade is the light's
         // absence and keeps more of the moon's own colour. It is the shade's hue made richer at the snow's own
@@ -1422,7 +1421,7 @@ export function makeSnowMaterial(): ShaderMaterial {
         }
         // The sun held on the far snow: past the near field a slope turned to mirror the sun carries a
         // broad soft sheen of it, so the distance has a lit face and not one even value.
-        float sheen = pow(max(dot(reflect(-uSunDir, n), v), 0.0), 7.0) * smoothstep(35.0, 140.0, dist) * shadow * t;
+        float sheen = pow(max(dot(reflect(-uSunDir, n), v), 0.0), 7.0) * smoothstep(35.0, 140.0, dist) * shadowR * t;
         col += lit * sunSnow * sheen * 0.2;
         if (uLiftK.w > 0.0) {
           // The visual lift: snow seen at a grazing angle toward the light takes a soft sheen of it (its
@@ -1432,7 +1431,16 @@ export function makeSnowMaterial(): ShaderMaterial {
           float lobe = max(dot(reflect(-uSunDir, n), v), 0.0);
           float graze = 1.0 - clamp(dot(n, v), 0.0, 1.0);
           float fwd = lobe * lobe * lobe * graze * graze * smoothstep(5.0, 18.0, dist) * (1.0 - smoothstep(70.0, 160.0, dist));
-          col += lit * mix(sunSnow, sunN, 0.35) * (fwd * shadow * t * 0.32 * uLiftK.w);
+          col += lit * mix(sunSnow, sunN, 0.35) * (fwd * shadowR * t * 0.32 * uLiftK.w);
+        }
+        // Round 8, second attempt: the light caught on the relief's forms. Where a pillow's flank or a sastrugi's crest
+        // turns to mirror the key light toward the eye it takes a soft sheen of it, so a field of powder seen toward
+        // the sun shines in its forms, not in a speckle laid over them. (Light on the forms alone: relG is nothing on
+        // flat snow.)
+        float relLit = length(relG);
+        if (relLit > 0.001) {
+          float rl = pow(max(dot(reflect(-uSunDir, n), v), 0.0), 10.0) * smoothstep(0.03, 0.15, relLit);
+          col += lit * mix(sunSnow, sunN, 0.35) * rl * smoothstep(4.0, 12.0, dist) * (1.0 - smoothstep(60.0, 110.0, dist)) * shadowR * t * 0.35 * uReliefK.w;
         }
         // Periwinkle settles in the ripple troughs.
         // (Round 8: deeper in powder, where the wind has worked the snow.)
@@ -1692,7 +1700,8 @@ export function makeSnowMaterial(): ShaderMaterial {
           // light turns to the eye, so the glints move with the view and gather where the snow mirrors the sun.
           // More cells hold one, since only a few of them face the eye at once.)
           // (The stills' critic preferred the denser glitter: critic one's density, which won where the old one was rainbow speckle.)
-          if (h > 0.5 - 0.12 * nightK - 0.1 * nearG) {
+          // (uRelief.w: glitter gathered harder toward the sun, a little denser than looks safe.)
+          if (h > 0.5 - 0.12 * nightK - 0.1 * nearG - 0.14 * toSun * uRelief.w) {
             vec2 pt = cell + 0.18 + 0.64 * vec2(hash13(vec3(cell, 1.7)), hash13(vec3(cell, 9.2)));
             vec2 o = (gp - pt) / 2.4;
             float rad = 0.008 + 0.004 * nearG + dist * 0.0021;
@@ -1707,11 +1716,11 @@ export function makeSnowMaterial(): ShaderMaterial {
             float rays = (smoothstep(0.3, 0.0, abs(q.y)) * smoothstep(3.0, 0.0, abs(q.x)) + smoothstep(0.3, 0.0, abs(q.x)) * smoothstep(3.0, 0.0, abs(q.y))) * (1.0 - farG);
             vec2 ftilt = (vec2(hash13(vec3(cell, 2.3)), hash13(vec3(cell, 6.1))) - 0.5) * 2.2;
             float fm = facetMirror(n, ftilt, v);
-            float on = smoothstep(0.94 - 0.1 * nightK, 0.985 - 0.06 * nightK, fm);
+            float on = smoothstep(0.94 - 0.1 * nightK - 0.03 * toSun * uRelief.w, 0.985 - 0.06 * nightK - 0.015 * toSun * uRelief.w, fm);
             // A powder crystal flashes harder than a packed or glazed one; each its own strength.
             float facing = (0.55 + 0.6 * fract(h * 37.0)) * (1.0 + 0.35 * powderK) + 0.3 * toSun;
             glint = on * (core * core + rays * 0.45) * facing * uSparkle * (1.0 - ice * 0.6) * (1.0 - smoothstep(glintFar * 0.64, glintFar, dist));
-            col += uSunColor * glint * smoothstep(0.05 - 0.15 * nightK, 0.45 - 0.15 * nightK, ndl) * mix(shadow, 1.0, 0.45 * nightK) * 3.4;
+            col += uSunColor * glint * smoothstep(0.05 - 0.15 * nightK, 0.45 - 0.15 * nightK, ndl) * mix(shadowR, 1.0, 0.45 * nightK) * 3.4;
           }
         }
         if (uSnowFx > 0.0 && dist < 22.0 && ice < 0.5) {
@@ -1730,7 +1739,7 @@ export function makeSnowMaterial(): ShaderMaterial {
             // (Round 8: a facet too, so the fine glitter turns with the view as the star glints do.)
             float mon = smoothstep(0.93, 0.98, facetMirror(n, (vec2(hash13(vec3(mc, 1.9)), hash13(vec3(mc, 3.3))) - 0.5) * 2.2, v));
             vec3 prism = mix(vec3(1.0), 0.5 + 0.5 * cos(6.2831 * (mh * 7.0 + vec3(0.0, 0.33, 0.67))), 0.1);
-            col += mix(uSunColor, vec3(1.0), 0.3) * prism * smoothstep(1.0, 0.25, length(mq)) * mon * (1.0 - smoothstep(12.0, 22.0, dist)) * (1.0 + 0.8 * mSun) * smoothstep(0.0, 0.35, ndl) * mix(shadow, 1.0, 0.3) * 1.8 * uSparkle;
+            col += mix(uSunColor, vec3(1.0), 0.3) * prism * smoothstep(1.0, 0.25, length(mq)) * mon * (1.0 - smoothstep(12.0, 22.0, dist)) * (1.0 + 0.8 * mSun) * smoothstep(0.0, 0.35, ndl) * mix(shadowR, 1.0, 0.3) * 1.8 * uSparkle;
           }
         }
         if (vPaint.y > 0.01) {
