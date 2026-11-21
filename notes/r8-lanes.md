@@ -80,7 +80,7 @@ this file first, then your own brief (your brief wins where it is more specific)
 - Build with `npx vite build --outDir dist/r8-<lane> --emptyOutDir` and serve with
   `npx vite preview --outDir dist/r8-<lane> --port <your port> --host 127.0.0.1 --strictPort` in the background. Stop
   your server when you finish. Ports: perf 4710, snow 4720, forest 4730, compose 4740, speed 4750, light 4760,
-  events 4770, sim 4780, spine 4790, screens 4800, modes 4810, album 4820, snow2 4830, hours 4840, photo 4850, image 4860.
+  events 4770, sim 4780, spine 4790, screens 4800, modes 4810, album 4820, snow2 4830, hours 4840, photo 4850, image 4860, rev0 to rev4 4870 to 4874.
 
 ## How work is judged
 
