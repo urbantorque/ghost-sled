@@ -114,7 +114,8 @@ export const ROSTER: readonly Rider[] = [
   {
     key: 'bram', name: 'Bram Oakhollow', hat: 'antlers', emblem: 'leaf', accent: '#CFE8B8', sled: 2, style: 'liner', skill: 0.4, home: 0,
     bio: 'Pinecrest born. Rides it slow, rides it all.',
-    says: { pass: ['Afternoon.', 'Lovely day.'], passed: ['After you.'], won: ['Steady wins.'], lost: ['Good on you.'] },
+    // (Round 8: lines for any hour. "Afternoon." and "Lovely day." were said on Lanternfall's night and every other hour.)
+    says: { pass: ['Steady on.', 'Nice and easy.'], passed: ['After you.'], won: ['Steady wins.'], lost: ['Good on you.'] },
   },
   {
     key: 'rosa', name: 'Rosa Quill', hat: 'foxears', emblem: 'wave', accent: '#FFC4B3', sled: 1, style: 'stunt', skill: 0.3, home: 3,

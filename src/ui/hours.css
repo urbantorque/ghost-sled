@@ -57,6 +57,19 @@
   opacity: 1;
 }
 
+/* A finger: each half and the mirror's toggle a 44 px target, the pill's inset padding given up so the row keeps one
+   height (34 and 36 px were under a thumb's size). */
+@media (pointer: coarse) {
+  .gs-t-hour {
+    padding: 0;
+  }
+
+  .gs-t-hour .gs-t-hour-opt,
+  .gs-t-opts .gs-t-mirror {
+    min-height: 44px;
+  }
+}
+
 /* A phone held upright: the row is centred under the full-width Ride. */
 @media (max-aspect-ratio: 1/1) {
   .gs-t-opts {
