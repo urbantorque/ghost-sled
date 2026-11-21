@@ -156,20 +156,22 @@ function ribbonMaterial(hdr: number): ShaderMaterial {
         vec3 col;
         float a;
         if (vRib.w < 0.5) {
-          // The spirit trail: a hot core in the rider's own vermillion at the root, burning through the lantern's
-          // marigold to a pale gold at the tail, with a brighter heart down its middle.
-          col = u < 0.35 ? mix(uRoot, uMid, u / 0.35) : mix(uMid, uTip, (u - 0.35) / 0.65);
-          float heart = smoothstep(0.55, 1.0, across);
-          col = mix(col, mix(col, vec3(1.0, 0.97, 0.9), 0.55), heart * (1.0 - u));
+          // The spirit trail: a flame, the rider's own vermillion at the root burning into the lantern's marigold, with
+          // a pale line of heat down its middle only. (Round 8's critics: with a pale gold tail across its whole width
+          // it read as a flat cream plank or a paddle by day.)
+          col = u < 0.3 ? mix(uRoot, uMid, u / 0.3) : mix(uMid, mix(uMid, uTip, 0.35), (u - 0.3) / 0.7);
+          float heart = smoothstep(0.8, 1.0, across);
+          col = mix(col, vec3(1.0, 0.95, 0.82), heart * 0.6 * (1.0 - u));
           col *= uHdr * (1.0 + 0.6 * heart);
           // (A glow, not a band of paint: soft from its heart to its edges.)
           a = pow(across, 1.7) * (1.0 - smoothstep(0.45, 1.0, u)) * smoothstep(0.0, 0.06, u + 0.02);
         } else {
           // A wind line: a pale stream of air, a little of the lantern's gold in it, faint at its ends.
           col = mix(vec3(0.96, 0.97, 1.0), uTip, 0.45) * mix(1.0, uHdr, 0.5);
-          a = across * across * smoothstep(0.0, 0.2, u) * (1.0 - smoothstep(0.75, 1.0, u));
+          a = 0.7 * across * across * smoothstep(0.0, 0.2, u) * (1.0 - smoothstep(0.75, 1.0, u));
         }
-        col = mix(col, uFog, vFog * 0.7);
+        // (A wind line takes little of the fog's colour: in Sakura's lilac air it turned into hard cyan lines.)
+        col = mix(col, uFog, vFog * (vRib.w < 0.5 ? 0.7 : 0.25));
         a *= vRib.z * vNear * (1.0 - vFog * 0.5);
         if (a < 0.005) discard;
         gl_FragColor = vec4(col, a);
@@ -454,7 +456,8 @@ export class SpiritFlow {
     const pa = pos.array as Float32Array;
     const ra = rib.array as Float32Array;
     // Width and light: thin at level 2, a band at full flow, flared by a breath; a gutter flickers and thins it.
-    const w = (0.03 + 0.045 * L.trail + 0.02 * L.top) * (1 + 0.6 * this.flare);
+    // (Low has no bloom to carry a thin flame: its trail is half as wide again, so it reads as the designed cheaper state.)
+    const w = (0.03 + 0.045 * L.trail + 0.02 * L.top) * (1 + 0.6 * this.flare) * (this.tier === 'low' ? 1.5 : 1);
     // (Round 8's first look: by age alone the ribbon reached back past the lens and lay on the snow as a broad yellow
     // stripe to the frame's foot. It is held to its last metres off the scarf, measured along itself.)
     const reach = 0.8 + 1.1 * L.trail + 0.5 * L.top;
