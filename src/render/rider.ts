@@ -172,6 +172,11 @@ const ECHO_LAGS: readonly (readonly [number, number])[] = [
 const TASSELS = 4;
 const TASSEL_L = 0.11 * RIDER_SCALE;
 const CREAM_KNIT = new Color('#F3E6D4');
+/** Round 8 (the flow pass): the scarf's tail burning at full Spirit Flow, from the rider's vermillion at the knot through
+ *  a flame's orange to the lantern's marigold at the tip, brighter than the cloth so it glows (and blooms on Medium and
+ *  High). */
+const BURN_MID = new Color('#FF7A1E').multiplyScalar(1.25);
+const BURN_TIP = new Color('#FFD34D').multiplyScalar(1.4);
 const INK_KNIT = new Color('#1A2140');
 
 /** The after-image's glass: a white-gold fresnel edge with a breath of light inside, added over the scene. */
@@ -1024,6 +1029,45 @@ export class Rider {
     const t = def.accent === 'cream' ? CREAM_KNIT : c.copy(V).multiplyScalar(0.82);
     for (let i = 2 * R * 2; i < col.count; i++) col.setXYZ(i, t.r, t.g, t.b);
     col.needsUpdate = true;
+    this.scarfBase = (col.array as Float32Array).slice();
+    this.burnShown = 0;
+    this.burnScarf(this.burnK);
+  }
+
+  /** The scarf's knit as painted, before any burn, and the burn now shown. */
+  private scarfBase: Float32Array | null = null;
+  private burnK = 0;
+  private burnShown = 0;
+
+  /** Round 8 (the flow pass): Spirit Flow sets the scarf's tail alight, 0 to 1 (spiritflow.ts flowLook's trail). The
+   *  knot keeps the rider's vermillion; down the tail the cloth burns through orange to marigold at the tip, so the flame
+   *  that rises off it reads as the scarf burning, not a fire beside the sled (two critics read tongues beside a plain
+   *  scarf as a campfire). Vertex colours only, so Low burns too at no cost; repainted only when it moves. */
+  setBurn(k: number): void {
+    this.burnK = Math.max(0, Math.min(1, k));
+    if (Math.abs(this.burnK - this.burnShown) < 0.02 && !(this.burnK === 0 && this.burnShown > 0)) return;
+    this.burnScarf(this.burnK);
+  }
+
+  private burnScarf(k: number): void {
+    const base = this.scarfBase;
+    if (!base) return;
+    const col = this.tailGeo.getAttribute('color') as BufferAttribute;
+    const a = col.array as Float32Array;
+    const R = TAIL_ROWS;
+    const hot = new Color();
+    for (let i = 0; i < col.count; i++) {
+      // Along the tail (0 the knot, 1 the tip); the tassels burn as the tip does.
+      const along = i < 2 * R * 2 ? (Math.floor(i / 2) % R) / (R - 1) : 1;
+      const b = k * Math.min(1, Math.max(0, (along - 0.25) / 0.6));
+      const e = b * b * (3 - 2 * b);
+      hot.copy(BURN_MID).lerp(BURN_TIP, Math.min(1, Math.max(0, (along - 0.55) / 0.45)));
+      a[i * 3] = base[i * 3] + (hot.r - base[i * 3]) * e;
+      a[i * 3 + 1] = base[i * 3 + 1] + (hot.g - base[i * 3 + 1]) * e;
+      a[i * 3 + 2] = base[i * 3 + 2] + (hot.b - base[i * 3 + 2]) * e;
+    }
+    col.needsUpdate = true;
+    this.burnShown = k;
   }
 
   /** A dash's spirit shimmer, eased (0 to 1): uniforms on every rider material, plus the after-images
