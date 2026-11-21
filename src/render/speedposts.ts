@@ -7,7 +7,10 @@ import { makeToonMaterial, shared } from './materials';
 import type { Tier } from './world';
 
 // Speed posts: thin stakes, snow poles, slalom flags and roped fence posts along both corridor edges,
-// 0.8 to 3 m past the edge and 10 to 18 m apart, for a strobe of parallax at speed. They are the first
+// 0.5 to 2.4 m past the edge and 4.5 to 12 m apart, for a strobe of parallax at speed, and behind them a rank of
+// tall poles 4.5 to 8 m out, every other station, so the bank has depth: the near rank whips past at the lens's
+// height and the far one slides by slower (round 8: at 10 to 18 m apart and one rank, nothing near the line read
+// as rushing past). They are the first
 // thing in the frame to read as "close", and they are markers, not hazards: slim, pale, in the biome's
 // cool accent, never the dark faceted hazard silhouette and never a signal colour (ART.md section 1).
 // Nothing here is a collider: the sim never hears of a post, and a post dissolves round a rider who
@@ -25,16 +28,19 @@ export enum PostKind {
 }
 
 /** How far past the corridor's edge a post stands (metres). */
-export const POST_E_MIN = 0.8;
-export const POST_E_MAX = 3;
+export const POST_E_MIN = 0.5;
+export const POST_E_MAX = 2.4;
+/** The far rank: how far past the edge its poles stand (metres), when the corridor's limit leaves room. */
+export const FAR_E_MIN = 4.5;
+export const FAR_E_MAX = 8;
 /** Metres of run one stretch of posts holds; its kind and spacing change from one to the next. */
 export const POST_CELL = 96;
 /** Spacing per kind (metres): a slalom's flags come slowest, a fence's posts quickest. */
 export const POST_GAP: Record<PostKind, readonly [number, number]> = {
-  [PostKind.Stake]: [13, 15],
-  [PostKind.Pole]: [11, 14],
-  [PostKind.Flag]: [16, 18],
-  [PostKind.Fence]: [10, 11],
+  [PostKind.Stake]: [7, 9],
+  [PostKind.Pole]: [8, 10],
+  [PostKind.Flag]: [10, 12],
+  [PostKind.Fence]: [4.5, 5.5],
 };
 /** The ground may dip this far under the corridor's edge, or over the next 1.5 m out, before a post
  *  gives up: the corridor's banks rise, so a dip means the ground falls away there. */
@@ -43,8 +49,8 @@ const FALL_AWAY = 0.25;
 const LIMIT_CLEAR = 0.4;
 
 /** Posts drawn and how far ahead they reach (metres), per tier. */
-const CAP: Record<Tier, number> = { low: 0, medium: 72, high: 104, ultra: 104 };
-const REACH: Record<Tier, number> = { low: 0, medium: 190, high: 260, ultra: 260 };
+const CAP: Record<Tier, number> = { low: 0, medium: 130, high: 210, ultra: 210 };
+const REACH: Record<Tier, number> = { low: 0, medium: 150, high: 210, ultra: 210 };
 /** Metres behind the rider a post stays (the lens is a few metres back, and the banks are in view). */
 const BEHIND = 14;
 
@@ -275,10 +281,10 @@ function postMaterial(): ShaderMaterial {
 
 /** A post's height and radius, per kind (metres). */
 const SIZE: Record<PostKind, readonly [number, number, number]> = {
-  [PostKind.Stake]: [1.45, 1.85, 0.05],
-  [PostKind.Pole]: [2.6, 3.2, 0.06],
-  [PostKind.Flag]: [2.2, 2.5, 0.055],
-  [PostKind.Fence]: [1.15, 1.3, 0.075],
+  [PostKind.Stake]: [1.6, 2.1, 0.06],
+  [PostKind.Pole]: [2.8, 3.6, 0.075],
+  [PostKind.Flag]: [2.3, 2.7, 0.065],
+  [PostKind.Fence]: [1.2, 1.35, 0.085],
 };
 
 const colA = new Color();
@@ -400,18 +406,22 @@ export class SpeedPosts {
         continue;
       }
       this.place(s.kind, s.stagger && side > 0 ? z + s.gap * 0.5 : z, side, st);
+      // The far rank: a tall pole every other station, a quarter gap off the near one, so the two ranks never
+      // line up into one.
+      if (st % 2 === (side > 0 ? 1 : 0)) this.place(PostKind.Pole, z + s.gap * 0.25, side, st, true);
     }
     return true;
   }
 
-  private place(kind: PostKind, z: number, side: -1 | 1, st: number): void {
+  private place(kind: PostKind, z: number, side: -1 | 1, st: number, far = false): void {
     if (z < 2) return;
     const c = this.course;
-    const key = Math.floor(z * 8) * side;
+    const key = Math.floor(z * 8) * side + (far ? 7919 : 0);
     // (Weighted toward the near end of the band: the closer to the road, the more of a strobe.)
     const he = hash(this.seed, key, 5);
-    const e0 = POST_E_MIN + (POST_E_MAX - POST_E_MIN) * he * he;
-    const at = placePost(c, z, side, kind === PostKind.Fence ? Math.min(e0, 1.8) : e0);
+    const e0 = far ? FAR_E_MIN + (FAR_E_MAX - FAR_E_MIN) * he : POST_E_MIN + (POST_E_MAX - POST_E_MIN) * he * he;
+    // (A far pole stands only where the limit leaves it its own band: never pressed in among the near rank.)
+    const at = far ? (c.edgeLimit(z) - 0.4 >= FAR_E_MIN ? placePost(c, z, side, e0) : null) : placePost(c, z, side, kind === PostKind.Fence ? Math.min(e0, 1.6) : e0);
     if (!at || this.kept?.(at.x, z)) {
       if (kind === PostKind.Fence) this.rope.slot = -1;
       return;

@@ -16,6 +16,7 @@ import {
   UnsignedInt101111Type,
   Vector2,
   Vector3,
+  Vector4,
   WebGLRenderTarget,
   WebGLRenderer,
 } from 'three';
@@ -24,6 +25,7 @@ import { FILM } from './palette';
 import { PIPE_COMPOSITE_GLSL, Pipeline, pipeUniforms } from './postfx/pipeline';
 import { iceMirror } from './postfx/reflect';
 import { renderScale, sceneSamples, wantsTaa, type PassSettings } from './postfx/tiers';
+import { FLOW_GLSL } from './spiritflow';
 
 // A small custom post stack (ART.md section 9): bloom via a downsample/upsample mip chain, then one
 // composite pass for colour grade, vignette, speed streaks, chromatic punch, grain and dither.
@@ -132,7 +134,7 @@ export class PostFX {
   readonly pipe: Pipeline;
   /** bloomScale tames the bloom (portrait run, results hero shot); feetY is the sled's height on screen and vpX, vpY the
    *  course's vanishing point (uv, origin bottom left), for the avalanche. */
-  readonly params = { speed: 0, punch: 0, flash: 0, vignette: 1, grain: 1, time: 0, danger: 0, cool: 0, riderX: 0.5, riderY: 0.4, feetY: 0.3, vpX: 0.5, vpY: 0.75, bloomScale: 1, streakFoot: 0.12, footScale: 1, reduced: false };
+  readonly params = { speed: 0, punch: 0, flash: 0, vignette: 1, grain: 1, time: 0, danger: 0, cool: 0, riderX: 0.5, riderY: 0.4, feetY: 0.3, vpX: 0.5, vpY: 0.75, bloomScale: 1, streakFoot: 0.12, footScale: 1, reduced: false, flow: 0, flowPulse: 0, flowTop: 0 };
 
   constructor(
     private renderer: WebGLRenderer,
@@ -256,6 +258,7 @@ export class PostFX {
         uFeet: { value: 0.3 },
         uVp: { value: new Vector2(0.5, 0.75) },
         uStreakFoot: { value: 0.12 },
+        uFlowLook: { value: new Vector4() },
         uAspect: { value: 1 },
         uUseBloom: { value: 1 },
         uFxaa: { value: msaa > 0 ? 0 : 1 },
@@ -495,6 +498,7 @@ export class PostFX {
           // (A pixel that is not a number, should a material ever write one, stays one pixel wide.)
           return moved.r == moved.r && moved.g == moved.g && moved.b == moved.b ? moved : rgbM;
         }
+        ${FLOW_GLSL}
         void main() {
           vec2 uv = vUv;
           vec2 dc = uv - 0.5;
@@ -502,8 +506,10 @@ export class PostFX {
           // Speed streaks: a short radial smear that only touches the edges of the frame, strongest at
           // the sides and all but gone across the bottom, where it smeared the foreground snow's sparkle
           // and ripples into one pale sheet of radial lines (worst on a tall phone screen).
+          // (Round 8, speed: only the frame's outer band, from half the half-diagonal: from 0.3 it smeared the far
+          // planes, the rider's surroundings and the trees a third of the way in. The middle stays sharp.)
           vec3 col;
-          float streak = uSpeed * smoothstep(0.3, 0.8, r) * mix(uStreakFoot, 1.0, smoothstep(0.25, 0.6, uv.y)) * mix(0.5, 1.0, smoothstep(0.12, 0.45, abs(dc.x) * uAspect));
+          float streak = uSpeed * smoothstep(0.5, 0.95, r) * mix(uStreakFoot, 1.0, smoothstep(0.25, 0.6, uv.y)) * mix(0.5, 1.0, smoothstep(0.12, 0.45, abs(dc.x) * uAspect));
           // The lens's colour split: the chromatic punch on boosts and perfect landings, and round 7's
           // lens character (at speed the glass shows in the frame's corners and nowhere else, a hair of
           // colour fringe, two and a half pixels of a 1280 frame in the very corner at the cap; a calm
@@ -691,6 +697,8 @@ export class PostFX {
             float l2 = dot(col, vec3(0.2126, 0.7152, 0.0722));
             col = max(mix(vec3(l2), col, 1.0 + 0.25 * uFilm * (1.0 - sat)), 0.0);
           }
+          // Round 8: Spirit Flow's richer colour and its breath (spiritflow.ts), over the place's own grade.
+          col = pipeFlow(col, lightHue);
           if (uFocal > 0.001) {
             // The mood's light pass: round its key light (the sun, the moon or the comet) the frame
             // lifts and takes the light's hue, and away from it the values settle a step, so the eye
@@ -1176,6 +1184,7 @@ export class PostFX {
     u.uFeet.value = this.params.feetY;
     u.uVp.value.set(this.params.vpX, this.params.vpY);
     u.uStreakFoot.value = this.params.streakFoot;
+    u.uFlowLook.value.set(this.params.flow, this.params.flowPulse, this.params.flowTop, 0);
     pipe.timer.begin('composite');
     this.pass(this.composite, null);
     pipe.end(lens);

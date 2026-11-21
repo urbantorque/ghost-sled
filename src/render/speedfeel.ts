@@ -36,9 +36,58 @@ export function chaseFov(v: number): number {
   return 62 + 3 * speedK(v) + 14 * fastK(v);
 }
 
-/** The radial speed streaks (post.ts): 0 to 24 m/s, about a quarter at 30, all of it only at the cap. */
+/** The radial speed streaks (post.ts): 0 to 24 m/s, about a fifth at 30, all of it only at the cap. Round 8 keeps
+ *  them to the frame's outer band, from half its half-diagonal, so the middle and the far planes stay sharp. It carried the speed on the lens (a quarter at 30, all of it at the cap, from a
+ *  third of the way in); the world rushing past carries it now. */
 export function streakK(v: number): number {
   return Math.pow(clamp01((v - 24) / 22), 1.2);
+}
+
+/** Round 8: the chatter of hard snow under the runners, 0 to 1 (the sled's and the lens's fine shake): none
+ *  under 14 m/s, a little by 22, about half at 30, all of it only at the cap. `hard` is the surface: 0 deep
+ *  powder (it swallows the runners' chatter), about 0.6 groomed, 1 ice. */
+export function chatterK(v: number, hard: number): number {
+  const h = clamp01(hard);
+  return (0.3 + 0.7 * h) * (0.55 * smooth01((v - 14) / 16) + 0.45 * clamp01((v - 30) / 16));
+}
+
+/** The washboard's beat (cycles a metre of snow): the chatter's pitch rises with speed, about 11 Hz at 30 m/s
+ *  on groomed snow, a touch finer on ice. */
+export function chatterPitch(hard: number): number {
+  return 0.34 + 0.12 * clamp01(hard);
+}
+
+/** Round 8: the lens breathes with the speed's change as well as the speed. Degrees of FOV for a smoothed
+ *  acceleration (m/s each second): a surge (a drop, a boost, a dash) opens the lens out ahead of the speed it
+ *  is gaining, a slowing (a bank, a climb) draws it in a little. Capped both ways so it never fights the hazard
+ *  read: at most 3.5 degrees out and 1.5 in. */
+export function surgeFov(accel: number): number {
+  const a = accel / 9;
+  return a > 0 ? 3.5 * (1 - Math.exp(-a)) : -1.5 * (1 - Math.exp(a));
+}
+
+/** Round 8: Spirit Flow's breath on the lens (degrees), `t` seconds after a level moved, `k` its signed size (+ a
+ *  level gained, - one lost, 0 to 1 each way). A level gained is a breath in: the lens draws in a little over the
+ *  first seventh of a second, then opens out past where it was and settles by about 1.3 s. A level lost is a
+ *  gutter out: the lens sags in over half a second and comes back slowly. */
+export function breathFov(t: number, k: number): number {
+  if (t < 0 || k === 0) return 0;
+  if (k > 0) {
+    const draw = t < 0.14 ? Math.sin((Math.PI * t) / 0.28) : Math.max(0, 1 - (t - 0.14) / 0.12);
+    const open = t < 0.14 ? 0 : Math.sin(Math.PI * Math.min(1, (t - 0.14) / 1.15)) * Math.exp(-(t - 0.14) * 0.6);
+    return k * (-1.6 * draw + 3.2 * open);
+  }
+  const sag = t < 0.5 ? Math.sin((Math.PI * t) / 1.0) : Math.exp(-(t - 0.5) / 0.45);
+  return k * 1.8 * sag;
+}
+
+/** Round 8: a dash's surge on the lens over its first seconds (degrees): a punch out to 6.5 in the first
+ *  tenth of a second, held at 3 while the dash lasts. `t` is seconds since it started, `on` whether it still
+ *  runs. */
+export function dashFov(t: number, on: boolean): number {
+  if (t < 0) return 0;
+  const punch = t < 0.1 ? t / 0.1 : Math.exp(-(t - 0.1) / 0.35);
+  return Math.max(6.5 * punch, on ? 3 : 0);
 }
 
 /** Speed-scaled motion blur (cine.motionBlur): none to 18 m/s, a third by 28 (already fast), then an even

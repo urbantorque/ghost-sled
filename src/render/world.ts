@@ -25,7 +25,7 @@ import { LIP_FROM, Overlooks } from './overlook';
 import type { LookSet } from './compose';
 import { beginLocalLights } from './lights';
 import { Palette, getPalette, journeyDusk, journeyPalette, journeyStamp } from './palette';
-import { Particles, Weather } from './particles';
+import { Particles, Weather, lensPx } from './particles';
 import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
 import { PostFX } from './post';
 import { POSTER_LAYER, PosterLayer } from './poster';
@@ -49,7 +49,9 @@ import { draftsOn } from '../sim/rivals';
 import { wispUp } from '../game/charmsignals';
 import { Sky } from './sky';
 import { Sloughs } from './sloughs';
-import { edgeK, kickK, roosterK, streakK } from './speedfeel';
+import { chatterK, chatterPitch, edgeK, kickK, roosterK, streakK } from './speedfeel';
+import { SpiritFlow } from './spiritflow';
+import { groomedAt } from './snowsurf';
 import { planShots } from '../game/shots';
 import { SpeedPosts } from './speedposts';
 import { SpiritFx } from './spirit';
@@ -261,6 +263,15 @@ export class World {
   /** Markers strobing past along the corridor's edges, a slough of snow off a bank, and the moments the
    *  sim hands the picture (speedposts.ts, sloughs.ts, moments.ts). */
   readonly speedPosts: SpeedPosts;
+  /** Round 8 (speed): Spirit Flow's picture (spiritflow.ts): the scarf's trail, the wind lines and the sparks. */
+  readonly spiritFlow: SpiritFlow;
+  /** The ghosts' glow the palette asks for, before the flow lifts it, and the lift last sent. */
+  private ghostGlowBase = 1;
+  private ghostGlowFlow = 0;
+  /** Dev (render only): the flow's picture held at this level (`?flowlook=0..6`), or -1 to read the sim's. */
+  private devFlow = -1;
+  private flowKnot = new Vector3();
+  private flowTip = new Vector3();
   readonly sloughs: Sloughs;
   readonly moments: Moments;
   readonly post: PostFX;
@@ -414,6 +425,7 @@ export class World {
     this.life.kept = (x, z) => this.setPieces.keeps(x, z) || !standable(this.course, z, this.course.edgeExcess(x, z));
     this.life.dropAt = (z, side, e) => this.overlooks.drop(z, side, e);
     this.speedPosts = new SpeedPosts(this.course, quality.detail);
+    this.spiritFlow = new SpiritFlow(quality.detail);
     this.speedPosts.kept = (x, z) => this.setPieces.keeps(x, z);
     this.sloughs = new Sloughs(this.course, quality.detail, this.particles);
     this.moments = new Moments(this);
@@ -487,6 +499,7 @@ export class World {
       this.chaos.root,
       this.life.root,
       this.speedPosts.mesh,
+      this.spiritFlow.root,
       this.sloughs.mesh,
       ...this.rider.objects,
       ...this.particles.objects,
@@ -534,6 +547,9 @@ export class World {
    */
   devPipe(q: URLSearchParams): void {
     const pipe = this.post.pipe;
+    // Round 8 (speed): Spirit Flow's picture held at a level (`flowlook=6`), render only: the sim's flow and its
+    // payouts are untouched, the picture shows that level and its breaths are held.
+    if (q.has('flowlook')) this.devFlow = Math.max(0, Math.min(6, Number(q.get('flowlook')) || 0));
     if (q.has('post')) {
       pipe.switches = parseSwitches(q.get('post'));
       this.post.configure(this.quality.passes);
@@ -680,6 +696,7 @@ export class World {
     this.charmGates.setLow(q.detail === 'low');
     this.life.setQuality(q.detail, q.forestDensity);
     this.speedPosts.setTier(q.detail);
+    this.spiritFlow.setTier(q.detail);
     this.sloughs.setTier(q.detail);
     setCloudShadows(q.detail !== 'low');
     this.applyWeather();
@@ -720,7 +737,7 @@ export class World {
     this.lantern.setCourse(c);
     this.row.setCourse(c);
     this.sky.setPalette(this.palette);
-    this.ghosts.setGlow(this.palette.ghostGlow);
+    this.setGhostGlow(this.palette.ghostGlow);
     this.trail.setCourse(c);
     this.ghosts.setCourse(c);
     this.chaos.setCourse(c);
@@ -756,7 +773,7 @@ export class World {
     this.overlooks.setPalette(this.palette);
     this.sky.setPalette(this.palette);
     this.life.setPalette(this.palette, mood);
-    this.ghosts.setGlow(this.palette.ghostGlow);
+    this.setGhostGlow(this.palette.ghostGlow);
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.spirit.fireworks.lightK = this.palette.grade.flash ?? 1;
     this.spirit.lightK = Math.max(0.5, this.palette.grade.flash ?? 1);
@@ -767,6 +784,12 @@ export class World {
     this.journeyAt0 = -Infinity;
     // (Another mood is another sun, or none.)
     if (!same) this.far.invalidate();
+  }
+
+  /** The ghosts' glow for the palette (Ghosts.setGlow), with Spirit Flow's lift on it (round 8, speed). */
+  private setGhostGlow(g: number): void {
+    this.ghostGlowBase = g;
+    this.ghosts.setGlow(g + this.ghostGlowFlow);
   }
 
   /** Each mountain's journey over a Clear Skies run (palette.ts JOURNEY, keyed off the distance ridden;
@@ -789,7 +812,7 @@ export class World {
     const p = journeyPalette(biome, metres, this.palette, this.course);
     applyPalette(p);
     this.sky.setPalette(p);
-    this.ghosts.setGlow(p.ghostGlow);
+    this.setGhostGlow(p.ghostGlow);
     this.post.setGrade({ ...p.grade, bloom: p.bloom });
     this.spirit.fireworks.lightK = p.grade.flash ?? 1;
     this.spirit.fireworks.noRed = this.course.biome === 'lantern';
@@ -1057,6 +1080,10 @@ export class World {
     this.dashK += ((dashing ? 1 : 0) - this.dashK) * Math.min(1, dt * (dashing ? 22 : 9));
     if (!riding) this.dashK = 0;
     this.rider.setSpirit(this.dashK < 0.004 ? 0 : this.dashK, this.quality.detail !== 'low', feel.reduced);
+    // Round 8 (speed): how hard the snow under the runners is (ice 1, a groomed lane about 0.65, powder 0.15), for
+    // the sled's and the lens's chatter.
+    const hard = v.mode === 'run' ? (s.onIce ? 1 : 0.15 + 0.5 * groomedAt(this.course, s.z)) : 0;
+    this.rider.setChatter(riding && !feel.reduced ? chatterK(s.speed, hard) : 0, chatterPitch(hard));
     const showRider = v.playerVisible;
     this.rider.setVisible(showRider);
     if (showRider && !this.rider.crashing) {
@@ -1235,7 +1262,33 @@ export class World {
     // The legend in reach (the four mountains' from the marquee's world, Lanternfall's from its own): the
     // chase looks a little toward it.
     const legend = v.mode === 'run' ? (this.marquee.legendShot() ?? this.lantern.legendShot() ?? this.showdownLook(v, dt)) : null;
-    const chase = () => this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded && !this.moments.tumbling, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, legend, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity, open: v.mode === 'run' ? this.overlooks.lean(s.z + 25) : 0, place: v.mode === 'run' ? this.overlooks.compose.place(s.z + 20, this.placeAt) : null, tumble: this.moments.tumbling ? 1 : 0, wall: this.moments.act.wall, results: v.mode === 'results' }, dt);
+    // Round 8 (speed): Spirit Flow (spiritflow.ts) off the sim's eased flow and its level events, with the rider's
+    // scarf as it now stands; its breath goes to the lens, its colour to the composite, its lift to the ghosts.
+    const flowing = v.mode === 'run' && riding && showRider;
+    if (flowing && this.devFlow < 0) for (const e of v.events) if (e.type === 'flow') this.spiritFlow.onLevel(e.level, e.from);
+    this.spiritFlow.setScale(lensPx());
+    this.spiritFlow.update({
+      dt,
+      time: v.time,
+      flow: flowing ? (this.devFlow >= 0 ? this.devFlow : s.flow) : 0,
+      vel,
+      knot: this.rider.scarfPoint(0, this.flowKnot),
+      tip: this.rider.scarfPoint(1, this.flowTip),
+      dir,
+      cam: this.cam.camera.position,
+      ground: (x, z) => this.course.ground(x, -z),
+      reduced: feel.reduced || reduced(),
+    });
+    const fl = this.spiritFlow.look;
+    const fb = this.spiritFlow.takeBreath();
+    if (fb !== 0) this.cam.flowBreath(fb);
+    const glowLift = Math.round(fl.ghost * 0.8 * 50) / 50;
+    if (glowLift !== this.ghostGlowFlow) {
+      this.ghostGlowFlow = glowLift;
+      this.ghosts.setGlow(this.ghostGlowBase + glowLift);
+    }
+    const dashOn = v.mode === 'run' && v.sim !== null && v.sim.s.dash > 0 && !this.rider.crashing;
+    const chase = () => this.cam.update({ dash: dashOn, hard, flow: fl.fov, pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded && !this.moments.tumbling, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, legend, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity, open: v.mode === 'run' ? this.overlooks.lean(s.z + 25) : 0, place: v.mode === 'run' ? this.overlooks.compose.place(s.z + 20, this.placeAt) : null, tumble: this.moments.tumbling ? 1 : 0, wall: this.moments.act.wall, results: v.mode === 'results' }, dt);
     chase();
     if (this.lens) this.lens(this.cam.camera, focus, dir, dt);
     this.forestLod();
@@ -1297,6 +1350,10 @@ export class World {
     const calm = this.course.biome === 'blossom' ? 0.55 : 1;
     pp.speed = v.mode === 'run' ? streakK(s.speed) * (tall ? 0.6 : 1) * (feel.reduced ? 0.5 : 1) * this.streakK * calm : 0;
     pp.streakFoot = tall ? 0 : 0.12;
+    // Round 8 (speed): Spirit Flow's colour (kept under reduced motion) and its breath (dropped under it).
+    pp.flow = fl.colour;
+    pp.flowTop = fl.top;
+    pp.flowPulse = feel.reduced || reduced() ? 0 : this.spiritFlow.pulse;
     pp.bloomScale = v.mode === 'results' ? 0.55 : tall ? 0.7 : 1;
     // The cool darkening at the foot of the frame holds the near snow's form there too (a bright,
     // smooth slope right under the results lens read as an overexposed smear).

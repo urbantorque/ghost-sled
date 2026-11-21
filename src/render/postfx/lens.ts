@@ -71,8 +71,9 @@ const LENS_FRAG = /* glsl */ `
   uniform mat4 uReproject;
   // x depth of field on, y the focus (m), z the most a circle grows to.
   uniform vec3 uDofMix;
-  // x the motion's scale (0: off), y the longest blur (uv of the frame's height), z the aspect.
-  uniform vec3 uBlur;
+  // x the motion's scale (0: off), y the longest blur (uv of the frame's height), z the aspect, w how much
+  // of it keeps to the frame's edge (cine.edge).
+  uniform vec4 uBlur;
   // The rider on screen: xy its uv, zw the ellipse's radii (uv).
   uniform vec4 uKeep;
   varying vec2 vUv;
@@ -101,8 +102,19 @@ const LENS_FRAG = /* glsl */ `
       vec2 vel = pc.w > 0.0 ? (vUv - (pc.xy / pc.w * 0.5 + 0.5)) * uBlur.x : vec2(0.0);
       float len = length(vel * vec2(uBlur.z, 1.0));
       float here = keep(vUv);
+      // Round 8 (speed): speed's blur keeps to the frame's edge. Over the whole frame it smeared the near
+      // banks and the snow under the lens into one soft sheet; held to the outer band (the sides and the
+      // corners, little across the foot) the middle stays sharp and what rushes past the sides streaks along
+      // its own path. A whip's blur (w 0) is still the whole frame's.
+      float rim = length((vUv - 0.5) * vec2(uBlur.z, 1.0));
+      // (And there it runs longer, up to three times a beat's: held to a beat's length the sides were as
+      // still as the middle, and a sharp frame read slower than the old whole-frame smear.)
+      float edgeM = smoothstep(0.46, 0.95, rim);
+      vel *= mix(1.0, edgeM, uBlur.w);
+      len *= mix(1.0, edgeM, uBlur.w);
+      float cap = uBlur.y * mix(1.0, 1.0 + 2.2 * edgeM, uBlur.w);
       if (len > uDepthTexel.y * 0.75 && here < 0.98) {
-        vel *= min(1.0, uBlur.y / len) * (1.0 - here);
+        vel *= min(1.0, cap / len) * (1.0 - here);
         float j = hash(gl_FragCoord.xy) - 0.5;
         vec3 acc = col;
         float wsum = 1.0;
@@ -212,10 +224,11 @@ export class LensPass {
 
   /**
    * Draws the beat. dof and blur are cine's values (0 when the plan left that half out); focus is
-   * cine.focus; dt the frame's seconds; rider the rider's place on screen (uv, origin bottom left).
+   * cine.focus; dt the frame's seconds; rider the rider's place on screen (uv, origin bottom left); edge
+   * how much of the blur keeps to the frame's edge (cine.edge).
    * Returns the picture for the bloom and the composite.
    */
-  render(scene: Texture, dof: number, focus: number, blur: number, dt: number, rider: Vector2): Texture {
+  render(scene: Texture, dof: number, focus: number, blur: number, dt: number, rider: Vector2, edge = 0): Texture {
     this.fit();
     const aspect = this.w / this.h;
     const coc = this.maxCoc * Math.min(1, dof);
@@ -230,7 +243,7 @@ export class LensPass {
     u.uDofMix.value.set(dof > 0 ? 1 : 0, Math.max(0.5, focus), coc, 0);
     // The motion is a frame's worth; a long frame is brought back to a 60 Hz shutter.
     const scale = blur > 0 ? this.shutter * Math.min(1, blur) * Math.min(1, 1 / 60 / Math.max(dt, 1 / 240)) : 0;
-    u.uBlur.value.set(scale, this.maxBlur * Math.min(1, blur), aspect, 0);
+    u.uBlur.value.set(scale, this.maxBlur * Math.min(1, blur), aspect, Math.max(0, Math.min(1, edge)));
     u.uKeep.value.set(rider.x, rider.y + 0.02, 0.11 / aspect + 0.03, 0.2);
     this.quad.draw(this.lens, this.full);
     return this.full.texture;

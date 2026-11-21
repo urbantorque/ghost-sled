@@ -775,6 +775,12 @@ export class Rider {
   /** The eased weights of a rail, a wall ride (signed) and the arms-up finish. */
   private grindK = 0;
   private wallS = 0;
+  /** Round 8 (speed): the runners' chatter on hard snow (0 to 1, speedfeel chatterK), its beat (cycles a metre) and
+   *  its phases. */
+  private chatK = 0;
+  private chatPitch = 0.4;
+  private chatPh = 0;
+  private chatPh2 = 0;
   private finK = 0;
   /** The upper body's eased turn toward the direction of travel while the sled slides sideways. */
   private twist = 0;
@@ -1159,6 +1165,27 @@ export class Rider {
     this.u.flow.value.set(Math.max(0, Math.min(1, flow)), Math.max(0, Math.min(1, pulse)));
   }
 
+  /** Round 8 (speed): the runners' chatter on hard snow, 0 to 1 (speedfeel chatterK), and its beat in cycles a
+   *  metre (chatterPitch): the sled and the rider on it judder finely, hardest on ice. Off under reduced motion. */
+  setChatter(k: number, pitch: number): void {
+    this.chatK = reduced() ? 0 : Math.max(0, Math.min(1, k));
+    this.chatPitch = pitch;
+  }
+
+  /** Round 8 (speed): the chatter, laid on the rig after its pose: a lift of a couple of centimetres and a rock of
+   *  about a degree, at a beat that rises with the speed (two incommensurate washboards, held under 26 Hz so the
+   *  frame rate never folds it into a wobble). On the snow only. */
+  private chatter(p: RiderPose, dt: number): void {
+    if (this.chatK < 1e-3 || p.airborne || dt <= 0) return;
+    const hz = Math.min(26, p.speed * this.chatPitch);
+    const step = dt * Math.PI * 2;
+    this.chatPh = (this.chatPh + step * hz * 1.07) % 6283.2;
+    this.chatPh2 = (this.chatPh2 + step * Math.min(26, hz * 1.53)) % 6283.2;
+    const k = this.chatK;
+    this.root.position.y += (Math.sin(this.chatPh) * 0.6 + Math.sin(this.chatPh2 + 1.1) * 0.4) * 0.02 * k;
+    this.leanG.rotation.z += (Math.sin(this.chatPh * 0.83 + 0.4) * 0.5 + Math.sin(this.chatPh2 * 1.21) * 0.5) * 0.018 * k;
+  }
+
   /** A point along the long scarf tail (u: 0 at the knot, 1 at the tip), in three.js space: where
    *  flow's motes stream off. */
   scarfPoint(u: number, out: Vector3): Vector3 {
@@ -1258,6 +1285,7 @@ export class Rider {
     // into the turn rather than tipping over as one rigid block with its sled.
     // (A rail's balance sways it side to side; a tumble throws it over.)
     this.leanG.rotation.set(0, 0, -p.lean * 0.2 + wob + rollSin * 0.8 + (calm ? 0 : Math.sin(time * 11) * 0.05 * this.grindK) + (wipe ? wipe.sledRock : 0) + tp.sledRoll * tk);
+    this.chatter(p, dt);
 
     // Body pose. A perfect landing squashes the torso and legs flat on touchdown (0.7 tall, 1.25
     // wide) and holds it for about 150 ms, springs back through a stretch, and rides the landing out

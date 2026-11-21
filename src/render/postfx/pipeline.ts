@@ -245,7 +245,7 @@ export class Pipeline {
     if (plan.lens && depth) {
       this.timer.begin('lens');
       const dt = Math.max(1 / 240, Math.min(0.1, this.time - this.lastTime));
-      picture = this.lens.render(picture, plan.dof ? cine.dof : 0, cine.focus, plan.blur ? cine.motionBlur : 0, dt, this.rider);
+      picture = this.lens.render(picture, plan.dof ? cine.dof : 0, cine.focus, plan.blur ? cine.motionBlur : 0, dt, this.rider, cine.edge);
     }
     this.lastTime = this.time;
     this.timer.begin('bloom');
