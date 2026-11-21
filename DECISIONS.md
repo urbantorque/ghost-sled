@@ -3754,3 +3754,37 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
       Save must be tried on the portal. The books' layout faults both critics named (screens lane's) go to the polish
       list. For a person: how the drag, keys, pad and touch feel, whether the phone bar is small enough, whether the
       album feels like "my runs".
+
+379. **V7, a stable image at High: the reconstruction finished and shipped on High and Ultra** (`notes/r8-image.md`; strips,
+    pairs and keys under `shots/r8/image/`).
+    - *What 363 said it needed, done.* Each High and Ultra frame is rebuilt from the ones before it, and two things are
+      kept out of its history. The rider stays in the scene (its depth, the occlusion, the shafts and contract C10's
+      stencil are unchanged) and is drawn a second time over the rebuilt frame at the frame's size with the tier's
+      MSAA, so the rebuild's softer, haloed rider underneath is never what is seen; the scarf is drawn again only
+      while Spirit Flow is not burning on it (the flame lies over it by its stencil). Everything that moves on its own
+      (lift chairs and gondolas, the birds, cable chairs, figures and flags) is drawn after the rebuild, so it can
+      neither trail nor double. Any new opaque thing that moves on its own goes to `post.pipe.after.adopt()` or a
+      `movers` list; that is now a rule for later work.
+    - *Two paths, judged in motion.* Strips of eight frames, 1:1 crops with the rider at the foot, blind against the
+      lane's own base (round 7's anti-aliasing on `bf76cc7`). The reconstruction: 8 of 10 strips picked, then 7 of 10
+      on new strips after its fixes (birds in the snow showing through where the hero's depth was loosened across its
+      whole box, now loosened only at the rider's distance). A sharper spatial path (4x MSAA on High and an edge walk)
+      was a coin flip, 4 of 10, and ships nothing (`?msaa=N` stays a dev switch). No critic named the rider soft, haloed
+      or smeared on the new side; both read the new side "a little softer far away", and one saw the middle band and
+      the near trees' feet soften in a fast saucer flip.
+    - *Measured.* Shimmer (DECISIONS 287's metric, p99) down 3 to 25% on High's frames (Pinecrest 900 m 89.3 to 67.1)
+      and 3 to 29% on Ultra's; the frame's sharpness up on every frame; the rider's own edge energy up 10% over 22
+      strips (one strip 1.9% down).
+    - *Cost.* High's draw calls 103.1 to 110.7 (the rebuild's two passes and the rider drawn again), triangles +0.5%;
+      High's GPU about 2.2 to 3 ms more than round 7 at a pixel ratio of 1 (the rebuild 1.7 to 2.4 ms, the after pass
+      0.5 to 0.75, the composite 0.4 cheaper); Ultra level or cheaper (16.4 to 15.7 ms, its scene at 2x MSAA under the
+      rebuild where it drew 4x). Nothing new before the first frame (the programs compile on idle and the edge walk
+      stands in until they are built); the console clean on a cold load on every mountain. Whether High holds 60 fps on
+      the laptop with 2.5 ms more is the quiet sitting's to say; the first lever is `taaMsaa: 0` on High.
+    - *Switches.* `?post=-taa` for round 7's image, `?post=-hero` for the lift's reconstruction without this work.
+      Still short: a slight softness far off and in a fast turn (the sharpen and the motion share, untuned), the
+      pom-pom is the rebuild's, a ghost passing close can leave a faint mint smear; Ultra not judged by a critic, a
+      pixel ratio over 1 not measured, nobody has played it at speed.
+    - *The machine.* The lane's first capture, and one of the main lane's, ran without the browser slot after a
+      40-minute take timed out and the script carried on; both scripts now stop or wait. Their frames were only
+      looked at, never paired.
