@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, Group, Mesh, NormalBlending, Points, ShaderMaterial, Vector3 } from 'three';
+import { BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, Group, Mesh, NormalBlending, NotEqualStencilFunc, Points, ShaderMaterial, Vector3 } from 'three';
 import { ghostStencil, shared } from './materials';
 import type { Tier } from './world';
 
@@ -8,9 +8,9 @@ import type { Tier } from './world';
 //  - richer colour: the frame's muted colours gain vibrance, its lights warm a touch toward their own hue and its
 //    shade deepens a step (FLOW_GLSL, in the composite after the grade; the colour roles hold, since what is already
 //    saturated gains least);
-//  - a spirit trail off the scarf: a ribbon that carries the scarf's line on past its tip, the rider's vermillion at
-//    the root burning through the lantern's marigold to a pale gold at its end (never mint: that is the ghosts'),
-//    and at the top levels sparks shed off it into the air the lens rushes through;
+//  - the scarf's tip burning: tongues of flame shed off its last third, the rider's vermillion at their birth burning
+//    into the lantern's marigold as they climb (never mint: that is the ghosts'), a soft glow on the tip, the rider's
+//    rim and scarf lit with it (world.ts), and at the top levels sparks shed off the flame;
 //  - wind lines: thin pale streams of air hung beside and over the line, drawn on and gone in under a second, racing
 //    with the rider so they whip past at the lens's height;
 //  - the ghosts brighter (world.ts lifts their glow by the flow);
@@ -18,8 +18,8 @@ import type { Tier } from './world';
 //    trail and throws a ring of sparks, and lifts the colour for a moment; a level lost sags the lens, gutters the
 //    trail (it flickers, shortens and drops dim embers) and drains the colour for a moment.
 // Reduced motion keeps the colour, the trail and the ghosts, and drops the wind lines, the sparks and the breath.
-// Low draws the trail alone (one draw, no sparks or wind; its colour is baked and has no composite to lift); Medium
-// and the phone half the wind and the sparks. Nothing here reads the sim but what it is handed, and nothing feeds
+// Low draws the flame alone (one draw, fewer and fuller tongues, no sparks or wind; its colour is baked and has no
+// composite to lift); Medium and the phone half the wind and the sparks. Nothing here reads the sim but what it is handed, and nothing feeds
 // back.
 
 const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
@@ -62,12 +62,13 @@ export function flowLook(flow: number): FlowLook {
 export const WIND_MAX: Record<Tier, number> = { low: 0, medium: 5, high: 9, ultra: 9 };
 /** Sparks off the trail per second at the top of flow, per tier (Low none). */
 export const SPARK_RATE: Record<Tier, number> = { low: 0, medium: 22, high: 44, ultra: 44 };
-/** The trail's samples, per tier: Low a short, coarse ribbon. */
-export const TRAIL_N: Record<Tier, number> = { low: 12, medium: 20, high: 24, ultra: 24 };
+/** The flame's tongues alive at most, per tier, and how many it sheds a second at full flow: Low fewer and fuller. */
+export const FLAME_MAX: Record<Tier, number> = { low: 28, medium: 70, high: 110, ultra: 110 };
+export const FLAME_RATE: Record<Tier, number> = { low: 55, medium: 120, high: 180, ultra: 180 };
 
-/** How long a point of the trail lives (seconds): a short flame at level 2, the longest at full flow. */
+/** How long a tongue of the flame lives (seconds): a lick at level 2, the tallest flame at full flow. */
 export function trailLife(look: FlowLook): number {
-  return 0.16 + 0.26 * look.trail + 0.08 * look.top;
+  return 0.16 + 0.12 * look.trail + 0.06 * look.top;
 }
 
 /** The breath a level change carries: + a level gained, - one lost, 0 to 1 each way. A bigger step is a bigger
@@ -106,16 +107,101 @@ const ROOT_C = new Color('#FF4D2E');
 const MID_C = new Color('#FFD34D');
 const TIP_C = new Color('#FFF1C8');
 
-/** The ribbons' material: world-space strips built on the CPU each frame, faced to the lens. aRib: x along the
- *  ribbon (0 its head, 1 its tail), y across (-1 to 1), z its alpha, w its kind (0 the trail, 1 a wind line). */
+/** The flame's material (round 8, the flow pass): soft tongues of fire shed off the scarf's last third, each a teardrop
+ *  stood along the way it rises (round at its foot, tapering to its tip), burning from the rider's vermillion at its
+ *  birth into the lantern's marigold as it climbs and fades, with a hot pale heart while it is young; and one soft glow
+ *  on the scarf's tip under them. No outline anywhere: every edge is a falloff. aFlame: x its age over its life, y its
+ *  size (m), z its alpha, w its kind (0 a tongue, 1 the glow); aRise: the way it rises (three.js, unit). (A ribbon here
+ *  read to two critics as a strip, a plank, a baton, a sickle and lightning; a flame is made of tongues.) */
+function flameMaterial(hdr: number): ShaderMaterial {
+  const m = new ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: NormalBlending,
+    uniforms: { uScale: { value: 600 }, uHdr: { value: hdr }, uRoot: { value: ROOT_C.clone() }, uMid: { value: MID_C.clone() } },
+    vertexShader: /* glsl */ `
+      attribute vec4 aFlame;
+      attribute vec3 aRise;
+      uniform float uScale;
+      varying vec4 vFlame;
+      varying vec2 vAxis;
+      varying float vRatio;
+      void main() {
+        vFlame = aFlame;
+        vec4 mv = viewMatrix * vec4(position, 1.0);
+        // (A tongue born on the scarf stands a hand in front of it, so the cloth it burns on never hides half of it.)
+        mv.z += 0.08;
+        float d = max(-mv.z, 0.05);
+        vec4 c0 = projectionMatrix * mv;
+        vec4 c1 = projectionMatrix * viewMatrix * vec4(position + aRise * 0.1, 1.0);
+        vAxis = vec2(0.0, 1.0);
+        if (c0.w > 0.05 && c1.w > 0.05) {
+          vec2 s = (c1.xy / c1.w - c0.xy / c0.w) * vec2(projectionMatrix[1][1] / projectionMatrix[0][0], 1.0);
+          float l = length(s);
+          if (l > 1e-5) vAxis = vec2(s.x, -s.y) / l;
+        }
+        // A tongue stands half as tall again as it is wide (thinner, a cluster read as a sparkler); the glow is round.
+        vRatio = aFlame.w > 0.5 ? 1.0 : 0.68;
+        // (Nothing grows into a blot at the lens: a tongue thins away inside about two metres.)
+        vFlame.z *= smoothstep(1.2, 2.2, d);
+        gl_PointSize = clamp(aFlame.y * uScale / d, 2.0 * uScale / 720.0, uScale * 0.12);
+        gl_Position = c0;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform float uHdr;
+      uniform vec3 uRoot;
+      uniform vec3 uMid;
+      varying vec4 vFlame;
+      varying vec2 vAxis;
+      varying float vRatio;
+      void main() {
+        vec2 c = (gl_PointCoord - 0.5) * 2.0;
+        // Along the rise (-1 its foot, 1 its tip) and across it.
+        float al = dot(c, vAxis);
+        float ac = dot(c, vec2(-vAxis.y, vAxis.x)) / vRatio;
+        float t = vFlame.x;
+        vec3 col;
+        float a;
+        if (vFlame.w > 0.5) {
+          // The glow on the scarf's tip: a soft round light, vermillion warming to orange.
+          float g2 = dot(c, c);
+          a = exp(-g2 * 3.2) * (1.0 - smoothstep(0.75, 1.0, g2));
+          col = mix(uRoot, uMid, 0.4) * uHdr;
+        } else {
+          // A teardrop: full at its foot, narrowing to a point at its tip.
+          float w = mix(1.0, 0.38, clamp(al * 0.5 + 0.5, 0.0, 1.0));
+          float r2 = al * al + (ac * ac) / (w * w);
+          a = pow(clamp(1.0 - r2, 0.0, 1.0), 1.05);
+          // Vermillion at its birth burning into marigold as it climbs; a hot pale heart while it is young.
+          col = mix(uRoot, uMid, smoothstep(0.05, 0.6, t));
+          col = mix(col, vec3(1.0, 0.93, 0.72), clamp(1.0 - r2, 0.0, 1.0) * 0.45 * (1.0 - t));
+          col *= uHdr;
+        }
+        a *= vFlame.z;
+        if (a < 0.004) discard;
+        gl_FragColor = vec4(col, a);
+        #include <colorspace_fragment>
+      }
+    `,
+  });
+  // Never over the rider's body (contract C10: the body's pixels hold 1), but over the scarf (3), which it burns on.
+  m.stencilWrite = true;
+  m.stencilWriteMask = 0;
+  m.stencilFunc = NotEqualStencilFunc;
+  m.stencilRef = 1;
+  m.stencilFuncMask = 3;
+  return m;
+}
+
+/** The wind lines' material: world-space strips built on the CPU each frame, faced to the lens. aRib: x along the
+ *  line (0 its head, 1 its tail), y across (-1 to 1), z its alpha, w unused. */
 function ribbonMaterial(hdr: number): ShaderMaterial {
   const m = new ShaderMaterial({
     transparent: true,
     depthWrite: false,
     blending: NormalBlending,
     uniforms: {
-      uRoot: { value: ROOT_C.clone() },
-      uMid: { value: MID_C.clone() },
       uTip: { value: TIP_C.clone() },
       uHdr: { value: hdr },
       uTime: shared.uTime,
@@ -141,11 +227,8 @@ function ribbonMaterial(hdr: number): ShaderMaterial {
       }
     `,
     fragmentShader: /* glsl */ `
-      uniform vec3 uRoot;
-      uniform vec3 uMid;
       uniform vec3 uTip;
       uniform float uHdr;
-      uniform float uTime;
       uniform vec3 uFog;
       varying vec4 vRib;
       varying float vFog;
@@ -153,25 +236,11 @@ function ribbonMaterial(hdr: number): ShaderMaterial {
       void main() {
         float u = vRib.x;
         float across = 1.0 - vRib.y * vRib.y;
-        vec3 col;
-        float a;
-        if (vRib.w < 0.5) {
-          // The spirit trail: a flame, the rider's own vermillion at the root burning into the lantern's marigold, with
-          // a pale line of heat down its middle only. (Round 8's critics: with a pale gold tail across its whole width
-          // it read as a flat cream plank or a paddle by day.)
-          col = u < 0.3 ? mix(uRoot, uMid, u / 0.3) : mix(uMid, mix(uMid, uTip, 0.35), (u - 0.3) / 0.7);
-          float heart = smoothstep(0.8, 1.0, across);
-          col = mix(col, vec3(1.0, 0.95, 0.82), heart * 0.6 * (1.0 - u));
-          col *= uHdr * (1.0 + 0.6 * heart);
-          // (A glow, not a band of paint: soft from its heart to its edges.)
-          a = pow(across, 1.7) * (1.0 - smoothstep(0.45, 1.0, u)) * smoothstep(0.0, 0.06, u + 0.02);
-        } else {
-          // A wind line: a pale stream of air, a little of the lantern's gold in it, faint at its ends.
-          col = mix(vec3(0.96, 0.97, 1.0), uTip, 0.45) * mix(1.0, uHdr, 0.5);
-          a = 0.7 * across * across * smoothstep(0.0, 0.2, u) * (1.0 - smoothstep(0.75, 1.0, u));
-        }
-        // (A wind line takes little of the fog's colour: in Sakura's lilac air it turned into hard cyan lines.)
-        col = mix(col, uFog, vFog * (vRib.w < 0.5 ? 0.7 : 0.25));
+        // A wind line: a pale stream of air, a little of the lantern's gold in it, faint at its ends.
+        vec3 col = mix(vec3(0.96, 0.97, 1.0), uTip, 0.45) * mix(1.0, uHdr, 0.5);
+        float a = 0.7 * across * across * smoothstep(0.0, 0.2, u) * (1.0 - smoothstep(0.75, 1.0, u));
+        // (It takes little of the fog's colour: in Sakura's lilac air it turned into hard cyan lines.)
+        col = mix(col, uFog, vFog * 0.25);
         a *= vRib.z * vNear * (1.0 - vFog * 0.5);
         if (a < 0.005) discard;
         gl_FragColor = vec4(col, a);
@@ -216,7 +285,7 @@ function sparkMaterial(hdr: number): ShaderMaterial {
         float r2 = dot(c, c) * 4.0;
         if (r2 > 1.0) discard;
         // A hot spark is marigold with a pale heart; a guttering ember is a dim amber going grey.
-        vec3 hot = mix(uMid, uTip, smoothstep(0.6, 0.0, r2)) * uHdr;
+        vec3 hot = mix(uMid, uTip, 0.35 * smoothstep(0.6, 0.0, r2)) * uHdr;
         vec3 dim = vec3(0.55, 0.36, 0.22);
         vec3 col = mix(dim, hot, vHot);
         float a = (1.0 - r2) * vA;
@@ -237,10 +306,12 @@ export interface SpiritFlowInput {
   time: number;
   /** The sim's eased flow, 0 to 6 (0 outside a run, in a crash or at the finish). */
   flow: number;
-  /** The rider's world velocity (three.js) and the scarf's knot and tip (rider.scarfPoint). */
+  /** The rider's world velocity (three.js), the scarf's knot and tip, and any point along it (rider.scarfPoint: u 0 at
+   *  the knot, 1 at the tip). */
   vel: Vector3;
   knot: Vector3;
   tip: Vector3;
+  scarfAt: (u: number, out: Vector3) => Vector3;
   /** Direction of travel (three.js, unit, horizontal) and the lens. */
   dir: Vector3;
   cam: Vector3;
@@ -271,21 +342,27 @@ interface Wind {
 export class SpiritFlow {
   readonly root = new Group();
   private tier: Tier;
-  private trailGeo = new BufferGeometry();
+  private flameGeo = new BufferGeometry();
   private windGeo = new BufferGeometry();
   private sparkGeo = new BufferGeometry();
-  private trailMat = ribbonMaterial(1.5);
+  private flameMat: ShaderMaterial;
   private windMat = ribbonMaterial(1.2);
   private sparkMat = sparkMaterial(1.4);
-  private trail: Mesh;
+  private flame: Points;
   private wind: Mesh;
   private sparks: Points;
-  // The trail: a ring of points shed off the scarf's tip, each with an age and a velocity.
-  private tp = new Float32Array(24 * 3);
-  private tv = new Float32Array(24 * 3);
-  private ta = new Float32Array(24);
-  private tn = 0;
-  private tAcc = 0;
+  // The flame's tongues: where along the scarf each was born (u, 0 at the knot to 1 at the tip), how far it has risen
+  // off that point (m), the way it rises (m/s), its age, life and size. Slot 0 of the drawn buffer is the glow on the
+  // tip. (Round 8, the flow pass: held as an offset from the knot, a tongue stayed where the scarf had been and read as
+  // a campfire on the snow beside the sled; riding its own point of the scarf, the scarf itself burns.)
+  private fp = new Float32Array(FLAME_MAX.high * 3);
+  private fv = new Float32Array(FLAME_MAX.high * 3);
+  private fa = new Float32Array(FLAME_MAX.high);
+  private fl = new Float32Array(FLAME_MAX.high);
+  private fs = new Float32Array(FLAME_MAX.high);
+  private fu = new Float32Array(FLAME_MAX.high);
+  private fn = 0;
+  private fAcc = 0;
   private winds: Wind[] = [];
   private windAcc = 0;
   private sp = new Float32Array(MAX_SPARK * 3);
@@ -306,11 +383,12 @@ export class SpiritFlow {
 
   constructor(tier: Tier) {
     this.tier = tier;
-    const tPos = new BufferAttribute(new Float32Array(24 * 2 * 3), 3).setUsage(DynamicDrawUsage);
-    const tRib = new BufferAttribute(new Float32Array(24 * 2 * 4), 4).setUsage(DynamicDrawUsage);
-    this.trailGeo.setAttribute('position', tPos);
-    this.trailGeo.setAttribute('aRib', tRib);
-    this.trailGeo.setIndex(stripIndex(1, 24));
+    const n = FLAME_MAX.high + 1;
+    this.flameGeo.setAttribute('position', new BufferAttribute(new Float32Array(n * 3), 3).setUsage(DynamicDrawUsage));
+    this.flameGeo.setAttribute('aFlame', new BufferAttribute(new Float32Array(n * 4), 4).setUsage(DynamicDrawUsage));
+    this.flameGeo.setAttribute('aRise', new BufferAttribute(new Float32Array(n * 3), 3).setUsage(DynamicDrawUsage));
+    // (Low has no bloom: its flame keeps its colour at full value rather than going over it.)
+    this.flameMat = flameMaterial(tier === 'low' ? 1 : 1.35);
     const wPos = new BufferAttribute(new Float32Array(MAX_WIND * WIND_PTS * 2 * 3), 3).setUsage(DynamicDrawUsage);
     const wRib = new BufferAttribute(new Float32Array(MAX_WIND * WIND_PTS * 2 * 4), 4).setUsage(DynamicDrawUsage);
     this.windGeo.setAttribute('position', wPos);
@@ -318,10 +396,10 @@ export class SpiritFlow {
     this.windGeo.setIndex(stripIndex(MAX_WIND, WIND_PTS));
     this.sparkGeo.setAttribute('position', new BufferAttribute(this.sp, 3).setUsage(DynamicDrawUsage));
     this.sparkGeo.setAttribute('aSpark', new BufferAttribute(this.sl, 2).setUsage(DynamicDrawUsage));
-    this.trail = new Mesh(this.trailGeo, this.trailMat);
+    this.flame = new Points(this.flameGeo, this.flameMat);
     this.wind = new Mesh(this.windGeo, this.windMat);
     this.sparks = new Points(this.sparkGeo, this.sparkMat);
-    for (const o of [this.trail, this.wind, this.sparks]) {
+    for (const o of [this.flame, this.wind, this.sparks]) {
       o.frustumCulled = false;
       o.visible = false;
       // After the rider (its stencil) and the near field.
@@ -332,17 +410,18 @@ export class SpiritFlow {
 
   setTier(tier: Tier): void {
     this.tier = tier;
+    this.flameMat.uniforms.uHdr.value = tier === 'low' ? 1 : 1.35;
     this.clear();
   }
 
   clear(): void {
-    this.tn = this.sn = 0;
+    this.fn = this.sn = 0;
     this.winds.length = 0;
-    this.tAcc = this.windAcc = this.sAcc = 0;
+    this.fAcc = this.windAcc = this.sAcc = 0;
     this.breath = this.stepUp = this.stepDown = 0;
     this.pulse = this.flare = this.gutter = 0;
     this.look = flowLook(0);
-    this.trail.visible = this.wind.visible = this.sparks.visible = false;
+    this.flame.visible = this.wind.visible = this.sparks.visible = false;
   }
 
   /** The sim's `flow` event: a level gained or lost. Several in one frame (a combo banking two levels at once)
@@ -362,6 +441,7 @@ export class SpiritFlow {
   /** The sizes the lens and the sparks use (lensPx, particles.ts). */
   setScale(px: number): void {
     this.sparkMat.uniforms.uScale.value = px;
+    this.flameMat.uniforms.uScale.value = px;
   }
 
   update(o: SpiritFlowInput): void {
@@ -390,108 +470,109 @@ export class SpiritFlow {
     this.pulse *= Math.exp(-dt / (this.pulse > 0 ? 0.32 : 0.45));
     this.flare *= Math.exp(-dt / 0.35);
     this.gutter = Math.max(0, this.gutter - dt / 0.75);
-    this.stepTrail(o, dt);
+    this.stepFlame(o, dt);
     this.stepWind(o, dt);
     this.stepSparks(o, dt);
   }
 
-  /** Sheds the trail's points off the scarf's tip and builds its ribbon, faced to the lens. */
-  private stepTrail(o: SpiritFlowInput, dt: number): void {
+  /** Sheds the flame's tongues off the scarf's last third and lays them, with the glow on its tip, into the buffer. They
+   *  are held in the rider's own frame (offsets from the knot), so the flame stays on the scarf at any speed: left in the
+   *  air, anything behind the rider is nearer the lens, which looks down on it, and it ran down the frame. */
+  private stepFlame(o: SpiritFlowInput, dt: number): void {
     const L = this.look;
-    const n = TRAIL_N[this.tier];
-    const life = trailLife(L);
+    const cap = FLAME_MAX[this.tier];
     const on = L.trail > 0.02 || this.gutter > 0;
-    // Age the points; drop the dead (they are kept oldest last).
-    for (let i = 0; i < this.tn; i++) {
-      this.ta[i] += dt;
-      const i3 = i * 3;
-      this.tp[i3] += this.tv[i3] * dt;
-      this.tp[i3 + 1] += this.tv[i3 + 1] * dt;
-      this.tp[i3 + 2] += this.tv[i3 + 2] * dt;
+    // Age the tongues and let them rise; drop the dead.
+    let i = 0;
+    while (i < this.fn) {
+      this.fa[i] += dt;
+      if (this.fa[i] >= this.fl[i]) {
+        const j = --this.fn;
+        if (i !== j) {
+          this.fp.copyWithin(i * 3, j * 3, j * 3 + 3);
+          this.fv.copyWithin(i * 3, j * 3, j * 3 + 3);
+          this.fa[i] = this.fa[j];
+          this.fl[i] = this.fl[j];
+          this.fs[i] = this.fs[j];
+          this.fu[i] = this.fu[j];
+        }
+        continue;
+      }
+      this.fp[i * 3] += this.fv[i * 3] * dt;
+      this.fp[i * 3 + 1] += this.fv[i * 3 + 1] * dt;
+      this.fp[i * 3 + 2] += this.fv[i * 3 + 2] * dt;
+      i++;
     }
-    while (this.tn > 0 && this.ta[this.tn - 1] > life) this.tn--;
-    // A new point a step, held in the rider's own frame (an offset from the scarf's knot) and drifting up and a little
-    // back along the scarf's line, so the ribbon continues the scarf past its tip and curls up off it as a plume of
-    // spirit fire. (Round 8's first looks left the points in the air: behind the rider they were nearer the lens, which
-    // looks down on them, so the ribbon ran down the frame to its foot as a yellow stripe.)
-    this.tAcc += dt;
-    const every = life / (n - 2);
-    if (on && this.tAcc >= every) {
-      this.tAcc = 0;
-      if (this.tn >= n) this.tn = n - 1;
-      this.tp.copyWithin(3, 0, this.tn * 3);
-      this.tv.copyWithin(3, 0, this.tn * 3);
-      this.ta.copyWithin(1, 0, this.tn);
-      this.tn++;
-      const s = tmpA.copy(o.tip).sub(o.knot);
-      const sl = Math.max(0.2, s.length());
-      s.multiplyScalar(1 / sl);
-      // The scarf's line, a little up, and a slow curl that turns with time (never the same twice).
-      // (A slow lean, not a curl: a curl turned the plume into an S that read as a stray glyph.)
-      const curl = Math.sin(o.time * 1.7) * 0.1;
-      this.tp[0] = o.tip.x - o.knot.x;
-      this.tp[1] = o.tip.y - o.knot.y;
-      this.tp[2] = o.tip.z - o.knot.z;
-      // (Straight up and a little out to the scarf's side, never back: back is toward the lens, which looks down,
-      // so a drift back read on screen as a hook hanging under the scarf's tip.)
-      const out = (s.x * -o.dir.z + s.z * o.dir.x) >= 0 ? 1 : -1;
-      this.tv[0] = -o.dir.z * (0.45 * out + curl);
-      this.tv[1] = 2.1;
-      this.tv[2] = o.dir.x * (0.45 * out + curl);
-      this.ta[0] = 0;
-    } else if (this.tn > 0 && on) {
-      // The head follows the tip between sheds, so the ribbon never comes away from the scarf.
-      this.tp[0] = o.tip.x - o.knot.x;
-      this.tp[1] = o.tip.y - o.knot.y;
-      this.tp[2] = o.tip.z - o.knot.z;
-    }
-    const show = this.tn >= 3 && (L.trail > 0.02 || this.gutter > 0);
-    this.trail.visible = show;
+    // Shed new tongues: more and taller with the flow, a flare on a level gained; a guttering flame sheds few, short ones.
+    if (on) {
+      const rate = FLAME_RATE[this.tier] * (this.gutter > 0 && L.trail < 0.05 ? 0.35 : 0.3 + 0.7 * L.trail) * (1 + 0.8 * this.flare);
+      this.fAcc += rate * dt;
+      const life0 = trailLife(L);
+      const size0 = (0.15 + 0.07 * L.trail + 0.05 * L.top) * (1 + 0.5 * this.flare) * (this.tier === 'low' ? 1.6 : 1);
+      while (this.fAcc >= 1 && this.fn < cap) {
+        this.fAcc -= 1;
+        const k = this.fn++;
+        // Along the whole tail, more toward the tip, so the scarf reads as alight along its length and not a fire beside it.
+        const r = Math.random();
+        this.fu[k] = 1 - 0.7 * r * r;
+        this.fp[k * 3] = (Math.random() - 0.5) * 0.04;
+        this.fp[k * 3 + 1] = (Math.random() - 0.5) * 0.04;
+        this.fp[k * 3 + 2] = (Math.random() - 0.5) * 0.04;
+        // Up, swaying a little either side; never back toward the lens (it would read as hanging under the scarf).
+        const sway = (Math.random() - 0.5) * 0.7;
+        this.fv[k * 3] = -o.dir.z * sway;
+        this.fv[k * 3 + 1] = 1.2 + Math.random() * 1.3 + 0.6 * L.top;
+        this.fv[k * 3 + 2] = o.dir.x * sway;
+        this.fa[k] = 0;
+        this.fl[k] = life0 * (0.7 + 0.6 * Math.random()) * (this.gutter > 0 && L.trail < 0.05 ? 0.6 : 1);
+        // (Smaller toward the knot: the flame grows toward the tip.)
+        this.fs[k] = size0 * (0.75 + 0.5 * Math.random()) * (0.55 + 0.45 * this.fu[k]);
+      }
+      if (this.fAcc > 1) this.fAcc = 1;
+    } else this.fAcc = 0;
+    const show = this.fn > 0 || L.trail > 0.02;
+    this.flame.visible = show;
     if (!show) {
-      this.trailGeo.setDrawRange(0, 0);
+      this.flameGeo.setDrawRange(0, 0);
       return;
     }
-    const pos = this.trailGeo.getAttribute('position') as BufferAttribute;
-    const rib = this.trailGeo.getAttribute('aRib') as BufferAttribute;
-    const pa = pos.array as Float32Array;
-    const ra = rib.array as Float32Array;
-    // Width and light: thin at level 2, a band at full flow, flared by a breath; a gutter flickers and thins it.
-    // (Low has no bloom to carry a thin flame: its trail is half as wide again, so it reads as the designed cheaper state.)
-    const w = (0.03 + 0.045 * L.trail + 0.02 * L.top) * (1 + 0.6 * this.flare) * (this.tier === 'low' ? 1.5 : 1);
-    // (Round 8's first look: by age alone the ribbon reached back past the lens and lay on the snow as a broad yellow
-    // stripe to the frame's foot. It is held to its last metres off the scarf, measured along itself.)
-    const reach = 0.8 + 1.1 * L.trail + 0.5 * L.top;
-    let arc = 0;
-    const flick = this.gutter > 0 && !o.reduced ? 0.35 + 0.65 * Math.abs(Math.sin(o.time * 41) * Math.sin(o.time * 17 + 1)) : 1;
-    const alpha = Math.min(1, (0.25 + 0.75 * L.trail) * (1 + 0.5 * this.flare)) * flick * (this.gutter > 0 ? 1 - 0.5 * this.gutter : 1);
-    for (let i = 0; i < this.tn; i++) {
-      const a = i > 0 ? i - 1 : 0;
-      const b = i < this.tn - 1 ? i + 1 : this.tn - 1;
-      tmpA.set(this.tp[b * 3] - this.tp[a * 3], this.tp[b * 3 + 1] - this.tp[a * 3 + 1], this.tp[b * 3 + 2] - this.tp[a * 3 + 2]);
-      const p = tmpB.set(this.tp[i * 3], this.tp[i * 3 + 1], this.tp[i * 3 + 2]).add(o.knot);
-      const toCam = tmpC.copy(o.cam).sub(p);
-      const side = tmpA.cross(toCam);
-      const sl = side.length();
-      if (sl > 1e-6) side.multiplyScalar(1 / sl);
-      if (i > 0) arc += Math.hypot(this.tp[i * 3] - this.tp[i * 3 - 3], this.tp[i * 3 + 1] - this.tp[i * 3 - 2], this.tp[i * 3 + 2] - this.tp[i * 3 - 1]);
-      const u = Math.min(1, Math.max(this.ta[i] / life, arc / reach));
-      // Narrow at the root (it grows out of the scarf's tip), widest a third of the way, tapering to its end.
-      const width = w * Math.min(1, 0.35 + u * 3) * (1 - 0.6 * u);
-      for (let k = 0; k < 2; k++) {
-        const sg = k === 0 ? -1 : 1;
-        const v = i * 2 + k;
-        pa[v * 3] = p.x + side.x * width * sg;
-        pa[v * 3 + 1] = p.y + side.y * width * sg;
-        pa[v * 3 + 2] = p.z + side.z * width * sg;
-        ra[v * 4] = u;
-        ra[v * 4 + 1] = sg;
-        ra[v * 4 + 2] = alpha;
-        ra[v * 4 + 3] = 0;
-      }
+    const pa = (this.flameGeo.getAttribute('position') as BufferAttribute).array as Float32Array;
+    const fa = (this.flameGeo.getAttribute('aFlame') as BufferAttribute).array as Float32Array;
+    const ra = (this.flameGeo.getAttribute('aRise') as BufferAttribute).array as Float32Array;
+    // A guttering flame flickers.
+    const flick = this.gutter > 0 && !o.reduced ? 0.4 + 0.6 * Math.abs(Math.sin(o.time * 41) * Math.sin(o.time * 17 + 1)) : 1;
+    const alpha = Math.min(1, (0.55 + 0.45 * L.trail) * (1 + 0.3 * this.flare)) * flick;
+    // Slot 0: the glow on the scarf's tip.
+    pa[0] = o.tip.x;
+    pa[1] = o.tip.y;
+    pa[2] = o.tip.z;
+    fa[0] = 0;
+    fa[1] = (0.4 + 0.26 * L.trail + 0.14 * L.top) * (1 + 0.4 * this.flare) * (this.tier === 'low' ? 1.4 : 1);
+    fa[2] = (0.35 + 0.4 * L.trail) * flick * (L.trail > 0.02 ? 1 : this.gutter);
+    fa[3] = 1;
+    ra[0] = 0;
+    ra[1] = 1;
+    ra[2] = 0;
+    for (let k = 0; k < this.fn; k++) {
+      const v = k + 1;
+      const at = o.scarfAt(this.fu[k], tmpB);
+      pa[v * 3] = this.fp[k * 3] + at.x;
+      pa[v * 3 + 1] = this.fp[k * 3 + 1] + at.y;
+      pa[v * 3 + 2] = this.fp[k * 3 + 2] + at.z;
+      const t = this.fa[k] / this.fl[k];
+      // Each tongue grows a moment, then narrows to nothing as it climbs; a flicker in its size (never under reduced motion).
+      const jit = o.reduced ? 1 : 0.85 + 0.3 * Math.abs(Math.sin(o.time * 37 + k * 1.7));
+      fa[v * 4] = t;
+      fa[v * 4 + 1] = this.fs[k] * Math.min(1, 0.55 + t * 4) * (1 - 0.7 * t) * jit;
+      fa[v * 4 + 2] = alpha * Math.min(1, t * 10) * (1 - t * t);
+      fa[v * 4 + 3] = 0;
+      const vl = Math.hypot(this.fv[k * 3], this.fv[k * 3 + 1], this.fv[k * 3 + 2]) || 1;
+      ra[v * 3] = this.fv[k * 3] / vl;
+      ra[v * 3 + 1] = this.fv[k * 3 + 1] / vl;
+      ra[v * 3 + 2] = this.fv[k * 3 + 2] / vl;
     }
-    pos.needsUpdate = true;
-    rib.needsUpdate = true;
-    this.trailGeo.setDrawRange(0, (this.tn - 1) * 6);
+    for (const a of ['position', 'aFlame', 'aRise']) (this.flameGeo.getAttribute(a) as BufferAttribute).needsUpdate = true;
+    this.flameGeo.setDrawRange(0, this.fn + 1);
   }
 
   /** Wind lines: spawned ahead in the air beside and over the line, racing a little with the rider so they whip past. */
@@ -625,14 +706,14 @@ export class SpiritFlow {
   private stepSparks(o: SpiritFlowInput, dt: number): void {
     const L = this.look;
     const rate = SPARK_RATE[this.tier];
-    if (rate > 0 && !o.reduced && this.tn > 2) {
+    if (rate > 0 && !o.reduced && this.fn > 2) {
       const want = rate * L.top + (this.gutter > 0 ? rate * 0.5 * this.gutter : 0);
       this.sAcc += want * dt;
       while (this.sAcc >= 1) {
         this.sAcc -= 1;
         // Off a point along the ribbon's first half, keeping less of the rider's speed so they fall behind past the lens.
-        const j = Math.floor(Math.random() * Math.max(1, this.tn / 2));
-        tmpA.set(this.tp[j * 3], this.tp[j * 3 + 1], this.tp[j * 3 + 2]).add(o.knot);
+        const j = Math.floor(Math.random() * this.fn);
+        tmpA.set(this.fp[j * 3], this.fp[j * 3 + 1], this.fp[j * 3 + 2]).add(o.scarfAt(this.fu[j], tmpC));
         const ember = this.gutter > 0 && Math.random() < 0.7;
         const keep = ember ? 0.7 : 0.55 + Math.random() * 0.2;
         this.spark(tmpA, o.vel.x * keep + (Math.random() - 0.5) * 2, o.vel.y * keep + (ember ? -0.5 : 0.4 + Math.random()), o.vel.z * keep + (Math.random() - 0.5) * 2, ember ? 0.45 : 0.4 + Math.random() * 0.35, ember ? 0 : 1);

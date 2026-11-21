@@ -224,3 +224,74 @@ speed lane, `notes/r8-speed.md`): `?flowlook=0..6` with `?debug` holds the flow'
 - `probe/` GL counts, GPU passes, systime and readability, before and after.
 - `look*/`, `lowlook/` look-dev (Low: before and after at Pinecrest 290 m and Sakura 1280 m).
 - The builds: `.claude/worktrees/r8-speed/dist/r8-speed-before` (fac4c46) and `dist/r8-speed`.
+
+## The flow pass (after the merge, branch `r8-flow` from round-8 at f9c0c87)
+
+The main lane shot the merged flame at `?flowlook=6` on Pinecrest and Sakura (600, 1500, 2700 m, High and Low) and a
+fresh critic found two faults, worst first: fine horizontal scanlines across the snow on High, and the flame read as "a
+flat yellow strip with a dotted white outline, floating clear of the scarf": a sticker, a baton, a sickle, lightning.
+
+**The scanlines were the occlusion pass, not the flow** (`postfx/ao.ts`, the light lane's file). Shot at the same ticks
+on round-8's head: the same stripes at `flowlook=0` and `flowlook=6`, with the lens blur off (`post=-blur`), and none with
+the occlusion off (`post=-ao`); round-8's own before still at Sakura 1500 m has them too. Row averages over the bank read
+a period of about four pixels: High's one-slice occlusion at half the frame, denoised by a 4x4 blur and a 2x2 upsample that
+both drop any tap more than about 3% nearer or further than the pixel. On snow seen at a grazing angle every tap a row up
+or down is that much deeper, so every vertical tap was dropped, each row kept its own phase of the 4x4 noise, and the
+banks and their shadows printed as scanlines. Now both weigh a tap against the plane the pixel lies on (the depth's
+slope, the smaller one-sided step in the blur and the screen derivative in the upsample, held to a ground's at most), so a
+slope is blurred and an edge (a trunk on the snow) still is not. Shot after at `flowlook=0`: both spots clean
+(`shots/r8/flow/crops/band-fix-m0.png`, `band-fix-m3.png`, the old build above, the new below). The composite's corner
+streak's six taps now start at a per-pixel offset too, so it can never copy a level edge into parallel lines. No draw, no
+pass; the blur takes four more taps of its own target.
+
+**The flame** (`spiritflow.ts`, `rider.ts`, `world.ts`). A ribbon from a chase lens reads as a strip whatever its colour,
+so it is now fire:
+- *Tongues*: soft teardrops shed off the scarf's tail (from along its whole length, more toward the tip, smaller toward
+  the knot), each round at its foot and tapering to its tip, stood along the way it rises, burning from the rider's
+  vermillion at its birth into the lantern's marigold as it climbs, a hot pale heart while young, fading and narrowing to
+  nothing; their sizes flicker. No outline anywhere: every edge is a falloff. One Points draw (High 110 tongues, 180 a
+  second at full flow; Medium 70; Low 28, fewer and fuller, its colour at full value with no bloom to carry it).
+- *Riding the scarf*: each tongue keeps the point of the scarf it was born on and rises off that point as the scarf moves,
+  so it never comes away (held as an offset from the knot, it stayed where the scarf had been: "a campfire beside the
+  sled").
+- *The scarf alight*: its tail's own colours burn from the rider's vermillion at the knot through a flame's orange to
+  marigold at the tip, brighter than the cloth (vertex colours, so Low burns too at no cost, repainted only when the flow
+  moves), and a soft glow sits on the tip. The rider's flow rim takes most of the flame's weight (all of it read as a
+  stippled outline).
+- *Over the scarf, not round it*: the scarf writes a stencil bit of its own (3) beside the rider's (1); the flame is held off
+  the body alone, and every ghost layer (`ghostStencil`, the avalanche's debris in `chaos.ts`) now tests the rider's bit
+  alone, so contract C10 still holds for them. Held off the scarf like the body, the flame showed only round the scarf's
+  edges and read as a fire beside it. Tongues stand a hand in front of the cloth, and the burnt tip is a deep marigold
+  (brighter, it bloomed to cream).
+- Sparks are marigold, never white (a pale heart read as a dotted white outline round the old ribbon), and shed off the
+  tongues.
+
+**Judged** by fresh critics (opus, high effort) given only ART.md and the twelve stills, asked what is attached to or
+streaming from the rider and what it reads as at a glance, whether each frame is a good picture of the game as ART.md
+describes it, and what is broken or ugly. Bar: a flame off the scarf in at least 10 of 12, and no banding.
+
+| Look | Flame named as off the scarf | Banding |
+| --- | --- | --- |
+| The merged ribbon (main lane's critic) | 0 of 12: a strip, sticker, baton, sickle, lightning | scanlines on High (m3-1500, m0-1500) |
+| Tongues off the tail's tip (`flow6/`) | about 1 of 12: right colours in all twelve, but "a small campfire or torch beside the sled", "an orange smudge" on Low | none: "no true scanlines", row profiles at 8-bit quantisation |
+| Tongues riding the scarf (`flow6b/`) | about 0 of 12: "a small fire burning next to the sled" | none from the occlusion |
+| The scarf alight (`flow6c/`) | about 2 of 12: the scarf's own burn "is right", but the fire still "a separate patch ... beside the sled", its burnt tip blooming to cream "like a stick in a fire" | none: "no true alternating-row scanlines" (a pixel check) |
+| The flame over the scarf (`flow6d/`, 95111aa) | **5 of 12 clearly, 7 with the two Low 600 m "exhaust" frames**: High Pinecrest 2700 m "clearly a burning scarf or lit fuse, the clearest read" and the set's best frame, High Pinecrest 600 m "a flame plume off the left shoulder", High Sakura 600 m "a flaming tail", Sakura 2700 m both tiers "a comet tail" | none from the occlusion |
+
+**Still short of the bar (10 of 12).** Where it fails, by the fourth critic: a flip (Pinecrest 1500 m, both tiers) hides the
+scarf behind the saucer's dark underside, so the tongues read as "a fireball beside a dark lid"; on Sakura 1500 m the scarf
+is short and flat and the tongues rise upright beside a powder burst as "a picket of candles" or "a bonfire"; on Low a few
+big marigold tongues read as two more spirit-light pickups (the course's fuel is a marigold teardrop too) and, at Pinecrest
+2700 m, as a smear on the far side from the scarf. What I would try next: tongues stretched along the scarf's own line at
+their birth (streaming off it) rather than standing upright, more orange and vermillion and less marigold so a tongue is
+never a fuel drop (Low most of all, with more and smaller tongues), and the flame thinned while a flip hides the scarf.
+
+What the critics named that is not the flow's, for the lanes that own it: regular stripes in the snow material itself
+(Pinecrest 2700 m's left bank as dunes or sand, Sakura 2700 m's left bank as cobalt "zebra" crests, a leap landing's
+corduroy across the lane reading as stair treads, starkest on Low), a halftone stipple inside cast shadows on High, Low
+missing a leap's outcrops and crowd that High draws (Pinecrest and Sakura 600 m), Sakura's hazards reading as ice spires,
+petals as flat pink dots, a flip's saucer underside as an ink-black disc, orange dots over the rider's hair at Sakura 1500 m
+(seen on the merged build before this pass too), a mint ghost beside the rider on Low and none on High at Sakura 1500 m.
+
+Frames: `shots/r8/flow/` (`diag-*` the banding diagnosis on round-8's head, `band-f0` the fix, `flame1` the first tongues,
+`flow6`, `flow6b`, `flow6c`, `flow6d` the twelve stills of each look, `crops/`).
