@@ -20,9 +20,10 @@ export const LEGEND_DELAY_S = 0.8;
 /** Seconds after the line: the finish lens has swung round to the rider (camera.ts FINISH_SWING_S is 2.5 on the
  *  render clock, which runs slow over the line). */
 export const FINISH_DELAY_S = 2.4;
-/** The finish's frames: this many, this far apart (s). */
+/** The finish's frames: this many, this far apart (s), so the lens's creep round the rider and the town's fireworks
+ *  make them four pictures and not one. */
 export const FINISH_FRAMES = 4;
-export const FINISH_STEP_S = 0.8;
+export const FINISH_STEP_S = 1.6;
 /** A flight is shot at its top only when it lasts at least this long in the air (s). */
 export const APEX_MIN_AIR_S = 0.45;
 /** The most frames one run keeps waiting for its settlement. */
