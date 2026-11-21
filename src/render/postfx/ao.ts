@@ -170,12 +170,24 @@ const BLUR_FRAG = /* glsl */ `
     float key = unpackKey(c.ba);
     vec2 acc = vec2(0.0);
     float wsum = 0.0;
-    // The 4x4 box the noise tiles in. A tap across a depth edge (more than about 3% nearer or further)
-    // is left out, so the occlusion under a trunk never bleeds onto the trunk.
+    // The slope of the depth here, a texel each way (the smaller of the two one-sided steps, so a step across an edge
+    // beside this pixel does not count as its slope), held to a ground's at most.
+    float kl = unpackKey(texture2D(tAO, vUv - vec2(uAOTexel.x, 0.0)).ba) - key;
+    float kr = unpackKey(texture2D(tAO, vUv + vec2(uAOTexel.x, 0.0)).ba) - key;
+    float kd = unpackKey(texture2D(tAO, vUv - vec2(0.0, uAOTexel.y)).ba) - key;
+    float ku = unpackKey(texture2D(tAO, vUv + vec2(0.0, uAOTexel.y)).ba) - key;
+    vec2 grad = vec2(abs(kr) < abs(kl) ? kr : -kl, abs(ku) < abs(kd) ? ku : -kd);
+    grad = clamp(grad, -0.016, 0.016);
+    // The 4x4 box the noise tiles in. A tap off the plane this pixel lies on (more than about 3% nearer or further
+    // than the slope puts it) is left out, so the occlusion under a trunk never bleeds onto the trunk. (Round 8, the
+    // flow pass: measured against this pixel's own depth, every tap a row up or down the snow seen at a grazing angle
+    // was "across an edge", so each row kept its own phase of the noise and the banks and their shadows printed as
+    // fine horizontal scanlines on High. Measured against the plane, a slope is blurred and an edge still is not.)
     for (int y = 0; y < 4; y++) {
       for (int x = 0; x < 4; x++) {
-        vec4 s = texture2D(tAO, vUv + (vec2(float(x), float(y)) - 1.5) * uAOTexel);
-        float w = max(0.0, 1.0 - abs(unpackKey(s.ba) - key) * 380.0);
+        vec2 o = vec2(float(x), float(y)) - 1.5;
+        vec4 s = texture2D(tAO, vUv + o * uAOTexel);
+        float w = max(0.0, 1.0 - abs(unpackKey(s.ba) - key - dot(grad, o)) * 380.0);
         acc += s.rg * w;
         wsum += w;
       }
@@ -274,9 +286,11 @@ export const AO_COMPOSITE_GLSL = /* glsl */ `
   vec3 pipeAO(vec3 col, vec2 uv) {
     if (uAO.x + uAO.y <= 0.0) return col;
     float raw = texture2D(tDepth, uv).r;
-    if (raw >= 1.0) return col;
-    float lin = linDepth(raw);
+    float lin = linDepth(min(raw, 0.999999));
     float key = depthKey(lin);
+    // (The depth's slope is taken before any pixel leaves, so a derivative never straddles one that has: the sky's.)
+    vec2 g = clamp(vec2(dFdx(key), dFdy(key)) * 2.0, -0.016, 0.016);
+    if (raw >= 1.0) return col;
     vec2 p = uv / uAO.zw - 0.5;
     vec2 f = fract(p);
     vec2 b = (floor(p) + 0.5) * uAO.zw;
@@ -286,7 +300,11 @@ export const AO_COMPOSITE_GLSL = /* glsl */ `
     vec4 s11 = texture2D(tAO, b + uAO.zw);
     vec4 w = vec4((1.0 - f.x) * (1.0 - f.y), f.x * (1.0 - f.y), (1.0 - f.x) * f.y, f.x * f.y);
     vec4 keys = vec4(unpackKey(s00.ba), unpackKey(s10.ba), unpackKey(s01.ba), unpackKey(s11.ba));
-    w *= max(vec4(0.002), 1.0 - abs(keys - key) * 380.0);
+    // (Each texel's depth against the plane this pixel lies on, not against the pixel's own depth: on snow seen at a
+    // grazing angle the texel a row away was always "across an edge", and the upsample printed rows. The plane's slope
+    // is the depth's own step across this pixel, a half-frame texel's worth, held to a ground's at most.)
+    vec4 plane = key + vec4(dot(g, -f), dot(g, vec2(1.0 - f.x, -f.y)), dot(g, vec2(-f.x, 1.0 - f.y)), dot(g, 1.0 - f));
+    w *= max(vec4(0.002), 1.0 - abs(keys - plane) * 380.0);
     float ws = w.x + w.y + w.z + w.w;
     vec2 ao = (s00.rg * w.x + s10.rg * w.y + s01.rg * w.z + s11.rg * w.w) / ws;
     // Never on a light: anything brighter than lit snow keeps its value.

@@ -273,6 +273,8 @@ export class World {
   private devFlow = -1;
   private flowKnot = new Vector3();
   private flowTip = new Vector3();
+  /** Any point along the scarf, for the flame (rider.scarfPoint). */
+  private scarfAt = (u: number, out: Vector3): Vector3 => this.rider.scarfPoint(u, out);
   readonly sloughs: Sloughs;
   readonly moments: Moments;
   readonly post: PostFX;
@@ -1118,7 +1120,11 @@ export class World {
     const pulse = pt >= FLOW_PULSE_S ? 0 : feel.reduced ? 0.6 * Math.sin((Math.PI * pt) / FLOW_PULSE_S) : pt < 0.05 ? pt / 0.05 : 1 - smooth01((pt - 0.05) / (FLOW_PULSE_S - 0.05));
     // (Only while riding: the crash owns its own beat, and the title reel's hero has earned nothing.)
     const riding = v.mode === 'run' && !this.rider.crashing;
-    this.rider.setFlow(riding ? feel.flow : 0, riding ? Math.max(feel.flowPulse, pulse) : 0);
+    // (Round 8, the flow pass: Spirit Flow's flame lights the rim and the scarf too, so the scarf reads as the flame's root:
+    // the director's earned flow, or most of the flame's own weight where that is more; all of it read as a stippled outline.)
+    this.rider.setFlow(riding ? Math.max(feel.flow, 0.6 * this.spiritFlow.look.trail) : 0, riding ? Math.max(feel.flowPulse, pulse) : 0);
+    // (And the scarf's tail burns with it: the flame's root.)
+    this.rider.setBurn(riding ? this.spiritFlow.look.trail : 0);
     // A dash puts the spirit shimmer on the rider (round 6): in over about 0.1 s, out over about 0.3 s, with
     // after-images on Medium and High.
     const dashing = riding && v.sim !== null && v.sim.s.dash > 0;
@@ -1319,6 +1325,7 @@ export class World {
       vel,
       knot: this.rider.scarfPoint(0, this.flowKnot),
       tip: this.rider.scarfPoint(1, this.flowTip),
+      scarfAt: this.scarfAt,
       dir,
       cam: this.cam.camera.position,
       ground: (x, z) => this.course.ground(x, -z),

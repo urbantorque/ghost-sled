@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { breathFov, chatterK, chatterPitch, dashFov, surgeFov } from '../src/render/speedfeel';
-import { SPARK_RATE, SpiritFlow, TRAIL_N, WIND_MAX, flowBreathOf, flowLook, trailLife } from '../src/render/spiritflow';
+import { FLAME_MAX, FLAME_RATE, SPARK_RATE, SpiritFlow, WIND_MAX, flowBreathOf, flowLook, trailLife } from '../src/render/spiritflow';
 
 // Spirit Flow's picture and the lens's breath (round 8, the speed lane): every part of the look climbs with the level
 // and none goes back down, full flow is everything at once, a level gained breathes in and one lost guts out, Low
@@ -52,7 +52,9 @@ describe('the flow look', () => {
   it('Low draws the trail alone: no wind and no sparks; the phone and Medium about half of High', () => {
     expect(WIND_MAX.low).toBe(0);
     expect(SPARK_RATE.low).toBe(0);
-    expect(TRAIL_N.low).toBeGreaterThan(2);
+    expect(FLAME_MAX.low).toBeGreaterThan(10);
+    expect(FLAME_RATE.low).toBeLessThan(FLAME_RATE.high);
+    expect(FLAME_MAX.low).toBeLessThan(FLAME_MAX.high);
     expect(WIND_MAX.medium).toBeLessThan(WIND_MAX.high);
     expect(SPARK_RATE.medium).toBeLessThan(SPARK_RATE.high);
   });
@@ -85,7 +87,7 @@ describe('a level moving', () => {
 
   it('several levels in one frame are one breath, and the camera takes it once', () => {
     const f = new SpiritFlow('high');
-    const o = { dt: 1 / 60, time: 10, flow: 3, vel: new Vector3(0, 0, -30), knot: new Vector3(0, 1.2, 0), tip: new Vector3(0.3, 1.1, 0.8), dir: new Vector3(0, 0, -1), cam: new Vector3(0, 2.6, 4.5), ground: () => 0, reduced: false };
+    const o = { dt: 1 / 60, time: 10, flow: 3, vel: new Vector3(0, 0, -30), knot: new Vector3(0, 1.2, 0), tip: new Vector3(0.3, 1.1, 0.8), scarfAt: (u: number, out: Vector3) => out.set(0.3 * u, 1.2 - 0.1 * u, 0.8 * u), dir: new Vector3(0, 0, -1), cam: new Vector3(0, 2.6, 4.5), ground: () => 0, reduced: false };
     f.onLevel(1, 0);
     f.onLevel(2, 1);
     f.onLevel(3, 2);
@@ -103,7 +105,7 @@ describe('a level moving', () => {
 
   it('builds a trail off the scarf at flow, and none at rest; no wind under reduced motion', () => {
     const f = new SpiritFlow('high');
-    const o = { dt: 1 / 60, time: 0, flow: 6, vel: new Vector3(0, 0, -30), knot: new Vector3(0, 1.2, 0), tip: new Vector3(0.3, 1.1, 0.8), dir: new Vector3(0, 0, -1), cam: new Vector3(0, 2.6, 4.5), ground: () => 0, reduced: true };
+    const o = { dt: 1 / 60, time: 0, flow: 6, vel: new Vector3(0, 0, -30), knot: new Vector3(0, 1.2, 0), tip: new Vector3(0.3, 1.1, 0.8), scarfAt: (u: number, out: Vector3) => out.set(0.3 * u, 1.2 - 0.1 * u, 0.8 * u), dir: new Vector3(0, 0, -1), cam: new Vector3(0, 2.6, 4.5), ground: () => 0, reduced: true };
     for (let i = 0; i < 60; i++) {
       o.time = i / 60;
       o.knot.z -= 0.5;
