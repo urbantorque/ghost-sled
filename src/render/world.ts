@@ -245,6 +245,8 @@ export class World {
   private farAt: number | null = null;
   /** Dev: the far shadows drawn at no strength (`far=0`). */
   farOff = false;
+  /** Dev: the ghosts left out of the picture (`ghosts=0`, hideGhosts). */
+  ghostsOff = false;
   private farPal = {} as Palette;
   /** The lantern in the world: sky gates, a dash's trail, a ward's light, ghosts' dashes. */
   private readonly spirit: SpiritFx;
@@ -571,6 +573,8 @@ export class World {
     if (q.has('gpu')) pipe.timer.on = true;
     // The far shadows off (`far=0`), to shoot a frame with and without them.
     if (q.get('far') === '0') this.farOff = true;
+    // The ghosts out of the picture (`ghosts=0`), so a still is judged on the snow alone (hideGhosts).
+    if (q.get('ghosts') === '0') this.ghostsOff = true;
     // The temporal reconstruction on any tier with a post stack (`?taa`, Medium's trial), its share of the
     // frame (`?tscale=0.75`), its sharpen (`?tsharp=0.3`) and its MSAA (`?tmsaa=0`).
     const ts = Number(q.get('tscale'));
@@ -1361,10 +1365,11 @@ export class World {
     this.ghosts.drafting = v.mode === 'run' && s.drafting && !s.crashed;
     // (A mirrored run's labels are laid out on the screen as the player sees it: modes lane.)
     this.mirrorView();
+    this.hideGhosts();
     this.ghosts.update(v.ghostPoses, this.cam.camera, this.width, this.height, v.time, focus, (p, c) => this.particles.sparkle(p, c, 16, 2.2, 0.55, 0.2, null, 0.6), v.occluders, v.rival);
     this.mirrorView();
     // The slipstream you ride in: motes of the drafted ghost's colour stream back past the runners.
-    if (this.ghosts.wakeK > 0.05 && s.grounded) this.particles.wake(pos, vel, this.ghosts.wakeCol, this.ghosts.wakeK * Math.min(2, dt * 60));
+    if (this.ghosts.wakeK > 0.05 && s.grounded && !this.ghostsOff) this.particles.wake(pos, vel, this.ghosts.wakeCol, this.ghosts.wakeK * Math.min(2, dt * 60));
     this.landing.streak = v.mode === 'run' ? feel.streak : 0;
     // (Round 8: the gold flash keeps to the sim's own window, wider on a save's first run.)
     this.landing.stompS = stompWindowS(v.sim?.config.firstRun === true);
@@ -1677,7 +1682,7 @@ export class World {
           this.newGroundFx(b, s);
           break;
         case 'ghostTrick':
-          if (b.quality === 'perfect') this.ghostStompFx(b, v);
+          if (b.quality === 'perfect' && !this.ghostsOff) this.ghostStompFx(b, v);
           break;
         case 'pass':
           this.passFx(b, v);
@@ -1960,6 +1965,15 @@ export class World {
     this.particles.line(a, c, GOLD_WHITE, 24, vel, 1.35);
   }
 
+  /** Dev only (`?debug&ghosts=0`, the snow2 lane): the ghosts, their light, ruts and labels left out of the picture,
+   *  so a still pair is judged on the snow alone (a pick turned on which ghost sat ahead). Render only: the race,
+   *  its beats and every pose run as ever, and nothing here reaches the sim. */
+  private hideGhosts(): void {
+    if (!this.ghostsOff) return;
+    this.ghosts.labels = false;
+    this.ghosts.root.visible = false;
+  }
+
   /** A ghost's stomp (its own perfect landing): a small ring of motes in its kind colour skimming out
    *  round it, riding along with it (at most 4 on Low). */
   private ghostStompFx(b: BeatOf<'ghostTrick'>, v: FrameView): void {
@@ -1979,6 +1993,7 @@ export class World {
    *  riding at its pace so they fall back behind you (ghosts.ts drops its name pill back). Low throws
    *  a few. */
   private passFx(b: BeatOf<'pass'>, v: FrameView): void {
+    if (this.ghostsOff) return;
     const pose = v.ghostPoses.get(b.ghost.id);
     if (!pose || pose.done) return;
     this.course.gradient(pose.x, pose.z, this.landG);
