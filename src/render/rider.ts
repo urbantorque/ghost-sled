@@ -1198,6 +1198,17 @@ export class Rider {
     if (this.crashSled.visible) cb(2, this.crashSled, MOTION_SLED[0], MOTION_SLED[1]);
   }
 
+  /** Round 8 (image): what is the hero on screen (the rig, the scarf, a wreck's body and sled), drawn again over
+   *  the temporal reconstruction's rebuilt frame (postfx/after.ts HERO_LAYER), each with whether it is drawn again
+   *  this frame. Not the echo or the stars; not the scarf while Spirit Flow burns on it (the flame is the scene's,
+   *  drawn over the scarf by its stencil, and the scarf drawn again over it would leave it burning only at its edges). */
+  heroRoots(cb: (o: Object3D, on: boolean) => void): void {
+    cb(this.root, true);
+    cb(this.scarf, this.burnShown < 0.02);
+    cb(this.crashBody, true);
+    cb(this.crashSled, true);
+  }
+
   /** Show or hide the rider; the world-space scarf follows (it also stays with a tumbling body). */
   setVisible(v: boolean): void {
     this.root.visible = v && !this.crash;

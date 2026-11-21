@@ -16,6 +16,7 @@ import {
   Matrix4,
   Mesh,
   NormalBlending,
+  type Object3D,
   PlaneGeometry,
   Points,
   Quaternion,
@@ -1121,6 +1122,12 @@ export class Life {
   }
 
   // ---------------------------------------------------------------- settings
+
+  /** Round 8 (image): the solids that move on their own (birds, the cable chairs, the figures, the flags), drawn
+   *  after the temporal reconstruction's rebuild so its history never holds them (postfx/after.ts adopt). */
+  get movers(): Object3D[] {
+    return [this.birdMesh, this.chairMesh, this.figMesh, this.flagMesh];
+  }
 
   setCourse(c: Course, p: Palette, mood: Mood): void {
     this.course = c;

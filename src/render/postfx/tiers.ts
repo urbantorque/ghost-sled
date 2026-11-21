@@ -68,14 +68,15 @@ const OFF: PassSettings = { ao: 'off', contact: false, shaftTaps: 0, shaftDiv: 4
 /** What each tier may run. Low has no post pass at all, so every row of it is off: its look is
  *  designed in the materials and the sky, never stripped from here. `fxaa` is what the composite runs
  *  when the reconstruction does not (its switch off, or the frames before its programs are built).
- *  The reconstruction ships off (`taa: false`; `?taa` turns it on with High's and Ultra's tuning below): its
- *  second critic found the rider softer with a pale halo and moving lifts doubled, and ART.md puts the hero
- *  first, so High and Ultra keep round 7's MSAA and edge walk (DECISIONS 362, notes/vl-temporal.md). */
+ *  The visual lift built the reconstruction and held it back (DECISIONS 363: the rider softer with a pale halo,
+ *  moving lifts doubled). Round 8 (image, notes/r8-image.md) ships it on High and Ultra: the rider is drawn again
+ *  over the rebuilt frame at the frame's size with the tier's MSAA, and what moves on its own is drawn only after
+ *  the rebuild, so neither is ever the history's. `?post=-taa` is round 7's MSAA and edge walk. */
 export const PASSES: Record<Tier, PassSettings> = {
   low: { ...OFF },
   medium: { ...OFF, shaftTaps: 6, shaftDiv: 4, mirror: 'bake', fxaa: 2 },
-  high: { ...OFF, ao: 'lite', shaftTaps: 8, shaftDiv: 2, dofTaps: 8, blurTaps: 5, mirror: 'bake', taa: false, taaMsaa: 2, scale: 0.7, sharpen: 0.8, fxaa: 2, fringe: 0.3, shadowReach: 34 },
-  ultra: { ao: 'gtao', contact: true, shaftTaps: 12, shaftDiv: 2, dofTaps: 22, blurTaps: 9, mirror: 'screen', taa: false, taaMsaa: 2, scale: 0.85, sharpen: 0.7, fxaa: 2, fringe: 1, shadowReach: 44 },
+  high: { ...OFF, ao: 'lite', shaftTaps: 8, shaftDiv: 2, dofTaps: 8, blurTaps: 5, mirror: 'bake', taa: true, taaMsaa: 2, scale: 0.7, sharpen: 0.8, fxaa: 2, fringe: 0.3, shadowReach: 34 },
+  ultra: { ao: 'gtao', contact: true, shaftTaps: 12, shaftDiv: 2, dofTaps: 22, blurTaps: 9, mirror: 'screen', taa: true, taaMsaa: 2, scale: 0.85, sharpen: 0.7, fxaa: 2, fringe: 1, shadowReach: 44 },
 };
 
 /** The fewest scene pixels to a page (CSS) pixel the reconstruction draws: at a pixel ratio of 1 it
@@ -135,6 +136,10 @@ export interface PassSwitches {
   scale: boolean;
   /** The contrast-adaptive sharpen after the reconstruction. */
   sharpen: boolean;
+  /** Under the reconstruction, the rider drawn again over the rebuilt frame at the frame's own size with the
+   *  tier's MSAA, and what moves on its own drawn only there (off: both are the rebuild's, as the visual lift
+   *  built it). */
+  hero: boolean;
   /** Round 7's edge anti-aliasing (off: round 6's, FXAA only where there is no MSAA). */
   aa: boolean;
   letterbox: boolean;
@@ -144,10 +149,10 @@ export interface PassSwitches {
   lens: boolean;
 }
 
-export const SWITCH_NAMES: ReadonlyArray<keyof PassSwitches> = ['ao', 'contact', 'shafts', 'dof', 'blur', 'mirror', 'taa', 'scale', 'sharpen', 'aa', 'letterbox', 'fit', 'lens'];
+export const SWITCH_NAMES: ReadonlyArray<keyof PassSwitches> = ['ao', 'contact', 'shafts', 'dof', 'blur', 'mirror', 'taa', 'scale', 'sharpen', 'hero', 'aa', 'letterbox', 'fit', 'lens'];
 
 export function allSwitches(on = true): PassSwitches {
-  return { ao: on, contact: on, shafts: on, dof: on, blur: on, mirror: on, taa: on, scale: on, sharpen: on, aa: on, letterbox: on, fit: on, lens: on };
+  return { ao: on, contact: on, shafts: on, dof: on, blur: on, mirror: on, taa: on, scale: on, sharpen: on, hero: on, aa: on, letterbox: on, fit: on, lens: on };
 }
 
 /**

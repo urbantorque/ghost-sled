@@ -1004,8 +1004,16 @@ export class PostFX {
       }
     }
     pipe.configure(passes, this.targets);
+    this.aimHero();
     this.setSize(this.outW, this.outH);
     this.aimAA();
+  }
+
+  /** Round 8 (image): what is drawn over the rebuilt frame (the rider again, what moves on its own, the sprites)
+   *  is drawn with the tier's own MSAA, so the hero's outline is round 7's. */
+  private aimHero(): void {
+    const sw = this.pipe.switches;
+    this.pipe.taa.setSamples(wantsTaa(this.pipe.passes, sw) && sw.hero ? Math.min(4, this.msaa) : 0);
   }
 
   /** Whether the scene is drawn multisampled (near props fade through coverage only then: world.ts). */
@@ -1032,6 +1040,7 @@ export class PostFX {
       t.samples = eff;
       t.dispose();
     }
+    this.aimHero();
     this.aimAA();
   }
 

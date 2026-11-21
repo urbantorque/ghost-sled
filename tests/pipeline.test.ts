@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { AdditiveBlending, BufferGeometry, CustomBlending, Mesh, MeshBasicMaterial, NormalBlending, NotEqualStencilFunc, OneFactor, OneMinusSrcAlphaFactor, Points, PointsMaterial, ShaderMaterial } from 'three';
+import { AdditiveBlending, BufferGeometry, CustomBlending, Group, Mesh, MeshBasicMaterial, NormalBlending, NotEqualStencilFunc, OneFactor, OneMinusSrcAlphaFactor, PerspectiveCamera, Points, PointsMaterial, ShaderMaterial } from 'three';
 import { cine, resetCine } from '../src/render/cine';
-import { drawsAfter } from '../src/render/postfx/after';
+import { AFTER_LAYER, AfterDraw, HERO_LAYER, drawsAfter } from '../src/render/postfx/after';
 import { CINE_EPS, PASSES, SCALE_FLOOR, SWITCH_NAMES, TIERS, allSwitches, detailOf, jitterAt, jitterPhases, letterboxShare, parseSwitches, passCosts, planFrame, renderScale, sceneSamples, wantsDepth, wantsTaa, type FrameSignals, type PassSettings, type Tier } from '../src/render/postfx/tiers';
 
 // The frame's passes without a GPU: every tier has a full row, Low runs nothing, and the camera's cine
@@ -187,8 +187,8 @@ describe('the temporal reconstruction', () => {
   // (As `?taa` turns it on: the tier's own settings with the reconstruction switched on.)
   const RB = (t: 'high' | 'ultra'): PassSettings => ({ ...PASSES[t], taa: true });
 
-  it('ships off on every tier; High and Ultra keep their tuning for ?taa', () => {
-    expect(PASSES.high.taa || PASSES.ultra.taa).toBe(false);
+  it('ships on High and Ultra (round 8, image), never on Medium or Low', () => {
+    expect(PASSES.high.taa && PASSES.ultra.taa).toBe(true);
     expect(PASSES.high.taaMsaa && PASSES.ultra.taaMsaa).toBe(2);
     expect(PASSES.medium.taa || PASSES.low.taa).toBe(false);
     // High draws the smaller scene; Ultra a larger share of it.
@@ -301,6 +301,40 @@ describe('the temporal reconstruction', () => {
     expect(drawsAfter(new Mesh(geo, solid), solid)).toBe(false);
     const lit = new ShaderMaterial({ lights: true, transparent: true, depthWrite: false, blending: AdditiveBlending });
     expect(drawsAfter(new Mesh(geo, lit), lit)).toBe(false);
+  });
+
+  it('draws the rider again over the rebuilt frame and what moves on its own only there (round 8, image)', () => {
+    const geo = new BufferGeometry();
+    const after = new AfterDraw();
+    const cam = new PerspectiveCamera();
+    // The rider: its opaque parts stay in the scene (its depth and its stencil, contract C10) and join the hero's
+    // layer; a part that blends is drawn once, in the scene; a sprite already drawn after stays there.
+    const rig = new Group();
+    const coat = new Mesh(geo, new MeshBasicMaterial());
+    const goggles = new Mesh(geo, new MeshBasicMaterial({ transparent: true }));
+    const flame = new Mesh(geo, new MeshBasicMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending }));
+    flame.userData.taaAfter = true;
+    flame.layers.set(AFTER_LAYER);
+    rig.add(coat, goggles, flame);
+    after.hero(rig);
+    after.sceneOnly(cam);
+    expect(coat.layers.test(cam.layers) && goggles.layers.test(cam.layers)).toBe(true);
+    expect(flame.layers.test(cam.layers)).toBe(false);
+    cam.layers.mask = 1 << HERO_LAYER;
+    expect(coat.layers.test(cam.layers)).toBe(true);
+    expect(goggles.layers.test(cam.layers) || flame.layers.test(cam.layers)).toBe(false);
+    // A lift's chairs: out of the scene's pass (the history never holds them), drawn in the after pass, once.
+    const chairs = new Mesh(geo, new MeshBasicMaterial());
+    after.adopt(chairs);
+    after.adopt(chairs);
+    expect(after.moved).toBe(1);
+    after.sceneOnly(cam);
+    expect(chairs.layers.test(cam.layers)).toBe(false);
+    cam.layers.mask = 1 << AFTER_LAYER;
+    expect(chairs.layers.test(cam.layers)).toBe(true);
+    // Every other lens draws each of them once.
+    after.all(cam);
+    for (const o of [coat, goggles, flame, chairs]) expect(o.layers.test(cam.layers)).toBe(true);
   });
 });
 
