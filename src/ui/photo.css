@@ -1,0 +1,371 @@
+/*
+  Round 8, photo mode (photo.ts). The picture is the screen: one ink bar at its foot holds the lens and Save, the
+  help sits at the top left as scene text, and both step back while the view moves. Tokens and radii as ART.md 10:
+  the bar is a card (18 px), every control a pill, vermillion only on Save. Its own UI root, over the game's.
+*/
+
+.gs-ui.gs-photo {
+  z-index: 12;
+}
+
+.gs-ph-surface {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+}
+
+.gs-ph-surface:active {
+  cursor: grabbing;
+}
+
+/* The framing grid: the thirds, hairlines with an ink edge so they hold on white snow. */
+.gs-ph-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.gs-ph-gl {
+  position: absolute;
+  background: rgba(245, 243, 255, 0.55);
+  box-shadow: 0 0 0 1px rgba(18, 25, 51, 0.22);
+}
+
+.gs-ph-v1,
+.gs-ph-v2 {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.gs-ph-v1 {
+  left: 33.333%;
+}
+
+.gs-ph-v2 {
+  left: 66.667%;
+}
+
+.gs-ph-h1,
+.gs-ph-h2 {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.gs-ph-h1 {
+  top: 33.333%;
+}
+
+.gs-ph-h2 {
+  top: 66.667%;
+}
+
+/* The help: the word set like Pause's, and what moves the view under it. */
+.gs-ph-help {
+  position: absolute;
+  top: var(--st);
+  left: var(--sl);
+  display: grid;
+  gap: 8px;
+  max-width: min(420px, 70vw);
+  pointer-events: none;
+  text-shadow: var(--halo);
+  transition: opacity 220ms ease;
+}
+
+.gs-ph-title {
+  margin: 0;
+  font-size: clamp(24px, calc(var(--u) * 1.8), 36px);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+.gs-ph-help-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  color: var(--text);
+  font-size: 0.86em;
+  font-weight: 700;
+  list-style: none;
+}
+
+.gs-ph-help-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gs-ph-help-row b {
+  font-weight: 900;
+}
+
+.gs-ph-help-row .gs-kbd {
+  text-shadow: none;
+}
+
+/* The bar: Done, the lens, the toggles, Save. */
+.gs-ph-bar {
+  position: absolute;
+  bottom: var(--sb);
+  left: 50%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px 18px;
+  width: min(980px, calc(100% - var(--sl) - var(--sr)));
+  padding: 10px 12px 10px 10px;
+  border-radius: var(--r-card);
+  pointer-events: auto;
+  transform: translateX(-50%);
+  transition: opacity 220ms ease;
+}
+
+.gs-ph-lens {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 18px;
+  min-width: 0;
+}
+
+.gs-ph-ctl {
+  display: grid;
+  min-width: 0;
+}
+
+.gs-ph-ctl-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.8em;
+  font-weight: 800;
+}
+
+.gs-ph-lab {
+  color: var(--dim);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gs-ph-val {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.gs-ph-range {
+  height: 30px;
+  touch-action: none;
+}
+
+.gs-ph-togs,
+.gs-ph-saves {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gs-ph-tog[aria-pressed='true'] {
+  background: var(--text);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.gs-ph-save {
+  min-height: 48px;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .gs-ph-bar .gs-btn-soft:hover:not([aria-pressed='true']) {
+    box-shadow: inset 0 0 0 1px var(--text), var(--shadow);
+  }
+
+  .gs-ph-save:hover {
+    filter: brightness(1.06);
+  }
+}
+
+/* What was saved, over the bar for a moment. */
+.gs-ph-status {
+  position: absolute;
+  bottom: calc(var(--sb) + 84px);
+  left: 50%;
+  max-width: calc(100% - 2 * var(--gut));
+  margin: 0;
+  padding: 8px 16px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--panel-solid);
+  box-shadow: inset 0 0 0 1px var(--hair-2), var(--shadow);
+  font-size: 0.86em;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 6px);
+  transition:
+    opacity 180ms ease,
+    transform 220ms var(--out);
+}
+
+.gs-ph-status:empty {
+  display: none;
+}
+
+.gs-ph-status.is-on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* The shutter: a breath of the UI's off-white over the picture as a frame is kept. */
+.gs-ph-flash {
+  position: absolute;
+  inset: 0;
+  background: var(--text);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.gs-ph-flash.is-on {
+  animation: gs-ph-shutter 260ms ease-out both;
+}
+
+@keyframes gs-ph-shutter {
+  from {
+    opacity: 0.42;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+/* While the view moves the bar and the help step back, so the picture is what is seen. */
+.gs-photo.is-moving .gs-ph-bar,
+.gs-photo.is-moving .gs-ph-help {
+  opacity: 0.18;
+}
+
+.gs-photo.is-moving .gs-ph-bar:hover,
+.gs-photo.is-moving .gs-ph-bar:focus-within {
+  opacity: 1;
+}
+
+/* H, or X on a pad: the bar away altogether. */
+.gs-photo.is-bare .gs-ph-bar,
+.gs-photo.is-bare .gs-ph-help {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.gs-photo.is-still .gs-ph-bar,
+.gs-photo.is-still .gs-ph-help,
+.gs-photo.is-still .gs-ph-status {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-ph-bar,
+  .gs-ph-help,
+  .gs-ph-status {
+    transition: none;
+  }
+
+  .gs-ph-flash.is-on {
+    animation: none;
+  }
+}
+
+/* The rest of the UI while photo mode is open: out of the picture (opacity, which no child's own visibility can
+   override: the HUD's pills set theirs) and out of reach (inert, set by the game). */
+.gs-ui.is-photo-hidden {
+  opacity: 0 !important;
+  transition: none !important;
+  pointer-events: none !important;
+}
+
+/* Pause: Photo beside Home (menus.ts). */
+.gs-pause-card > .gs-pause-acts {
+  grid-area: home;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The results' foot: the lens as an icon beside Home (sequence.ts). */
+.gs-sq-foot > .gs-sq-photo {
+  width: 44px;
+  margin-right: auto;
+  padding: 0;
+}
+
+.gs-sq-foot:has(> .gs-sq-photo) > .gs-sq-home {
+  margin-right: 0;
+}
+
+/* A phone held upright: the bar is the width of the screen, in three rows. */
+@media (max-aspect-ratio: 1/1) {
+  .gs-ph-bar {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'lens lens'
+      'back togs'
+      'saves saves';
+    width: calc(100% - var(--sl) - var(--sr));
+    padding: 10px;
+  }
+
+  .gs-ph-lens {
+    grid-area: lens;
+  }
+
+  .gs-ph-back {
+    grid-area: back;
+  }
+
+  .gs-ph-togs {
+    grid-area: togs;
+    justify-content: flex-end;
+  }
+
+  .gs-ph-saves {
+    grid-area: saves;
+  }
+
+  .gs-ph-saves > .gs-btn {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .gs-ph-status {
+    bottom: calc(var(--sb) + 196px);
+  }
+
+  .gs-pause-card > .gs-pause-acts > .gs-btn {
+    flex: 1 1 0;
+  }
+}
+
+/* A short landscape screen: the bar keeps to one row and the help to its title. */
+@media (max-height: 460px) and (min-aspect-ratio: 1/1) {
+  .gs-ph-help-list {
+    display: none;
+  }
+
+  .gs-ph-bar {
+    gap: 8px 12px;
+    padding: 6px 8px;
+  }
+}

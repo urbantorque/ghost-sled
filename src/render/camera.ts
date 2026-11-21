@@ -2800,3 +2800,191 @@ export class ChaseCamera {
     return (mx < -0.3 ? 1 : 0) + (mx < screenX(hero.x, hero.z) ? 0.04 : 0);
   }
 }
+
+// ------------------------------------------------------------------ photo mode (round 8, the photo lane)
+//
+// Photo mode holds the run and frees the lens (World.lens, as the reel's lenses take it): the lens turns round a point
+// on the rider's chest, carried up to PHOTO_REACH.pan metres off it, from PHOTO_REACH.near to PHOTO_REACH.far metres
+// out, and never stands in the snow, a rock or a tree: its arm stops short of a rock or a trunk, and it rides up over
+// the snow. Everything the controls set eases on the page's own clock (the run's is held at a standstill), and lands at
+// once under reduced motion. It writes the cine state as a still camera: no letterbox, no motion blur, depth of field
+// only when the player asks for it (High and Ultra draw it).
+
+/** Photo mode's reach: how near and far the lens may stand (m), how far its pivot may be carried off the rider (m),
+ *  how low and high it may look from (radians over the level), the lens's width (degrees) and the most it tilts. */
+export const PHOTO_REACH = { near: 1.3, far: 32, pan: 12, pitchLo: -0.3, pitchHi: 1.45, fovLo: 16, fovHi: 90, roll: 0.35 } as const;
+/** The lens keeps this far over the snow and off a rock's face (m). */
+const PHOTO_CLEAR = 0.45;
+/** A tree's trunk, as the lens's arm meets it: its reach round a trunk and the height a crown stands to (m). */
+const PHOTO_TREE_R = 0.9;
+const PHOTO_TREE_H = 11;
+/** The arm is tested at this spacing (m), and stops this far short of what it meets. */
+const PHOTO_STEP = 0.35;
+const PHOTO_SHORT = 0.25;
+/** How fast the lens follows the controls (1/s). */
+const PHOTO_EASE = 14;
+/** The pivot sits this far over the rider's feet (m): the chest. */
+const PHOTO_CHEST = 0.9;
+
+const pUp = new Vector3(0, 1, 0);
+const pDir = new Vector3();
+const pPivot = new Vector3();
+
+const clampN = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
+
+export class PhotoRig {
+  /** What the controls set. */
+  yaw = 0;
+  pitch = 0.2;
+  dist = 6;
+  fov = 50;
+  roll = 0;
+  readonly pan = new Vector3();
+  /** Depth of field on the rider (drawn on High and Ultra). */
+  focus = false;
+  reduced = false;
+  /** The arm's length as drawn, after it was kept clear of rock and trees. */
+  arm = 0;
+  /** What the lens draws, eased toward the controls. */
+  private readonly d = { yaw: 0, pitch: 0.2, dist: 6, fov: 50, roll: 0 };
+  private readonly dPan = new Vector3();
+  private readonly home = { yaw: 0, pitch: 0.2, dist: 6, fov: 50 };
+  private started = false;
+  private last = 0;
+  /** The rider's feet as the run holds them (three.js space). */
+  private readonly feet = new Vector3();
+
+  constructor(private readonly chase: Pick<ChaseCamera, 'ground' | 'surface' | 'blocked'>) {}
+
+  /** Starts from where the lens stands now, so photo mode opens on the frame the player paused on: never a cut and
+   *  never a swoop. */
+  begin(camera: PerspectiveCamera, focus: Vector3): void {
+    this.feet.copy(focus);
+    pPivot.copy(focus).addScaledVector(pUp, PHOTO_CHEST);
+    pDir.copy(camera.position).sub(pPivot);
+    const len = pDir.length() || 1;
+    this.dist = clampN(len, PHOTO_REACH.near, PHOTO_REACH.far);
+    this.yaw = Math.atan2(pDir.x, pDir.z);
+    this.pitch = clampN(Math.asin(clampN(pDir.y / len, -1, 1)), PHOTO_REACH.pitchLo, PHOTO_REACH.pitchHi);
+    this.fov = clampN(camera.fov, PHOTO_REACH.fovLo, PHOTO_REACH.fovHi);
+    this.roll = 0;
+    this.pan.set(0, 0, 0);
+    this.focus = false;
+    Object.assign(this.home, { yaw: this.yaw, pitch: this.pitch, dist: this.dist, fov: this.fov });
+    Object.assign(this.d, { yaw: this.yaw, pitch: this.pitch, dist: this.dist, fov: this.fov, roll: 0 });
+    this.dPan.set(0, 0, 0);
+    this.started = false;
+  }
+
+  /** Back to the frame photo mode opened on. */
+  reset(): void {
+    this.yaw = this.home.yaw;
+    this.pitch = this.home.pitch;
+    this.dist = this.home.dist;
+    this.fov = this.home.fov;
+    this.roll = 0;
+    this.pan.set(0, 0, 0);
+  }
+
+  /** Turns the lens round the pivot (radians across, radians up). */
+  orbit(across: number, up: number): void {
+    if (!Number.isFinite(across) || !Number.isFinite(up)) return;
+    this.yaw += across;
+    this.pitch = clampN(this.pitch + up, PHOTO_REACH.pitchLo, PHOTO_REACH.pitchHi);
+  }
+
+  /** Moves the lens in or out by a factor of its distance (under 1 is in). */
+  dolly(k: number): void {
+    if (Number.isFinite(k) && k > 0) this.dist = clampN(this.dist * k, PHOTO_REACH.near, PHOTO_REACH.far);
+  }
+
+  /** Carries the pivot across the frame and up it, in shares of the lens's distance (1 moves it about as far as the
+   *  lens stands). It stays within PHOTO_REACH.pan of the rider, over the snow, and out of a rock or a tree. */
+  move(right: number, up: number): void {
+    if (!Number.isFinite(right) || !Number.isFinite(up)) return;
+    const s = Math.max(1.5, this.dist);
+    let x = this.pan.x + Math.cos(this.yaw) * right * s;
+    let y = this.pan.y + up * s;
+    let z = this.pan.z - Math.sin(this.yaw) * right * s;
+    const len = Math.hypot(x, y, z);
+    if (len > PHOTO_REACH.pan) {
+      const k = PHOTO_REACH.pan / len;
+      x *= k;
+      y *= k;
+      z *= k;
+    }
+    const px = this.feet.x + x;
+    const pz = this.feet.z + z;
+    const g = this.chase.ground ? this.chase.ground(px, pz) : -Infinity;
+    // (The pivot never sinks under the snow: it rides along its top.)
+    y = Math.max(y, g + PHOTO_CLEAR - this.feet.y - PHOTO_CHEST);
+    if (this.solid(px, this.feet.y + PHOTO_CHEST + y, pz)) return;
+    this.pan.set(x, y, z);
+  }
+
+  setFov(deg: number): void {
+    if (Number.isFinite(deg)) this.fov = clampN(deg, PHOTO_REACH.fovLo, PHOTO_REACH.fovHi);
+  }
+
+  setRoll(rad: number): void {
+    if (Number.isFinite(rad)) this.roll = clampN(rad, -PHOTO_REACH.roll, PHOTO_REACH.roll);
+  }
+
+  /** A lens standing at (x, y, z) would be in a rock or a tree. */
+  solid(x: number, y: number, z: number): boolean {
+    const c = this.chase;
+    if (!c.ground) return false;
+    const g = c.ground(x, z);
+    const top = c.surface ? c.surface(x, z) : g;
+    if (top - g > 0.02 && y < top + PHOTO_CLEAR) return true;
+    return y - g < PHOTO_TREE_H && c.blocked !== null && c.blocked(x, z, PHOTO_TREE_R);
+  }
+
+  /** How far out from `p` along `dir` the lens can stand, up to `len`: short of the first rock or tree. */
+  reach(p: Vector3, dir: Vector3, len: number): number {
+    for (let t = PHOTO_STEP; t < len + PHOTO_STEP; t += PHOTO_STEP) {
+      const u = Math.min(t, len);
+      if (this.solid(p.x + dir.x * u, p.y + dir.y * u, p.z + dir.z * u)) return Math.max(PHOTO_REACH.near * 0.5, u - PHOTO_SHORT);
+    }
+    return len;
+  }
+
+  /** World.lens while photo mode is open. */
+  frame = (camera: PerspectiveCamera, focus: Vector3): void => {
+    const now = performance.now();
+    const dt = this.started ? Math.min(0.1, Math.max(0, (now - this.last) / 1000)) : 0;
+    this.last = now;
+    const k = this.reduced || !this.started ? 1 : 1 - Math.exp(-dt * PHOTO_EASE);
+    this.started = true;
+    const d = this.d;
+    let dy = this.yaw - d.yaw;
+    dy -= Math.round(dy / (Math.PI * 2)) * Math.PI * 2;
+    d.yaw += dy * k;
+    d.pitch += (this.pitch - d.pitch) * k;
+    d.dist += (this.dist - d.dist) * k;
+    d.fov += (this.fov - d.fov) * k;
+    d.roll += (this.roll - d.roll) * k;
+    this.dPan.lerp(this.pan, k);
+    this.feet.copy(focus);
+    pPivot.copy(focus).addScaledVector(pUp, PHOTO_CHEST).add(this.dPan);
+    const cp = Math.cos(d.pitch);
+    pDir.set(Math.sin(d.yaw) * cp, Math.sin(d.pitch), Math.cos(d.yaw) * cp);
+    this.arm = this.reach(pPivot, pDir, d.dist);
+    camera.position.copy(pPivot).addScaledVector(pDir, this.arm);
+    // Over the snow, never in it: the lens rides up the slope it would have gone under.
+    const g = this.chase.ground ? this.chase.ground(camera.position.x, camera.position.z) : -Infinity;
+    if (camera.position.y < g + PHOTO_CLEAR) camera.position.y = g + PHOTO_CLEAR;
+    camera.up.copy(pUp);
+    camera.lookAt(pPivot);
+    camera.rotateZ(d.roll);
+    camera.fov = d.fov;
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+    cine.letterbox = 0;
+    cine.motionBlur = 0;
+    cine.edge = 1;
+    cine.slow = 1;
+    cine.dof = this.focus ? 0.75 : 0;
+    cine.focus = camera.position.distanceTo(pPivot);
+  };
+}

@@ -457,6 +457,8 @@ export interface UIHandlers {
    *  mountain, or the Long Night from its first leg). */
   onMirror?(on: boolean): void;
   onRideMode?(mode: { kind: 'night' } | { kind: 'mirror'; mountain: string }): void;
+  /** Round 8 (the photo lane): photo mode, from pause or from the results while the scene stands. */
+  onPhoto?(): void;
   /** A sled sound's Listen button: a few seconds of it under a carving rider, bought or not. */
   onListenSound?(id: string): void;
   onSettings(s: Partial<SettingsModel>): void;
@@ -615,6 +617,8 @@ export interface StickerCard {
   group: string;
   hint: string;
   frame: boolean;
+  /** Round 8 (the photo lane): the frame kept from the run it happened in (an object URL), when one was kept. */
+  img?: string;
 }
 
 /** The results' one primary button (game/goals.ts primaryButton). */

@@ -748,6 +748,7 @@ export class Results {
       paid: () => {
         for (let i = 0; i < m.missions.length; i++) if (m.missions[i].justCompleted) this.stampShown(i);
       },
+      photo: this.hd.onPhoto ? () => this.hd.onPhoto?.() : undefined,
     }, []);
     this.story = story;
     story.el.tabIndex = -1;

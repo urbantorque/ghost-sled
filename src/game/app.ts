@@ -13,6 +13,14 @@ import { RunRecord, recordFromString, recordToString } from '../sim/replay';
 import { decodeLog, packInput } from '../sim/input';
 import { GET_UPS, GET_UP_BACK_M, SIM_VERSION, Sim, SimEvent } from '../sim/sim';
 import { SLEDS, sledById } from '../sim/sleds';
+import { PhotoRig } from '../render/camera';
+import { type CineState, cine } from '../render/cine';
+import { pipeUniforms } from '../render/postfx/pipeline';
+import { PhotoMode, photoName } from '../ui/photo';
+import { metres, ordinal } from '../ui/fmt';
+import { StickerShots } from './albumframes';
+import { allFrames, putFrame } from './framestore';
+import { type RunCard, download, encodeThumb, photoOf, pngOf, thumbOf } from './photoshoot';
 import { UI } from '../ui/ui';
 import { reduced } from '../ui/motion';
 import { REVEAL_TIMING } from '../ui/reveal';
@@ -369,8 +377,10 @@ export class App {
       // (The modes lane: the title's mirror toggle, and an Almanac page's Ride for a mirror or the Long Night.)
       onMirror: (on) => this.pickMirror(on),
       onRideMode: (mode) => this.rideMode(mode),
-      onOpenAlbum: () => this.ui.showAlbum?.(albumModel(this.save.data)),
+      onOpenAlbum: () => this.openAlbum(),
       onResultsBeat: (kind, i) => this.resultsBeat(kind, i),
+      // Round 8 (the photo lane): photo mode, from pause and from the results.
+      onPhoto: () => this.openPhoto(),
       onOpenSettings: () => this.ui.showSettings(this.settingsModel()),
       onUiSound: (k) => {
         this.audio.unlock();
@@ -619,6 +629,9 @@ export class App {
   // ------------------------------------------------------------------ title
 
   private enterTitle(): void {
+    this.leavePhoto(false);
+    this.keepShots(true);
+    this.shots = null;
     this.phase = 'title';
     this.paused = false;
     this.run = null;
@@ -1338,6 +1351,8 @@ export class App {
     this.passedAtStart = d.ghostsPassed;
     this.settlement = null;
     this.spineFacts = { tricks: [], charms: [], synergies: [], showdownsWon: 0, moments: [] };
+    this.leavePhoto(false);
+    this.beginShots();
     this.spineSettlement = null;
     this.againTo = null;
     this.dayMedalAtStart = this.mountain.id === 'daily' ? dailyMedalNow(d.daily, this.daily.tagline) : this.mountain.id === 'cup' ? cupMedalNow(d.cup, this.cup.tagline) : 0;
@@ -1708,6 +1723,228 @@ export class App {
     });
     // Over the line, a few seconds in the square, then the card again.
     if (sim.finished && sim.tick - sim.s.finishTick > 240) this.endHome();
+  }
+
+  // ------------------------------------------------------------------ photo mode and the album's frames (round 8)
+
+  /** Photo mode while it is open: its bar, the lens it drives, where it was opened from and the pipeline's lens state
+   *  to hand back. The run is held while it is open (frameRun's `frozen`). */
+  private photo: { ui: PhotoMode; rig: PhotoRig; from: 'pause' | 'results'; cine: CineState } | null = null;
+  /** This run's album frames (albumframes.ts): what to keep of the live picture for the stickers it earns. */
+  private shots: StickerShots<HTMLCanvasElement> | null = null;
+  /** Work for the next drawn picture (World.onPicture), before the tags go over it. */
+  private pictureJobs: Array<(c: HTMLCanvasElement) => void> = [];
+  /** The album's frames as the open album shows them (object URLs, let go when it is opened again). */
+  private albumUrls: string[] = [];
+  /** The last photo saved (play-tests read it). */
+  lastPhoto: { name: string; bytes: number; w: number; h: number } | null = null;
+  /** The last sticker frames kept, and the main thread's cost of taking each (ms; play-tests read them). */
+  readonly frameLog: Array<{ id: string; bytes: number; grabMs: number }> = [];
+  private grabMs = 0;
+
+  /** The page shows the canvas turned over (a mirror mountain, CSS scaleX(-1) on the canvas): a saved photo and a
+   *  sticker's frame turn over to match, and a drag across turns the other way. (Wired at the merge to what the page
+   *  shows: world.ts setMirrored, which the modes lane's applyMirror sets for a mirror run or a mirrored leg.) */
+  private mirroredView(): boolean {
+    return this.world.mirrored;
+  }
+
+  /** Runs `job` on the next picture drawn, before the riders' tags and the avalanche mirror go over it. */
+  private takePicture(job: (c: HTMLCanvasElement) => void): void {
+    this.pictureJobs.push(job);
+    this.world.onPicture = this.runPictureJobs;
+  }
+
+  private readonly runPictureJobs = (c: HTMLCanvasElement): void => {
+    const jobs = this.pictureJobs;
+    this.pictureJobs = [];
+    this.world.onPicture = null;
+    for (const j of jobs) j(c);
+  };
+
+  /** Photo mode: from pause (the run held where it stopped) or from the results (the scene as it stands). */
+  private openPhoto(): void {
+    if (this.photo || this.runReel || this.adPlaying) return;
+    const from = this.phase === 'run' && this.paused ? 'pause' : this.phase === 'results' ? 'results' : null;
+    if (!from) return;
+    if (from === 'pause') this.ui.hidePause();
+    const game = document.querySelector<HTMLElement>('.gs-ui');
+    if (game) {
+      game.classList.add('is-photo-hidden');
+      game.inert = true;
+    }
+    this.input.releaseAll();
+    this.input.enabled = false;
+    const rig = new PhotoRig(this.world.cam);
+    rig.reduced = reduced();
+    let begun = false;
+    this.world.lens = (camera, focus) => {
+      // (The first frame: the lens stands where the chase held it, so photo mode opens on the paused frame.)
+      if (!begun) {
+        rig.begin(camera, focus);
+        begun = true;
+      }
+      rig.frame(camera, focus);
+    };
+    this.world.photo = true;
+    const tier = this.tiers.tier;
+    const ui = new PhotoMode(this.world.renderer.domElement.parentElement ?? document.body, rig, {
+      save: (card) => this.savePhoto(card),
+      leave: () => this.leavePhoto(),
+      sound: (k) => {
+        this.audio.unlock();
+        this.audio.ui(k);
+      },
+    }, { mode: this.input.mode, reduced: reduced(), canFocus: tier === 'high' || tier === 'ultra', card: true, mirrored: this.mirroredView() });
+    this.photo = { ui, rig, from, cine: { ...cine } };
+  }
+
+  /** Back where photo mode was opened from, exactly as it stood. `show` false: the run is ending anyway. */
+  private leavePhoto(show = true): void {
+    const p = this.photo;
+    if (!p) return;
+    this.photo = null;
+    p.ui.dispose();
+    this.world.lens = null;
+    this.world.photo = false;
+    Object.assign(cine, p.cine);
+    const game = document.querySelector<HTMLElement>('.gs-ui');
+    if (game) {
+      game.classList.remove('is-photo-hidden');
+      game.inert = false;
+    }
+    this.input.enabled = true;
+    this.input.releaseAll();
+    this.last = performance.now();
+    if (show && p.from === 'pause' && this.phase === 'run' && this.paused) this.ui.showPause(this.settingsModel(), this.missionsNow());
+  }
+
+  /** The run's card for a photo's corner: the mountain, the time (or how far the run has come), the place, the rider. */
+  private runCard(): RunCard {
+    const sim = this.run?.sim ?? null;
+    const st = this.frameStandings;
+    const finished = sim !== null && sim.finished;
+    const time = sim ? (finished ? clock(sim.s.finishTick / 60) : metres(sim.distance)) : '';
+    const of = st ? Math.max(st.of, this.ghosts.fieldSize) : 0;
+    return { mountain: this.mountain.name, time, place: st && of > 1 ? `${ordinal(st.rank)} of ${of}` : null, first: !!st && st.rank === 1 && finished, name: this.save.data.name };
+  }
+
+  /** Saves the picture as it stands as a PNG at the canvas's size (the run's card in a corner when asked). */
+  private savePhoto(card: boolean): Promise<string | null> {
+    return new Promise((resolve) => {
+      const info = card ? this.runCard() : null;
+      this.takePicture((c) => {
+        const out = photoOf(c, this.mirroredView(), info);
+        if (!out) return resolve(null);
+        const w = out.width;
+        const h = out.height;
+        void pngOf(out).then((b) => {
+          if (!b) return resolve(null);
+          const name = photoName(this.mountain.name, new Date(), card);
+          const ok = download(b, name);
+          if (ok) this.lastPhoto = { name, bytes: b.size, w, h };
+          resolve(ok ? name : null);
+        });
+      });
+    });
+  }
+
+  /** A run starts: its album frames start empty (what the last run kept for its line is handed over first). */
+  private beginShots(): void {
+    this.keepShots(true);
+    this.shotAir.trickMissing = this.trickMissing();
+    const named = MOUNTAINS.some((m) => m.id === this.mountain.id) ? this.mountain.id : '';
+    this.shots = new StickerShots<HTMLCanvasElement>({
+      mountain: named,
+      held: (id) => this.save.data.album?.got[id] !== undefined,
+      play: (i) => {
+        const p = this.run?.sim.plays.find((q) => q.index === i);
+        return p ? { key: p.key, variant: p.variant } : null;
+      },
+      trick: (id) => TRICKS[id]?.key ?? null,
+      charm: (id) => CHARMS[id]?.key ?? null,
+      synergy: (id) => SYNERGY_KEYS[id] ?? null,
+    });
+  }
+
+  /** Once a frame of a run, before the picture: the events and the clock to the album's frames, and a frame taken when
+   *  one is due (in the picture's own callback, so the tags are not on it). Nothing is taken in photo mode. */
+  private stepShots(events: readonly SimEvent[], dt: number, sim: Sim): void {
+    const shots = this.shots;
+    if (!shots || this.photo) return;
+    shots.events(events);
+    const air = this.phase === 'run' ? this.shotAir : null;
+    if (air) {
+      air.airborne = !sim.s.grounded;
+      air.vy = sim.s.vy;
+    }
+    if (!shots.step(dt, air)) return;
+    this.takePicture((c) => {
+      if (this.shots !== shots) return;
+      const t0 = performance.now();
+      const scale = c.width / Math.max(1, c.clientWidth || c.width);
+      const thumb = thumbOf(c, this.world.riderScreen.x * scale, this.world.riderScreen.y * scale, this.mirroredView(), pipeUniforms.uBars.value);
+      this.grabMs = performance.now() - t0;
+      if (thumb) shots.took(thumb);
+      this.keepShots();
+    });
+  }
+
+  /** The rider in the air, for the album's frames (one object, written each frame; `trickMissing` set as a run starts). */
+  private readonly shotAir = { airborne: false, vy: 0, trickMissing: true };
+
+  /** A named trick the album does not hold yet (the flight's top is worth a frame). */
+  private trickMissing(): boolean {
+    const got = this.save.data.album?.got;
+    if (!got) return true;
+    for (let i = 1; i < TRICKS.length; i++) if (got[`t:${TRICKS[i].key}`] === undefined) return true;
+    return false;
+  }
+
+  /** The stickers the run earned with a frame: encoded on idle time and kept (framestore.ts). `final`: the run is over,
+   *  so the line's stickers take what finish frames there are. */
+  private keepShots(final = false): void {
+    const shots = this.shots;
+    if (!shots) return;
+    const got = this.save.data.album?.got ?? {};
+    for (const { id, frame } of shots.ready(final)) {
+      const run = got[id];
+      if (run === undefined) continue;
+      const grabMs = this.grabMs;
+      const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+      const work = () =>
+        void encodeThumb(frame).then((blob) => {
+          if (!blob) return;
+          void putFrame({ id, run, blob }).then((ok) => {
+            if (ok) {
+              this.frameLog.push({ id, bytes: blob.size, grabMs });
+              if (this.frameLog.length > 64) this.frameLog.shift();
+            }
+          });
+        });
+      if (idle) idle(work, { timeout: 4000 });
+      else window.setTimeout(work, 200);
+    }
+  }
+
+  /** The Spirit Album, each sticker held showing its frame where one was kept (the painted card where not). */
+  private openAlbum(): void {
+    const d = this.save.data;
+    void allFrames(400).then((frames) => {
+      for (const u of this.albumUrls) URL.revokeObjectURL(u);
+      this.albumUrls = [];
+      const m = albumModel(d);
+      const got = d.album?.got ?? {};
+      for (const sec of m.sections)
+        for (const s of sec.stickers) {
+          const f = s.got ? frames.get(s.id) : undefined;
+          if (!f || f.run !== got[s.id]) continue;
+          const url = URL.createObjectURL(f.blob);
+          this.albumUrls.push(url);
+          s.img = url;
+        }
+      this.ui.showAlbum?.(m);
+    });
   }
 
   // ------------------------------------------------------------------ the highlight reel (round 7)
@@ -2178,6 +2415,9 @@ export class App {
     if (this.night && !nightGoesOn) this.settleNight(sim);
     else this.nightEnd = null;
     const spineOut = this.settleSpineRun(sim, sum, settled, climb, board, you, mi);
+    // (Round 8, the photo lane: the stickers it earned take the frames this run kept of them.)
+    this.shots?.settle(spineOut.outcome.stickers);
+    this.keepShots();
     // (A page that opens a mountain shows its unlock card, as the ghosts passed and The Twelve do.)
     for (const { reward: r } of spineOut.outcome.opened) {
       if (r.kind !== 'open') continue;
@@ -2644,6 +2884,7 @@ export class App {
     if (this.frameTimes.length > 300) this.frameTimes.shift();
     if (DEV.has('fps')) this.drawFps();
     this.input.poll();
+    this.photo?.ui.update(dt);
     // A friend's reel link plays once the title has had its first frames (it loads its code then).
     if (this.linkReel && this.phase === 'title' && this.time > 0.6 && !this.reelLoading) {
       const rec = this.linkReel;
@@ -3014,7 +3255,8 @@ export class App {
   private frameRun(dt: number): void {
     const run = this.run;
     if (!run || !this.loop) return;
-    const frozen = this.paused || this.adPlaying || this.ui.modal && this.phase === 'run';
+    // (Photo mode holds the run, and the results' scene, exactly where they stood.)
+    const frozen = this.paused || this.adPlaying || this.photo !== null || this.ui.modal && this.phase === 'run';
     let alpha = 1;
     // Hit-stop and slow motion are the director's time scale. Only the real-time feed into the fixed
     // loop is scaled, so the simulation itself stays tick-exact.
@@ -3120,6 +3362,8 @@ export class App {
       this.onSimEvent(e);
     }
 
+    // Round 8 (the photo lane): the album's frames, before the picture is drawn.
+    this.stepShots(events, frozen ? 0 : dt, sim);
     this.world.frame({
       mode: this.phase === 'results' ? 'results' : 'run',
       labels: this.phase !== 'results',

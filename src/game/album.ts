@@ -3,6 +3,8 @@ import { MOODS, Mood } from '../sim/chaos';
 import { courseFor } from '../sim/course';
 import { planMoments } from '../sim/moments';
 import { MOUNTAINS } from '../sim/mountains';
+import { SYNERGIES } from '../sim/charms';
+import { TRICKS } from '../sim/tricks';
 import { CHARM_IDS, CHARM_NAMES, TRICK_NAMES } from './almanac';
 import { riderTimeOn } from './twelve';
 import type { AlbumSave } from './spinesave';
@@ -54,10 +56,10 @@ export function albumCatalogue(): readonly Sticker[] {
     for (const r of ROSTER) if (riderTimeOn(r, m.id) !== null) out.push({ id: `rv:${m.id}:${r.key}`, mountain: m.id, group: 'rival', name: `${r.name} on ${m.name}`, hint: `Beat ${r.name}'s record on ${m.name} to the line` });
     out.push({ id: `x:${m.id}`, mountain: m.id, group: 'mirror', name: `Mirror ${m.name}`, hint: `Finish ${m.name} mirrored (an Almanac page opens it)` });
   }
-  for (const k of TRICK_KEYS) out.push({ id: `t:${k}`, mountain: '', group: 'trick', name: TRICK_NAMES[k] ?? k, hint: 'Land it' });
+  for (const k of TRICK_KEYS) out.push({ id: `t:${k}`, mountain: '', group: 'trick', name: TRICK_NAMES[k] ?? TRICKS.find((t) => t.key === k)?.name ?? k, hint: 'Land it' });
   for (const r of ROSTER) out.push({ id: `w:${r.key}`, mountain: '', group: 'duel', name: r.name, hint: `Beat ${r.name} in a duel` });
   for (const k of Object.keys(CHARM_IDS)) out.push({ id: `c:${k}`, mountain: '', group: 'charm', name: CHARM_NAMES[k] ?? k, hint: 'Ride through its gate' });
-  for (const k of SYNERGY_KEYS) out.push({ id: `s:${k}`, mountain: '', group: 'synergy', name: k, hint: 'Hold the two charms it pairs' });
+  for (const k of SYNERGY_KEYS) out.push({ id: `s:${k}`, mountain: '', group: 'synergy', name: SYNERGIES.find((x) => x.key === k)?.name ?? k, hint: 'Hold the two charms it pairs' });
   for (let n = 1; n <= NIGHT_DEPTHS; n++) out.push({ id: `n:${n}`, mountain: '', group: 'night', name: `${n} ${n === 1 ? 'leg' : 'legs'} of the Long Night`, hint: 'Ride the Long Night this deep' });
   return (catalogue = out);
 }
