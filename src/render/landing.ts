@@ -264,15 +264,17 @@ function craterMaterial(): ShaderMaterial {
         P = crestC * kc + P * (1.0 - kc);
         A = kc + A * (1.0 - kc);
         // Round 8 (the events lane): the stomp's own shockwave, the event in the snow. A ring of snow heaved up
-        // runs out from the lip to about 8.5 m in half a second, a hand's width tall: its crest a bright line
-        // of lifted powder (lit on its sun side, its own periwinkle on the other), a cool trough dragged in
-        // behind it, and a second, fainter ring after it. For its first tenth of a second the crest burns
+        // runs on from the crater's own shockwave out to about 8.5 m in half a second, a hand's width tall: its
+        // crest a bright line of lifted powder (lit on its sun side, its own periwinkle on the other) and a cool
+        // trough dragged in behind it. For its first tenth of a second the crest burns
         // white-gold and the snow inside it lifts toward the light; then it is snow. It thins and widens as
         // it runs and is gone by WAVE_S. Displaced snow, never a painted target.
         if (t < WAVE_S) {
           float wk = t / WAVE_S;
           float run = 1.0 - pow(1.0 - wk, 2.4);
-          float Rw = M(1.7) + M(${(WAVE_R - 1.7).toFixed(2)}) * run;
+          // (From past the crater's own shockwave, so the two are one wave running on, not rings inside rings: with
+          // an echo and both waves at once a critic read four even bands as a target.)
+          float Rw = M(3.4) + M(${(WAVE_R - 3.4).toFixed(2)}) * run;
           float ww = M(0.14 + 0.3 * wk);
           float wq = (r - Rw) / ww;
           float wK = pow(1.0 - wk, 1.4) * smoothstep(0.0, 0.03, t);
@@ -282,20 +284,15 @@ function craterMaterial(): ShaderMaterial {
           vec3 waveC = mix(shadeP, powder * 1.12, 0.45 + 0.55 * wFace);
           waveC = mix(waveC, vec3(1.25, 1.12, 0.86), hot * 0.75);
           // The snow inside the ring lifts toward the light for the impact's instant.
-          float kw = (1.0 - smoothstep(Rw * 0.6, Rw, r)) * hot * 0.22;
+          float kw = (1.0 - smoothstep(Rw * 0.6, Rw, r)) * hot * 0.1;
           P = mix(powder, vec3(1.15, 1.06, 0.88), 0.5) * kw + P * (1.0 - kw);
           A = kw + A * (1.0 - kw);
-          float kTr = exp(-(wq + 2.0) * (wq + 2.0) * 0.9) * wK * 0.42;
+          float kTr = exp(-(wq + 2.0) * (wq + 2.0) * 0.9) * wK * 0.3;
           P = shadeP * kTr + P * (1.0 - kTr);
           A = kTr + A * (1.0 - kTr);
-          float kCr = exp(-wq * wq * 2.2) * wK * 0.9;
+          float kCr = exp(-wq * wq * 2.2) * wK * 0.7;
           P = waveC * kCr + P * (1.0 - kCr);
           A = kCr + A * (1.0 - kCr);
-          // The echo: a fainter ring of lifted snow at three fifths of the first.
-          float eq = (r - Rw * 0.6) / (ww * 0.8);
-          float kE = exp(-eq * eq * 2.2) * wK * 0.4 * smoothstep(0.08, 0.2, t);
-          P = mix(shadeP, powder, 0.4 + 0.6 * wFace) * kE + P * (1.0 - kE);
-          A = kE + A * (1.0 - kE);
         }
         float life = 1.0 - smoothstep(${CRATER_LIFE - 2}.0, ${CRATER_LIFE}.0, t);
         float d = length(cameraPosition - vWorldPos);
