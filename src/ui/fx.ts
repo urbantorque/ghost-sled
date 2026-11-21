@@ -848,9 +848,11 @@ export class Fx {
     }
     c.wrap.classList.add('is-gone', fast ? 'is-fast' : 'is-slow');
     this.exitUntil = Math.max(this.exitUntil, performance.now() + (fast ? COLLAPSE_MS : OUT_MS));
+    // (Round 8: the words fade first and the line rises after. The row closes on an ease-out, fast at the start, so
+    // with the fade on an ease-in two leaving lines met while both still read, printed over each other.)
     const a = fast
-      ? play(c.inner, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-8px) scale(0.7)' }], { duration: COLLAPSE_MS, easing: EASE_IN, fill: 'forwards' })
-      : play(c.inner, leaveFrames(c.tone), { duration: OUT_MS, easing: EASE_IN, fill: 'forwards' });
+      ? play(c.inner, [{ opacity: 1, transform: 'none' }, { opacity: 0.12, transform: 'translateY(-3px) scale(0.9)', offset: 0.4 }, { opacity: 0, transform: 'translateY(-8px) scale(0.7)' }], { duration: COLLAPSE_MS, easing: 'linear', fill: 'forwards' })
+      : play(c.inner, leaveFrames(c.tone), { duration: OUT_MS, easing: 'linear', fill: 'forwards' });
     const rm = () => {
       c.wrap.remove();
       this.onLayout();
@@ -1079,8 +1081,9 @@ export class Fx {
     this.el.append(el);
     const item: BankFx = { el, ax, ay, peak, chipW: chip ? Math.round(f * 1.9) : 0, flying: false, anim: null, raf: 0, timers: [], sparks: [], hold: ++this.holdSeq };
     this.banks.push(item);
-    // It holds over the combo meter until it flies: a new combo's total waits under it till then.
-    this.hud.holdComboRow(fly);
+    // It holds over the combo meter until it flies: a new combo's total waits under it till then, and a little
+    // past (the flight eases in, so for its first part the figure is still where the total prints).
+    this.hud.holdComboRow(fly + Math.round((T - fly) * 0.6));
     // The sim already counts the bank in the score: the score shows it once the figure lands in it.
     this.hud.holdScore(item.hold, b.points);
 
@@ -1379,11 +1382,13 @@ function leaveFrames(tone: StyleTone): Keyframe[] {
   if (tone === 'lost') {
     return [
       { opacity: 1, transform: 'none' },
+      { opacity: 0.12, transform: 'translateY(5px) rotate(1deg)', offset: 0.4 },
       { opacity: 0, transform: 'translateY(14px) rotate(3deg)' },
     ];
   }
   return [
     { opacity: 1, transform: 'none' },
+    { opacity: 0.12, transform: 'translateY(-5px) scale(0.9)', offset: 0.4 },
     { opacity: 0, transform: 'translateY(-14px) scale(0.72)' },
   ];
 }
