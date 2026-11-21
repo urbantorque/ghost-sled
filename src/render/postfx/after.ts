@@ -100,12 +100,14 @@ export class AfterDraw {
   }
 
   /** Round 8 (image): the rider's opaque parts are drawn again over the rebuilt frame (HERO_LAYER). A part that
-   *  blends is left to the scene (drawn twice it would be twice as strong), as is one already drawn after. */
-  hero(root: Object3D): void {
+   *  blends is left to the scene (drawn twice it would be twice as strong), as is one already drawn after. With
+   *  `on` false the root is the scene's alone this frame. */
+  hero(root: Object3D, on = true): void {
     root.traverse((o) => {
       const m = (o as Object3D & { material?: Material | Material[] }).material;
       if (!m || Array.isArray(m) || m.transparent || o.userData.taaAfter === true) return;
-      o.layers.enable(HERO_LAYER);
+      if (on) o.layers.enable(HERO_LAYER);
+      else o.layers.disable(HERO_LAYER);
     });
   }
 

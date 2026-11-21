@@ -14,12 +14,24 @@ if (!dir || !out || !cropS) {
   process.exit(1);
 }
 const named = { rider: [480, 330, 320, 240], full: [0, 0, 1280, 720] };
+// (`rider`: a 320 by 240 box centred on where the rider was at the strip's first frame, from image-strips.js's report
+// beside the frames, `<frames>/../m<m>.json`; the fixed box if there is none.)
+const riderAt = (name) => {
+  try {
+    const j = JSON.parse(JSON.parse(fs.readFileSync(path.join(dir, '..', name.slice(0, 2) + '.json'), 'utf8')));
+    const s = j.strips.find((x) => x.z === Number(name.slice(4)));
+    const b = s && s.rider0;
+    if (!b) return null;
+    const x = Math.max(0, Math.min(1280 - 320, Math.round(b[0] + b[2] / 2 - 160)));
+    const y = Math.max(0, Math.min(720 - 240, Math.round(b[1] + b[3] / 2 - 120)));
+    return [x, y, 320, 240];
+  } catch {
+    return null;
+  }
+};
 const crop = named[cropS] ?? cropS.split(',').map(Number);
 const scale = Number(scaleS) || 1;
 const only = onlyS ? new Set(onlyS.split(',')) : null;
-const [cx, cy, cw, ch] = crop;
-const w = Math.round(cw * scale);
-const h = Math.round(ch * scale);
 const ffmpeg = createRequire(import.meta.url)('ffmpeg-static');
 fs.mkdirSync(out, { recursive: true });
 const strips = new Map();
@@ -33,6 +45,9 @@ for (const [name, frames] of strips) {
   const fr = frames.filter(Boolean);
   if (fr.length < 2) continue;
   const n = fr.length;
+  const [cx, cy, cw, ch] = (cropS === 'rider' && riderAt(name)) || crop;
+  const w = Math.round(cw * scale);
+  const h = Math.round(ch * scale);
   const args = ['-loglevel', 'error', '-y'];
   for (const f of fr) args.push('-i', f);
   // (Nearest-neighbour enlargement: a pixel stays a pixel, so a stair-step is seen as it is.)

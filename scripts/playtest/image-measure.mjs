@@ -55,8 +55,12 @@ function readPng(path) {
   return { w, h, bpp, px };
 }
 
-function grad(path, [rx, ry, rw, rh]) {
-  const { w, bpp, px } = readPng(path);
+function grad(path, box) {
+  const { w, h, bpp, px } = readPng(path);
+  const rx = Math.max(0, box[0]);
+  const ry = Math.max(0, box[1]);
+  const rw = Math.min(w - rx, box[2]);
+  const rh = Math.min(h - ry, box[3]);
   const L = (x, y) => {
     const p = (y * w + x) * bpp;
     return 0.299 * px[p] + 0.587 * px[p + 1] + 0.114 * px[p + 2];
@@ -68,13 +72,27 @@ function grad(path, [rx, ry, rw, rh]) {
 
 const [a, b, rS] = process.argv.slice(2);
 const rect = (rS || '540,380,200,220').split(',').map(Number);
+// Each frame's rider box from image-strips.js's report beside the frames (`<frames>/../m<m>.json`): frame 0's is the
+// strip's `rider0`, frame k's the box reported with step k - 1. Without one, the fixed rect.
+const boxes = (d) => {
+  const out = new Map();
+  for (let mm = 0; mm < 5; mm++) {
+    try {
+      const j = JSON.parse(JSON.parse(readFileSync(join(d, '..', `m${mm}.json`), 'utf8')));
+      for (const s of j.strips) out.set(`m${mm}-z${String(s.z).padStart(4, '0')}`, [s.rider0, ...s.frames.map((f) => f.rider)]);
+    } catch {}
+  }
+  return out;
+};
 const strips = (d) => {
   const m = new Map();
+  const bx = boxes(d);
   for (const f of readdirSync(d)) {
     const r = /^(m\d-z\d{4})-f(\d+)\.png$/.exec(f);
     if (!r) continue;
     if (!m.has(r[1])) m.set(r[1], []);
-    m.get(r[1]).push(join(d, f));
+    const b = bx.get(r[1]);
+    m.get(r[1]).push([join(d, f), (b && b[Number(r[2])]) || rect]);
   }
   return m;
 };
@@ -86,8 +104,8 @@ let n = 0;
 for (const [name, fa] of A) {
   const fb = B.get(name);
   if (!fb) continue;
-  const ga = fa.map((f) => grad(f, rect)).reduce((x, y) => x + y, 0) / fa.length;
-  const gb = fb.map((f) => grad(f, rect)).reduce((x, y) => x + y, 0) / fb.length;
+  const ga = fa.map(([f, r]) => grad(f, r)).reduce((x, y) => x + y, 0) / fa.length;
+  const gb = fb.map(([f, r]) => grad(f, r)).reduce((x, y) => x + y, 0) / fb.length;
   sa += ga;
   sb += gb;
   n++;

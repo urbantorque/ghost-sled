@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Round 8 (image): the image lane's strips in motion. For each variant (a tag and the URL switches it adds) and
-# each mountain, speedstrips.js rides the pool rider as the player on a virtual clock from a fresh save to each
+# each mountain, image-strips.js (speedstrips.js with the rider's box) rides the pool rider as the player on a virtual clock from a fresh save to each
 # strip's metre and shoots `n` frames `every` ticks apart (1: consecutive frames, so a crawl shows from frame to
 # frame). Frames go to `<out>/<tag>/frames/`; image-tile.mjs crops and tiles them. Takes a browser slot for its
 # whole run and gives it back.
@@ -29,7 +29,7 @@ for v in $VARIANTS; do
   for m in $MS; do
     playwright-cli -s="$S" goto "$BASE" >/dev/null 2>&1
     playwright-cli -s="$S" eval "window.__stripsCfg = { base: '$BASE', out: '$dir/', tier: '$TIER', m: $m, demo: 0, zs: $(zs "$m"), n: $N, every: $EVERY, extra: '$extra' }" >/dev/null 2>&1
-    timeout 1200 playwright-cli -s="$S" --raw run-code --filename="$HERE/speedstrips.js" 2>&1 | grep -v '^[╔║╚]' | grep -v '^$' > "$OUT/$tag/m$m.json"
+    timeout 1200 playwright-cli -s="$S" --raw run-code --filename="$HERE/image-strips.js" 2>&1 | grep -v '^[╔║╚]' | grep -v '^$' > "$OUT/$tag/m$m.json"
     echo "$(date +%H:%M) $tag m$m $(ls "$dir" | grep -c "^m$m-")"
   done
 done

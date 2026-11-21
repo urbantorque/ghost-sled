@@ -1479,7 +1479,7 @@ export class World {
     // What moves on its own is drawn only after the rebuild (adopted once, for good).
     if (this.post.pipe.switches.hero) {
       const after = this.post.pipe.after;
-      for (const r of this.rider.heroRoots()) after.hero(r);
+      this.rider.heroRoots((o, on) => after.hero(o, on));
       for (const o of this.life.movers) after.adopt(o);
       for (const o of this.setPieces.movers) after.adopt(o);
     }
