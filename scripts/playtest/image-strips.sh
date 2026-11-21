@@ -13,6 +13,17 @@ S="r8-image"
 # The strips' metres, a mountain each: thin things (trees, cables, bunting, rails), what moves on its own (lifts,
 # gondolas, lamps, flags) and round 8's motion (a dash at flow 6 on Pinecrest at 290 m).
 zs() {
+  # (SET=2: a second set of metres, for the second critic's new pairs.)
+  if [ "$SET" = 2 ]; then
+    case "$1" in
+      0) echo "[1050, 2429, 3548]" ;;
+      1) echo "[595, 1550]" ;;
+      2) echo "[1039, 3741]" ;;
+      3) echo "[970, 2580, 4076]" ;;
+      4) echo "[1138]" ;;
+    esac
+    return
+  fi
   case "$1" in
     0) echo "[290, 900, 1763, 3464]" ;;
     1) echo "[1045, 2405]" ;;
@@ -34,5 +45,5 @@ for v in $VARIANTS; do
   done
 done
 playwright-cli -s="$S" close >/dev/null 2>&1
-bash "$SLOT" give image
+[ -n "$NOGIVE" ] || bash "$SLOT" give image
 echo done

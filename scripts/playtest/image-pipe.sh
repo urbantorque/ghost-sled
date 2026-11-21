@@ -13,5 +13,5 @@ playwright-cli -s="$S" goto "$BASE" >/dev/null 2>&1
 playwright-cli -s="$S" eval "window.__pipeCfg = $(tr -d '\r\n' < "$CFG_JSON")" >/dev/null 2>&1
 timeout 1500 playwright-cli -s="$S" --raw run-code --filename="$HERE/pipe.js" 2>&1 | grep -v '^[╔║╚]' | grep -v '^$' > "$REPORT"
 playwright-cli -s="$S" close >/dev/null 2>&1
-bash "$SLOT" give image
+[ -n "$NOGIVE" ] || bash "$SLOT" give image
 echo "$(date +%H:%M) done"

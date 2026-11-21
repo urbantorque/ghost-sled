@@ -187,8 +187,8 @@ describe('the temporal reconstruction', () => {
   // (As `?taa` turns it on: the tier's own settings with the reconstruction switched on.)
   const RB = (t: 'high' | 'ultra'): PassSettings => ({ ...PASSES[t], taa: true });
 
-  it('ships off on every tier; High and Ultra keep their tuning for ?taa', () => {
-    expect(PASSES.high.taa || PASSES.ultra.taa).toBe(false);
+  it('ships on High and Ultra (round 8, image), never on Medium or Low', () => {
+    expect(PASSES.high.taa && PASSES.ultra.taa).toBe(true);
     expect(PASSES.high.taaMsaa && PASSES.ultra.taaMsaa).toBe(2);
     expect(PASSES.medium.taa || PASSES.low.taa).toBe(false);
     // High draws the smaller scene; Ultra a larger share of it.

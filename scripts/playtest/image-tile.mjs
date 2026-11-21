@@ -13,15 +13,17 @@ if (!dir || !out || !cropS) {
   console.log('usage: node scripts/playtest/image-tile.mjs <frames dir> <out dir> <x,y,w,h|rider|full> [scale] [only]');
   process.exit(1);
 }
-const named = { rider: [480, 330, 320, 240], full: [0, 0, 1280, 720] };
+const named = { rider: [480, 330, 320, 240], hero: [320, 300, 640, 360], full: [0, 0, 1280, 720] };
 // (`rider`: a 320 by 240 box centred on where the rider was at the strip's first frame, from image-strips.js's report
 // beside the frames, `<frames>/../m<m>.json`; the fixed box if there is none.)
-const riderAt = (name) => {
+const riderAt = (name, hero) => {
   try {
     const j = JSON.parse(JSON.parse(fs.readFileSync(path.join(dir, '..', name.slice(0, 2) + '.json'), 'utf8')));
     const s = j.strips.find((x) => x.z === Number(name.slice(4)));
     const b = s && s.rider0;
     if (!b) return null;
+    // (`hero`: 640 by 360, the rider at its foot and the run ahead above it.)
+    if (hero) return [Math.max(0, Math.min(640, Math.round(b[0] + b[2] / 2 - 320))), Math.max(0, Math.min(360, Math.round(b[1] + b[3] + 10 - 360))), 640, 360];
     const x = Math.max(0, Math.min(1280 - 320, Math.round(b[0] + b[2] / 2 - 160)));
     const y = Math.max(0, Math.min(720 - 240, Math.round(b[1] + b[3] / 2 - 120)));
     return [x, y, 320, 240];
@@ -45,7 +47,7 @@ for (const [name, frames] of strips) {
   const fr = frames.filter(Boolean);
   if (fr.length < 2) continue;
   const n = fr.length;
-  const [cx, cy, cw, ch] = (cropS === 'rider' && riderAt(name)) || crop;
+  const [cx, cy, cw, ch] = ((cropS === 'rider' || cropS === 'hero') && riderAt(name, cropS === 'hero')) || crop;
   const w = Math.round(cw * scale);
   const h = Math.round(ch * scale);
   const args = ['-loglevel', 'error', '-y'];

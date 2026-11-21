@@ -286,6 +286,8 @@ const PRESENT_FRAG = /* glsl */ `
   // The rider's box on screen (uv: x0, y0, x1, y1; empty when x0 > x1), where the rider is drawn again over this
   // frame (after.ts HERO_LAYER).
   uniform vec4 uHeroRect;
+  // How far the rider's parts are from the lens (metres, nearest and farthest).
+  uniform vec2 uHeroDepth;
   varying vec2 vUv;
   float top3(vec3 c) { return max(c.r, max(c.g, c.b)); }
   vec3 squash(vec3 c) { return c / (1.0 + top3(c)); }
@@ -333,14 +335,15 @@ const PRESENT_FRAG = /* glsl */ `
     }
     // Round 8 (image): round the rider, where it is drawn again at the middle of each frame pixel, pushed back by
     // the four's own spread too (at most 3% of the distance): the nearest of four on a sloped coat is nearer than
-    // the coat at the pixel's middle, and the rider failed its own depth in patches. Anything more than 3% behind
-    // the rider's outline is still behind it (the spray's specks).
+    // the coat at the pixel's middle, and the rider failed its own depth in patches. Only at the rider's own
+    // distance: pushed back everywhere in its box on screen, birds sitting in the snow beside it showed through
+    // the snow. Anything more than 3% behind the rider's outline is still behind it (the spray's specks).
     float f = uDepthNF.y;
     float n = uDepthNF.x;
     if (dz < 1.0 && vUv.x >= uHeroRect.x && vUv.y >= uHeroRect.y && vUv.x <= uHeroRect.z && vUv.y <= uHeroRect.w) {
       float l0 = n * f / (f - dz * (f - n));
       float l1 = dx >= 1.0 ? f : n * f / (f - dx * (f - n));
-      float lz = l0 + clamp(l1 - l0, 0.001 * l0, 0.03 * l0);
+      float lz = l0 + (l0 >= uHeroDepth.x && l0 <= uHeroDepth.y ? clamp(l1 - l0, 0.001 * l0, 0.03 * l0) : 0.001 * l0);
       gl_FragDepth = min(1.0, f * (1.0 - n / lz) / (f - n));
     } else {
       gl_FragDepth = min(1.0, dz + (1.0 - dz) * 0.001);
@@ -469,6 +472,7 @@ export class TemporalPass {
         uDepthNF: d.uDepthNF,
         uPresent: { value: new Vector3() },
         uHeroRect: { value: new Vector4(1, 1, 0, 0) },
+        uHeroDepth: { value: new Vector2(1, 0) },
       },
     });
   }
@@ -604,6 +608,8 @@ export class TemporalPass {
     const seen = new Set<number>();
     const hero = this.presentMat.uniforms.uHeroRect.value as Vector4;
     hero.set(1, 1, 0, 0);
+    const heroD = this.presentMat.uniforms.uHeroDepth.value as Vector2;
+    heroD.set(1e9, 0);
     for (let i = 0; i < BODIES; i++) {
       if (i >= this.nBodies) {
         rect[i].set(1, 1, 0, 0);
@@ -624,6 +630,8 @@ export class TemporalPass {
       let x1 = -1;
       let y1 = -1;
       let behind = false;
+      let w0 = 1e9;
+      let w1 = 0;
       for (let c = 0; c < 8; c++) {
         tmpV.set(c & 1 ? 1 : -1, c & 2 ? 1 : -1, c & 4 ? 1 : -1).multiply(b.half).add(b.center).applyMatrix4(b.world);
         const x = tmpV.x;
@@ -635,6 +643,8 @@ export class TemporalPass {
           behind = true;
           break;
         }
+        w0 = Math.min(w0, w);
+        w1 = Math.max(w1, w);
         const sx = ((el[0] * x + el[4] * y + el[8] * z + el[12]) / w) * 0.5 + 0.5;
         const sy = ((el[1] * x + el[5] * y + el[9] * z + el[13]) / w) * 0.5 + 0.5;
         x0 = Math.min(x0, sx);
@@ -649,6 +659,8 @@ export class TemporalPass {
         const r = rect[i];
         if (hero.x > hero.z) hero.copy(r);
         else hero.set(Math.min(hero.x, r.x), Math.min(hero.y, r.y), Math.max(hero.z, r.z), Math.max(hero.w, r.w));
+        // (A corner behind the lens: the lens is in the box, and the rider within a few metres of it.)
+        heroD.set(behind ? 0 : Math.min(heroD.x, w0), Math.max(heroD.y, behind ? 6 : w1));
       }
     }
     // Each body's pose is kept for next frame; a body not seen this frame is forgotten.
