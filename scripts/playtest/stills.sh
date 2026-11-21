@@ -9,7 +9,7 @@ BASE="$1"; OUT="$2"; DEV="${3:-desk}"; TIERS="${4:-high}"; MS="${5:-0 1 2 3 4}";
 HERE="$(cd "$(dirname "$0")" && pwd -W)"
 CFG=.playwright/cli-headless.config.json; [ "$DEV" = phone ] && CFG=.playwright/mobile-headless.config.json
 S="r8-stills-$LANE-$DEV"
-slot=$(bash "C:/Users/roger/OneDrive/Desktop/Ghost Sled/scripts/playtest/browser-slot.sh" take "$LANE-stills"); echo "$(date +%H:%M) took $slot"
+slot=$(bash "C:/Users/roger/OneDrive/Desktop/Ghost Sled/scripts/playtest/browser-slot.sh" take "$LANE-stills") || { echo "no slot: $slot"; exit 2; }; echo "$(date +%H:%M) took $slot"
 playwright-cli -s="$S" open --config="$CFG" >/dev/null 2>&1
 for t in $TIERS; do
   dir="$OUT/$t"; [ "$DEV" = phone ] && dir="$OUT/phone-$t"

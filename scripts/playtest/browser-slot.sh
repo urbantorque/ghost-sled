@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Round 8: the laptop blue-screens under load (DECISIONS 365, notes/r8-lanes.md), so lanes share one browser slot (two until a crash with two on 21 November).
 # Take a slot before opening a playwright browser and give it back when the browser is closed:
-#   scripts/playtest/browser-slot.sh take <lane>      waits (up to 40 min) for the slot (one since 21 November), prints it
+#   scripts/playtest/browser-slot.sh take <lane>      waits for the slot (one since 21 November) however long it takes, prints it
+#   (Until 22 November a take gave up after 40 min, and callers that did not check went on to open a second browser.)
 #   scripts/playtest/browser-slot.sh give <lane>      gives back whatever slot <lane> holds
 #   scripts/playtest/browser-slot.sh who              lists the slots held, by whom and since when
 # A slot is a directory under the main checkout's shots/r8/slots (mkdir is atomic, so two lanes never take the same
@@ -31,7 +32,7 @@ case "$cmd" in
     [ -f "$d/owner" ] && [ "$(cut -d' ' -f1 "$d/owner")" = "$lane" ] && rm -rf "$d" && echo "gave heavy"; exit 0 ;;
   take)
     [ -z "$lane" ] && { echo "usage: take <lane>"; exit 1; }
-    deadline=$(( $(now) + 2400 ))
+    deadline=$(( $(now) + 6 * 3600 ))
     while :; do
       for s in 1; do  # one browser on the machine since the 21 November crash with two
         d="$SLOTS/slot$s"
@@ -42,7 +43,7 @@ case "$cmd" in
         fi
         if mkdir "$d" 2>/dev/null; then echo "$lane $(now)" > "$d/owner"; echo "slot$s"; exit 0; fi
       done
-      [ "$(now)" -gt "$deadline" ] && { echo "no slot free after 40 min"; exit 2; }
+      [ "$(now)" -gt "$deadline" ] && { echo "no slot free after 6 hours"; exit 2; }
       sleep 20
     done ;;
   give)
