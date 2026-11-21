@@ -3686,3 +3686,32 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
       line, so a novice rode all ten legs on two nights of four. Holding a night's get-ups across stage lines is a sim
       flag for a later sim round (the sim is closed, DECISIONS 370); a full night's time as a second record is the
       spine's to add. Trials (the stretch) were not built. Only scripts have ridden either mode.
+
+377. **The flow pass: High's scanlines found in the occlusion and gone; the flame burns on the scarf, short of its bar**
+    (`notes/r8-speed.md` "The flow pass"; frames under `shots/r8/flow/`).
+    - *The scanlines were never the flow's.* Fine horizontal stripes about 4 px apart on High's banks and shadows, which
+      a critic laid on Spirit Flow's wind lines, showed at flow 0, with the lens blur off and in round 8's own before
+      stills, and went with the occlusion off. High's half-resolution occlusion (`postfx/ao.ts`) blurred and upsampled
+      only taps within about 3% of the pixel's own depth, and on snow seen at a grazing angle every tap a row away is
+      that much deeper, so each row kept its own noise. Both now weigh a tap against the plane the pixel lies on (its
+      depth slope, capped): a slope is blurred and a true edge is not. No new draw or pass. Four fresh critics named no
+      scanlines after it, two of them testing for them. The composite's corner streak starts its taps at a per-pixel
+      offset, so it cannot copy an edge into parallel lines either.
+    - *The flame.* From a ribbon read as "a plank" to the scarf alight: its vertex colours run from vermillion at the
+      knot to marigold at the tip (free, so Low burns too), with soft tongues riding the points of the scarf they were
+      born on, vermillion burning into marigold with a pale heart, no outline, one Points draw (110 tongues on High, 70
+      on Medium, 28 fuller ones on Low). The scarf writes a stencil bit of its own (3) beside the rider's (1); the flame
+      is held off the body alone, and every ghost layer and the avalanche's debris test the rider's bit alone, so no
+      ghost covers the rider or the scarf (contract C10 holds). Four fresh critics given only ART.md, counting the
+      flame as fire off the scarf over twelve stills: 1, 0, 2, then 5 (7 with two borderline Low frames). The bar was
+      10. It fails where a flip hides the scarf behind the saucer, where Sakura's scarf is short and the upright tongues
+      read as candles, and on Low where big marigold tongues read as the course's fuel drops. Merged for the scanlines
+      and a flame better than the one merged in 375; the lane's next pass tries tongues laid along the scarf, a colour
+      further from the fuel's marigold, and a thinner flame while a flip hides the scarf.
+    - *Touched outside the lane's files:* `postfx/ao.ts` (the light lane's), `materials.ts ghostStencil` and `chaos.ts`
+      (the stencil mask). A later rework of the occlusion keeps the plane test.
+    - *Named by its critics, not the flow's (for the polish pass and the snow lane):* regular stripes in the snow
+      material itself (Pinecrest 2700 m as dunes, Sakura's left bank as cobalt stripes, a landing's corduroy as stair
+      treads, starkest on Low); a checker dither inside High's cast shadows; Low missing a leap's outcrops and crowds
+      High draws at 600 m; a radial smear on Low's near snow; Sakura's hazards reading as ice spires; a flip's saucer
+      underside as an ink-black disc.
