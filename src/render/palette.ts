@@ -438,7 +438,9 @@ function biomeBase(biome: BiomeId): Palette {
       p.massif.peak = 'cone';
       p.massif.rock = c('#6A5A86');
       p.massif.glow = c('#FFA0B8');
-      p.petals = 0.7;
+      // (Round 8's review: the air was confetti, flat pink discs over every sky. Fewer, so they read as petals on the
+      // wind in depth: about two thirds of the round 7 count down the run.)
+      p.petals = 0.45;
       p.clouds = { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFEAF0'), shade: c('#B49CCC'), rim: c('#FFB4C6'), shadow: 0.28 };
       p.atmo.valleyColor = c('#F0CCDA');
       return p;
@@ -1823,7 +1825,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.snowShade = c('#7C88D2');
         p.fog = c('#EEDADE');
         p.grade.saturation = 1.18;
-        p.petals = 0.9;
+        p.petals = 0.6;
         p.massif.bands = 0;
         p.clouds.shadow = 0.26;
       },
@@ -1870,7 +1872,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.air.scatter = 0.8;
         p.bloom = 0.17;
         p.massif.veil = 0;
-        p.petals = 1.1;
+        p.petals = 0.75;
         p.grade.exposure = 0.9;
         // (The valley under the Leap opens: the sea of cloud thins so the far plane is flat blue openings
         // between white, not one white floor, and the cloud's shadows break the slopes either side.)
@@ -1890,7 +1892,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.snowShade = c('#7684D2');
         p.snowDeep = c('#5448AC');
         p.grade.contrast = 1.16;
-        p.petals = 1.3;
+        p.petals = 0.85;
         p.lamps = 0.45;
         // (The clearest light on the mountain: the air thins so the town under the last leap and the pagoda
         // over the square stand in it, not a pale ghost of them.)
