@@ -715,6 +715,15 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   from the lens, 6 m on Low), solid and then gone, never stippled or milky; a tree ahead of the rider is a threat and
   stays. What a sled passes is cut fine enough to hold at the lens: a spire, a standing stone, a tunnel's rock, a
   bridge's parapet and beam.
+- **At the lens, solid then gone (round 8's review loop).** Whatever fades at the lens fades through the middle of its
+  fade in a few centimetres of travel, never stippled or milky: props, a street's front row, a lantern hanging over the
+  run (gone by about 8 m, before it is over the rider's head; a bell or a wheel by the snow 5 m), a race cabin the rider
+  has passed. A ward's broken paper is flakes a little over half a panel, gone near the lens. Shafts hang in the air:
+  none in the first 10 m from the lens, and the composite's own rays under the horizon a tenth of their strength. A
+  glaze keeps a cool tint under a warm sky (where what it mirrors is warm, half of it is the deep upper sky). A flipped
+  saucer or tray shows the snow's light on its hull and the trim's vermillion round its rim, fading as it turns
+  edge-on, never an ink disc over the rider. The slow hero frame's depth of field is half a beat's, so the valley the
+  flight is over reads. A dash's after-images are faint (at most 0.6 by day, 0.35 at night), never a second sled.
 - **The Lantern Row (round 8).** Each finish town hangs the lanterns a player has lit there, marigold, on a wire across
   the square 58 m past the line, and the same row hangs over the stretch the mountain's title shot rides. Only lit
   lanterns hang, so a fresh save's frames do not change. Medium and High light the snow under it; Low hangs glowing
@@ -924,6 +933,10 @@ stays the dark shape in the street.
   rider and the cable car doubled in black ice. (3) Old Town's street at golden hour, down the bunting to the far
   peak. (4) The Valley Leap's apex, the spired town below.
 - **The one image.** A red-scarfed rider in the air over a gold valley, a spired town far below.
+- **The review loop (round 8).** The gold keeps its high wisps and no cumulus banks: a bank lit from below stood
+  over the road as one flat orange crown. Its shade is violet-blue, never lilac. Ice before the Valley Leap is ice, not
+  a salmon slab (section 12's glaze rule). Old Town's lanterns and the covered bridge's pool amber on the snow; Low paints
+  the pools as a soft step under white.
 
 ### Frostfang Glacier: blue hour, aurora, dawn
 
@@ -947,6 +960,13 @@ stays the dark shape in the street.
   the aurora's green across both and on the crests of the ice. A slot in the ice is the dark of its frame. Cobalt
   belongs to the ice walls. The Ice Cavern has ribs of ice with crystals at their springings and a rose and gold
   dawn blade on the floor at its mouth.
+- **The review loop (round 8).** A crevasse wall is cut ice: a few planes a step apart in the wall's three values, a
+  pale fracture down some of the splits, and none of the stretched faceting of the ground it stands on. The aurora lies on
+  the snow in curtains with the violet shade between them, never one teal floor. In the Ice Cavern each gate is a pool of
+  its light with the cobalt dark between, and the lanterns over the run leave the frame before the lens passes under
+  them; the cavern's dark lets go within two seconds of the mouth, so the bridge out of it is the dawn. The dawn's key
+  stands at 25 degrees, gold enough that the slope facing down the run takes rose-gold. At night the sled's lantern is
+  low, so a landing's powder is snow and not a sheet of milk.
 
 ### Ember Peak: under the mountain's breath
 
@@ -971,13 +991,21 @@ stays the dark shape in the street.
 - **As built.** The snow's own colour stays a warm white from the start line to the forge town; the light carries
   the orange, once. From the Basalt Halls on the light is ember, and the ash is an ember red that stands off the
   lens and never cools to grey. Caldera Leap: lava lies on the banks, its crust near-black, only the heart glows.
-  (It is not yet a lake under the flight, and no smoke ceiling is lit from below: the direction above still asks
-  for both.)
+  (Round 8's review loop built the lake under the flight, below; the smoke ceiling is lit from below in the Caldera's
+  place.)
 - **As built in round 8.** The light that shades the snow comes from the lava's side, low and further round than the
   dim disc (64 to 70 degrees right, 30 to 40 up), so the snow facing it is firelit warm white and the far bank turns
   to a cold plum-teal a step down, never a dark slab (a near-black bank lost every blind pair); the deck's shadows
   take at most half the light. Lamps, forges and windows hang a thin haze of their own light in the air round them
   (Medium and High; strong, it reads as milk).
+- **The review loop (round 8).** The Caldera's valley is a lake of lava: from the lip, the landing and the air the sea
+  under the smoke is crust in rafts with melt along the cracks between them in the fire's colour, wider in the hot pools.
+  The crust floor lies under the gap and the foot of the landing; the landing face is groomed snow, the lava in its
+  fields either side. Ice under the fire holds the cold of the deep sky: a cold dark lane, never the red horizon. From
+  the halls on, the key is a step paler on a brighter snow, so the light's orange is a tint and the lava's pools are the
+  orange; Low leans its lit snow toward the cold shade, so it never reads as sand. The opening's high side is a rank of
+  organ pipes along the wall's crest. A charred snag holds snow at its foot, never on its splintered tip. A tunnel's
+  colour holds only a sled under its roof: thrown up by Cinder Gate's vent, the slope below is the open air's.
 
 ### Sakura Ridge: the spring morning
 
@@ -1001,6 +1029,13 @@ stays the dark shape in the street.
   the Blossom Leap the sky sits a full step under the snow and the far plane is blue. Petal Steps: the flooded
   paddies are a view from the air; from the run they read as rims. The Thousand Torii lays bars of sun across the
   snow in every gap.
+- **The review loop (round 8).** Temple Town's houses are two storeys (three now and then) of paper screens behind
+  close dark slats, an ink pent roof at each storey line and snow on the ridge's quarter of the roof; the inn three or
+  four. The cut walls, the chute's crags and the leaps' shoulders are one stone leaning to the lacquer's wine, in beds
+  with snow on the ledges, never navy. Cast shadows lie soft and a middle value. The calm lens keeps a third of the
+  speed streaks and half the speed blur at the frame's sides; fewer, smaller petals ride the air. Petal Steps' lanterns
+  wait in marigold. The bridge is one deep lacquer on framed towers under swept roofs; the masts and the finish arch a
+  deeper lacquer than the torii, never near the rider's vermillion.
 
 ### Lanternfall: where the lights come from (new in round 7)
 
@@ -1062,6 +1097,14 @@ stays the dark shape in the street.
   with stronger pools was read three times, against this section, as a flat violet with a gold floor. A lamp's pool
   keeps the snow's own lilac and lifts its value toward silver, the lamp's marigold only at its heart; Low paints it in
   two soft steps of silver and a small warm heart.
+- **The review loop (round 8).** The cloud lets go as the Cloud Sea's guide light leaves the run, about 300 m above
+  the break's lip (wherever the course puts the lip), so the last of the high ground is ridden out under the deck with
+  the valley opening ahead and the whip lands on it open. The valley's near lanterns are paper with ribs, palest at the
+  waist, under an ink cap and over a foot and tassel. The rider is rimmed by the moon on the Crown and more strongly in
+  the cloud, where the light has no side. The great lantern, walked off the run, is let down on its chains so that in
+  the results it burns in the top third over the rider. The lift station is coursed stone under a hall of lit paper;
+  the kilometre pillars carry string courses and a graded paper head; the bridge of lights' piers carry a lantern storey
+  and a slot of light; the FINISH board is lilac paper.
 
 ### Tiers, designed
 
