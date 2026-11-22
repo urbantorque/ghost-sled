@@ -1318,9 +1318,9 @@ export function galleryPiece(ctx: SiteCtx): Piece {
 function rock(col: Color, pos: V3, scale: V3, jitter = 0.28): BufferGeometry {
   // (Round 8, the forest lane: a mass over two metres is cut a step finer, its corners jittered less, so a tunnel's
   // wall beside the lens is rock in facets and not a few panes a tenth of the frame wide.)
-  // (The lowperf lane: Low's poster keeps round 7's cut, twenty broad facets to a mass whatever its size: the finer
-  // cut was four times the triangles and most of a tunnel's build, on idle time a saturated Low frame pays in full.)
-  const big = chamferLevel() !== 'low' && Math.max(scale[0], scale[1], scale[2]) > 2.2;
+  // (The lowperf lane tried round 7's cut on Low, twenty facets to every mass, for a quarter of a tunnel's build: at
+  // the lens it brought back the shards a tenth of the frame wide that this cut removed, so every tier keeps it.)
+  const big = Math.max(scale[0], scale[1], scale[2]) > 2.2;
   return part(rockCut(big ? 1 : 0), col, { pos, scale, jitter: big ? jitter * 0.55 : jitter });
 }
 
