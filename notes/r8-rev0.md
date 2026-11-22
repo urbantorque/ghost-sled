@@ -421,7 +421,7 @@ Draw calls level on every tier. Triangles +1.1% on High, +2.7% on Low and +1.2% 
 outcrops in more, thinner beds of nine sides (pass 2's fix; in a batch already drawn) and the tray's two rings (about
 400 triangles on one sled). No new draw, pass, program or uniform, and nothing before the first frame; the glaze's
 warmth reads the mirrored colour it already has, and the shafts' near metres are one subtraction.
-GLCOUNT_LINE
+Low's GL calls a frame (`glcount.js`) were not counted: the count against the pass-1 build (`dist/r8-rev0-base`, kept in the worktree; `rev0/glc.sh` runs it A B B A) had just taken the slot when the lane was told to hand back. Nothing in the branch adds a draw or a uniform call on Low (palette values, shader terms and a few triangles), so the count should be level; it is the main lane's to confirm.
 
 ## Shared code touched
 
