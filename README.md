@@ -1002,7 +1002,28 @@ The expert's race is a little less live than round 7's (0.67 against 0.70): it r
 Ember and Sakura that its quiet runs rose from 8 to 27 of 600. Median finishes, by pilot over five mountains: mid
 126.3 s, expert 121.3, novice 144.1, clumsy 337.3.
 
-<!-- r8-fill: the critic loop's scores (DECISIONS 383), the performance table against round 7 (the quiet sitting), sizes, where the captures are, what this does not show -->
+**The critic loop** (DECISIONS 383; one review lane a mountain, five passes, a fresh critic each pass told only
+ART.md, judging High at 1280x720, Low and a phone on Medium, and strips in motion). High's mean, pass 1 to pass 5:
+
+| Mountain | High (lowest frame) | Low | Phone | Best frames |
+| --- | --- | --- | --- | --- |
+| Pinecrest | 7.28 (6) to 7.20 (5) | 6.27 to 6.42 | 6.28 to 6.35 | 8.5 |
+| Frostfang | 6.60 (4.5) to 6.94 (5.5) | 6.20 to 6.27 | 6.50 to 6.37 | 8 |
+| Ember | 7.00 (5) to 6.96 (6) | 6.56 to 6.21 | 6.65 to 6.49 | 8 |
+| Sakura | 6.76 (5.5) to 6.67 (5) | 6.15 to 5.96 | 6.26 to 6.42 | 8 |
+| Lanternfall | 6.72 (5.5) to 6.56 (5.8) | 6.32 to 5.98 | 6.49 to 6.18 | 8 |
+
+No mountain met the stopping rule (no frame under 8, every hero vista 9). A new critic moved frames nothing had
+touched by up to a point and a half and the last two passes were the harshest everywhere, so the means are a band;
+what each pass fixed was not named again, and the worst frames rose on Frostfang and Ember. The fixes: a flipped
+saucer or tray lit with a vermillion rim instead of an ink disc, ice that stays cool under a warm sky, nothing at the
+lens stippled or milky, shafts off the near snow, a ward that breaks into paper flakes, Pinecrest's gold without its
+orange crown, Frostfang's walls as cut ice and its dawn on the bridge, Ember's Caldera a lake of lava with a groomed
+landing, Sakura's paper-screen townhouses and soft shadows, Lanternfall's break opening where its script puts it and
+the great lantern over the results. What is left is shared: the camera through a leap's lip, a flip read as a fall,
+ghosts in the sky (the pool riders' own lines), walls that want geometry rather than paint.
+
+<!-- r8-fill: the performance table against round 7 (the quiet sitting), sizes, where the captures are, what this does not show -->
 
 ## Layout
 
