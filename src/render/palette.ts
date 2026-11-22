@@ -953,7 +953,8 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.grade = { lift: c('#030A26'), gain: c('#F0F5FF'), saturation: 1.1, contrast: 1.12, grain: 0.7, foot: 0.3, shafts: 0.3, lens: 0.25, focal: 1, gust: 0, glitter: 0.25 };
       // (Low's poster: the blue hour in printed steps of cobalt over the thin lemon band, a line of it printed
       // over its glow, ART.md 15.)
-      Object.assign(p.poster, { steps: 2, bands: 6, stripe: 0.6, rim: 0.6, shadow: c('#3A2E9A'), shadowK: 0.35 });
+      // (Round 8's review: Low's painted shafts fanned over the near snow as white cards; half of them.)
+      Object.assign(p.poster, { steps: 2, bands: 6, stripe: 0.6, rim: 0.6, shadow: c('#3A2E9A'), shadowK: 0.35, shafts: 0.5 });
       p.clouds = { low: 0.3, high: 0.35, top: 0.13, lit: c('#AFC6EC'), shade: c('#34559E'), rim: c('#FFEFAE'), shadow: 0.08 };
       p.atmo = { rays: 0.25, halo: 0, meteors: 0.2, banner: 1, slide: 1, sweep: 0.3, valley: 0.6, valleyColor: c('#6084C8'), drift: 0.1 };
       p.stars = 0.7;
@@ -2932,8 +2933,9 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.lanternGlow = 0.7;
         p.bloom = 0.9;
         // (Round 8's review: at 1.35 the gates' lanterns laid one amber floor down the cavern, a gold floor with no
-        // cobalt between; at 1 each is a pool in the dark.)
-        lamps(p, 1);
+        // cobalt between; at 1 it still was, the gates' pools running into each other: at 0.7 each is a pool in the
+        // dark.)
+        lamps(p, 0.7);
         // (Round 8: the cavern's lanterns stand in a glow of their own light; the ice holds it.)
         p.lampAir = 0.2;
         // (The visual lift: the floor under the roof is dark, so it bounces little, and that cold.)

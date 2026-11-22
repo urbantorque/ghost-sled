@@ -117,7 +117,9 @@ export function litMaterial(): ShaderMaterial {
         vForm = (0.5 + 0.6 * facing * facing) * (0.9 + 0.1 * n.y);
         vec4 mv = viewMatrix * wp;
         vDist = -mv.z;
-        vUp = wp.y - cameraPosition.y;
+        // (The form's own origin, not the pixel's: measured a pixel at a time, a lantern across the band was cut
+        // through with a ragged top.)
+        vUp = (m * vec4(0.0, 0.0, 0.0, 1.0)).y - cameraPosition.y;
         gl_Position = projectionMatrix * mv;
       }
     `,

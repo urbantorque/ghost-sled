@@ -93,3 +93,52 @@ pool rider's line); the kilometre arch's beam over the phone's lens at 3000 m (e
 tiny riders (the replayed pool rider's own tricks); Station Street's and Fang Town's houses as boxes, the cavern's vault
 bays as stacked cubes and the span's missing abyss (geometry too big and too shared for a review lane); the dash's
 after-images (the events lane's).
+
+## Pass 2 (`7fd14da`)
+
+Console clean on every set.
+
+| Group | Mean | Min |
+| --- | --- | --- |
+| High (35) | 6.96 | 5.5 (2250, 3304) |
+| Low (35) | 6.46 | 5.0 (2250, 3418) |
+| Phone, Medium (35) | 6.63 | 5.0 (3000) |
+| Strips (6) | 6.67 | 5.5 (1230) |
+
+High: 150 7, 300 7, 450 7.5, 595 7.5, 750 7, 900 7.5, 975 6.5, 1045 7, 1195 6.5, 1343 7.5, 1500 7, 1550 7, 1650 6.5,
+1800 6.5, 1917 6, 2137 7, 2250 5.5, 2297 7.5, 2405 6, 2548 6.5, 2700 7.5, 2783 7.5, 2850 6.5, 3000 7, 3154 6.5,
+3304 5.5, 3418 6, 3549 7.5, 3600 8, 3750 8, 3940 8, 4050 7, 4200 7.5, 4330 7, 4440 7.5.
+
+Low: 150 6.5, 300 7, 450 7, 595 6.5, 750 6.5, 900 7, 975 6, 1045 6.5, 1195 6, 1343 6.5, 1500 5.5, 1550 6.5, 1650 6.5,
+1800 6, 1917 6, 2137 6.5, 2250 5, 2297 6.5, 2405 6, 2548 6.5, 2700 6, 2783 6.5, 2850 6, 3000 7, 3154 6.5, 3304 6,
+3418 5, 3549 7, 3600 7, 3750 7.5, 3940 7, 4050 7.5, 4200 7, 4330 6.5, 4440 7.
+
+Phone: 150 6.5, 300 7.5, 450 7, 595 6.5, 750 6.5, 900 7.5, 975 6.5, 1045 7, 1195 6.5, 1343 6.5, 1500 6.5, 1550 7,
+1650 7, 1800 6.5, 1917 6.5, 2137 7, 2250 6, 2297 7, 2405 6.5, 2548 6, 2700 7, 2783 7, 2850 6.5, 3000 5, 3154 5.5,
+3304 6.5, 3418 5.5, 3549 7, 3600 7, 3750 7, 3940 6.5, 4050 7.5, 4200 6.5, 4330 6.5, 4440 7.
+
+Strips: 200 7.5, 1230 5.5, 2300 6, 2650 6.5, 3400 7.5, 3880 7.
+
+Hero vistas (none a 9): the opening 7.5 (strip 200); the span 7.5 (1343); the aurora 7.5 (2700, 2783); the cavern mouth
+7.5 (3549; no frame on the mouth itself); the Fang at dawn 8 (3940, 3600, 3750).
+
+Every High mean rose but the strips' (6.6 to 6.96; Low 6.2 to 6.46; phone 6.5 to 6.63): the ward's shards (5 to 7), the
+walls' frames (300 6 to 7, 900 6 to 7.5), the parapet (1343 7 to 7.5). What it named now, worst first: shafts over the
+near snow in most dawn frames and the phone's lower half (and Low's painted shaft cards, even at night); the walls still
+"huge stretched flat facets with no fractures"; 3418's floor still a gold carpet and its lanterns now "flat blocks with
+jagged tops" (the pixel-by-pixel height test cut through them); 3304's vault masses floating as cubes over an upright
+rider who hides the mouth; the phone's 3000 arch beam; the hero frame over the last leap (4050) lost to depth of field;
+the Fang a straight slab, not a curved needle; the ice floor's cracks a hexagon grid at 2700.
+
+### After pass 2
+
+- **The walls, again** (`materials.ts rockCells`, the fluted ice only): each flute split along its own diagonal drew long
+  thin triangles up a 30 m face, and that, not only the mesh, was the "stretched facets". The ice is now upright flutes,
+  each with a face turned to the light and one from it, broken across into drums at uneven heights (2.2 m wide, about
+  6.5 m tall), with pale fractures along some breaks and down some seams.
+- **Shafts stay in the air** (`postfx/shafts.ts`, shared): the first 8 m from the lens take none of a shaft's light and it
+  comes in by 30 m, ART.md 12's "never on the near snow". Low's painted shaft cards on Frostfang at half (`poster.shafts`
+  0.5).
+- **The Ice Cavern's floor**: the place's lamps at 0.7 (1 still ran the gates' pools into one gold floor). The overhead
+  lanterns' dissolve is measured at each lantern's own origin, so a lantern goes whole, never cut through with a ragged
+  top.

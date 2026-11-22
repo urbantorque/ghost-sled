@@ -125,6 +125,10 @@ export const SHAFT_COMPOSITE_GLSL = /* glsl */ `
     // Lit air lies between the lens and what it sees, and (for a place) no further than the place.
     float reach = src.w > 0.0 ? min(lin, src.w) : lin;
     float air = 1.0 - exp(-reach / uShaftAir);
+    // (Round 8's review, Frostfang: a low sun's shafts fanned over the near snow and the deck under the rider as
+    // radial streaks, in most dawn frames and the phone's lower half. ART.md 12: shafts hang in the air, never on
+    // the near snow; the first 8 m take none and the light comes in by 30.)
+    air *= smoothstep(8.0, 30.0, reach);
     return color * (acc * grain * fall * air * src.z);
   }
   vec3 pipeShafts(vec2 uv, vec3 sunColor) {
