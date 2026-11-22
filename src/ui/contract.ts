@@ -465,6 +465,9 @@ export interface UIHandlers {
   onRideMode?(mode: { kind: 'night' } | { kind: 'mirror'; mountain: string }): void;
   /** Round 8 (the photo lane): photo mode, from pause or from the results while the scene stands. */
   onPhoto?(): void;
+  /** Round 8, G11 (the share lane): the run's reel, cut short and saved as a video clip (absent where the browser
+   *  cannot record the canvas: no button). */
+  onSaveClip?(): void;
   /** A sled sound's Listen button: a few seconds of it under a carving rider, bought or not. */
   onListenSound?(id: string): void;
   onSettings(s: Partial<SettingsModel>): void;

@@ -373,6 +373,12 @@ export class Graph {
 
   private swap: { split: ChannelSplitterNode; merge: ChannelMergerNode } | null = null;
 
+  /** Round 8, G11 (the share lane): the mix's last node before the speakers (the mirror's swap when a mirrored run is
+   *  heard), where a clip takes the game's sound as the player hears it. */
+  get last(): AudioNode {
+    return this.swap ? this.swap.merge : this.ceiling;
+  }
+
   disconnect(): void {
     this.disposed = true;
     if (this.swap) {

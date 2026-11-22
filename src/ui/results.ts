@@ -749,6 +749,7 @@ export class Results {
         for (let i = 0; i < m.missions.length; i++) if (m.missions[i].justCompleted) this.stampShown(i);
       },
       photo: this.hd.onPhoto ? () => this.hd.onPhoto?.() : undefined,
+      clip: this.hd.onSaveClip ? () => this.hd.onSaveClip?.() : undefined,
     }, []);
     this.story = story;
     story.el.tabIndex = -1;

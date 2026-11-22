@@ -1115,6 +1115,12 @@ export class AudioEngine {
     return { played: { ...c.scape.played }, stats: { ...c.scape.stats }, heard: { ...this.heard } };
   }
 
+  /** Round 8, G11 (the share lane): the running context and the mix's last node, for a clip's sound; null while the
+   *  context has not started (no gesture yet, or parked), and the clip is then silent. */
+  clipTap(): { ctx: AudioContext; out: AudioNode } | null {
+    return this.ctx && this.core && this.ctx.state === 'running' ? { ctx: this.ctx, out: this.core.graph.last } : null;
+  }
+
   /** Probe-only: the context and the master's last node before the speakers, for a capture tap. */
   debugTap(): { ctx: AudioContext; out: AudioNode } | null {
     return this.ctx && this.core ? { ctx: this.ctx, out: this.core.graph.ceiling } : null;

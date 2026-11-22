@@ -89,12 +89,15 @@ export async function encodeThumb(c: HTMLCanvasElement): Promise<Blob | null> {
   return toBlob(c, 'image/jpeg', 0.82);
 }
 
-const FACE = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+/** The game's type (the UI's system sans stack), for what is drawn into a saved picture or clip. */
+export const FACE = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
 /** The run's card, in the game's type and colours, in the picture's lower left (ART.md 10: ink at 86% with an inner
- *  hairline, an 18 px corner, weight 800 to 900, italic for the mountain). */
-export function drawRunCard(g: CanvasRenderingContext2D, w: number, h: number, card: RunCard): void {
-  const u = Math.max(0.6, Math.min(w, h * 1.6) / 1152);
+ *  hairline, an 18 px corner, weight 800 to 900, italic for the mountain). Its bottom edge sits at `bottom` (a clip's
+ *  keeps it above a letterbox's bar). A picture held upright sizes it from its width (round 8, the share lane: from
+ *  the long side it came out at 5 to 8 px of type on a phone's 585 px photo). */
+export function drawRunCard(g: CanvasRenderingContext2D, w: number, h: number, card: RunCard, bottom = h): void {
+  const u = Math.max(0.6, w < h ? w / 680 : Math.min(w, h * 1.6) / 1152);
   const pad = 22 * u;
   const m = 28 * u;
   const lines: Array<{ text: string; font: string; color: string; gap: number; track?: number }> = [
@@ -118,7 +121,7 @@ export function drawRunCard(g: CanvasRenderingContext2D, w: number, h: number, c
   const boxH = pad * 2 + lh(13 * u) + 10 * u + lh(34 * u) + 8 * u + lh(21 * u) + 6 * u + lh(19 * u);
   const boxW = inner + pad * 2;
   const x = m;
-  const y = h - m - boxH;
+  const y = bottom - m - boxH;
   const r = 18 * u;
   const round = (rx: number, ry: number, rw: number, rh: number, rr: number) => {
     g.beginPath();
