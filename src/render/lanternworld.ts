@@ -1395,7 +1395,9 @@ export class LanternWorld {
       // few metres in, so a lamp lit nothing a rider could see. (Medium and High: Low keeps its draws.)
       if (!low && d > -24 && d < 150) {
         const toward = Math.sign(c.centerX(l.z) - l.x);
-        this.pool(c, l.x + toward * 3.2, l.z, 11, 12, MARIGOLD, 0.16 * fl * Math.min(1.2, p.lamps));
+        // (Round 8, the review loop: a fifth stronger, so a road reads as pools and not even lilac; the pool keeps the
+        // snow's silver with marigold at its heart, palette.ts poolSilver.)
+        this.pool(c, l.x + toward * 3.2, l.z, 11, 12, MARIGOLD, 0.2 * fl * Math.min(1.2, p.lamps));
       }
     }
     // The stone lamps the sim stands in the run: lit, unless one waits to be kindled.
