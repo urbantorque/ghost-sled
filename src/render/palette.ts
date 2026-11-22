@@ -1060,7 +1060,7 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.massif.heroAz = 27;
       p.massif.veil = 0.3;
       p.clouds = { low: 0.3, high: 0.35, top: 0.16, lit: c('#FFF8EE'), shade: c('#E4DCCF'), rim: c('#FFDCC4'), shadow: 0.1 };
-      p.shadowK = 0.82;
+      p.shadowK = 0.7;
       p.grade = { lift: c('#22282E'), gain: c('#FFFDF8'), saturation: 1.06, contrast: 1.03, grain: 0.5, foot: 0.14, shafts: 0.7, lens: 0.3, focal: 0.5, gust: 0, glitter: 0.1 };
       // (Low's poster: the calm mountain, low contrast on purpose: three soft steps of peach sky, a light foot, the snow
       // in its smooth light: in flat steps its banks read as camouflage.)
@@ -1796,7 +1796,10 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.fogFar = 720;
         p.massif.veil = 0;
         p.massif.bands = 0.4;
-        p.shadowK = 0.95;
+        // (Round 8's review: at 0.95 a tree's or a lantern's shadow lay on the snow as a flat, hard-edged lavender
+        // puddle, "spilled paint", in nine frames. Under 1 the shadow is a middle value and its penumbra widens
+        // (materials.ts snowShadow), so the calm mountain's shadows are soft and the bars of the torii keep theirs.)
+        p.shadowK = 0.74;
         p.atmo.valley = 0.7;
         p.atmo.drift = 0.15;
         p.grade.contrast = 1.12;
@@ -1867,7 +1870,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.grade.exposure = 0.9;
         // (The valley under the Leap opens: the sea of cloud thins so the far plane is flat blue openings
         // between white, not one white floor, and the cloud's shadows break the slopes either side.)
-        p.massif.sea = 0.8;
+        // (Round 8's review: at 0.8 the gaps were flat blue cut-outs on a white floor, read as lakes with no shore. A
+        // fuller sea keeps a few, small, so the valley is cloud with the far plane's blue beyond it.)
+        p.massif.sea = 1;
         p.clouds.shadow = 0.22;
         // Late morning's light on the snow is a warm cream (white, the Leap's slopes were one pale sheet).
         p.snowLit = c('#FFF2E6');
@@ -3067,6 +3072,9 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.grade.shafts = 1;
         // (A deep plum-blue between the bars, so each bar of sun lands on the snow as a hard band.)
         p.snowShade = c('#5C56A8');
+        // (The posts' shadows are the dark between the bars: they keep their depth here, where the rest of the
+        // mountain's shadows are soft.)
+        p.shadowK = 0.95;
         lamps(p, 0.7);
       },
     },
