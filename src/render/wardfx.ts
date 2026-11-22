@@ -283,7 +283,9 @@ export class WardFx {
         sh.q.premultiply(this.q.setFromAxisAngle(sh.axis, sh.spin * dt));
         const left = Math.max(0, sh.life);
         const fade = Math.min(1, left / 0.4);
-        const shrink = 0.7 + 0.3 * fade;
+        // (Broken, a panel is a flake of paper a little over half its size: whole panels flying past the lens read as
+        // yellow cards, the review loop.)
+        const shrink = (0.7 + 0.3 * fade) * 0.6;
         this.m.compose(sh.p, sh.q, this.s.set(sh.w * shrink, sh.h * shrink, 1));
         this.mesh.setMatrixAt(n, this.m);
         const heat = Math.max(0, 1 - since / 0.6);
