@@ -236,11 +236,17 @@ function placeFrames(c: Course, cp: Composed, p: Palette, out: BufferGeometry[])
     const sentinel = kit(p, 'sentinel', () => basaltSentinelGeometry(p));
     for (const b of cp.banks) {
       if (b.kind === 'wall') {
-        for (const u of [0.22, 0.5, 0.78]) {
-          const z = b.z0 + (b.z1 - b.z0) * u;
-          const pt = bank(c, b.side, lim(z) + 9.5, z);
+        // (Round 8's review: three outcrops a place read as "a squat dark block" and "no ridge": the wall is a rank
+        // of organ pipes along its crest, a stand every 20 m or so, each its own height, the near ones a little
+        // lower, so from the low lens it is a wall of basalt beside the run with the fall on the other hand.)
+        const n = Math.max(3, Math.round((b.z1 - b.z0) / 20));
+        for (let k = 0; k < n; k++) {
+          const u = (k + 0.5) / n;
+          const h = Math.abs(Math.sin(k * 12.9898 + b.z0 * 0.0137) * 43758.5453) % 1;
+          const z = b.z0 + (b.z1 - b.z0) * u + (h - 0.5) * 6;
+          const pt = bank(c, b.side, lim(z) + 8 + 2.5 * h, z);
           // (Its broad face toward the run.)
-          out.push(at(organ, pt[0], pt[1] - 0.6, pt[2], b.side > 0 ? -Math.PI / 2 : Math.PI / 2, 1.5));
+          out.push(at(organ, pt[0], pt[1] - 0.6, pt[2], (b.side > 0 ? -Math.PI / 2 : Math.PI / 2) + (h - 0.5) * 0.5, 1.05 + 0.5 * h));
         }
       } else if (b.kind === 'fall') {
         for (const u of [0.3, 0.68]) {

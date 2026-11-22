@@ -24,7 +24,7 @@ import { Midground } from './midground';
 import { LIP_FROM, Overlooks } from './overlook';
 import type { LookSet } from './compose';
 import { beginLocalLights } from './lights';
-import { Palette, getPalette, journeyDusk, journeyPalette, journeyStamp } from './palette';
+import { Palette, getPalette, journeyDusk, journeyPalette, journeyStamp, overRoof } from './palette';
 import { Particles, Weather, lensPx } from './particles';
 import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
 import { PostFX } from './post';
@@ -874,11 +874,11 @@ export class World {
    *  the title reel stays at the start). It is re-blended into the live palette only while the light
    *  moves, a few times a second at most; the props keep their baked colours and take the light through
    *  the shared uniforms. Chaos moods keep their own palette. */
-  private journey(metres: number): void {
+  private journey(metres: number, over = 0): void {
     if (this.mood !== Mood.None) return;
     const biome = this.course.biome;
     // (Round 7, the light lane: the course's places grade the hour's light, palette.ts PLACES.)
-    const key = journeyStamp(biome, metres, this.course);
+    const key = journeyStamp(biome, metres, this.course, over);
     if (key === this.journeyKey) return;
     // (On Low a re-blend repaints every material's baked colours, and on a course thick with places, Sakura's
     // first kilometre, the stamp moved every couple of frames: Low takes the light at most five times a second,
@@ -887,7 +887,7 @@ export class World {
     if (this.quality.detail === 'low' && now - this.journeyAt0 < JOURNEY_LOW_MS) return;
     this.journeyAt0 = now;
     this.journeyKey = key;
-    const p = journeyPalette(biome, metres, this.palette, this.course);
+    const p = journeyPalette(biome, metres, this.palette, this.course, over);
     applyPalette(p);
     this.sky.setPalette(p);
     this.setGhostGlow(p.ghostGlow);
@@ -1093,7 +1093,9 @@ export class World {
     // (Round 7, the light lane: the frame's local lights start here, focused on the rider. lights.ts.)
     beginLocalLights(s.x, s.y, -s.z);
     lake.uGroundTime.value = reduced() ? 0 : v.time;
-    this.journey(this.journeyAt ?? (v.mode === 'title' ? 0 : Math.max(0, s.z)));
+    // (How far over any roof the sled flies: a tunnel's light is for a sled under it. palette.ts overRoof.)
+    const over = this.journeyAt === null && v.mode !== 'title' && this.mood === Mood.None ? Math.round(overRoof(s.y - this.course.ground(s.x, s.z)) * 8) / 8 : 0;
+    this.journey(this.journeyAt ?? (v.mode === 'title' ? 0 : Math.max(0, s.z)), over);
     this.sky.setStill(this.mood === Mood.None && reduced());
     this.updateChunks(s.z);
     const ci = Math.floor(s.z / CHUNK_LEN);

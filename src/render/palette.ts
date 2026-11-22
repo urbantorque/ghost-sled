@@ -81,8 +81,9 @@ export interface Palette {
    *  snowfield on the valley floor and its openings as frozen lakes that hold still (Pinecrest's Clear
    *  Skies); 0 keeps them gaps in a sea of cloud. seaWarm lights the sea from beneath in patches, in the
    *  deck's glow colour (Lanternfall: the valley of lanterns under the cloud). bands lays mist in three
-   *  layers across the panorama's lower slopes (Sakura's run-in: the mist lifting off the cone). */
-  massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number; flow: number; heroAz: number; seaIce: number; seaWarm: number; bands: number };
+   *  layers across the panorama's lower slopes (Sakura's run-in: the mist lifting off the cone). seaLava 1 paints
+   *  the sea as a lake of lava, crust on cracks of the seaWarm glow (Ember's Caldera Leap; 0 everywhere else). */
+  massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number; flow: number; heroAz: number; seaIce: number; seaWarm: number; seaLava: number; bands: number };
   /** grain: film grain strength (night moods run light, where grain reads as digital noise in the
    *  dark). foot: how much the bottom edge of the frame darkens and cools (see post.ts). */
   grade: Grade;
@@ -118,6 +119,9 @@ export interface Palette {
   /** Low's painted pools (lights.ts): 0 adds the light in two flat values; 1 lays it over the snow in the
    *  light's own hue without clipping (Ember: added to a coloured snow, they clipped to mustard). */
   poolSoft: number;
+  /** Round 8's review: how much of what a glaze (the fork's strip, an ice patch) mirrors is the cold of the deep
+   *  upper sky rather than the horizon (0 for every mountain but Ember, whose red horizon laid a vermillion band). */
+  glazeCool: number;
   /** Round 8, the hours lane: a lamp's pool as a lift of the snow's own colour toward this silver (materials.ts
    *  silverPool), the lamp's hue only at its heart; k how far (0: the light is added in its hue, as every mountain
    *  but Lanternfall has it). ART.md 15: lilac snow with a silver lit side, never a gold floor. */
@@ -134,6 +138,9 @@ export interface Palette {
   /** How much of the lit snow's colour Low's poster keeps (1: all of it). With no film to roll it off, a
    *  warm light on the snow that reads as light on High reads as sand on Low. */
   posterSnowSat: number;
+  /** How much of the key light's colour Low's poster keeps (1: all of it). Round 8's review: Ember's orange key on
+   *  Low's ungraded warm-white snow read as desert sand and dunes from the start line to the shield. */
+  posterSunSat: number;
   /** Low's poster (the visual lift, ART.md 15 "Tiers, designed"): what Low paints where the other tiers
    *  draw an effect. None of it touches another tier. See PosterLook below. */
   poster: PosterLook;
@@ -313,7 +320,7 @@ function base(): Palette {
     ridge: [c('#C8B4DE'), c('#9A8AC6'), c('#6660A6')],
     mist: null,
     mistK: 0,
-    massif: { peak: 'summit', rock: c('#5A4E7A'), glow: c('#FF9AA2'), glowK: 0, glowLine: -6000, veil: 0, sea: 1, lava: 0, flow: 0, heroAz: 0, seaIce: 0, seaWarm: 0, bands: 0 },
+    massif: { peak: 'summit', rock: c('#5A4E7A'), glow: c('#FF9AA2'), glowK: 0, glowLine: -6000, veil: 0, sea: 1, lava: 0, flow: 0, heroAz: 0, seaIce: 0, seaWarm: 0, seaLava: 0, bands: 0 },
     grade: { lift: c('#0A0F2A'), gain: c('#FFF8F0'), saturation: 1.08, contrast: 1.04, grain: 1, foot: 0.3, shafts: 1, lens: 1, focal: 1, gust: 0, glitter: 0.15 },
     clouds: { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFE6CF'), shade: c('#A48CC0'), rim: c('#FFB088'), shadow: 0.3 },
     deck: { k: 0, lit: c('#FFFFFF'), shade: c('#FFFFFF'), glow: c('#FFFFFF') },
@@ -324,10 +331,12 @@ function base(): Palette {
     lamps: 0.25,
     lampAir: 0,
     poolSoft: 0,
+    glazeCool: 0,
     poolSilver: { color: c('#E4E2FA'), k: 0 },
     leaf: 0,
     lift: { bounce: 0, sun: 0.7, tint: c('#FFFFFF'), sky: 0, through: 0, sheen: 0 },
     posterSnowSat: 1,
+    posterSunSat: 1,
     // (After the lane's critic: no rings by default, a hard-edged disc round the sun read as a sticker; the snow's
     // steps softer, hard-edged they turned the macro tone into camouflage; a cast shadow's edge only a little
     // harder than the field gives it; the hero's rim stronger, it was not seen. After the merge's critics: the
@@ -1240,16 +1249,27 @@ function round7(p: Palette, biome: BiomeId): void {
       p.under = { color: c('#FF6A28'), k: 0.3 };
       p.lamps = 0.9;
       p.poolSoft = 1;
+      // (Ice under the fire holds the cold of the deep sky: mirroring the red horizon, the fork's strip lay across
+      // the snow as a band of the rider's vermillion, and hazards are never warm.)
+      p.glazeCool = 0.8;
       // The smoke deck's own shadows drift over the slopes: the firelit snow lies in pools between
       // cold plum-teal shade, so a wide slope is never one even peach (which read as sand).
       p.clouds.shadow = 0.6;
       p.grade.exposure = 1.08;
-      p.grade.saturation = 1.18;
+      // (Round 8's review: at 1.18 and a warmer split the firelit snow turned sand-orange from the shield to the
+      // halls; the light carries the orange once, ART.md 15, and the grade only a trace of it.)
+      p.grade.saturation = 1.12;
       p.grade.contrast = 1.12;
-      p.grade.hi = c('#FFE8CE');
+      p.grade.hi = c('#FFEEDA');
       p.grade.lo = c('#CCE4F2');
       // (Glints: snow glitters in firelight, where sand would not.)
       p.sparkle = 0.9;
+      // (Round 8's review: on Low, with no film to roll it off, the orange key turned the warm-white snow to sand, and
+      // the graded snow itself was a tan: the poster keeps less of both, and its lit snow leans a little to the
+      // cold shade's hue, so the slopes read as snow in firelight and not as desert dunes.)
+      p.posterSunSat = 0.45;
+      p.posterSnowSat = 0.5;
+      p.grade.posterCool = 0.12;
       return;
     case 'blossom':
       // A peach morning, not a yellow one: the light leans to rose, and the shafts are thin until the
@@ -1752,8 +1772,11 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyHorizon = c('#E8481A');
         // As the day goes the light is the deck's and the lava's, and it is ember, not peach: a pale
         // light on a dusk snow gave a grey-mauve floor that nothing lit.
-        p.sunColor = c('#FFB490');
-        p.snowLit = c('#FCE6DA');
+        // (Round 8's review: at #FFB490 on a #FCE6DA snow, under the shader's day line, the snow facing the light
+        // was sand-orange from the halls' slot to the third stage; a step paler, and the snow bright enough to read
+        // as day, so the light's orange is a tint on snow and the lava's pools the orange.)
+        p.sunColor = c('#FFC4A4');
+        p.snowLit = c('#FFEEE4');
         p.lift.tint = c('#FFF4B0');
         p.snowShade = c('#585484');
         // The ash stands off the lens: thick from the first metre it turned the shade under it brown.
@@ -2431,6 +2454,9 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.grade.shafts = 0;
       p.grade.glitter = 0.15;
       p.posterSnowSat = 0.7;
+      // (The night's own key and snow on Low, as its lane judged them: the day's paler poster is for the day.)
+      p.posterSunSat = 1;
+      p.grade.posterCool = 0;
       Object.assign(p.poster, { shadow: c('#7C6AA8'), shadowK: 0.5 });
       p.stars = 0;
       p.sparkle = 0.35;
@@ -3013,16 +3039,22 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // The basalt slots: lava in the joints lights the walls from their feet.
       kind: 'ravine',
       edit: (p) => {
-        p.under.k = Math.max(p.under.k, 0.5);
+        // (Round 8's review: "nothing lights the walls or the rider from below" in Cinder Gate's slot at 0.5.)
+        p.under.k = Math.max(p.under.k, 0.65);
         p.fog = c('#5A1E18');
         p.air.far = c('#6A2010');
         // The slot's floor lies in the walls' shade: cold, so the lava's light on it is seen.
         p.snowShade = c('#383254');
         p.grade.contrast += 0.04;
-        lamps(p, 1.25);
+        // (Round 8's review: the halls' floor stayed a cool lilac that took no lava light at 1.25; ART.md 15 asks for
+        // lava "lighting the snow orange" beside the line.)
+        lamps(p, 1.55);
         // (The visual lift: the floor's own shade, with the lava's light lying on it, comes back up orange.)
         p.lift.sun = 0.35;
         p.lift.tint = c('#FFDCA4');
+        // (Round 8's review: Low's light in flat steps cut the slot's steep banks into long pink streaks that read
+        // as smeared geometry; in a slot the snow's light is one smooth ramp.)
+        p.poster.steps = 0;
       },
     },
     {
@@ -3091,9 +3123,18 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.snowLit = c('#FFE8D8');
         p.atmo.valleyColor = c('#E0541C');
         p.atmo.valley = 1;
-        p.massif.seaWarm = 2.2;
+        // (Round 8's review: the basin past the lip still read as a pale grey cloud sea, not lava: its pools, lit from
+        // beneath at 2.2, went past the curve to cream. Its smoke is near black over the fire, and the pools glow
+        // the fire's own orange-red, the only light in it.)
+        p.clouds.lit = c('#3A1610');
+        p.clouds.shade = c('#160808');
+        p.massif.seaWarm = 1.1;
+        // (Still read as grey-beige mud by the next critic: the valley under the flight is a lava lake, its crust
+        // in rafts on cracks of the fire's colour, massif.ts uSeaLava.)
+        p.massif.seaLava = 1;
         p.embers = 1.7;
-        p.grade.hi = c('#FFDCB4');
+        // (Round 8's review: with the landing now snow, a warmer split turned it to sand under the fire.)
+        p.grade.hi = c('#FFE8D2');
         p.grade.exposure! *= 1.04;
         p.bloom += 0.15;
         lamps(p, 1.2);
@@ -3395,6 +3436,8 @@ interface LaidPlace {
   pal: Palette;
   /** How finely its weight steps the stamp (a span changes the whole picture, so it steps finer). */
   steps?: number;
+  /** A roof's place (a tunnel): it holds only a sled under the roof (journeyPalette's `over`). */
+  roof?: boolean;
 }
 
 const LAID = { day: new WeakMap<Course, LaidPlace[]>(), alt: new WeakMap<Course, LaidPlace[]>() };
@@ -3427,7 +3470,7 @@ function laidPlaces(course: Course): LaidPlace[] {
       // A roof closes over quickly and lets go quickly (the burst out of a cavern is under two seconds);
       // an open place comes in over its section's own blend.
       const roof = sec.kind === 'tunnel';
-      laid.push({ z0: sec.z0 + (roof ? sec.blend * 0.5 : 0), z1: sec.z1 - (pl.ends ?? 0), rise: roof ? Math.max(30, sec.blend * 0.5) : Math.max(40, sec.blend), fall: pl.fall ?? (roof ? 75 : 90), pal });
+      laid.push({ z0: sec.z0 + (roof ? sec.blend * 0.5 : 0), z1: sec.z1 - (pl.ends ?? 0), rise: roof ? Math.max(30, sec.blend * 0.5) : Math.max(40, sec.blend), fall: pl.fall ?? (roof ? 75 : 90), pal, roof });
       break;
     }
     if (sec.kind === 'finish') break;
@@ -3444,6 +3487,12 @@ const smooth01 = (x: number): number => {
   return t * t * (3 - 2 * t);
 };
 
+/** How far a sled `height` metres over the snow stands over any roof, 0..1: no roof stands lower than the
+ *  air under it needs (landmarks.ts ENC_MAX, 44 m), so a sled higher than that is in the open. */
+export function overRoof(height: number): number {
+  return smooth01((height - 46) / 20);
+}
+
 /** How fully a laid place holds the frame at `metres` (0..1). */
 function placeWeight(l: LaidPlace, metres: number): number {
   if (metres <= l.z0 || metres >= l.z1 + l.fall) return 0;
@@ -3452,12 +3501,15 @@ function placeWeight(l: LaidPlace, metres: number): number {
 
 /** Clear Skies' palette `metres` into a run, written into out (which must not be one of the cached
  *  stops): the hour's light, and over it the place the course is in there, when the course is given.
- *  Chaos moods keep their own palette: the caller only calls this for Mood.None. */
-export function journeyPalette(biome: BiomeId, metres: number, out: Palette, course?: Course): Palette {
+ *  Chaos moods keep their own palette: the caller only calls this for Mood.None. `over` (0..1) is how far
+ *  the sled stands over any roof (overRoof): a tunnel's place holds a sled under its roof, not one a vent
+ *  has thrown high over the stretch where the roof gave way to its flight. (Round 8's review: Ember's Cinder
+ *  Gate seen from a hundred metres up was one red wash of the hall's own air.) */
+export function journeyPalette(biome: BiomeId, metres: number, out: Palette, course?: Course, over = 0): Palette {
   hourPalette(biome, metres, out);
   if (course && course.biome === biome) {
     for (const l of laidPlaces(course)) {
-      const w = placeWeight(l, metres);
+      const w = placeWeight(l, metres) * (l.roof ? 1 - over : 1);
       if (w > 0) lerpPalette(out, l.pal, w, out);
     }
   }
@@ -3466,12 +3518,12 @@ export function journeyPalette(biome: BiomeId, metres: number, out: Palette, cou
 
 /** A number that changes whenever journeyPalette's answer would, in steps fine enough to blend smoothly
  *  and coarse enough that the world re-blends only while the light moves. */
-export function journeyStamp(biome: BiomeId, metres: number, course?: Course): number {
+export function journeyStamp(biome: BiomeId, metres: number, course?: Course, over = 0): number {
   let key = Math.round(journeyProgress(biome, metres) * 400) + (hourOf(biome) === 'alt' ? 7e8 : 0);
   if (course && course.biome === biome) {
     const laid = laidPlaces(course);
     for (let i = 0; i < laid.length; i++) {
-      const w = placeWeight(laid[i], metres);
+      const w = placeWeight(laid[i], metres) * (laid[i].roof ? 1 - over : 1);
       if (w > 0) key += (i + 1) * 4001 * Math.round(w * (laid[i].steps ?? 64));
     }
   }
@@ -3546,6 +3598,11 @@ export function tierLook(p: Palette): Palette {
   if (g.posterKey) {
     const l = Math.max(o.snowLit.r, o.snowLit.g, o.snowLit.b);
     if (l > g.posterKey) o.snowLit.multiplyScalar(g.posterKey / l);
+  }
+  if (p.posterSunSat < 1) {
+    const s = o.sunColor;
+    const l = Math.max(s.r, s.g, s.b);
+    s.setRGB(l + (s.r - l) * p.posterSunSat, l + (s.g - l) * p.posterSunSat, l + (s.b - l) * p.posterSunSat);
   }
   if (p.posterSnowSat < 1) {
     const s = o.snowLit;
