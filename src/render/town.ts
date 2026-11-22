@@ -300,7 +300,7 @@ export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: nu
       const x = -w / 2 + ((i + 0.5) * w) / n;
       if (k === 0 && o.shop && Math.abs(x) < w * 0.3) continue;
       if (k === 0 && !o.shop && i === Math.floor(n / 2)) continue;
-      if (biome === 'blossom' && k === 0) continue;
+      if (biome === 'blossom') continue;
       win(x, y0 + SH * 0.52, zf + 0.04, biome === 'glacier' ? 1.6 : 1.15, biome === 'glacier' ? 0.8 : 1.35, 'z', 1, biome === 'alpine' ? shutter : undefined);
     }
     if (!plain && !o.sunk) {
@@ -310,8 +310,27 @@ export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: nu
         win(s * (w / 2 + 0.04), y0 + SH * 0.52, z, 1.1, 1.3, 'x', s, biome === 'alpine' ? shutter : undefined);
       }
     }
-    // Storey bands.
-    if (k > 0) parts.push(box(w + 0.15, 0.22, d + out + 0.15, t.trim, [0, y0, out / 2]));
+    // Round 8's review: a Sakura townhouse's upper storeys read as brick terraces with flat amber panes. Each
+    // storey is a band of paper screens behind close dark slats (the street's lattice, raised), under a pent roof
+    // of ink at the storey line, so a street is rows of eaves stepping back and not rows of windows.
+    if (biome === 'blossom' && k > 0 && !o.low) {
+      const bw = w * 0.84;
+      const yb = y0 + SH * 0.5;
+      parts.push(pane(0, yb, zf + 0.03, bw + 0.3, 1.75, t.trim, 'z', 1));
+      parts.push(pane(0, yb, zf + 0.05, bw, 1.45, glass, 'z', 1));
+      if (!plain) {
+        for (let x = -bw / 2 + 0.3; x < bw / 2 - 0.1; x += 0.46) parts.push(pane(x, yb, zf + 0.07, 0.07, 1.45, t.trim, 'z', 1));
+        parts.push(pane(0, yb + 0.22, zf + 0.07, bw, 0.06, t.trim, 'z', 1));
+      }
+    }
+    // Storey bands (Sakura's a pent roof).
+    // (It reaches out from the storey under it no further than the lot's room, as everything over the run does.)
+    const fb = d / 2 + (k - 1) * jet;
+    const pr = Math.min(1.1, (room - 0.25 - (k - 1) * jet) / 0.92);
+    if (k > 0 && biome === 'blossom' && !o.back && pr > 0.35) {
+      parts.push(box(w + 0.5, 0.24, pr + 0.2, t.roof, [0, y0 + 0.08, fb + pr * 0.42 - 0.1], [0.34, 0, 0]));
+      if (!plain) parts.push(box(w + 0.4, 0.12, pr * 0.5, SNOW, [0, y0 + 0.28, fb + pr * 0.22 - 0.1], [0.34, 0, 0]));
+    } else if (k > 0) parts.push(box(w + 0.15, 0.22, d + out + 0.15, t.trim, [0, y0, out / 2]));
     const reach = Math.min(1.4, room - 0.2 - out);
     if (o.balconies && k > 0 && reach > 0.7 && !o.low) balcony(parts, w * 0.86, y0 - 0.05, zf, reach, biome === 'blossom' ? t.trim : TIMBER_DARK);
   }
@@ -744,7 +763,9 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
         let kind: Lot['kind'] = rnd() < 0.42 ? 'shop' : 'house';
         let w = narrow ? 7.5 + rnd() * 4 : 9 + rnd() * 4.5;
         let d = narrow ? 7 + rnd() * 1.5 : 8.5 + rnd() * 2.5;
-        let storeys = biome === 'glacier' ? (narrow ? 2 : 1) + (rnd() < 0.5 ? 1 : 0) : (narrow ? 3 : 2) + (rnd() < 0.42 ? 1 : 0);
+        // (Round 8's review: Sakura's townhouses are two storeys, now and then three; at three and four the narrow
+        // streets read as terraces of flats.)
+        let storeys = biome === 'glacier' ? (narrow ? 2 : 1) + (rnd() < 0.5 ? 1 : 0) : (narrow && biome !== 'blossom' ? 3 : 2) + (rnd() < 0.42 ? 1 : 0);
         let e = 0;
         if (s === markSide && !markDone && dz + 10 > markAt) {
           kind = 'landmark';
@@ -756,7 +777,7 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
           kind = 'hotel';
           w = 17 + rnd() * 4;
           d = narrow ? 8.5 : 11;
-          storeys = biome === 'glacier' ? 3 : narrow ? 5 + (rnd() < 0.4 ? 1 : 0) : 4 + (rnd() < 0.5 ? 1 : 0);
+          storeys = biome === 'glacier' ? 3 : biome === 'blossom' ? 3 + (rnd() < 0.5 ? 1 : 0) : narrow ? 5 + (rnd() < 0.4 ? 1 : 0) : 4 + (rnd() < 0.5 ? 1 : 0);
           e = 0.3;
           hotelDone = true;
         }
