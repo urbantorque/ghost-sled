@@ -1426,7 +1426,9 @@ export class World {
     this.streakK += ((v.mode === 'run' && !this.rider.crashing && !s.crashed ? 1 : 0) - this.streakK) * Math.min(1, dt * 6);
     // (Sakura, the calm mountain, keeps half the streaks: at full strength the bottom of its pale frames was
     // a radial smear, and its ripples and shade lost their shape. ART.md 15: a lens that stays out of the way.)
-    const calm = this.course.biome === 'blossom' ? 0.55 : 1;
+    // (Round 8's review: at 0.55 the near snow still read as a radial smear converging on the rider in eleven of
+    // thirty-six frames. A third of the streaks: the calm mountain's speed is in its petals, posts and lens.)
+    const calm = this.course.biome === 'blossom' ? 0.35 : 1;
     pp.speed = v.mode === 'run' ? streakK(s.speed) * (tall ? 0.6 : 1) * (feel.reduced ? 0.5 : 1) * this.streakK * calm : 0;
     pp.streakFoot = tall ? 0 : 0.12;
     // Round 8 (speed): Spirit Flow's colour (kept under reduced motion) and its breath (dropped under it).
