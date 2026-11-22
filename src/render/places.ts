@@ -71,6 +71,10 @@ function spanStyle(biome: BiomeId, ctx: SiteCtx): SpanStyle {
   }
 }
 
+/** Frostfang's parapet: blocks of clear ice, two values (round 8's review). */
+const ICE_BLOCK = new Color('#78B4E6');
+const ICE_BLOCK_PALE = new Color('#A6D4F4');
+
 /** The bridge at a `bridge` section: rails where the sim turns a sled back, drawn on past the section's
  *  body as its banks fall away; what rises past them (Frostfang's ice arch, Ember's iron truss, Sakura's
  *  lacquered arch, Pinecrest's timber truss); the portal towers on the rims; and the raked legs, piers
@@ -108,7 +112,9 @@ export function viaductPiece(ctx: SiteCtx): Piece {
           const out = rail.at(dz, s, e + 0.62);
           // (Round 8, the forest lane: a block cut a step finer, so the parapet beside the lens is blocks of ice and not
           // panes a tenth of the frame wide.)
-          parts.push(part(new IcosahedronGeometry(1, 1), rnd() < 0.5 ? st.post : st.rail, { pos: [out.x, pt.y + 0.55, out.z], scale: [0.42, 0.72, 1.25], rot: [0, (rnd() - 0.5) * 0.3, 0], jitter: 0.05 }));
+          // (Round 8's review: in the span's two palest blues the blocks read as milky pillows; they are cut ice, a
+          // clear blue a step under the rails with a paler one among them.)
+          parts.push(part(new IcosahedronGeometry(1, 1), rnd() < 0.6 ? ICE_BLOCK : ICE_BLOCK_PALE, { pos: [out.x, pt.y + 0.55, out.z], scale: [0.42, 0.72, 1.25], rot: [0, (rnd() - 0.5) * 0.3, 0], jitter: 0.05 }));
         }
         else parts.push(grade(box(0.2, 1.42, 0.2, st.post, [pt.x, pt.y + 0.62, pt.z]), pt.y, pt.y + 1.3, 0.8, 1.05));
         if (prev) {

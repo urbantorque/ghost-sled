@@ -553,6 +553,17 @@ export class MarqueeWorld {
         if (Math.abs(z - s.z) < 110) pushLocalLight(tv.x, tv.y - 1, tv.z, 1, 0.5, 0.18, 15, 0.9);
         const ahead = this.cableAt(c, p.side, z + 4, ts);
         cabin.rotation.set(0, Math.atan2(ahead.x - tv.x, ahead.z - tv.z), sway);
+        // (Round 8's review, Frostfang: a cabin the rider has passed is beside the chase lens, and in a slot it crossed
+        // the top of the frame as a smeared red block. Like a tree behind the rider (ART.md 12) it goes whole while it
+        // is there; level with the rider or ahead, where it is the race, it stays.)
+        const near = mode === 'run' && z < s.z - 1 && z > s.z - 14;
+        if (near && cabin.visible) {
+          cabin.visible = false;
+          cabin.userData.nearHid = true;
+        } else if (!near && cabin.userData.nearHid) {
+          cabin.userData.nearHid = false;
+          cabin.visible = this.shown.find((g) => g.objs.includes(cabin))?.objs[0].visible ?? true;
+        }
       });
     }
     if (this.pillars && this.lanterns && c && this.pillars.visible) {

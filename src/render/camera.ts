@@ -405,6 +405,9 @@ const TRACK_CLOSE = -1.1;
 const TRACK_FOV = 8;
 const TRACK_BOX = 0.45;
 const TRACK_DOF = 0.3;
+/** Round 8's review (Frostfang's last leap): the hero frame's depth of field. At a beat's full blur the valley the
+ *  flight is over (the town, the Fang) went to mush; at half it is soft and still read. */
+const HERO_DOF = 0.5;
 /** The whip-pan onto a reveal: over the last WHIP_LEAD_S seconds before the place the look drifts
  *  WHIP_PRE radians off the road (it stays in the frame: the lens sees over 50 degrees to each side), then
  *  whips back across in WHIP_S seconds, WHIP_OVER past dead ahead, and settles over WHIP_SETTLE. With
@@ -1149,7 +1152,7 @@ export class ChaseCamera {
     let edge = 1;
     let slow = 1;
     if (this.mode === 'chase') {
-      dof = Math.max(this.heroK, this.trackK * TRACK_DOF);
+      dof = Math.max(this.heroK * HERO_DOF, this.trackK * TRACK_DOF);
       box = Math.max(this.heroK, this.wideK * this.flightK * WIDE_BOX, this.trackK * TRACK_BOX, this.placeShotK * PLACE_BOX);
       // Speed's blur, held back in the hero frame (a slow frame is a sharp one) and halved under reduced
       // motion, as the streaks are; the whip smears the whole frame for its fifth of a second.

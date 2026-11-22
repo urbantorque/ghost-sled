@@ -243,7 +243,9 @@ export function seracGeometry(p: Palette): BufferGeometry {
     crystal(shade(p.tall, 1.1), 0.55, 1.6, [-1.1, 0.05, -0.45], [-0.2, 0.4, 0.42]),
     crystal(shade(p.tallDark, 1.2), 0.42, 1.1, [0.3, 0.05, -1.1], [-0.42, 1.3, -0.12]),
     crystal(shade(p.tall, 0.92), 0.36, 0.9, [-0.55, 0.05, 1.0], [0.5, 0.2, 0.3]),
-    part(new IcosahedronGeometry(1.5, 1), SNOW, { pos: [0, 0.05, 0], scale: [1.3, 0.3, 1.2], jitter: 0.12 }),
+    // (Round 8's review: a drift all round the foot read as a white plinth under every serac. Snow lies on its lee
+    // side, ART.md 3, never in a ring.)
+    part(new IcosahedronGeometry(1.5, 1), SNOW, { pos: [0.45, 0.0, 0.8], scale: [0.85, 0.26, 0.7], rot: [0, 0.5, 0], jitter: 0.14 }),
     part(new IcosahedronGeometry(0.5, 0), SNOW, { pos: [0.75, 1.15, 0.35], scale: [1.1, 0.35, 0.9], jitter: 0.1 }),
   ]);
 }

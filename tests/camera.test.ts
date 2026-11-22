@@ -799,7 +799,8 @@ describe('directed shots: the lens', () => {
     // Closer and on a longer lens: the rider at least half as big again as in the wide.
     const size = (q: { back: number; fov: number; lens: Vector3; rider: Vector3 }) => 1 / (q.lens.distanceTo(q.rider) * Math.tan((q.fov * Math.PI) / 360));
     expect(size(hero[peak]) / size(wide[peak])).toBeGreaterThan(1.5);
-    expect(hero[peak].dof).toBeGreaterThan(0.9);
+    // (Round 8's review: the hero frame's blur is half a beat's, camera.ts HERO_DOF, so the valley under the flight reads.)
+    expect(hero[peak].dof).toBeGreaterThan(0.45);
     expect(hero[peak].box).toBeGreaterThan(0.9);
     expect(hero[peak].slow).toBeLessThan(0.4);
     // The focus rides the rider as the lens closes (within a pace of it mid-push).
@@ -837,7 +838,7 @@ describe('directed shots: the lens', () => {
     }
     const peak = Math.round(1.5 * 60);
     expect(shot[peak].box).toBeGreaterThan(0.9);
-    expect(shot[peak].dof).toBeGreaterThan(0.9);
+    expect(shot[peak].dof).toBeGreaterThan(0.45);
     expect(plain[peak].box).toBe(0);
   });
 

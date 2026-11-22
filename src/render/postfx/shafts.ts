@@ -124,8 +124,9 @@ export const SHAFT_COMPOSITE_GLSL = /* glsl */ `
     float fall = (exp(-dS * 2.5) + 0.14 * exp(-dS * 0.9)) * (1.0 - smoothstep(0.7, 1.05, dS));
     // Lit air lies between the lens and what it sees, and (for a place) no further than the place.
     float reach = src.w > 0.0 ? min(lin, src.w) : lin;
-    // (Round 8's review loop, Pinecrest: the first metres of air hold none of it, so a low sun ahead lays no fan of
-    // white rays over the near ice and snow under the lens, ART.md 12: shafts hang in the air, never on the near snow.)
+    // (Round 8's review loop, Pinecrest and Frostfang: the first metres of air hold none of it, so a low sun ahead lays
+    // no fan of white rays over the near ice and snow or a bridge's deck under the lens, ART.md 12: shafts hang in the
+    // air, never on the near snow.)
     float air = 1.0 - exp(-max(reach - 10.0, 0.0) / uShaftAir);
     return color * (acc * grain * fall * air * src.z);
   }

@@ -968,7 +968,8 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.grade = { lift: c('#030A26'), gain: c('#F0F5FF'), saturation: 1.1, contrast: 1.12, grain: 0.7, foot: 0.3, shafts: 0.3, lens: 0.25, focal: 1, gust: 0, glitter: 0.25 };
       // (Low's poster: the blue hour in printed steps of cobalt over the thin lemon band, a line of it printed
       // over its glow, ART.md 15.)
-      Object.assign(p.poster, { steps: 2, bands: 6, stripe: 0.6, rim: 0.6, shadow: c('#3A2E9A'), shadowK: 0.35 });
+      // (Round 8's review: Low's painted shafts fanned over the near snow as white cards; half of them.)
+      Object.assign(p.poster, { steps: 2, bands: 6, stripe: 0.6, rim: 0.6, shadow: c('#3A2E9A'), shadowK: 0.35, shafts: 0.5 });
       p.clouds = { low: 0.3, high: 0.35, top: 0.13, lit: c('#AFC6EC'), shade: c('#34559E'), rim: c('#FFEFAE'), shadow: 0.08 };
       p.atmo = { rays: 0.25, halo: 0, meteors: 0.2, banner: 1, slide: 1, sweep: 0.3, valley: 0.6, valleyColor: c('#6084C8'), drift: 0.1 };
       p.stars = 0.7;
@@ -1220,6 +1221,9 @@ function round7(p: Palette, biome: BiomeId): void {
     case 'glacier':
       p.air = { far: c('#27469C'), cool: c('#D8E2FF'), low: 0.5, scatter: 1.25 };
       p.lamps = 0.6;
+      // (Round 8's review: Low's pools in Fang Town and Station Street read as hard white ovals on the pale snow; the
+      // pool is a paler, warmer step of the snow it lies on, kept under white. Low only.)
+      p.poolSoft = 0.8;
       p.grade.exposure = 1.05;
       p.grade.hi = c('#FFF8E4');
       p.grade.lo = c('#DCE4FF');
@@ -1616,10 +1620,14 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.aurora = 1.7;
         p.stars = 1;
         p.massif.flow = 1;
-        p.bloom = 0.7;
+        // (Round 8's review: at 0.7 a dash's glow and a landing's veil bloomed to a milky haze over the lower frame and
+        // the rider in the night's frames; the aurora and the lights still bloom at 0.5.)
+        p.bloom = 0.5;
         p.giftGlow = 0.6;
         p.ghostGlow = 1.7;
-        p.lanternGlow = 0.55;
+        // (Round 8's review: at 0.55 a landing's veil of powder inside the sled lantern's light went to one milky
+        // sheet over the lower frame, the rider's feet lost in it.)
+        p.lanternGlow = 0.4;
         p.lamps = 1;
         p.grade.exposure = 1.1;
         p.grade.contrast = 1.14;
@@ -1641,7 +1649,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.snowLit = c('#93ACE2');
         p.aurora = 1.3;
         p.key2.k = 0.7;
-        p.lanternGlow = 0.6;
+        p.lanternGlow = 0.42;
       },
     },
     {
@@ -1651,8 +1659,14 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       // (It turns in the cavern's first hundred metres, so the far mouth is the dawn from the moment it shows.)
       from: 3291, at: 3451, dusk: 1,
       edit: (p) => {
-        setSun(p, 30, 3.6, 20, 9);
-        p.sunColor = c('#FFC8A4');
+        // (Round 8's review: the light that shades the snow stands at 25 degrees, was 20: at 20 most of the slope
+        // facing down the run sat on the shade's side and read mauve-grey; the disc and the long shadows keep their
+        // height.)
+        setSun(p, 30, 3.6, 25, 9);
+        // (Round 8's review: the dawn's snow still read lilac-grey with one warm patch, never rose-gold. The light is
+        // a step more gold, the lit snow and the rim with it, and the air a touch rosier. A warm bounce under the coat
+        // went to the grudge's rose, tests/lift.test.ts.)
+        p.sunColor = c('#FFBE90');
         p.sunCore.setRGB(2.9, 2.1, 1.5);
         p.sunDisc = 1;
         p.sunGlow = 1.2;
@@ -1666,14 +1680,14 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyBand.k = 1;
         p.skyBelow = c('#B88EB4');
         // (Round 7's review: rose-gold, not lilac: the lit snow takes the sun's warmth.)
-        p.snowLit = c('#FFD8C4');
+        p.snowLit = c('#FFD2B2');
         // (Round 7's review: Fang Town sank into a lilac haze, the middle plane and the Fang lost in it. The
         // shade is a deeper violet and the air clearer, so the lit snow, the long shadows and the far range
         // stand in three planes.)
         p.snowShade = c('#4E54B2');
         p.snowDeep = c('#242C88');
-        p.rim = c('#FFD2B4');
-        p.fog = c('#8E84C2');
+        p.rim = c('#FFC89C');
+        p.fog = c('#9A86BE');
         p.fogFar = 620;
         p.hemiSky = c('#8A98DC');
         p.air.far = c('#7064B6');
@@ -1688,12 +1702,16 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.massif.glowLine = -40;
         p.aurora = 0.12;
         p.stars = 0.15;
-        p.atmo.rays = 1;
-        p.grade.shafts = 1;
+        // (Round 8's review: at full strength the sun's shafts laid radial streaks over the whole lower third, on the
+        // near snow, where ART.md 12 keeps them in the air.)
+        p.atmo.rays = 0.8;
+        p.grade.shafts = 0.7;
+        // (And the lens's ghosts strung from the sun lay an orange disc on the near snow.)
+        p.grade.lens = 0.1;
         p.grade.gain = c('#FFF4EE');
         p.grade.exposure = 1.04;
         p.grade.contrast = 1.08;
-        p.grade.hi = c('#FFE6D2');
+        p.grade.hi = c('#FFE0C2');
         p.grade.lo = c('#E0D8FF');
         p.bloom = 0.6;
         p.giftGlow = 0.3;
@@ -2987,7 +3005,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // The Ice Cavern: near-black cobalt. The only light is what the cavern holds.
       kind: 'tunnel',
       // (Night to full dawn is the widest step in the game: it takes ten metres more than a roof's 75.)
-      fall: 85,
+      // (Round 8's review: over 85 m the cavern's violet still lay on the bridge out of its mouth, 26 m past it, and
+      // the dawn's snow read mauve-grey there in every pass; it lets go over 62, the fastest the places' blend test
+      // allows, under two seconds at speed.)
+      fall: 62,
       edit: (p) => {
         // (Round 7's review: the hour outside is the dawn by the cavern's middle, so the far mouth is a
         // blade of rose gold in the dark. Inside, the sun's own light is held down to a dim violet and
@@ -3017,7 +3038,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.grade.lo = c('#D6DCFF');
         p.lanternGlow = 0.7;
         p.bloom = 0.9;
-        lamps(p, 1.35);
+        // (Round 8's review: at 1.35 the gates' lanterns laid one amber floor down the cavern, a gold floor with no
+        // cobalt between; at 1 it still was, the gates' pools running into each other: at 0.7 each is a pool in the
+        // dark.)
+        lamps(p, 0.7);
         // (Round 8: the cavern's lanterns stand in a glow of their own light; the ice holds it.)
         p.lampAir = 0.2;
         // (The visual lift: the floor under the roof is dark, so it bounces little, and that cold.)
@@ -3470,7 +3494,9 @@ function laidPlaces(course: Course): LaidPlace[] {
       // A roof closes over quickly and lets go quickly (the burst out of a cavern is under two seconds);
       // an open place comes in over its section's own blend.
       const roof = sec.kind === 'tunnel';
-      laid.push({ z0: sec.z0 + (roof ? sec.blend * 0.5 : 0), z1: sec.z1 - (pl.ends ?? 0), rise: roof ? Math.max(30, sec.blend * 0.5) : Math.max(40, sec.blend), fall: pl.fall ?? (roof ? 75 : 90), pal, roof });
+      // (A place that lets go faster than a roof steps the stamp finer, so the world re-blends as often as its light
+      // moves: Frostfang's cavern, round 8's review.)
+      laid.push({ z0: sec.z0 + (roof ? sec.blend * 0.5 : 0), z1: sec.z1 - (pl.ends ?? 0), rise: roof ? Math.max(30, sec.blend * 0.5) : Math.max(40, sec.blend), fall: pl.fall ?? (roof ? 75 : 90), pal, roof, steps: pl.fall !== undefined && pl.fall < 75 ? 160 : undefined });
       break;
     }
     if (sec.kind === 'finish') break;

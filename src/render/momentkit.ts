@@ -98,6 +98,7 @@ export function litMaterial(): ShaderMaterial {
       varying vec3 vCol;
       varying float vForm;
       varying float vDist;
+      varying float vUp;
       void main() {
         vCol = color;
         #ifdef USE_INSTANCING_COLOR
@@ -116,6 +117,9 @@ export function litMaterial(): ShaderMaterial {
         vForm = (0.5 + 0.6 * facing * facing) * (0.9 + 0.1 * n.y);
         vec4 mv = viewMatrix * wp;
         vDist = -mv.z;
+        // (The form's own origin, not the pixel's: measured a pixel at a time, a lantern across the band was cut
+        // through with a ragged top.)
+        vUp = (m * vec4(0.0, 0.0, 0.0, 1.0)).y - cameraPosition.y;
         gl_Position = projectionMatrix * mv;
       }
     `,
@@ -127,6 +131,7 @@ export function litMaterial(): ShaderMaterial {
       varying vec3 vCol;
       varying float vForm;
       varying float vDist;
+      varying float vUp;
       void main() {
         // (A light in fog is seen further than a wall is: half the fog.)
         float f = 0.5 * smoothstep(uFogNear, uFogFar, vDist);
@@ -134,9 +139,12 @@ export function litMaterial(): ShaderMaterial {
         // lens it would be a block of its colour across the frame.)
         // (The review loop: dithered from 7 m in, a street's near lanterns hung as half-transparent
         // scanline ghosts across the top of a still. Each holds solid to 5.2 m and is gone by 4.4 m.)
-        // (Round 8's review loop: a phone still caught one inside the dither's 0.8 m as a checkerboard at the top of
-        // the frame, twice. Solid, then gone, as the trees are.)
-        if (vDist < 4.8) discard;
+        // (Round 8's review loop: a phone still caught one inside a dither's 0.8 m as a checkerboard at the top of the
+        // frame, twice, so solid, then gone, as the trees are. And Frostfang's: a gate's lanterns hanging over the run 5
+        // to 7 m ahead of the lens were two great blocks of their colour across the top of the frame in the Ice Cavern.
+        // What hangs over the lens goes before it is over the rider's head, by 8.2 m; a bell or a wheel by the snow,
+        // which the rider meets, keeps 4.8 m.)
+        if (vDist < mix(4.8, 8.2, smoothstep(0.2, 1.4, vUp))) discard;
         vec3 c = vCol * vForm;
         c *= min(1.0, uCap / max(max(c.r, max(c.g, c.b)), 0.001));
         gl_FragColor = vec4(mix(c, uFog, f), 1.0);

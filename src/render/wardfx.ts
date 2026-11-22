@@ -36,6 +36,8 @@ const RING_S = 0.62;
 /** Round 8: how much of the sled's pace the broken lantern keeps. At round 7's 0.88 a shard fell back 5 m a second
  *  at 40 m/s, under the lens in a blink; now it hangs beside the rider as it flies out and only slowly drops back. */
 const KEEP = 0.95;
+/** Round 8's review: a broken shard's size against its panel (a whole panel flying past read as flat yellow card). */
+const SHARD_K = 0.6;
 
 /** The lantern's radius at height `h` (0 at its foot to LANTERN_H at its top): a round paper lantern,
  *  pinched at both ends where the rims are. */
@@ -88,7 +90,7 @@ function wardMaterial(): ShaderMaterial {
       varying vec4 vWard;
       varying float vSeed;
       varying float vFace;
-      varying float vNear;
+      varying float vDist;
       void main() {
         vUv = uv;
         vWard = aWard;
@@ -96,8 +98,7 @@ function wardMaterial(): ShaderMaterial {
         vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
         vec3 n = normalize(mat3(modelMatrix * instanceMatrix) * vec3(0.0, 0.0, 1.0));
         vFace = abs(dot(n, normalize(cameraPosition - wp.xyz)));
-        // (A shard that flies up past the lens goes before it can fill the frame's top as a flat card.)
-        vNear = smoothstep(1.6, 4.2, distance(cameraPosition, wp.xyz));
+        vDist = distance(cameraPosition, wp.xyz);
         gl_Position = projectionMatrix * viewMatrix * wp;
       }
     `,
@@ -110,10 +111,12 @@ function wardMaterial(): ShaderMaterial {
       varying vec4 vWard;
       varying float vSeed;
       varying float vFace;
-      varying float vNear;
+      varying float vDist;
       float h1(float x) { return fract(sin(x * 91.17) * 43758.5453); }
       void main() {
-        float alpha = vWard.x;
+        // (Round 8's review: a shard flying past the lens was a flat card of marigold a fifth of the frame wide. Broken
+        // free, it thins out inside 5 m of the lens and is gone by 2.5 m.)
+        float alpha = vWard.x * (vWard.y > 0.5 && vWard.w < 0.5 ? smoothstep(2.5, 5.0, vDist) : 1.0);
         float crack = vWard.y;
         float heat = vWard.z;
         vec2 q = vUv - 0.5;
@@ -159,7 +162,7 @@ function wardMaterial(): ShaderMaterial {
         vec3 glow = uWhiteGold * (lines * heat * 1.25 * (1.0 - crack) + heat * 0.6 * crack);
         // A paper lantern is densest at its rims, where the eye looks through more of it; face on it stays
         // thin, so it never turns into a wall between the lens and the rider.
-        float a = alpha * mix(0.34 + 0.22 * g + 0.3 * (1.0 - vFace), 0.62 * vNear, crack);
+        float a = alpha * mix(0.34 + 0.22 * g + 0.3 * (1.0 - vFace), 0.62 * smoothstep(1.6, 4.2, vDist), crack);
         gl_FragColor = vec4(linearToOutputTexel(vec4(paper, 1.0)).rgb * a + linearToOutputTexel(vec4(glow, 1.0)).rgb * alpha, a);
       }
     `,
@@ -285,7 +288,7 @@ export class WardFx {
         const fade = Math.min(1, left / 0.4);
         // (Broken, a panel is a flake of paper a little over half its size: whole panels flying past the lens read as
         // yellow cards, the review loop.)
-        const shrink = (0.7 + 0.3 * fade) * 0.6;
+        const shrink = (0.7 + 0.3 * fade) * SHARD_K;
         this.m.compose(sh.p, sh.q, this.s.set(sh.w * shrink, sh.h * shrink, 1));
         this.mesh.setMatrixAt(n, this.m);
         const heat = Math.max(0, 1 - since / 0.6);
