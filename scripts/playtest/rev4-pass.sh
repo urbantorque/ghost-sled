@@ -18,11 +18,11 @@ S=r8-rev4
 mkdir -p "$OUT/motion" "$OUT/rising"
 playwright-cli -s="$S" open --config=.playwright/cli-headless.config.json >/dev/null 2>&1
 playwright-cli -s="$S" goto "$BASE" >/dev/null 2>&1
-playwright-cli -s="$S" eval "window.__revCfg = { base: '$BASE', out: '$OUT/motion/', tier: 'high', m: 4, zs: [80, 450, 565, 1000, 1300, 1540, 1600, 2209, 2600, 3297, 3500, 3950, 4300], fin: [400, 1200, 2200, 3400, 4500, 6000] }" >/dev/null 2>&1
+playwright-cli -s="$S" eval "window.__revCfg = { base: '$BASE', out: '$OUT/motion/', tier: 'high', m: 4, zs: [80, 450, 565, 1000, 1300, 1460, 1600, 1690, 1730, 2209, 2600, 3297, 3500, 3950, 4300], fin: [400, 1200, 2200, 3400, 4500, 6000] }" >/dev/null 2>&1
 timeout 1500 playwright-cli -s="$S" --raw run-code --filename="$HERE/rev4-motion.js" 2>&1 | grep -v '^[╔║╚]' | grep -v '^$' > "$OUT/motion.json"
 echo "$(date +%H:%M) motion $(ls "$OUT/motion" | wc -l)"
 playwright-cli -s="$S" goto "$BASE" >/dev/null 2>&1
-playwright-cli -s="$S" eval "window.__revCfg = { base: '$BASE', out: '$OUT/rising/', tier: 'high', m: 4, zs: [1540, 1600], fin: [], extra: '&legend=1' }" >/dev/null 2>&1
+playwright-cli -s="$S" eval "window.__revCfg = { base: '$BASE', out: '$OUT/rising/', tier: 'high', m: 4, zs: [1600, 1730], fin: [], extra: '&legend=1' }" >/dev/null 2>&1
 timeout 900 playwright-cli -s="$S" --raw run-code --filename="$HERE/rev4-motion.js" 2>&1 | grep -v '^[╔║╚]' | grep -v '^$' > "$OUT/rising.json"
 echo "$(date +%H:%M) rising $(ls "$OUT/rising" | wc -l)"
 playwright-cli -s="$S" close >/dev/null 2>&1
