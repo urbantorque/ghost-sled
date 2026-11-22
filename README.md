@@ -43,6 +43,38 @@ your best recent run to your slowest: whichever run you have, someone is near. E
 landing, for 80 m above a leap's lip, and through a mogul field and 30 m past it. What stands on a lake stands
 along its shores, 17 m from the line.
 
+**Tricks.** In the air, what the steer is doing when you press decides the trick: press with the steer to a side to
+grab that side (held, it deepens three times), steer with the grab to spin it, against it to tweak; press with the
+steer centred and hold to flip. Let go of a grab just before touchdown and it is a stomp, a perfect landing. A short
+grab held into the snow lands clean; a deep one held into the snow on a big flight is a fall. Eighteen named tricks,
+one of them each sled's own move (two quick taps).
+
+**Charms.** Up to three gates a run, each three arches of light side by side: the arch you ride through is your charm
+for the rest of the run, with no menu and no stop. Twenty-four charms in three families (speed, style and survival)
+and seven named pairs; the middle arch is always a survival charm, so a rider who only steers still takes one.
+
+**Spirit Flow.** Style that outlives a banked combo builds a level from 0 to 6. It multiplies the lantern's gain and
+the points, gives a little speed, and is drawn on the rider: richer colour, a flame off the scarf, wind lines, sparks
+and brighter ghosts.
+
+**Showdowns.** Ride level with one of The Twelve, your grudge or your own best for two seconds and a showdown starts
+to a marker 300 m on. A clean close pass steals a wisp. The pool's riders race, draft and duel each other too.
+
+**Rider Rank and the Almanac.** Every run pays experience into one rank, and each rank turns a page of a fifty-page
+Almanac. The first ten pages each change play (the second and third charm gates, more charms, daily contracts, the
+album, a sled, a mirror mountain, the Long Night). A daily flame, three daily contracts, Cup leagues and monthly
+chapters that never expire give reasons to come back. Gifts stay the one currency; nothing bought wins a race; there
+are no ads.
+
+**After The Twelve.** Mirror mountains turn a course left for right (picture, steering and sound). The Long Night
+rides whole mountains back to back, carrying the lantern, the get-ups and the last three charms from leg to leg.
+Every mountain has a second hour to earn (Pinecrest at Dusk, Frostfang at Noon, Ember at Night, Sakura in the Evening,
+Lanternfall at First Light), picked under Ride.
+
+**Photos and the album.** Pause, or open the results, and the camera beside Home holds the run where it is: turn the
+lens round the rider, set the focal length and save a PNG, with or without a run card. The album's stickers are
+frames kept from the run that earned them.
+
 Screenshots of the final build, captured from live runs on desktop and phone, are in `screenshots/`.
 
 ## Run
@@ -103,8 +135,10 @@ The UI harness (`ui-harness.html` on the dev server) shows screens with fake mod
 | Gamepad | Either stick or the d-pad | A or the right trigger; X, B, a bumper or the left trigger to dash |
 
 Hold the action to crouch (deeper carve, tuck); hold it while steering hard to drift; release to
-pop. In the air, steer to spin and press-and-hold to backflip. Tap the action just before
-touchdown (when the ring on the snow flashes gold) for a perfect landing. P pauses.
+pop. In the air, steer to spin; press with the steer to a side to grab that side, or with it centred and
+hold to flip (press, then steer, for a flip that spins). Let go of a grab, or tap the action, just before
+touchdown (when the ring on the snow flashes gold) for a perfect landing. A deep grab warns with a ring round
+the sled's shadow: still held at touchdown on a big flight, it is a fall. P pauses.
 
 Gamepad: either stick or the d-pad steers; A or the right trigger is the button; X, B, a bumper or the left
 trigger spends the lantern; Start pauses. The menus follow the stick and the d-pad, A chooses, B goes back. The
@@ -925,6 +959,50 @@ merge's fixed frames on High, Low and the phone in `shots/vl/merge/after/`, the 
 
 What this does not show: whether the lift is felt at full speed under a person's hands, how Low looks on a real
 low-end phone rather than a throttled laptop, and the reconstruction tuned for the rider and moving lifts.
+
+## Round 8: beauty and the hook
+
+Round 8 (DECISIONS 367 to 383) changed the sim once (SIM_VERSION 10: the air's language, charms, showdowns and the
+spirit steal, Spirit Flow, the first run's layout, the Long Night's carry) and then only what is drawn, heard and
+kept. Its lanes' notes are `notes/r8-*.md`; `notes/r8-report.md` is the short version for the owner, with a
+fifteen-minute route through what changed. Nobody has played this build with hands.
+
+- **A trick language** (G1): eighteen named tricks from one rule (above), each with its pose, name and sound, on
+  the ghosts too; a perfect landing holds the picture for a breath and throws a ring of snow.
+- **A build chosen by steering** (G2): charm gates of light, three families, seven pairs.
+- **Rivals met on the snow** (G3): showdowns, the spirit steal, a pool that races, drafts and duels itself.
+- **One rank and reasons to come back** (G4 to G7): Rider Rank, the Almanac, the daily flame and contracts, Cup
+  leagues, monthly chapters, a Lantern Row to light; a first hour paced by design; results that sell the next run
+  with one button chosen for it.
+- **Somewhere to go after The Twelve** (G9): mirror mountains and the Long Night; a second hour on every mountain.
+- **The look** (V1 to V8): snow with three surfaces and relief the light draws; openings composed with a low lens;
+  Ember lit from the lava's side and Lanternfall's great lantern lit over the rider; lamps that light the air; speed
+  in the world (near crystals, posts strobing past, blur only at the frame's edge); every action an event; a stable
+  image on High and Ultra (a temporal reconstruction with the rider drawn sharp over it); photo mode and album
+  frames from the run.
+
+**The bars, in the lab** (`scripts/playtest/r8-bars.ts`, careers of 100 runs on the real sim settled into a real
+save, six seeds; `lab.ts`, six seeds on each of five mountains; `race-lab.ts`; `shots/r8/final/lab/`):
+
+| Bar | Measured |
+| --- | --- |
+| No dead runs (nothing gained at all) in a mid pilot's first 30 | 0 of 30 (strict: 3 of 100 over all 100 runs) |
+| Always one run away: a near goal exists, and the one button names it | 100 of 100 runs, mid and novice |
+| Choices a run that change the rest (charm, showdown, dash, fork) | median 17, least 10 |
+| Named tricks; distinct ones in the expert's best combo | 18; 6 (median best combo 5) |
+| First minute on a fresh save: a pass by 20 s, a perfect by 45 s, a dash by 60 s | 6 of 6 seeds, prompted clumsy and novice pilots |
+| The clumsy pilot finishes | 28 of 30 (round 7: 26 of 30) |
+| Still new at run 50, reachable next run, on every mountain | 2 to 12 things a mountain |
+| Set pieces won, mid / expert / novice | 78 / 82 / 29 of 90 (round 7: 80 / 82 / 18) |
+| A race live (a riding ghost within 40 m), runs 2 to 6, mid / expert / stunt | 0.79 / 0.67 / 0.71 (round 7: 0.73 / 0.70 / 0.65) |
+| Passes a minute, the same | 4.2 / 4.0 / 3.6 (round 7: 2.4 to 3.6) |
+| Showdowns a run, started / won, mid | 1.61 / 0.52 |
+
+The expert's race is a little less live than round 7's (0.67 against 0.70): it rides far enough ahead of the field on
+Ember and Sakura that its quiet runs rose from 8 to 27 of 600. Median finishes, by pilot over five mountains: mid
+126.3 s, expert 121.3, novice 144.1, clumsy 337.3.
+
+<!-- r8-fill: the critic loop's scores (DECISIONS 383), the performance table against round 7 (the quiet sitting), sizes, where the captures are, what this does not show -->
 
 ## Layout
 
