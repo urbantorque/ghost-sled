@@ -543,10 +543,19 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
             float edgeU = smoothstep(0.17, 0.32, abs(vSledP.x));
             // (Round 8: a round hull, the saucer's and the tray's, takes the snow's bounce at 0.5, not 0.14. Its
             // whole underside faces the lit snow, and in a flip it filled the rider's place as an ink-black disc.)
-            // (Round 8's review loop: at 0.5 the saucer's underside still read as a navy disc over the rider in a
-            // flip on every tier. 0.8: the hull's own blue, lit from the snow under it.)
-            float bounceU = mix(0.14, 0.8, step(vSledI.w, -5.0));
+            float roundU = step(vSledI.w, -5.0);
+            float bounceU = mix(0.14, 0.5, roundU);
             vec3 underC = col * (0.62 + 0.1 * grainU) * (1.0 - 0.55 * seam) * (1.0 - 0.3 * edgeU) + base * mix(uSnowLit, uShadeTint, 0.5) * bounceU;
+            // (Round 8's review loop: a dark paint on a round hull still turned its underside to an ink disc over the
+            // rider in a flip, on every tier, whatever the bounce. The hull's face takes the snow's own cool light
+            // as well as its paint's, spun in rings, and its rim carries the trim's vermillion round the edge, so a
+            // flipped saucer is the player's sled, lit from the snow, and the hero's colour rings the disc.)
+            if (roundU > 0.5) {
+              // (The tray is an oval, 1.2 times as long as it is wide; the saucer round.)
+              float rU = length(vec2(vSledP.x, (vSledP.z - 0.05) * 0.9));
+              underC = mix(underC, mix(uSnowLit, uShadeTint, 0.62) * (0.66 + 0.08 * sin(rU * 46.0)), 0.42);
+              underC = mix(underC, vec3(0.66, 0.06, 0.025), smoothstep(0.5, 0.53, rU) * (1.0 - smoothstep(0.64, 0.68, rU)));
+            }
             col = mix(col, underC, underK);
           }
         }`
