@@ -71,9 +71,19 @@ rides whole mountains back to back, carrying the lantern, the get-ups and the la
 Every mountain has a second hour to earn (Pinecrest at Dusk, Frostfang at Noon, Ember at Night, Sakura in the Evening,
 Lanternfall at First Light), picked under Ride.
 
+**Trials (from Almanac page 35, or the crown).** Every week a twist on a named mountain, the same for everyone:
+mirrored, a mood, the other hour or an event, one charm family, and what counts (the clock, the clock without a
+get-up, style points or perfect landings). Its bronze, silver and gold are set by the week's own field of riders; pick
+it on the Cup's card. Dev: `?debug&trials`, `?debug&week=2026-W50` (another week's Cup and Trial), `&demo=N` rides
+the Nth rider of the Trial's field.
+
 **Photos and the album.** Pause, or open the results, and the camera beside Home holds the run where it is: turn the
 lens round the rider, set the focal length and save a PNG, with or without a run card. The album's stickers are
 frames kept from the run that earned them.
+
+**Save Clip.** From the results, save your run's highlight reel as a short video (about fifteen seconds: the best
+moments, the game named on the first shot and your run's card on the last, with the game's sound) to share; tap it
+again on a phone to hand it straight to an app. Nothing records until you ask.
 
 Screenshots of the final build, captured from live runs on desktop and phone, are in `screenshots/`.
 
@@ -962,7 +972,7 @@ low-end phone rather than a throttled laptop, and the reconstruction tuned for t
 
 ## Round 8: beauty and the hook
 
-Round 8 (DECISIONS 367 to 384) changed the sim once (SIM_VERSION 10: the air's language, charms, showdowns and the
+Round 8 (DECISIONS 367 to 387) changed the sim once (SIM_VERSION 10: the air's language, charms, showdowns and the
 spirit steal, Spirit Flow, the first run's layout, the Long Night's carry) and then only what is drawn, heard and
 kept. Its lanes' notes are `notes/r8-*.md`; `notes/r8-report.md` is the short version for the owner, with a
 fifteen-minute route through what changed. Nobody has played this build with hands.
@@ -974,12 +984,15 @@ fifteen-minute route through what changed. Nobody has played this build with han
 - **One rank and reasons to come back** (G4 to G7): Rider Rank, the Almanac, the daily flame and contracts, Cup
   leagues, monthly chapters, a Lantern Row to light; a first hour paced by design; results that sell the next run
   with one button chosen for it.
-- **Somewhere to go after The Twelve** (G9): mirror mountains and the Long Night; a second hour on every mountain.
+- **Somewhere to go after The Twelve** (G9): mirror mountains, the Long Night and a weekly Trial with its own medal;
+  a second hour on every mountain.
 - **The look** (V1 to V8): snow with three surfaces and relief the light draws; openings composed with a low lens;
   Ember lit from the lava's side and Lanternfall's great lantern lit over the rider; lamps that light the air; speed
   in the world (near crystals, posts strobing past, blur only at the frame's edge); every action an event; a stable
   image on High and Ultra (a temporal reconstruction with the rider drawn sharp over it); photo mode and album
   frames from the run.
+- **Share it** (G11): Save Clip on the results, the run's reel as a short video with its sound, and the photo with
+  the run's card.
 
 **The bars, in the lab** (`scripts/playtest/r8-bars.ts`, careers of 100 runs on the real sim settled into a real
 save, six seeds; `lab.ts`, six seeds on each of five mountains; `race-lab.ts`; `shots/r8/final/lab/`):

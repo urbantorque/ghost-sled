@@ -521,12 +521,27 @@ Round 7:
   own type: "GHOST SLED" small, the mountain in italic 900, the time and the place (gold-white for a win), the rider's
   name in vermillion, on ink at 86% with an 18 px corner. Nothing is shared or sent. On a mirror mountain the photo is
   turned over with the picture.
+- **A clip is the reel, short, as the player saw it (round 8).** Save Clip (a soft pill with its words, beside the
+  camera in the results' foot) plays the run's reel cut to its three best shots and saves it: the picture with no HUD
+  and no tags, turned over with a mirrored page, the letterbox, each shot's card (the small word in 800 caps, the line in
+  italic 900 with the scene text's ink halo) for its first moments, a half-second card over ink at each cut, the game
+  named on the first shot, and the run's card from the photo over the last frame, above the letterbox. Held upright, the
+  type is sized from the width and kept out of the bottom tenth. While it records, an ink chip with an off-white dot that
+  breathes says "Recording" beside Cancel.
 - **A sticker held is a frame from its run** where one was kept: the moment as the player saw it (a set piece at its
   height, a legend in reach, a trick at its grab or the top of the flight, a charm's arch, the finish's swing), to the
   card's edge, the name on the same ink band. The painted card in its mountain's sky stays for a sticker with no frame.
 - **The Long Night's beat between legs** is one ink panel low at the reading edge over the finish town: the leg and its
   mountain in the italic of speed words, the night deepening, then what rides in (the lantern in marigold, the get-up
   pips, the charms by name) and a bar draining to the next leg. It is never a menu: it goes on by itself.
+- **A Trial is the week's second race, on the Cup's card (round 8).** Once open the card reads "Cup and Trial"; under
+  Ride the hour's pill holds the week's two ways, the trophy and the Trial's star (or the medal it holds). Picked, the
+  title travels to its mountain in its sky and hour, the place line reads "Week 50 Trial" over the twist, and over Ride
+  the rule wears the star and the three targets are struck as the medals they win, with their unit and the days left; a
+  target already won is struck through. A run names the rule once in the HUD's one-line card, and the stage line's words
+  carry the next medal's target. A Trial's results lead with the run's own figure on the week's measure, lit by its
+  medal as a place is (gold-white for gold, the silver step for silver and bronze), "Silver in the Trial" under it and
+  the gap to the next medal with the medal's disc. No new colour: the medals' metals are the Daily's and the Cup's.
 - **Motion has a direction.** A screen leaves the way it is built: the logo's column off the logo's side,
   the cards off theirs, the primary button forward. The HUD arrives from its corners once; a lantern cell
   that fills lifts once; a set piece's card settles into its chip. Transform and opacity only, nothing

@@ -1,6 +1,7 @@
 # Round 8: the report
 
-Branch `round-8`. It is not merged, pushed or deployed. Everything below is told at length in DECISIONS 367 to 384,
+Round 8 is on `main` and live at https://urbantorque.github.io/ghost-sled/ (DECISIONS 387), with its two stretch items,
+Trials and Save Clip. Everything below is told at length in DECISIONS 367 to 387,
 the README's "Round 8: beauty and the hook", ART.md and the lanes' notes (`notes/r8-*.md`); this is the short
 version for the owner. **Nobody has played this build with hands.** A test going green is permission to ask you to
 play, nothing more.
@@ -33,9 +34,14 @@ play, nothing more.
 - **Somewhere to go after The Twelve.** Mirror mountains (every course turned left for right: picture, steering and
   sound), the Long Night (whole mountains back to back, the lantern, get-ups and last three charms carried leg to
   leg), and a second hour on every mountain (Pinecrest at Dusk, Frostfang at Noon, Ember at Night, Sakura in the
-  Evening, Lanternfall at First Light), each an Almanac reward picked under Ride.
+  Evening, Lanternfall at First Light), each an Almanac reward picked under Ride. And a **Trial** a week (from
+  Almanac page 35): a twist on a named mountain (mirrored, a mood, the other hour or an event, one charm family, and
+  what counts: the clock, the clock without a get-up, style points or perfect landings), the same for everyone, with
+  bronze, silver and gold set by the week's own field; picked on the Cup's card.
 - **Photo mode and album frames.** Pause or the results' camera holds the run; turn the lens round the rider, save a
-  PNG with or without a run card. Album stickers are frames from the run that earned them.
+  PNG with or without a run card. Album stickers are frames from the run that earned them. **Save Clip** on the results
+  saves the run's reel as a short video (about 15 s, its three best shots, the game's sound, the run card at its end);
+  a second tap on a phone hands it to the share sheet.
 - **The look.** Snow with three surfaces, glints and relief the light draws on High; openings composed past the
   trench with a low lens beside the rider; Ember lit from the lava's side; the great lantern lit over the rider at
   Lanternfall's finish; lamps that light the air; speed in the world (near crystals, posts and poles strobing past,
@@ -124,8 +130,10 @@ release build on every mountain and tier, mirrored and at the other hours, with 
    them after you have seen them in motion, or take them out.
 4. **The other hours** shipped as Almanac rewards though their critics judged them short against ART.md's day. Keep
    them as rewards, or hold them back until a later round lifts them.
-5. **Photo mode on CrazyGames.** Save Photo is a browser download; whether CrazyGames' frame allows downloads is
-   untested. If it does not, the photo needs another way out (the SDK has none we use today).
+5. **Saving on CrazyGames.** Save Photo and Save Clip are browser downloads (a clip's second tap uses the share sheet);
+   whether CrazyGames' frame allows either is untested, and its SDK shares no image or video. Try both on the portal,
+   desk and phone; if neither works there, hide them on that platform or ask CrazyGames (DECISIONS 385). A rewarded
+   placement, its leaderboard and a friends feature are yours to decide; none was added.
 6. **The camera.** Every mountain's worst frames are the camera's: through a leap's lip for a slow rider, the opening
    and the First Drop seen from the big-air lens, a flip read as a fall, the rider a speck over the biggest leaps, the
    phone's lower third empty. A camera lane is the largest look lift left.
@@ -152,17 +160,19 @@ window is a fresh save.
    until the flame lights off the scarf. Does the game read faster than round 7 at the same speed? Does the flame read
    as fire?
 5. **After The Twelve (2 minutes): `?debug&m=4&hour=alt` (Lanternfall at First Light), then `?debug&m=0&mirror`
-   (mirror Pinecrest).** Do the other hour and the mirror feel like somewhere new?
-6. **Photo mode and the album (1 minute).** Pause in a good place, press Photo, turn the lens, save with the run card.
-   Open the album from the title: are the stickers frames you remember?
+   (mirror Pinecrest), then `?debug&trials` and pick the Trial on the Cup's card.** Do the other hour and the mirror
+   feel like somewhere new? Does the Trial's twist read in a second, and is its medal fair?
+6. **Photo mode, the clip and the album (2 minutes).** Pause in a good place, press Photo, turn the lens, save with the
+   run card. At a results screen press Save Clip: would you send it? Open the album from the title: are the stickers
+   frames you remember?
 7. **Low (1 minute): `?debug&tier=low&m=2`.** Does Low still look made and run smoothly? On a phone if you have one:
    open the dev server's network address and ride Low.
 
 ## Where things are
 
-- **The decisions:** DECISIONS 367 to 384. **The look:** ART.md 16 and the "round 8" bullets through sections 4 to 15.
+- **The decisions:** DECISIONS 367 to 387. **The look:** ART.md 16 and the "round 8" bullets through sections 4 to 15.
 - **Each lane's notes:** `notes/r8-*.md` (the sim's design in `r8-sim-design.md`, the spine's in `r8-spine-design.md`,
-  the five review lanes in `r8-rev0.md` to `r8-rev4.md` with their per-frame scores, Low's cost in `r8-lowperf.md`).
+  the five review lanes in `r8-rev0.md` to `r8-rev4.md` with their per-frame scores, Low's cost in `r8-lowperf.md`, the stretch's Trials in `r8-trials.md` and the clip in `r8-share.md`).
 - **Captures** (git-ignored) under `shots/r8/`: each lane's own folder; the review loop's frames by mountain and pass
   in `shots/r8/review/m0` to `m4`; the lab in `shots/r8/final/lab/`; the performance sittings in
   `shots/r8/final/perf/` (the first, during the lanes) and `shots/r8/final/sit2/` to `sit4/` (the last three, with the

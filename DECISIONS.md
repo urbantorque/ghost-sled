@@ -3995,3 +3995,74 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
       screen and a frame callback spread thin over a dozen systems (382); none of it is the critic loop's. Going further
       means showing less of the field on Low: the owner's call (the report's first open question), with the bar
       restated as round 7's plus the field or carried into round 9.
+
+385. **G11, Share it (the roadmap's stretch): the reel saved as a clip, the photo's card checked** (`notes/r8-share.md`,
+    the share lane; clips, frames and screens under `shots/r8/share/`).
+    - *The clip.* Save Clip beside the camera in the results' foot plays the run's reel again, cut to its three best
+      shots (the end and the next two of the reel's claims: the legend, the best leap, a set piece won or the closest
+      pass), and records the canvas as it plays: the picture with no HUD and no tags (taken in the picture's own
+      callback), turned over on a mirror mountain, the reel's letterbox and cards, a short dip at each cut, the game named
+      on the first shot and the photo's run card over the last 1.8 s, with the game's mix tapped after the master. MP4
+      (H.264, AAC) where the browser writes it, WebM where not; 720p at most either way up, 30 frames, about 2.5 Mb/s (2.4
+      times that held upright, after the phone's first clips came out blocky). Chrome wrote MP4 every time: 15 to 17 s and
+      4.7 to 5.3 MB on a desk, 16 to 18 s and 2 to 4.6 MB on the phone, each read back in a `<video>` and looked at frame
+      by frame. The whole reel (20 to 30 s, 10 to 15 MB) was too long to send; `CLIP_SHOTS` and `CLIP_MAX_TICKS` make it
+      longer. Nothing records, encodes or taps the mix until a player asks (a test holds the stream, the recorder and the
+      tap to one factory that runs at the first cut); the code is its own chunk, loaded on the click. While it records an
+      ink chip says "Recording" and Cancel (or Escape) drops it; a second tap on the same results hands the clip to the
+      share sheet. Where a browser cannot record the canvas there is no button.
+    - *The photo's card.* Saved and looked at on High, Low, the phone and mirrored runs on all three: none flipped
+      wrongly. Fixed: an upright picture's card is sized from its width (5 to 8 px of type on a phone's photo before), and
+      a mirror mountain's card says "Mirror". The reel's last frame now holds (1.1 s) as it was meant to.
+    - *Two fresh critics.* The first: the opening and the end card work, the middle did not (long dips to ink, small type
+      on the phone, blocky phone video, the card over the letterbox, an unlabelled icon), all fixed. The second:
+      "partly" shareable, "the flights are worth sharing", the control "reads, and it doesn't crowd", the colour roles
+      hold; its three fixes made. Left to the reel and the results: the reel's high lenses over blank snow, a lens behind
+      a gate's beams, a pass shot that does not show the pass, wrecks inside a shot, the results' lens after a reel, and
+      cut copy on the results.
+    - *CrazyGames* (its docs read, nothing signed in to): invite links (used), Room Data for multiplayer, a friends list
+      for logged-in players, one leaderboard for invited games, and rewarded ads under its rules (optional, the reward
+      only on completion, never during play); nothing in the SDK shares an image or a video. No SDK call and no ad were
+      added. Its docs say nothing of downloads in its frame and forbid popups, so whether Save Photo or Save Clip works on
+      the portal is untested; the second tap's share sheet is the fallback.
+    - *Cost.* Nothing before the first frame; Low's GL calls level (Pinecrest 475 and 520 before, 472 and 475 after;
+      Ember 477 and 489, 473 and 486); 3.4 KB of main script, the clip's 8.1 KB loaded on the click; 0.13 to 0.19 ms of
+      main thread a frame while a clip records.
+    - *For the owner:* press Save Clip and Save Photo on the CrazyGames portal, desk and phone; if neither the download nor
+      the share sheet works there, hide both on that platform or ask CrazyGames. A rewarded placement, the leaderboard
+      and a friends feature are the owner's calls. Whether a 15 s clip is one players send, how it plays in a messaging
+      app, the encoder on a real phone and iOS Safari's save need a person.
+
+386. **Trials (the roadmap's stretch, G9): a weekly rule twist with its own medal** (`notes/r8-trials.md`, the trials
+    lane; frames under `shots/r8/trials/`).
+    - *The week's Trial.* Each ISO week names one, the same for everyone, so a friend's link and a ghost from the same
+      week race the same rules: a named mountain (a new one every week), mirrored or not, one sky at most (a mood never the
+      Cup's that week, the other hour, or an event), the gates dealing one charm family or all, and a measure in turn
+      every four weeks (the clock, the clock without a get-up, style points, perfect landings). Nothing reaches the sim but
+      its `SimConfig` (seed, chaos, sled, charm pool; a test asserts it); mirror and hour are presentation, and the
+      measure is judged at the line from the sim's own state by the same tally for the player and the field.
+    - *The medal.* Bronze, silver and gold come out of the week's own field (25 bot riders on the Trial itself, made in
+      the worker after the Cup's, about 1.5 s), at one share of the field a measure, set once from the lab (clock 30, 50
+      and 70%; without a get-up 20, 40 and 60%; points 22, 50 and 80%; perfects 45, 70 and 90%). Over twelve weeks the
+      lab's expert took gold and its mid pilot a medal every week (W48 to W51: the mid pilot's six rides SSSGGS, -GSGBG,
+      BBBBBB, SSSSSS; the expert's GGGGGG, -G-GG-, GSSGGS, SGGGSS). Lights, distinct tricks and set pieces were tried as
+      measures and left out; the clock is never raced on Glass Ice, and a week without a get-up never deals the speed
+      family. A medal is kept per week for a year and never lowered, and pays experience as the Cup's medal does: no new
+      currency.
+    - *Where it lives.* Opens on Almanac page 35 (the spine's "Trials" page) or with the crown, so every mountain and
+      mirror is open by then. The Cup's card reads "Cup and Trial", and under Ride the hour's pill picks the week's Cup or
+      Trial; the title travels to the Trial's mountain in its sky and hour and shows the rule, the three targets with
+      their unit, the best and the days left. Also from page 35's Ride, the medal wall's row, the title's news line and a
+      friend's link. A run names the rule once in the HUD's one-line card and the stage line carries the next target; the
+      results lead with the run's figure lit by its medal and the gap to the next, and the one button is Ride the Trial.
+    - *Two fresh critics.* The first read it "as a weekly challenge with a medal ladder in about a second" and named eight
+      faults; the five that were the Trial's are fixed (the title in the Trial's sky, the card saying which is picked,
+      results led by the medal, the clock judged in its own tenths, a star for the pick's ring). The second: "it does read
+      as a weekly challenge almost at a glance"; a style week's results still led with the race, and the targets wanted a
+      unit and the week's end: fixed. The base game's faults they named are left (the Wisp sled's mint runners, the rider
+      behind the results column on a mirror mountain, the phone's mood chip cut short, ghosts at the lens and in the
+      title sky, the Cup title's framing, touch lessons in the thumbs' band).
+    - *Cost.* Nothing before the first frame; a Low frame's held-run GL calls level (Pinecrest 449.4 and 449.3 before,
+      446.7 and 449.2 after; Ember 502.2 and 502.9, 499.5 and 502.2); 15 KB of main script and 4.5 KB of worker.
+    - *For the owner:* opening Trials earlier than page 35 is one line (`trialsOpen`; below page 21 a week could deal
+      Lanternfall before it is open). A Trial medal has no album sticker. Nobody has ridden a Trial by hand.
