@@ -163,3 +163,301 @@ lilac" with no lava light; the grey monolith (the ropeway's station) before the 
   a white cone on every broken top read as a field of pencils.
 - **The slots' floor** takes the lava's light harder (the slots' place `lamps` 1.55, was 1.25): the pools by the
   rivers reach the snow beside the line.
+
+## Pass 5: what the critic saw (the last pass)
+
+High mean 6.96, minimum 6 (1650, 3000 m). Low mean 6.21, minimum 5.5 (the critic skipped Low's 2691 m: 33 frames).
+Phone mean 6.49, minimum 5.5 (1166 m). Strips mean 6.58, minimum 5 (the lip). The best frames 8 (High 3591 and
+4440 m). Hero vistas: the cone 7, Cinder Gate 7 ("the walls are lit from below and the slot is graphic"), the Caldera
+6.5 on the strips and 7.5 on the stills ("the lava lake now reads under the cone"), the bridge 7.5, the opening 6.5.
+No frame a 9 and no hero vista one.
+
+Its findings, worst first: the lip's strip (the lens through the lip, as passes 2 to 4); the flip at 1166 m; Low's
+tunnel wall at 3150 m a flat cream slab; Low's slot banks "shredded into stretched shards"; 1316 m on Low murky with
+no value separation; on High, 1650 and 3000 m's big flat banks under the edge blur, and "grey out-of-focus flake
+discs" over the slots. Named again: the charred snags still read as "pencils" at 2024 m (the white cone is gone; the
+snags are slim black posts with a pale foot and read as posts at that size), the slots' walls as ruled slabs, the
+halls' roof grid as "a car park", Ash Market's windows and lanterns clipped to flat blocks, the seam at 2550 m.
+
+The loop stops here: five passes, the brief's limit. The stop rule (no frame under 8, every hero vista 9) was not met.
+
+## Scores
+
+Each pass a new critic (general-purpose, opus, high effort), told only ART.md and the frames' paths. A fresh critic
+moves an unchanged frame by half a point to a point on its own (DECISIONS 342 found the same): 993 m went 7.5, 7.5,
+7, 5.5, 7 with nothing changed there, so read the means as a band, not a line. Pass 1's strips are five (the lip's
+strip was added from pass 2); from pass 2 on, six. The hero vista columns are the critic's own judgement of each
+vista over all the frames it named.
+
+| Pass | High mean (min) | Low mean (min) | Phone mean (min) | Strips mean (min) | Cone | Cinder Gate | Caldera | Bridge | Opening |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 7.00 (5) | 6.56 (4.5) | 6.65 (5) | 6.90 (6) | 7.5 | 6 | 5.5 | 7.5 | 7 |
+| 2 | 6.60 (5) | 6.09 (5) | 6.34 (5) | 6.08 (4) | 7 | 6.5 | 5 | 7.5 | 6.5 |
+| 3 | 6.85 (5.5) | 6.04 (5) | 6.19 (5.5) | 6.33 (4.5) | 7.5 | 6 | 7.5 | 7.5 | 6.5 |
+| 4 | 6.54 (5.5) | 6.03 (5) | 6.04 (5) | 6.00 (3.5) | 7.5 | 5.5 | 6.5 | 7.5 | 6.5 |
+| 5 | 6.96 (6) | 6.21 (5.5) | 6.49 (5.5) | 6.58 (5) | 7 | 7 | 6.5 | 7.5 | 6.5 |
+
+High, frame by frame:
+
+| Frame | P1 | P2 | P3 | P4 | P5 |
+| --- | --- | --- | --- | --- | --- |
+| 1039 | 7.5 | 7 | 6.5 | 6 | 7 |
+| 1166 | 6 | 5.5 | 5.5 | 5.5 | 6.5 |
+| 1316 | 5 | 6 | 7.5 | 7 | 6.5 |
+| 1500 | 7.5 | 7 | 7.5 | 7 | 6.5 |
+| 1650 | 6 | 5 | 6 | 5.5 | 6 |
+| 1766 | 8 | 6.5 | 7.5 | 7.5 | 7.5 |
+| 1950 | 7 | 7 | 6 | 6.5 | 7 |
+| 2024 | 5.5 | 6 | 6 | 6 | 6.5 |
+| 2100 | 7.5 | 6.5 | 6.5 | 6 | 6.5 |
+| 2271 | 7.5 | 7 | 7 | 6 | 7 |
+| 2441 | 5.5 | 5.5 | 8 | 7.5 | 7.5 |
+| 2550 | 6.5 | 5.5 | 7.5 | 7 | 7 |
+| 2691 | 7 | 7 | 6.5 | 6 | 7.5 |
+| 2761 | 7 | 7 | 6.5 | 6 | 7 |
+| 2850 | 6.5 | 6 | 6 | 6 | 6.5 |
+| 3000 | 7 | 6.5 | 7 | 6.5 | 6 |
+| 3150 | 6.5 | 6.5 | 6 | 6 | 6.5 |
+| 3323 | 7 | 7 | 7 | 6 | 7.5 |
+| 3450 | 7.5 | 7.5 | 7.5 | 7.5 | 7.5 |
+| 3540 | 7.5 | 7 | 7.5 | 7.5 | 7.5 |
+| 3591 | 8 | 8 | 7.5 | 7.5 | 8 |
+| 3741 | 7 | 7 | 7 | 7 | 7 |
+| 3940 | 7.5 | 7 | 7 | 7 | 7 |
+| 4050 | 6.5 | 5.5 | 6 | 6 | 6.5 |
+| 4200 | 7.5 | 7.5 | 7.5 | 6.5 | 7 |
+| 4330 | 7.5 | 7.5 | 7.5 | 7 | 7.5 |
+| 4440 | 8 | 7.5 | 7.5 | 7.5 | 8 |
+| 0150 | 7.5 | 7 | 7.5 | 7.5 | 7 |
+| 0300 | 7 | 6 | 6.5 | 6.5 | 6.5 |
+| 0450 | 7 | 6 | 6.5 | 6 | 6.5 |
+| 0613 | 8 | 7 | 7 | 7 | 7 |
+| 0750 | 6.5 | 5.5 | 7 | 6.5 | 6.5 |
+| 0900 | 7 | 6.5 | 6 | 6 | 7.5 |
+| 0993 | 7.5 | 7.5 | 7 | 5.5 | 7 |
+
+Low, frame by frame:
+
+| Frame | P1 | P2 | P3 | P4 | P5 |
+| --- | --- | --- | --- | --- | --- |
+| 1039 | 7 | 6.5 | 6 | 6 | 6.5 |
+| 1166 | 5.5 | 5 | 5.5 | 5 | 6 |
+| 1316 | 4.5 | 5.5 | 5.5 | 6.5 | 5.5 |
+| 1500 | 7 | 6 | 6.5 | 6.5 | 6 |
+| 1650 | 6 | 5 | 6 | 5.5 | 6 |
+| 1766 | 7.5 | 6 | 6.5 | 6.5 | 6 |
+| 1950 | 7 | 7 | 5 | 6 | 6 |
+| 2024 | 6 | 6 | 5 | 6 | 6 |
+| 2100 | 7 | 6.5 | 6 | 6 | 6 |
+| 2271 | 7 | 6.5 | 6.5 | 6 | 6 |
+| 2441 | 6 | 5 | 7 | 7 | 7 |
+| 2550 | 6 | 5.5 | 6.5 | 5 | 6.5 |
+| 2691 | 6 | 6 | 5.5 | 5.5 | - |
+| 2761 | 5.5 | 6 | 5.5 | 5.5 | 6 |
+| 2850 | 5.5 | 6 | 5 | 5.5 | 5.5 |
+| 3000 | 7 | 5.5 | 6.5 | 6.5 | 6 |
+| 3150 | 6 | 5.5 | 5.5 | 5.5 | 5.5 |
+| 3323 | 6.5 | 6 | 5.5 | 5.5 | 6 |
+| 3450 | 7.5 | 7 | 6.5 | 6.5 | 6.5 |
+| 3540 | 7.5 | 7 | 6.5 | 6.5 | 6.5 |
+| 3591 | 7.5 | 7 | 6.5 | 6.5 | 6.5 |
+| 3741 | 7 | 7 | 6.5 | 6.5 | 6.5 |
+| 3940 | 7 | 6.5 | 6 | 6.5 | 6 |
+| 4050 | 6.5 | 6 | 5.5 | 5.5 | 6 |
+| 4200 | 6.5 | 6.5 | 6 | 5.5 | 6.5 |
+| 4330 | 7 | 7 | 6.5 | 6.5 | 6.5 |
+| 4440 | 7 | 7 | 6.5 | 7 | 7 |
+| 0150 | 7 | 6 | 6.5 | 6.5 | 6.5 |
+| 0300 | 7 | 5.5 | 6 | 6 | 6 |
+| 0450 | 6.5 | 5.5 | 6 | 6 | 6 |
+| 0613 | 7 | 6 | 6.5 | 6.5 | 6.5 |
+| 0750 | 6.5 | 5 | 6 | 6 | 6 |
+| 0900 | 6.5 | 6 | 6 | 5.5 | 7 |
+| 0993 | 6 | 6.5 | 6.5 | 5.5 | 6.5 |
+
+Phone, frame by frame:
+
+| Frame | P1 | P2 | P3 | P4 | P5 |
+| --- | --- | --- | --- | --- | --- |
+| 1039 | 7 | 7 | 6.5 | 6 | 7 |
+| 1166 | 5 | 5 | 5.5 | 5 | 5.5 |
+| 1316 | 5 | 5.5 | 6.5 | 6.5 | 6 |
+| 1500 | 7.5 | 6.5 | 6.5 | 6.5 | 6.5 |
+| 1650 | 6 | 5 | 5.5 | 5.5 | 6 |
+| 1766 | 7.5 | 6.5 | 6.5 | 6.5 | 6.5 |
+| 1950 | 7 | 7 | 6 | 6.5 | 7 |
+| 2024 | 5.5 | 6 | 5.5 | 6 | 6 |
+| 2100 | 5.5 | 6 | 5.5 | 5.5 | 6 |
+| 2271 | 7.5 | 6.5 | 6.5 | 6 | 6.5 |
+| 2441 | 5 | 5 | 7 | 6.5 | 7 |
+| 2550 | 5 | 5.5 | 6.5 | 5.5 | 6.5 |
+| 2691 | 7 | 6.5 | 6 | 6 | 7 |
+| 2761 | 6.5 | 6.5 | 6 | 5.5 | 6.5 |
+| 2850 | 6.5 | 6 | 5.5 | 5.5 | 6.5 |
+| 3000 | 7 | 6 | 6 | 6 | 6 |
+| 3150 | 6.5 | 6.5 | 6 | 5.5 | 6.5 |
+| 3323 | 7 | 6.5 | 6 | 5.5 | 6.5 |
+| 3450 | 7 | 7 | 6.5 | 6.5 | 6.5 |
+| 3540 | 7.5 | 7 | 6.5 | 6.5 | 6.5 |
+| 3591 | 7.5 | 7.5 | 7 | 6.5 | 7 |
+| 3741 | 7 | 7 | 7 | 6.5 | 6.5 |
+| 3940 | 7 | 6.5 | 6 | 6 | 6 |
+| 4050 | 6.5 | 5.5 | 5.5 | 5.5 | 6 |
+| 4200 | 7.5 | 7 | 6.5 | 6.5 | 7 |
+| 4330 | 7 | 7 | 7 | 6.5 | 7 |
+| 4440 | 7 | 7.5 | 7 | 7 | 7 |
+| 0150 | 7 | 6 | 6.5 | 6 | 6.5 |
+| 0300 | 6.5 | 5.5 | 5.5 | 6 | 6.5 |
+| 0450 | 7 | 6.5 | 6.5 | 6 | 6 |
+| 0613 | 7.5 | 6.5 | 6.5 | 6.5 | 6.5 |
+| 0750 | 6.5 | 6 | 5.5 | 6 | 6 |
+| 0900 | 7 | 6.5 | 6 | 6 | 7 |
+| 0993 | 6.5 | 7 | 5.5 | 5.5 | 7 |
+
+Strips (High, eight frames in motion):
+
+| Strip | P1 | P2 | P3 | P4 | P5 |
+| --- | --- | --- | --- | --- | --- |
+| 0150 | 7.5 | 7 | 7.5 | 7 | 7 |
+| 1166 | 6 | 6 | 5.5 | 5.5 | 6.5 |
+| 2340 | 6 | 5.5 | 6.5 | 6.5 | 7 |
+| 2395 | - | 4 | 4.5 | 3.5 | 5 |
+| 3540 | 7.5 | 7.5 | 7.5 | 7 | 7.5 |
+| 3940 | 7.5 | 6.5 | 6.5 | 6.5 | 6.5 |
+
+What moved for the fixes, under five different critics: 1316 m (High 5, 6, 7.5, 7, 6.5; Low 4.5 to 5.5 to 6.5);
+2024 m (High 5.5 to 6 to 6.5; nobody names a vermillion band after pass 1); 2441 m (High 5.5, 5.5, 8, 7.5, 7.5: the
+best frame on the mountain in pass 3); the Caldera's vista 5.5, 5, 7.5, 6.5, 6.5; 3150 m's "flat orange rectangle"
+named in passes 1 to 3 and not after; Cinder Gate's vista 6, 6.5, 6, 5.5, 7 (pass 5's "the walls are lit from
+below"). What no pass moved: the flip at 1166 m, the opening (6.5 to 7 throughout), the bridge (7.5 throughout).
+
+## What is still short, and why
+
+- **No frame is a 9 and no hero vista is one.** The best frames are 8 (High 3591, 4440, and 2441 m in pass 3).
+- **The Caldera's lip, in motion** (the strip at 2395 m, 3.5 to 5 every pass): the replayed rider reaches the lip at
+  15.8 m/s, drops the 4 m cliff, and the chase lens follows it down through the lip's own ground: the near plane cuts
+  the lip's snow into pale shards with the pit's crust showing between them. This is the chase lens (`camera.ts`) at
+  any leap's lip for a slow rider, not Ember's data; the main lane should keep the lens over the lip's ground (or fade
+  what is within a metre of the lens) for every mountain.
+- **The flip at 1166 m** (5 to 6.5 every pass, every tier): the replayed rider flips over the slot's bump and the
+  saucer's underside faces the lens, "a blue disc with a face". The trick pose and the lens are shared. (Round 8's
+  merge has since landed "the flipped hull in rider.ts" from the other review lanes; this lane's frames were shot
+  before it, so pass 5 does not show it, and the main lane's next look at 1166 m should.)
+- **The opening** (6.5 to 7): the composed wall now carries a rank of organ pipes, but the sim's bank on the fall
+  side (9.5 m in its first 10 m) hides the fall to the lava from the low lens, and Ember has no place shot (the compose
+  lane cut it). The low bank is the sim request round 8's compose lane listed (`notes/r8-compose.md`).
+- **The slots** (900 to 1039 m and 2691 to 2850 m): walls read as ruled slabs or planks with white lines; the halls
+  repeat Cinder Gate's slot (round 7's open item). Low's slot banks are the terrain itself: on Low's coarse columns and
+  rows the V-shaped foot of the wall is drawn as long thin triangles (the hide-and-read probe found only the terrain at
+  those pixels); a finer Low grid there would cost triangles on every mountain, so it is left.
+- **Shared, named by every critic:** the ward's burst at 1650 m washing the frame (the events lane); the speed blur of
+  the frame's outer band over a bright bank (2850, 3323 m: "a milky sheet", "an orange smudge"); grey out-of-focus
+  flakes near the lens on Ember (`nearfield.ts` mixes them to Ember's dark red fog); ghosts at the lens (450, 750, 1950
+  m); grey powder puffs as smoke over dark ground; Low's dark round contact shadow by the sled "like a hole".
+- **Ember's own, not reached:** Ash Market's windows and lanterns clip to flat blocks; the halls' roof reads as a
+  beam grid; the grey ropeway station before the cone at 300 m; the charred snags as posts at a distance; no frame of
+  the fixed set shows the flight over the lake (the replayed rider is too slow to fly the gap; the lake reads from the
+  lip, the landing and the approach).
+
+## Shared code touched
+
+All small; each is 0 or a no-op on every other mountain unless said.
+
+- `palette.ts`: `overRoof` and `journeyPalette`/`journeyStamp`'s `over` (a tunnel's place lets go of a sled more than
+  46 m over the snow; every mountain's tunnels, nothing changes under a roof); the fields `glazeCool` (0 default),
+  `posterSunSat` (1 default) and `massif.seaLava` (0 default), and `tierLook` applying `posterSunSat`. Otherwise
+  Ember's palette, journey and places only.
+- `world.ts`: `journey()` takes the sled's height over the snow (one `course.ground` a frame on Clear Skies).
+- `materials.ts`: the shared float `uGlazeCool` in the snow material (the glaze's mirror and its plates' borders; 0
+  elsewhere); Low's painted pools' ramps in the `uPoolSoft` branch (Ember alone sets `poolSoft`).
+- `massif.ts`: the sea's `uSeaLava` (a float in the sea's own uniforms; the shader's branch is skipped at 0).
+- `stages.ts`: Ember's caldera and rivers (Ember only); the lava shader's rafts held whole within 18 m of the lens
+  (Ember only).
+- `framing.ts`: Ember's composed wall. `flora.ts`: Ember's charred snag.
+- `scripts/playtest/stills.js`: each frame's draw calls and triangles in its JSON (commit 89c5c0a).
+
+No uniform array of vectors anywhere; no new draw, pass or program; nothing before the first frame.
+
+## Cost
+
+The frames' JSON (draw calls and triangles summed over every pass of the shot frame, 34 places a tier), pass 1 (the
+base, 9a93aa8 plus the stills' cost record) against pass 5 (54da13e):
+
+| Tier | Calls, mean (max) | Triangles, mean |
+| --- | --- | --- |
+| High | 111.5 (120) to 111.6 (120) | 718k to 722k |
+| Low | 52.8 (60) to 52.9 (60) | 120k to 122k |
+| Phone on Medium | 94.4 (103) to 95.0 (103) | 497k to 507k |
+
+No new draw anywhere. The triangles are the opening's rank of organ pipes (Low 87k to 94k at 150 m, 116k to 123k at
+300 m; High 588k to 605k at 150 m, 640k to 740k at 300 m, where the composed wall is in view) and nothing else of
+note. The lava sea, the over-roof weight, the cold glaze, the paler poster and the pools are shader and palette work.
+
+Low's GL calls a frame (`glcount.js`, Ember on Low, an autoride's live ride, so the windows differ a little): the
+opening (about 200 to 560 m), base 515.1 and 510.3 against head 497.1 and 512.7, interleaved base, head, head, base;
+the Caldera's stretch, base 546.7 (2269 to 2681 m) against head 514.2 (2427 to 2929 m); the halls and the market's
+bridge, base 526.6 (2934 to 3440 m) against head 532.0 (2833 to 3386 m). Level within the ride's spread: Low is not
+heavier. Raw output in `shots/r8/review/m2/cost/`. Frame rates were not judged (other lanes shared the machine);
+the GPU's pass times were not measured.
+
+## For the main lane
+
+- **Merging:** `palette.ts` is the one file every review lane edits. Mine adds three fields to `Palette` (`glazeCool`,
+  `posterSunSat`, `massif.seaLava`) with their defaults in the base palette, `overRoof`, the `over` argument of
+  `journeyPalette` and `journeyStamp`, and `roof` on `LaidPlace`; everything else is inside Ember's own cases
+  (`clearSkies`/`round7`/`valuePass` volcanic, the volcanic `JOURNEY` stops, the volcanic `PLACES`, `ALT_HOURS`
+  volcanic). `materials.ts` adds `uGlazeCool` beside `uIceMood` and two lines in the ice block; the other lanes' "warm-sky
+  glaze tint" (merged on round-8) sits in the same block: keep both (mine is the last `sky = mix(...)` before the
+  mirror is laid on).
+- **Decide:** the chase lens at a leap's lip for a slow rider (it goes through the lip's ground: every mountain);
+  the flip's saucer underside (merged since, by the other lanes, as "the flipped hull"); whether Ember's near flakes
+  should keep their brightness rather than mixing to Ember's dark fog; the ward's burst on Ember's warm snow.
+- **Nothing reaches the sim.** SIM_VERSION 10 untouched; the stills replay the same ticks on every pass.
+
+## Text for DECISIONS (a new item)
+
+> **Ember's critic loop, milestone 4: five passes, the Caldera a lake of lava at last, short of the stop rule**
+> (`notes/r8-rev2.md`; frames under `shots/r8/review/m2/`). The fixed frames as stills on High, Low and the phone, six
+> strips in motion, a fresh opus critic each pass told only ART.md. High's mean 7.0, 6.6, 6.85, 6.54, 6.96 (minimum 5
+> to 6); Low 6.56 to 6.21; the phone 6.65 to 6.49; no frame a 9 and no hero vista one; the best frames 8 (2441 m, the
+> Caldera's lava lake under the cone, in pass 3; 3591 and 4440 m in pass 5). The critics moved unchanged frames by up
+> to a point and a half, so the means are a band. *What a player sees:* the Caldera's valley is a lake of lava from
+> the lip, the landing and the air (crust rafts on cracks of the fire's colour, `massif.ts uSeaLava`), and its landing
+> is groomed snow with the lava in the fields either side (the crust had run the length of the landing face, so every
+> rider rode 200 m of crust: the line read as a hazard); thrown a hundred metres up by Cinder Gate's vent, the slope
+> below is the open air's, not one red wash of the hall's fog (a tunnel's place now holds only a sled under its roof,
+> `palette.ts overRoof`, every mountain); the fork's ice is a cold lane, never a vermillion band; the snow from the
+> halls on and on Low is snow in firelight, not sand (`posterSunSat`); the opening rides beside a rank of organ
+> pipes; the halls' lava is plates on cracks beside the rider, not a flat orange slab; charred snags hold no snow on
+> their tips. *Cost:* no draw; triangles +0.6% on High, +1.7% on Low (the organ pipes); Low's GL calls level.
+> *Short:* the lens goes through a leap's lip for a slow rider (shared); the flip's saucer at 1166 m (shared); the
+> opening's fall is hidden by the sim's bank (a sim request); the slots read as ruled slabs and Low's slot banks as
+> the terrain's long triangles; Ash Market's windows clip to flat blocks.
+
+## Text for ART.md 15 (Ember Peak, "As built in round 8", to add)
+
+> The Caldera's valley is a lake of lava: from the lip, the landing and the air the sea under the smoke is crust in
+> rafts with melt along the cracks between them in the fire's colour, wider in the hot pools. The crust floor lies under
+> the gap and the foot of the landing; the landing face is groomed snow, the lava in its fields either side. Ice under
+> the fire holds the cold of the deep sky: a cold dark lane, never the red horizon. From the halls on, the key is a
+> step paler on a brighter snow, so the light's orange is a tint and the lava's pools are the orange; Low keeps less of
+> the key's colour and leans its lit snow toward the cold shade. The opening's high side is a rank of organ pipes along
+> the wall's crest; beside the lens no raft of lava goes under whole. A charred snag holds snow at its foot, never on
+> its splintered tip.
+
+And ART.md 15's earlier note ("It is not yet a lake under the flight, and no smoke ceiling is lit from below") can lose
+its first half: the lake is built; the ceiling is lit from below in the Caldera's place (the deck `#C8501C`), which
+no critic credited.
+
+## Text for the README (round 8's look, one line)
+
+> Ember Peak's Caldera Leap flies over a lake of lava and lands on groomed snow between the fields; a tunnel's light
+> lets go of a rider thrown high over it; on Low, Ember's snow reads as snow in firelight.
+
+## Where the frames are
+
+- `shots/r8/review/m2/pass1` to `pass5` in the main checkout: `high/`, `low/`, `phone-medium/`, `sheets/` (as each
+  critic saw Low and the phone), `strips/` and `strips-raw/`, and each capture's JSON (console errors: none in any
+  capture on any tier; draw calls and triangles per frame).
+- `shots/r8/review/m2/cost/`: Low's GL calls, base and head.
+- `notes/r8-rev2-scores.json`: every critic's score for every frame on every tier, pass by pass.
