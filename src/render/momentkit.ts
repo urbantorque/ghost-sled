@@ -134,8 +134,9 @@ export function litMaterial(): ShaderMaterial {
         // lens it would be a block of its colour across the frame.)
         // (The review loop: dithered from 7 m in, a street's near lanterns hung as half-transparent
         // scanline ghosts across the top of a still. Each holds solid to 5.2 m and is gone by 4.4 m.)
-        float thr = (mod(floor(gl_FragCoord.x), 2.0) + 2.0 * mod(floor(gl_FragCoord.y), 2.0)) / 4.0 + 0.125;
-        if (smoothstep(4.4, 5.2, vDist) < thr) discard;
+        // (Round 8's review loop: a phone still caught one inside the dither's 0.8 m as a checkerboard at the top of
+        // the frame, twice. Solid, then gone, as the trees are.)
+        if (vDist < 4.8) discard;
         vec3 c = vCol * vForm;
         c *= min(1.0, uCap / max(max(c.r, max(c.g, c.b)), 0.001));
         gl_FragColor = vec4(mix(c, uFog, f), 1.0);
