@@ -199,6 +199,10 @@ interface Item {
   dim: number;
   /** How much of the ghost shows this frame after every fade (0 to 1). */
   shown: number;
+  /** Round 8 (the lowperf lane): whether it was posed last frame (one coming back on screen snaps to its pose), and
+   *  whether its wisp, shadow, halo and glass sled hold anything (hideFx clears them once, not every frame). */
+  posed: boolean;
+  fxOn: boolean;
   /** This frame's chest on screen (CSS px), its radius there and its depth from the lens; sr 0 when
    *  the ghost is not drawn. */
   sx: number;
@@ -1249,6 +1253,8 @@ export class GhostVisuals {
         ringed: false,
         dim: 1,
         shown: 0,
+        posed: false,
+        fxOn: false,
         sx: 0,
         sy: 0,
         sr: 0,
@@ -1623,6 +1629,8 @@ export class GhostVisuals {
     if (this.wakeK < 0.01) this.wakeK = 0;
     if (this.wakeIdx >= 0 && this.wakeIdx < this.items.length) this.wakeCol.copy(this.items[this.wakeIdx].col);
     this.trails?.setWake(this.wakeIdx, this.wakeK);
+    // (Whether any ghost on screen has a wisp, shadow, halo or sled this frame: with none, those four draws rest.)
+    let fxShown = false;
     for (let i = 0; i < this.items.length; i++) {
       const it = this.items[i];
       const p = poses.get(it.id);
@@ -1648,6 +1656,7 @@ export class GhostVisuals {
       if (!p) {
         it.shown = 0;
         it.mesh.visible = false;
+        it.posed = false;
         this.hideFx(i);
         continue;
       }
@@ -1669,7 +1678,7 @@ export class GhostVisuals {
         it.fade = Math.max(0, 1 - p.sinceDone / 0.6);
         if (!it.marker) this.plantMarker(it, pos);
       } else it.fade = 1;
-      this.poseGhost(it, p, pos, dt);
+      // (Posed below, once it is known to be on screen: what follows reads only where it is.)
       // A ghost fades only where it would hide or tint the rider, or fill the lens; anywhere else in
       // the frame it is a glass spirit, head and shoulders solid and dissolving into its wisp (the
       // overtake beside you is the duel the game is about, and a ghost thinned to a few mint hairlines
@@ -1790,6 +1799,18 @@ export class GhostVisuals {
       it.mat.uniforms.uGlow.value = it.reactT >= 0 ? this.glow * (1 + 1.6 * Math.exp(-it.reactT * 6)) : this.glow;
       it.mesh.visible = core > 0.004;
       it.shown = vis;
+      // Round 8 (the lowperf lane): only a ghost on screen is posed and has its wisp, shadow, halo and glass sled
+      // built. One off it (behind the lens, faded at the rider, crashed out, past the finish) keeps its clocks, its
+      // motes and its wisp's path, and snaps to its pose the frame it comes back: most of a field is off screen most
+      // of a run, and each one posed cost a Low frame its springs, two ribbons and three samples of the snow.
+      const onScreen = it.mesh.visible;
+      if (onScreen) {
+        this.poseGhost(it, p, pos, dt, !it.posed);
+        it.posed = true;
+      } else {
+        this.restGhost(it, p, pos, dt);
+        it.posed = false;
+      }
       if (!it.mesh.visible) it.sr = 0;
       // Every ghost writes depth (head and torso), so its own limbs stay hidden behind its glass:
       // without it every limb draws its own rim, an x-ray tangle instead of one soft silhouette with a
@@ -1801,21 +1822,26 @@ export class GhostVisuals {
         else if (it.wasGrounded) this.trails.lift(i);
         it.wasGrounded = p.grounded;
       }
-      // Its glass sled goes as its lower body does (a ghost grown big on screen is a head and
-      // shoulders over its wisp), dims with it, and keeps a breath of itself in a pass beat.
-      // Near the lens it goes sooner than the body (whose glass there is a faint veil of head and
-      // shoulders): bright runners at the bottom of the frame read as scribbles on the snow.
-      this.updateSled(i, it, vis * body * mix01(0.45, 1, it.dim) * smooth01((camD - 2.4) / 3));
-      // Near the lens the wisp shortens with the fade, so a tail never sweeps a lower corner; a big
-      // ghost keeps half its wisp (the tail streams on from the dissolving waist), and the one further
-      // back of an overlapping pair dims with its body.
-      const fx = vis * mix01(0.5, 1, body) * it.dim;
-      this.updateWisp(i, it, pos, p, fx, camera, nearCam);
-      this.updateShadow(i, it, p, vis * body);
-      // The halo stays off a ghost right by you: around your silhouette it read as an outline ring.
-      // (The ghost you are drafting glows a little brighter: the slipstream is its light.)
-      const wakeGlow = i === this.wakeIdx ? 1 + 0.7 * this.wakeK : 1;
-      this.updateAura(i, it, pos, fx * body * smooth01((dPlayer - 1.2) / 1.0) * wakeGlow, camera);
+      if (onScreen) {
+        // Its glass sled goes as its lower body does (a ghost grown big on screen is a head and
+        // shoulders over its wisp), dims with it, and keeps a breath of itself in a pass beat.
+        // Near the lens it goes sooner than the body (whose glass there is a faint veil of head and
+        // shoulders): bright runners at the bottom of the frame read as scribbles on the snow.
+        this.updateSled(i, it, vis * body * mix01(0.45, 1, it.dim) * smooth01((camD - 2.4) / 3));
+        // Near the lens the wisp shortens with the fade, so a tail never sweeps a lower corner; a big
+        // ghost keeps half its wisp (the tail streams on from the dissolving waist), and the one further
+        // back of an overlapping pair dims with its body.
+        const fx = vis * mix01(0.5, 1, body) * it.dim;
+        this.updateWisp(i, it, pos, p, fx, camera, nearCam);
+        this.updateShadow(i, it, p, vis * body);
+        // The halo stays off a ghost right by you: around your silhouette it read as an outline ring.
+        // (The ghost you are drafting glows a little brighter: the slipstream is its light.)
+        const wakeGlow = i === this.wakeIdx ? 1 + 0.7 * this.wakeK : 1;
+        this.updateAura(i, it, pos, fx * body * smooth01((dPlayer - 1.2) / 1.0) * wakeGlow, camera);
+        it.fxOn = true;
+        this.fxDirty = true;
+        fxShown = true;
+      } else this.hideFx(i);
 
       // A ghost inside any of the fades shows no tag at all (with a little hysteresis). Contract C11:
       // the ghost the HUD's rival pill names keeps its tag whenever it is on screen and not sitting on
@@ -1848,15 +1874,17 @@ export class GhostVisuals {
     }
     this.dimOverlaps(dt, riderDepth);
     this.trails?.flush();
-    if (this.wisp) {
-      const g = this.wisp.geometry;
-      g.getAttribute('position').needsUpdate = true;
-      g.getAttribute('aCol').needsUpdate = true;
-    }
-    for (const m of [this.shadow, this.aura]) {
-      if (!m) continue;
-      m.geometry.getAttribute('position').needsUpdate = true;
-      m.geometry.getAttribute('aCol').needsUpdate = true;
+    // The wisps, shadows, halos and glass sleds are sent only when one of them changed, and drawn only while a ghost
+    // on screen has them (round 8, the lowperf lane: with the field off screen they were four draws and six
+    // uploads of nothing at all, every frame).
+    for (const m of [this.wisp, this.shadow, this.aura, this.sleds]) if (m) m.visible = fxShown;
+    if (this.fxDirty) {
+      this.fxDirty = false;
+      for (const m of [this.wisp, this.shadow, this.aura]) {
+        if (!m) continue;
+        m.geometry.getAttribute('position').needsUpdate = true;
+        m.geometry.getAttribute('aCol').needsUpdate = true;
+      }
     }
     this.declutter(occluders, h);
     this.animateTags(dt);
@@ -2160,15 +2188,15 @@ export class GhostVisuals {
    *  (eased, level in the air), turns to its heading and air yaw, pitches with a flip and banks a
    *  little into the carve; the body leans further into the carve about its hips, so the ghost bends
    *  into the turn over its sled rather than tipping over with it as one rigid block. */
-  private poseGhost(it: Item, p: GhostPose, pos: Vector3, dt: number): void {
-    this.moveGhost(it, p, dt);
+  private poseGhost(it: Item, p: GhostPose, pos: Vector3, dt: number, snap = false): void {
+    this.moveGhost(it, p, dt, snap);
     if (p.grounded) {
       this.course.gradient(p.x, p.z, grad);
       tmpN.set(-grad.x, 1, grad.z).normalize();
     } else tmpN.copy(UP);
     tmpQ.setFromUnitVectors(UP, tmpN);
-    // (The first frame of a run snaps.)
-    it.tilt.slerp(tmpQ, dt === 0 ? 1 : Math.min(1, dt * (p.grounded ? 14 : 4)));
+    // (The first frame of a run snaps, and so does one back on screen.)
+    it.tilt.slerp(tmpQ, dt === 0 || snap ? 1 : Math.min(1, dt * (p.grounded ? 14 : 4)));
     const q = it.mesh.quaternion;
     sledQ.copy(it.tilt).multiply(tmpQ.setFromAxisAngle(UP, -(p.heading + p.airYaw)));
     sledQ.multiply(tmpQ.setFromAxisAngle(AX, -p.airPitch)).multiply(tmpQ.setFromAxisAngle(AZ, -p.lean * 0.2));
@@ -2176,9 +2204,53 @@ export class GhostVisuals {
     q.copy(sledQ).multiply(tmpQ.setFromAxisAngle(AZ, -it.leanS * 0.28));
     // Round 8: passed, it rocks back on its sled for a moment, and its glass comes apart into motes of its kind
     // colour that hang back past the rider (mint, rose for a grudge, gold-white for your best).
+    if (it.reactT >= 0 && !this.feel.reduced) q.multiply(tmpQ.setFromAxisAngle(AX, 0.42 * Math.sin(Math.min(1, it.reactT / 0.5) * Math.PI)));
+    this.reactMotes(it, p, pos, dt);
+    // (Round 8: and its trick pose's fold and roll, about the hips too.)
+    if (Math.abs(it.tPitch) + Math.abs(it.tRoll) > 1e-3) q.multiply(tmpQ.setFromAxisAngle(AX, it.tPitch)).multiply(tmpQ.setFromAxisAngle(AZ, it.tRoll));
+    // Turned about the hips: position = pos + sled * hips - body * hips.
+    hip.set(0, it.seat.y * RIDER_SCALE, it.seat.z * RIDER_SCALE);
+    it.mesh.position.copy(pos).add(tmpA.copy(hip).applyQuaternion(sledQ)).sub(hip.applyQuaternion(q));
+    if (it.tLift !== 0) it.mesh.position.addScaledVector(UP, it.tLift * RIDER_SCALE);
+    it.sledQ.copy(sledQ);
+    it.sledP.copy(pos);
+  }
+
+  /** A ghost off screen this frame (round 8, the lowperf lane): no pose, but its pass reaction's clock runs and its
+   *  motes still leave (they play out beside the rider, where the ghost itself may be out of the lens), and its wisp
+   *  keeps the path its body takes, upright, so a ghost coming into view trails the tail it would have had. */
+  private restGhost(it: Item, p: GhostPose, pos: Vector3, dt: number): void {
+    if (it.reactT >= 0) {
+      it.reactT += dt;
+      if (it.reactT > REACT_S) it.reactT = -1;
+    }
+    this.reactMotes(it, p, pos, dt);
+    if (!this.wisp) return;
+    it.air += ((p.grounded ? 0 : 1) - it.air) * Math.min(1, this.dt * 6);
+    this.wispPath(it, pos.x, pos.y + WISP_LIFT, pos.z);
+  }
+
+  /** Records the wisp's anchor every 12 cm; a jump (a new run, a revive) restarts the history. */
+  private wispPath(it: Item, ax: number, ay: number, az: number): void {
+    const hist = it.hist;
+    const last = ((it.hHead - 1 + HIST) % HIST) * 3;
+    const d2 = it.hCount > 0 ? (ax - hist[last]) ** 2 + (ay - hist[last + 1]) ** 2 + (az - hist[last + 2]) ** 2 : Infinity;
+    if (d2 > 36) it.hCount = 0;
+    if (d2 >= 0.0144) {
+      const n = it.hHead * 3;
+      hist[n] = ax;
+      hist[n + 1] = ay;
+      hist[n + 2] = az;
+      it.hHead = (it.hHead + 1) % HIST;
+      it.hCount = Math.min(HIST, it.hCount + 1);
+    }
+  }
+
+  /** Round 8: passed, its glass comes apart into motes of its kind colour that hang back past the rider (mint, rose
+   *  for a grudge, gold-white for your best). */
+  private reactMotes(it: Item, p: GhostPose, pos: Vector3, dt: number): void {
     if (it.reactT >= 0) {
       const t = it.reactT;
-      if (!this.feel.reduced) q.multiply(tmpQ.setFromAxisAngle(AX, 0.42 * Math.sin(Math.min(1, t / 0.5) * Math.PI)));
       const sink = fx.snow;
       if (sink && t < 0.5 && dt > 0) {
         const sp = p.speed;
@@ -2197,14 +2269,6 @@ export class GhostVisuals {
         sink.ghostMotes(reactAt, 0.9 * RIDER_SCALE, it.col, reactCar, ((t < 0.08 ? 40 : 15) * dt * 60 * (fx.tier === 0 ? 0.4 : 1)) / (t < 0.08 ? 5 : 1), reactAway);
       }
     }
-    // (Round 8: and its trick pose's fold and roll, about the hips too.)
-    if (Math.abs(it.tPitch) + Math.abs(it.tRoll) > 1e-3) q.multiply(tmpQ.setFromAxisAngle(AX, it.tPitch)).multiply(tmpQ.setFromAxisAngle(AZ, it.tRoll));
-    // Turned about the hips: position = pos + sled * hips - body * hips.
-    hip.set(0, it.seat.y * RIDER_SCALE, it.seat.z * RIDER_SCALE);
-    it.mesh.position.copy(pos).add(tmpA.copy(hip).applyQuaternion(sledQ)).sub(hip.applyQuaternion(q));
-    if (it.tLift !== 0) it.mesh.position.addScaledVector(UP, it.tLift * RIDER_SCALE);
-    it.sledQ.copy(sledQ);
-    it.sledP.copy(pos);
   }
 
   /** The ghosts drawn this frame, nearest the lens first and at most n, for the temporal reconstruction's
@@ -2244,11 +2308,11 @@ export class GhostVisuals {
    *  its lean lags the sled's bank and settles; a landing (its vertical speed jumping) drops the body
    *  into its knees and the pom-pom and hood after it, and they spring back; its arms come out in the
    *  air and down on the snow. Reduced motion keeps the lean and the arms and drops the springs. */
-  private moveGhost(it: Item, p: GhostPose, dt: number): void {
+  private moveGhost(it: Item, p: GhostPose, dt: number, snap = false): void {
     const h = Math.min(dt, 1 / 30);
     const calm = this.feel.reduced;
-    if (h <= 0 || Number.isNaN(it.lastY) || Math.abs(p.y - it.lastY) > 6) {
-      // The first frame, a frozen one or a jump (the title reel changing leads): at rest where it is.
+    if (h <= 0 || snap || Number.isNaN(it.lastY) || Math.abs(p.y - it.lastY) > 6) {
+      // The first frame, a frozen one, a jump (the title reel changing leads) or one back on screen: at rest where it is.
       it.leanS = p.lean;
       it.leanV = it.bob = it.bobV = it.pom = it.pomV = 0;
       it.lastVy = 0;
@@ -2295,8 +2359,8 @@ export class GhostVisuals {
       ti.grab = p.grab;
       ti.tier = p.tier;
       ti.tweak = 0;
-      ti.spin = (p.airYaw - it.lastYaw) / h;
-      ti.flip = (p.airPitch - it.lastPitch) / h;
+      ti.spin = snap ? 0 : (p.airYaw - it.lastYaw) / h;
+      ti.flip = snap ? 0 : (p.airPitch - it.lastPitch) / h;
       ti.danger = 0;
       ti.time = shared.uTime.value;
       ti.calm = calm;
@@ -2311,13 +2375,13 @@ export class GhostVisuals {
     }
     it.lastYaw = p.airYaw;
     it.lastPitch = p.airPitch;
-    const ek = Math.min(1, dt === 0 ? 1 : dt * (tk > it.trickK ? 14 : 8));
+    const ek = Math.min(1, dt === 0 || snap ? 1 : dt * (tk > it.trickK ? 14 : 8));
     it.trickK += (tk - it.trickK) * ek;
     it.tPitch += ((tk > 0 && !Number.isNaN(tp.pitch) ? tp.pitch : 0) - it.tPitch) * ek;
     it.tRoll += ((tk > 0 ? tp.roll : 0) - it.tRoll) * ek;
     it.tLift += ((tk > 0 ? tp.lift : 0) - it.tLift) * ek;
     it.shoulder.value.w += (armD - it.shoulder.value.w) * ek;
-    it.armS += (want - it.armS) * Math.min(1, dt === 0 ? 1 : dt * (tk > 0 ? 14 : 8));
+    it.armS += (want - it.armS) * Math.min(1, dt === 0 || snap ? 1 : dt * (tk > 0 ? 14 : 8));
     it.pose.value.set(it.armS, 1 + it.bob * 2.2, it.pom, it.seat.y);
   }
 
@@ -2330,7 +2394,15 @@ export class GhostVisuals {
     (u.uP.value as Vector4[])[i].set(it.sledP.x, it.sledP.y, it.sledP.z, a < 0.004 ? 0 : a);
   }
 
+  /** Whether a wisp, shadow or halo was written this frame (they are sent only then). */
+  private fxDirty = false;
+
   private hideFx(i: number): void {
+    // (Once, as it leaves the screen: cleared, they stay clear.)
+    const it = this.items[i];
+    if (!it.fxOn) return;
+    it.fxOn = false;
+    this.fxDirty = true;
     if (this.wisp) {
       const col = this.wisp.geometry.getAttribute('aCol').array as Float32Array;
       for (let v = i * 2 * WISP_PTS * 2; v < (i + 1) * 2 * WISP_PTS * 2; v++) col[v * 4 + 3] = 0;
@@ -2381,17 +2453,7 @@ export class GhostVisuals {
     it.air += ((p.grounded ? 0 : 1) - it.air) * Math.min(1, this.dt * 6);
     const rise = 0.12 - 0.3 * it.air;
     // Record the anchor every 12 cm; a jump (new run, revive) restarts the history.
-    const last = ((it.hHead - 1 + HIST) % HIST) * 3;
-    const d2 = it.hCount > 0 ? (ax - hist[last]) ** 2 + (ay - hist[last + 1]) ** 2 + (az - hist[last + 2]) ** 2 : Infinity;
-    if (d2 > 36) it.hCount = 0;
-    if (d2 >= 0.0144) {
-      const n = it.hHead * 3;
-      hist[n] = ax;
-      hist[n + 1] = ay;
-      hist[n + 2] = az;
-      it.hHead = (it.hHead + 1) % HIST;
-      it.hCount = Math.min(HIST, it.hCount + 1);
-    }
+    this.wispPath(it, ax, ay, az);
     // Length grows with speed; walk back along the recorded path (newest first) by horizontal arc
     // length. Height is left out on purpose: a ghost dropping from a jump or mid-flip would otherwise
     // trail a vertical column up into the sky.
