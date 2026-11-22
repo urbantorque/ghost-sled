@@ -164,7 +164,9 @@ function shoulderGeometry(biome: BiomeId): BufferGeometry {
     ];
     stacks.forEach(([x, z, rx, rz, h, taper, yaw], k) => {
       const from = f.triangles;
-      strataInto(f, { rx, rz, h: h + 0.8, foot: 0.3, layers: k === 0 ? 4 : 3, sides: 7, rock, lie: SNOW, taper, shift: 0.22, dip: 0.12, dipZ: 0.14, warp: 0.5, jut: 0.22, rough: 0.36, lieMin: 0.02, apron: 0.22, seed: 7711 + k * 13 });
+      // (Round 8's review loop: at seven sides, three beds and a gentle dip the stacks still read from the run as
+      // lilac cubes under white lids. More, thinner beds that dip harder and jut further, on a rougher plan.)
+      strataInto(f, { rx, rz, h: h + 0.8, foot: 0.3, layers: k === 0 ? 5 : 4, sides: 9, rock, lie: SNOW, taper, shift: 0.3, dip: 0.2, dipZ: 0.18, warp: 0.75, jut: 0.32, rough: 0.42, bays: 0.25, lieMin: 0.02, apron: 0.22, seed: 7711 + k * 13 });
       f.place(from, x, -0.8, z, yaw);
     });
     return merge([f.build(), softPart(new SphereGeometry(1, 7, 3), SNOW, { pos: [0, -0.5, 0.4], scale: [5, 1.2, 4] })]);

@@ -2833,7 +2833,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // The covered bridge: the lamps come on against blue shade.
       kind: 'bridge',
       edit: (p) => {
-        lamps(p, 1.2);
+        // (Round 8's review loop: at 1.2 the deck's snow under the lanterns was plain lilac, no pool under any of them.
+        // Low paints them as a soft step, never a white oval.)
+        lamps(p, 1.8);
+        p.poolSoft = 1;
         p.grade.lo = c('#D8DEFF');
       },
     },
@@ -2842,7 +2845,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // (Third pass: at 1 the street's snow was flat lavender, with no amber under the lanterns.)
       kind: 'street',
       edit: (p) => {
-        lamps(p, 1.6);
+        // (Round 8's review loop: at 1.6 the street's floor was still a flat lilac sheet by day, the fronts' shade with
+        // no amber in it. Pools of amber with blue between, ART.md 15; Low's a soft step.)
+        lamps(p, 2.3);
+        p.poolSoft = 1;
         // (Round 8: the lanterns' light hangs in the street's evening air.)
         p.lampAir = Math.max(p.lampAir, 0.12);
         p.snowShade = c('#5064C8');
