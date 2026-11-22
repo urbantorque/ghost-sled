@@ -3855,3 +3855,36 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
       over 45% on High).
     - *Also at the merge:* Bram Oakhollow said "Afternoon." and "Lovely day." on every hour, Lanternfall's night too; his
       lines are now for any hour ("Steady on.", "Nice and easy.").
+
+382. **Low at 6x after the play and screens merges: the cost is the field on screen; two passes give part of it back,
+    the bar is not met** (`notes/r8-lowperf.md`, the lowperf lane; raw output in `shots/r8/lowperf/`).
+    - *What the bisect really found.* Its fast point, 9685d8b, was a build whose pools were still SIM_VERSION 9's
+      (a95ad26 regenerated them after it): its Low frame drew no ghost at all and its rider, with nothing to draft, rode
+      a quarter slower. So its work and its GL calls are a frame without the field, and "between 9685d8b and 9cafb5b"
+      is where the field came back, not where a fault went in. **The main lane's call: the GL half of the bar is
+      restated against round 7**, counted on a held run (`scripts/playtest/lowperf/glv.js`: a pool rider replayed on
+      exact steps, so two builds draw nearly the same frames; a live pilot's count moved by 30 with one ghost more or
+      less on screen).
+    - *What a Low frame does more than round 7's.* The field: 2.85 ghosts drawn a frame on Ember against round 7's 0.7,
+      each two draws, plus one draw each for the composed places' framing, the poster and a gate in reach. Profiled at
+      matched machine speed the frame callback is 9% over round 7's and spread thin over a dozen systems; audio made 2.2
+      times the nodes a second (the same engine, the duel heartbeat and fuse ticks played more); the HUD paints more
+      because it says more, with no element written when nothing changed (checked element by element).
+    - *First pass (every tier, nothing on screen changes).* A ghost off screen is not posed or given its wisp, shadow,
+      halo and glass sled, and with none on screen those four draws and six uploads rest; a rock's mass is copied, not
+      built; gates out of reach skip their slope.
+    - *Second pass, on the main lane's calls.* On Low a ghost under a twelfth of the frame's height is drawn as its
+      glass alone, without its depth pass (nearly nine in ten of Low's ghosts; at that size no limb or wisp reads
+      through its chest, judged on the worst case found, a ghost mid-flip 55 px tall). The duel heartbeat and the fuse
+      tick play from rendered takes on every tier (two channels for the bank's stereo noise, started on the frame
+      nearest wherever the grid puts them through a new `Prerender.playNear`; at the take's own phase sample-exact, off
+      it within half a frame, block levels within 0.1 dB of the live beat; four takes a pulse so beats still vary).
+    - *Measured.* Held-run GL calls a Low frame, round 7 / before / after: Pinecrest 463.2 / 491.6 / 450.2, Ember
+      476.6 / 537.6 / 504.4, Sakura 478.4 / 511.9 / 461.2; High, Medium and a phone's frame draw no more. Work a Low
+      frame at a common 45 fps, interleaved on shared sittings: round 7 2.14 to 2.21, this branch 2.36 to 2.40.
+    - *Not met:* Low at 6x is still about 6 to 15% over round 7's work, and Ember draws 28 GL calls a frame more than
+      round 7's, two more ghosts on screen. The quiet sitting gives the frame rate (DECISIONS 384).
+    - *Rejected:* round 7's coarser rock on Low, twice (shards a tenth of the frame wide at Ember's tunnel); every ghost
+      body in one draw on Low (a build drawing no far ghost at all was no cheaper within the noise, so merging their
+      glass could not reach the bar); fewer ghosts in glass on Low (the field in glass is the round's design); a cheaper
+      HUD (nothing in it writes when unchanged).
