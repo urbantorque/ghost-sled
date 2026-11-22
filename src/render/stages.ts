@@ -195,6 +195,9 @@ function lavaMaterial(low: boolean): ShaderMaterial {
           // the heart, its width wandering along each crack. Near the heart some rafts have gone under.
           float w = mix(0.03, 0.3, heat * heat) * (0.6 + 0.8 * vn(p * 0.7 + 3.1)) * breathe;
           float gone = step(1.0 - 0.32 * heat * heat * heat, id);
+          // (Round 8's review: a whole raft gone under, beside the lens, was a flat orange rectangle on the halls'
+          // wall. Within a few metres the rafts all hold, so the melt is cracks between plates there.)
+          gone *= smoothstep(8.0, 18.0, length(vW - cameraPosition));
           float crack = max(1.0 - smoothstep(w * 0.55, w, ed), gone);
           // Not every crack is live: across a cool crust most have dulled to a dark red seam, so the floor
           // is never a lit net (a net of even lines read as a grid laid on the ground).
@@ -912,7 +915,8 @@ export class Stages {
     const runs = (z: number, side: number): number => smooth(0.4, 0.56, vnoise2(z * 0.021, side * 3.3, 31)) * smooth(z0, z0 + 16, z) * (1 - smooth(z1 - 16, z1, z));
     const ACROSS = [0, 0.3, 0.68, 1];
     // (A crusted seam with live cracks, not open melt: a three-metre band of melt read as a neon strip.)
-    const HEAT = roof ? [0.3, 0.6, 0.55, 0.25] : [0.4, 0.8, 0.72, 0.3];
+    // (Round 8's review: under the halls' roof the seam's heart still read as an orange slab beside the lens.)
+    const HEAT = roof ? [0.24, 0.46, 0.42, 0.2] : [0.4, 0.8, 0.72, 0.3];
     for (const side of [-1, 1]) {
       const base = pos.length / 3;
       let rows = 0;

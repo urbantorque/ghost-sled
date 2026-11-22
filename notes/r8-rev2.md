@@ -106,3 +106,35 @@ Its findings, worst first:
   frame's outer band over the lava-lit bank (hiding every object at that pixel left only the terrain); the seam at
   2550 m is the sim's drop lip there; Low's streaks in the halls are the terrain itself (Low's coarse columns and rows
   on the slot's steep foot), and the smooth ramp of pass 1 did not touch them.
+
+## Pass 3: what the critic saw
+
+High mean 6.85, minimum 5.5 (1166 m). Low mean 6.04, minimum 5. Phone mean 6.19, minimum 5.5. Strips mean 6.33,
+minimum 4.5 (the Caldera's lip). The best frame on the mountain is now **2441 m at 8** ("the lava lake now reads under
+the cone"), and the Caldera Leap's vista rose from 5 to 7.5. Hero vistas: the cone 7.5, Cinder Gate 6, the Caldera
+7.5, the bridge 7.5, the opening 6.5. No frame a 9.
+
+Its findings, worst first:
+
+1. The lip's strip (4.5): the lens passes through the lip as pale shards and a black gap (as pass 2).
+2. 1950 m: a near ghost milky and oversize at the frame's edge on Low and the phone (the ghost's size rule is shared).
+3. 2024 m: "polygon cell lines drawn across the snow": the plates' pale borders in the fork's strip, which now lies
+   dark under the cold glaze.
+4. 2850 m and Low's halls: the bank a smeared salmon slab (the edge blur on High; Low's terrain, as before).
+5. 1166 m: the flip; Cinder Gate's slot "nothing lights the walls or the rider from below", the throat never a hot
+   disc; out-of-focus grey flakes like dirt on the lens.
+6. Also: the opening still "a tall snow bank with a rail, not a low basalt wall with organ pipes"; the halls' wall
+   "flat glowing orange rectangles" (3150 m); the near flakes grey across the run; the snow sand at 1650 and 3000 m.
+
+## After pass 3: what changed
+
+- **The halls' rectangle is lava** (found by the hide-and-read probe at 3150 m: the river's own mesh, not its light):
+  within 8 to 18 m of the lens a raft never goes under whole (`stages.ts` lava shader, `gone` faded near the lens),
+  so beside the rider the melt is cracks between plates; the halls' rivers under the roof run cooler
+  (`HEAT` 0.24 to 0.46, was 0.3 to 0.6).
+- **The opening's wall is a rank of organ pipes** (`framing.ts`, Ember's `wall` bank): a stand about every 20 m along
+  the wall's crest, each its own height and turn, 8 to 10.5 m past the limit, where three outcrops a place stood.
+  Every composed place on Ember (the opening and the stage starts) takes it; one draw as before.
+- **The fork's ice plates** on Ember's cold glaze keep a quarter of their pale border (`uGlazeCool`): a faint seam,
+  never a grid.
+- **Cinder Gate's slot** is lit harder from below (the slots' `under.k` 0.65, was 0.5).

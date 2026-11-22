@@ -1610,7 +1610,9 @@ export function makeSnowMaterial(): ShaderMaterial {
           if (nearC > 0.0) {
             float crack = max(iceCracks(vWorldPos.xz * 0.42, footprint * 0.42, 1.0), iceCracks(vWorldPos.xz * 1.1 + 5.3, footprint * 1.1, 1.0) * 0.55);
             // (A lake's plates a little fainter: on the black body they drew a white grid, the review loop.)
-            body = mix(body, mix(uSnowShade, uSnowLit, 0.6), crack * nearC * mix(0.5, 0.32, lakeK));
+            // (Round 8's review: on Ember's dark cold glaze, uGlazeCool, the plates' pale borders drew a cell grid on the
+            // fork's strip; there they are a faint seam.)
+            body = mix(body, mix(uSnowShade, uSnowLit, 0.6), crack * nearC * mix(0.5, 0.32, lakeK) * (1.0 - 0.75 * uGlazeCool));
           }
           col = mix(col, body, 0.62 * ice);
           // The mirror: the sky, and low along the horizon the far ridges, mirrored dark and soft in

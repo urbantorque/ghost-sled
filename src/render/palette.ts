@@ -2969,7 +2969,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // The basalt slots: lava in the joints lights the walls from their feet.
       kind: 'ravine',
       edit: (p) => {
-        p.under.k = Math.max(p.under.k, 0.5);
+        // (Round 8's review: "nothing lights the walls or the rider from below" in Cinder Gate's slot at 0.5.)
+        p.under.k = Math.max(p.under.k, 0.65);
         p.fog = c('#5A1E18');
         p.air.far = c('#6A2010');
         // The slot's floor lies in the walls' shade: cold, so the lava's light on it is seen.
