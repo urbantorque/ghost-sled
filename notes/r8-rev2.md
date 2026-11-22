@@ -138,3 +138,28 @@ Its findings, worst first:
 - **The fork's ice plates** on Ember's cold glaze keep a quarter of their pale border (`uGlazeCool`): a faint seam,
   never a grid.
 - **Cinder Gate's slot** is lit harder from below (the slots' `under.k` 0.65, was 0.5).
+
+## Pass 4: what the critic saw
+
+High mean 6.54, minimum 5.5 (993, 1166, 1650 m). Low mean 6.03, minimum 5. Phone mean 6.04, minimum 5. Strips mean
+6.0, minimum 3.5 (the lip). "No frame on any tier is above 7.5." Hero vistas: the cone 7.5, Cinder Gate 5.5, the
+Caldera 6.5, the bridge 7.5, the opening 6.5.
+
+The fourth critic was the harshest yet on the frames nothing changed (993 m 7 to 5.5, 2271 m 7 to 6, 2100 m 6.5 to 6),
+and it judged the Caldera a point under the third ("the lava basin under the cone reads... but the lake is not under
+the flight", which no fixed frame shows: the replayed rider is too slow to fly the gap). It saw the opening's new rank
+of organ pipes and did not credit it: "a snow bank with a guardrail on the left and distant crags on the right"; the
+sim's bank on the fall side (9.5 m in its first 10 m) still hides the fall from the low lens.
+
+Its findings, worst first: the lip's strip (the snow "tears into large pale polygons and a black void"); the saucer's
+underside in the flip at 1166 m ("a blue face in goggles"); Low's rider at the frame's foot at 2550 m and the seam
+there; 993 m's radial streaks and pale blocks on the walls; 1650 m's ward burst; the slots' walls as "stacked shingle
+slabs" with white lines; the charred pines at 2024 m as "fence posts with white cone caps"; the halls' floor "cool
+lilac" with no lava light; the grey monolith (the ropeway's station) before the cone at 300 m.
+
+## After pass 4: what changed
+
+- **Ember's charred snags** (`flora.ts charSnagGeometry`) hold no snow on their splintered tips, only at their feet:
+  a white cone on every broken top read as a field of pencils.
+- **The slots' floor** takes the lava's light harder (the slots' place `lamps` 1.55, was 1.25): the pools by the
+  rivers reach the snow beside the line.

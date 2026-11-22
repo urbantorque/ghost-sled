@@ -2976,7 +2976,9 @@ export const PLACES: Record<BiomeId, Place[]> = {
         // The slot's floor lies in the walls' shade: cold, so the lava's light on it is seen.
         p.snowShade = c('#383254');
         p.grade.contrast += 0.04;
-        lamps(p, 1.25);
+        // (Round 8's review: the halls' floor stayed a cool lilac that took no lava light at 1.25; ART.md 15 asks for
+        // lava "lighting the snow orange" beside the line.)
+        lamps(p, 1.55);
         // (The visual lift: the floor's own shade, with the lava's light lying on it, comes back up orange.)
         p.lift.sun = 0.35;
         p.lift.tint = c('#FFDCA4');

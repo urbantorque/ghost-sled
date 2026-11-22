@@ -883,7 +883,8 @@ export function charSnagGeometry(p: Palette): BufferGeometry {
     const a = rnd() * 6.28;
     parts.push(part(new CylinderGeometry(0.04, 0.07, 0.8, 4), p.tallDark, { pos: [Math.cos(a) * 0.3, 1.9 + i * 0.7, Math.sin(a) * 0.3], rot: [0, -a, 1.0] }));
   }
-  parts.push(part(new ConeGeometry(0.2, 0.2, 5), SNOW, { pos: [0, 3.12, 0] }));
+  // (Round 8's review: a white cone on each broken top read as a field of pencils. A burnt snag holds no snow on its
+  // splintered tip, only at its foot.)
   parts.push(part(new IcosahedronGeometry(0.6, 0), SNOW, { pos: [0, 0.04, 0], scale: [1.3, 0.3, 1.2], jitter: 0.1 }));
   return merge(parts);
 }
