@@ -197,6 +197,10 @@ export function paletteSea(u: SeaUniforms, p: Palette): void {
   u.uSeaRim.value.copy(p.clouds.rim).lerp(p.sunColor, 0.3);
   u.uSeaHaze.value.copy(p.skyHorizon).lerp(p.fog, 0.3);
   u.uSeaDeep.value.copy(p.ridge[2]).lerp(p.snowDeep, 0.4);
+  // (Round 8, the review loop: where a sea under the moon is lit from beneath, Lanternfall's (Ember's smoke sea has no
+  // moon over it and keeps its dark gaps), the gaps between its billows open onto
+  // that light, not onto the night's navy: from the Crown they read as dark water under the moon on every tier.)
+  if (p.massif.seaWarm > 0 && p.moon) u.uSeaDeep.value.lerp(p.clouds.shade, 0.6);
   u.uSeaSun.value.copy(p.diskDir);
   u.uSeaWarm.value.copy(p.deck.glow).multiplyScalar(p.massif.seaWarm * 0.85);
 }
