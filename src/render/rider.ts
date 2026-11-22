@@ -543,7 +543,9 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
             float edgeU = smoothstep(0.17, 0.32, abs(vSledP.x));
             // (Round 8: a round hull, the saucer's and the tray's, takes the snow's bounce at 0.5, not 0.14. Its
             // whole underside faces the lit snow, and in a flip it filled the rider's place as an ink-black disc.)
-            float bounceU = mix(0.14, 0.5, step(vSledI.w, -5.0));
+            // (Round 8's review loop: at 0.5 the saucer's underside still read as a navy disc over the rider in a
+            // flip on every tier. 0.8: the hull's own blue, lit from the snow under it.)
+            float bounceU = mix(0.14, 0.8, step(vSledI.w, -5.0));
             vec3 underC = col * (0.62 + 0.1 * grainU) * (1.0 - 0.55 * seam) * (1.0 - 0.3 * edgeU) + base * mix(uSnowLit, uShadeTint, 0.5) * bounceU;
             col = mix(col, underC, underK);
           }

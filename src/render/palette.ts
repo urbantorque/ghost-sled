@@ -1178,6 +1178,12 @@ function round7(p: Palette, biome: BiomeId): void {
       p.clouds.shadow = 0.34;
       p.grade.posterKey = 0.92;
       p.grade.posterCool = 0.16;
+      // (Round 8's review loop: the phone's lower half and Low's foreground read as blank white snow under the
+      // rider, frame after frame. The frame's foot takes a deeper step of the periwinkle, painted on Low.)
+      p.grade.foot = 0.38;
+      p.poster.foot = 0.44;
+      // (And Low's shaft cards stood over the opening's crest as hard glass panes: fewer of them.)
+      p.poster.shafts = 0.6;
       return;
     case 'glacier':
       p.air = { far: c('#27469C'), cool: c('#D8E2FF'), low: 0.5, scatter: 1.25 };
@@ -1435,6 +1441,10 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.clouds.lit = c('#FFE0B4');
         p.clouds.shade = c('#7E8CB8');
         p.clouds.rim = c('#FFB86C');
+        // (Round 8's review loop: with the sun low under them the cumulus banks stood over the vanishing point as one
+        // smooth orange crown, their rim colour from foot to top, in every frame of the gold and the dusk. They sink
+        // to shoulders on the ridges, so the faceted peaks hold the sky's middle; the high wisps stay.)
+        p.clouds.low = 0.42;
         p.massif.glowK = 0.7;
         p.massif.glowLine = -60;
         p.atmo.rays = 0.8;
@@ -2690,6 +2700,9 @@ export const PLACES: Record<BiomeId, Place[]> = {
         // (1.6 after the third pass; 1.3 after the fourth: on Low the lamps' pools on the open slope
         // under the leap were hard pale ovals.)
         lamps(p, 1.3);
+        // (Round 8's review loop: still a hard white oval ahead of the sled on Low. Low paints the pools as a paler,
+        // warmer step of the snow, kept under white, as Ember's.)
+        p.poolSoft = 1;
       },
     },
     {
@@ -2784,6 +2797,16 @@ export const PLACES: Record<BiomeId, Place[]> = {
       },
     },
     {
+      // The second stage line's cruise, in the full gold. (Round 8's review loop: the bank that faces the low sun
+      // was an empty cream page at 3000 to 3100 m; a step down, so its relief and the cloud's shadows read.)
+      kind: 'cruise',
+      nth: 2,
+      edit: (p) => {
+        p.grade.exposure! *= 0.95;
+        p.grade.contrast += 0.03;
+      },
+    },
+    {
       // Mirror Lake: high-key and wide, the one place the grade goes almost monochrome blue.
       kind: 'lake',
       edit: (p) => {
@@ -2796,7 +2819,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
         // (Fourth pass: still mid-blue. A step deeper.)
         p.skyHorizon = c('#8CB0E2');
         p.skyMid = c('#3E78C8');
-        p.grade.shafts = 0.7;
+        // (Round 8's review loop: with the sun ahead down the lake the shafts fanned white over the ice and milked
+        // it under the lens. They keep to the air over the far shore; the sun's path on the ice is the glaze's own.)
+        p.grade.shafts = 0.35;
+        p.atmo.rays = 0.35;
         p.grade.hi = c('#EEF6FF');
         p.grade.lo = c('#D4E4FF');
         p.fog = c('#BCD8F8');
@@ -2835,6 +2861,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
       kind: 'finish',
       edit: (p) => {
         lamps(p, 1.1);
+        // (Round 8's review loop: Low's pools on the square's floor read as two white spotlight ovals.)
+        p.poolSoft = 1;
         p.grade.hi = c('#FFEED2');
         p.bloom += 0.04;
         // (The sun stands in the street's mouth at the line: at full shafts it flooded the frame orange

@@ -1606,7 +1606,9 @@ export function makeSnowMaterial(): ShaderMaterial {
           if (nearC > 0.0) {
             float crack = max(iceCracks(vWorldPos.xz * 0.42, footprint * 0.42, 1.0), iceCracks(vWorldPos.xz * 1.1 + 5.3, footprint * 1.1, 1.0) * 0.55);
             // (A lake's plates a little fainter: on the black body they drew a white grid, the review loop.)
-            body = mix(body, mix(uSnowShade, uSnowLit, 0.6), crack * nearC * mix(0.5, 0.32, lakeK));
+            // (Round 8's review loop: still a regular hexagonal mesh over the lake's black. Fainter again, so the
+            // long fractures and the bubbles carry the ice.)
+            body = mix(body, mix(uSnowShade, uSnowLit, 0.6), crack * nearC * mix(0.5, 0.18, lakeK));
           }
           col = mix(col, body, 0.62 * ice);
           // The mirror: the sky, and low along the horizon the far ridges, mirrored dark and soft in
@@ -1641,6 +1643,10 @@ export function makeSnowMaterial(): ShaderMaterial {
           // hour's peach horizon it lay across the snow as a salmon smear and never read as ice (the
           // review loop). It takes half its mirror from the deep upper sky, so it stays a blue lane.
           sky = mix(sky, mix(uSkyZenith, uSnowDeep, 0.3), 0.5 * vPaint.y * (1.0 - lakeK));
+          // (Round 8's review loop, Pinecrest: still copper under the gold, and a glazed patch, which under its peach horizon
+          // lay before the Valley Leap's lip as one salmon slab. A glaze keeps a cooler tint, ART.md 4: where what it
+          // mirrors is warm, half of it is the deep upper sky. A cool sky, Frostfang's or Glass Ice's, is untouched.)
+          sky = mix(sky, mix(uSkyZenith, uSnowDeep, 0.3), 0.5 * clamp((sky.r - sky.b) * 2.5, 0.0, 1.0) * (1.0 - lakeK));
           col = mix(col, sky * (0.72 + 0.28 * shadow), clamp(fr * 1.15, 0.0, 0.95) * ice * (1.0 - 0.8 * vPaint.y));
           if (lakeK > 0.0) {
             vec2 lp = vWorldPos.xz;
