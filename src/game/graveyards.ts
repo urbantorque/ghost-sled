@@ -61,7 +61,9 @@ export const GRAVE_NAMES = [
   'Long Sleep',
   'Hollow Bell',
   'Still Water',
-  'Cinder Rest',
+  // (Round 8's review: "Cinder Rest" landed on Lanternfall as an Ember-sounding name. Renamed in place, so the hash
+  // over the list's length gives every other place the name it had.)
+  'Pale Rest',
 ] as const;
 
 export interface Graveyard {
