@@ -651,6 +651,10 @@ export class CharmGates {
       }
       for (const g of gates) {
         if (g.lane >= 0 && !this.takenAt.has(g.index)) this.takenAt.set(g.index, this.clock);
+        // (Out of reach, no arch of it stands: the line's slope there is not looked up. Round 8, the lowperf lane: every
+        // gate of the run asked the course for it twice a frame.)
+        const dz = g.z - riderZ;
+        if (dz > DRAW_AHEAD || dz < -DRAW_BEHIND) continue;
         const since = g.lane >= 0 ? this.clock - (this.takenAt.get(g.index) ?? this.clock) : 0;
         // The run's line through the gate: the arches face along it.
         const slope = (c.safeX(g.z + 4) - c.safeX(g.z - 4)) / 8;

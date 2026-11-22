@@ -1318,8 +1318,17 @@ export function galleryPiece(ctx: SiteCtx): Piece {
 function rock(col: Color, pos: V3, scale: V3, jitter = 0.28): BufferGeometry {
   // (Round 8, the forest lane: a mass over two metres is cut a step finer, its corners jittered less, so a tunnel's
   // wall beside the lens is rock in facets and not a few panes a tenth of the frame wide.)
+  // (The lowperf lane tried round 7's cut on Low, twenty facets to every mass, for a quarter of a tunnel's build: at
+  // the lens it brought back the shards a tenth of the frame wide that this cut removed, so every tier keeps it.)
   const big = Math.max(scale[0], scale[1], scale[2]) > 2.2;
-  return part(new IcosahedronGeometry(1, big ? 1 : 0), col, { pos, scale, jitter: big ? jitter * 0.55 : jitter });
+  return part(rockCut(big ? 1 : 0), col, { pos, scale, jitter: big ? jitter * 0.55 : jitter });
+}
+
+/** A rock's mass before it is placed, in its two cuts: made once and copied (round 8, the lowperf lane: a vault asks
+ *  for a few hundred, and making each from scratch was half of what its build cost). */
+const ROCK_CUTS: BufferGeometry[] = [];
+function rockCut(detail: 0 | 1): BufferGeometry {
+  return (ROCK_CUTS[detail] ??= new BufferGeometry().copy(new IcosahedronGeometry(1, detail))).clone();
 }
 
 /** The vault of a rock or ice tunnel, bay by bay: wall masses standing on each bank past the limit, roof
