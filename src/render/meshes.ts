@@ -748,8 +748,16 @@ export function kmArchGeometry(span: number, lantern = false): BufferGeometry {
     for (const sx of [-1, 1]) {
       const x = sx * half;
       parts.push(paint(part(kitBox(0.9, H + 6, 0.9), stoneC, { pos: [x, (H - 6) / 2 - 0.6, 0] }), -6, H - 1.2, 0.6, 1.05, 0.1));
+      // (Round 8, the review loop: a shaft and a cube of one flat orange at the lens read as a box capped with a box.
+      // Two string courses with snow on them, and a head of paper graded from its flame up, in a timber frame.)
+      for (const k of [0.3, 0.68]) {
+        parts.push(part(kitBox(1.14, 0.26, 1.14), slate, { pos: [x, H * k, 0] }));
+        parts.push(part(kitBox(1.2, 0.1, 1.2), SNOW, { pos: [x, H * k + 0.17, 0] }));
+      }
       parts.push(part(kitBox(1.2, 0.3, 1.2), slate, { pos: [x, H - 2.4, 0] }));
-      parts.push(part(new BoxGeometry(1.0, 1.3, 1.0), new Color('#FFD070').multiplyScalar(2.2), { pos: [x, H - 1.55, 0] }));
+      parts.push(paint(part(new BoxGeometry(0.92, 1.3, 0.92), new Color('#FFC870').multiplyScalar(1.7), { pos: [x, H - 1.55, 0] }), H - 2.2, H - 0.9, 1.2, 0.62, 0.04));
+      for (const cx of [-1, 1]) for (const cz of [-1, 1]) parts.push(part(new BoxGeometry(0.12, 1.36, 0.12), slate, { pos: [x + cx * 0.47, H - 1.55, cz * 0.47] }));
+      for (const [ax, az] of [[1, 0], [0, 1]] as const) parts.push(part(new BoxGeometry(ax ? 0.96 : 0.98, 0.08, az ? 0.96 : 0.98), slate, { pos: [x, H - 1.35, 0] }));
       parts.push(part(new ConeGeometry(1.0, 0.9, 4), slate, { pos: [x, H - 0.45, 0], rot: [0, Math.PI / 4, 0] }));
       parts.push(part(new CylinderGeometry(0.66, 0.78, 0.5, 8), SNOW, { pos: [x, 0.05, 0], jitter: 0.06 }));
     }
