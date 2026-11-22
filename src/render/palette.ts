@@ -3126,7 +3126,9 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.air.scatter = 0.4;
         // (The near plane keeps its whole palette for the first few metres, so the snow under the rider is
         // snow and the cloud is beyond it: from 2 m the near, the middle and the far were one violet.)
-        p.fogNear = 7;
+        // (Round 8, the review loop: from 7 m the slot's near walls were already in the cloud, a pale plane with nothing
+        // on it, and every frame of the Cloud Sea was one milky value. The walls beside the rider keep their own.)
+        p.fogNear = 12;
         p.fogFar = 49;
         p.skyZenith = c('#6A60BC');
         p.skyMid = c('#9A90DA');

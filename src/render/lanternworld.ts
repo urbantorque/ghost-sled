@@ -48,7 +48,7 @@ const LAMP_RGB: [number, number, number] = [1, 0.66, 0.2];
 
 /** Lanterns in the valley by tier, the lanterns a win lets go, and the banks of cloud at the lens. */
 const BUDGET: Record<Detail, { valley: number; release: number; puffs: number; sheets: number; sprites: number; floats: number; lampAhead: number }> = {
-  low: { valley: 1500, release: 160, puffs: 10, sheets: 1, sprites: 160, floats: 0, lampAhead: 170 },
+  low: { valley: 2100, release: 160, puffs: 10, sheets: 1, sprites: 160, floats: 0, lampAhead: 170 },
   medium: { valley: 3600, release: 360, puffs: 18, sheets: 2, sprites: 320, floats: 36, lampAhead: 240 },
   high: { valley: 6000, release: 600, puffs: 28, sheets: 3, sprites: 480, floats: 72, lampAhead: 300 },
 };
@@ -72,6 +72,10 @@ const LAMP_AHEAD = 400;
 const GREAT_Z = 14;
 const GREAT_Y = 6.5;
 const GREAT_SIDE = 12;
+/** And let down this far on its chains as it is walked (round 8, the review: measured in the results of a slow
+ *  finisher, scripts/playtest/rev4-motion.js, the paper's middle stood at the frame's top edge; let down, it hangs
+ *  in the top third over the rider's head. It goes down once the rider is under and past it, and off the run.) */
+const GREAT_DROP = 3.6;
 /** The guide light keeps this far ahead of the rider. */
 const GUIDE_AHEAD = 26;
 /** The canal's reaches lie this far past the edge. */
@@ -768,7 +772,7 @@ export class LanternWorld {
     this.greatWon = false;
     this.greatSide = 0;
     this.greatWalk = -1;
-    if (this.greatNode) this.greatNode.position.x = 0;
+    if (this.greatNode) this.greatNode.position.set(0, 0, 0);
     this.surge = 0;
     this.tallZ = 0;
     if (this.valley) (this.valley.material as ShaderMaterial).uniforms.uRelease.value = -1;
@@ -1587,7 +1591,9 @@ export class LanternWorld {
       for (let zt = from - (from % 5) + 5, n = 0; zt < zl - 2 && n < (low ? 6 : 9); zt += 5, n++) {
         const xt = pathX(c, p.path, zt);
         const near = 1 - Math.min(1, Math.abs(zt - s.z) / 40);
-        this.pool(c, xt, zt, 2 * p.hw + 0.6, 6.4, col, (inWake ? 0.5 : 0.2) * (0.5 + 0.5 * near) * (0.85 + 0.15 * Math.sin(time * 3 - zt * 0.3)));
+        // (Low adds it with no tone curve over the cloud's pale snow: at High's strength it clipped to a white glare
+        // beside the sled, the review loop.)
+        this.pool(c, xt, zt, 2 * p.hw + 0.6, 6.4, col, (inWake ? 0.5 : 0.2) * (low ? 0.45 : 1) * (0.5 + 0.5 * near) * (0.85 + 0.15 * Math.sin(time * 3 - zt * 0.3)));
       }
       if (inWake) pushLocalLight(pathX(c, p.path, s.z + 8), c.ground(s.x, s.z + 8) + 1.2, -(s.z + 8), 1, 0.8, 0.36, 10, 0.55 * lampK);
     }
@@ -1772,10 +1778,12 @@ export class LanternWorld {
         this.greatWalk = time;
       }
       const reach = Math.min(GREAT_SIDE, node.userData.reach as number);
-      node.position.x = this.greatSide * reach * (this.greatWalk < 0 ? 0 : smooth01((time - this.greatWalk) / 1.2));
+      const walk = this.greatWalk < 0 ? 0 : smooth01((time - this.greatWalk) / 1.2);
+      node.position.x = this.greatSide * reach * walk;
+      node.position.y = -GREAT_DROP * walk;
     }
     const x = root.position.x + (node ? node.position.x : 0);
-    const y = root.position.y + GREAT_Y + 11.6 - 2.2 - 3.3;
+    const y = root.position.y + (node ? node.position.y : 0) + GREAT_Y + 11.6 - 2.2 - 3.3;
     // It sways a little on its chains.
     paper.rotation.z = 0.02 * Math.sin(time * 0.9);
     if (lit > 0) {
