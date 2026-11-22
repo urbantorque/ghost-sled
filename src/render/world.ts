@@ -543,6 +543,8 @@ export class World {
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.spirit.fireworks.lightK = this.palette.grade.flash ?? 1;
     this.spirit.lightK = Math.max(0.5, this.palette.grade.flash ?? 1);
+    this.rider.echoK = Math.max(0.35, this.palette.grade.flash ?? 1);
+    this.rider.setHeroRim(this.palette.heroRim);
     this.lakeMirror = new LakeMirror(this.renderer);
     this.applyWeather();
     this.resize();
@@ -773,6 +775,8 @@ export class World {
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.spirit.fireworks.lightK = this.palette.grade.flash ?? 1;
     this.spirit.lightK = Math.max(0.5, this.palette.grade.flash ?? 1);
+    this.rider.echoK = Math.max(0.35, this.palette.grade.flash ?? 1);
+    this.rider.setHeroRim(this.palette.heroRim);
     this.applyWeather();
     this.lastChunkRange = '';
     this.journeyKey = -1;
@@ -836,6 +840,8 @@ export class World {
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.spirit.fireworks.lightK = this.palette.grade.flash ?? 1;
     this.spirit.lightK = Math.max(0.5, this.palette.grade.flash ?? 1);
+    this.rider.echoK = Math.max(0.35, this.palette.grade.flash ?? 1);
+    this.rider.setHeroRim(this.palette.heroRim);
     this.lakeMirror.invalidate();
     this.applyWeather();
     this.lastChunkRange = '';
@@ -885,6 +891,8 @@ export class World {
     this.spirit.fireworks.lightK = p.grade.flash ?? 1;
     this.spirit.fireworks.noRed = this.course.biome === 'lantern';
     this.spirit.lightK = Math.max(0.5, p.grade.flash ?? 1);
+    this.rider.echoK = Math.max(0.35, p.grade.flash ?? 1);
+    this.rider.setHeroRim(p.heroRim);
     // The falling weather thickens in coarse steps (configuring it is not free).
     const fall = Math.round((p.embers + p.petals + p.snowfall) * 20);
     if (fall !== this.journeyFall) {

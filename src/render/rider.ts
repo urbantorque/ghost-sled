@@ -715,6 +715,13 @@ export class Rider {
   private hat: HatId = 'beanie';
   /** The scarf from the garage (garage.ts): its tails' length, width, knit pattern and tassels. */
   private scarfLook: ScarfDef = SCARVES[0];
+  /** How strongly the frame's key light rims the hero (the palette's heroRim). */
+  setHeroRim(k: number): void {
+    this.u.hero.value.y = k;
+  }
+  /** How strong a dash's after-images are, from the grade's flash dial (world.ts): over Lanternfall's lilac cloud
+   *  and its night, added white-gold read as a milky second sled trailing under the rider (the review loop). */
+  echoK = 1;
   /** A dash's after-images: two faint white-gold silhouettes of the seated rider a few hundredths of a
    *  second behind it (one instanced draw, only while it dashes, never on Low), drawn only where the
    *  rider is not (contract C10's stencil, as a ghost is). */
@@ -1118,7 +1125,7 @@ export class Rider {
         const i = (this.echoHead - j + ECHO_HIST) % ECHO_HIST;
         if (time - this.echoT[i] < lag) continue;
         this.echo.setMatrixAt(n, this.echoHist[i]);
-        a[n] = strength * k;
+        a[n] = strength * k * this.echoK;
         n++;
         break;
       }

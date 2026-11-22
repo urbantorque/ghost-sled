@@ -14,7 +14,7 @@ import { pushLocalLight } from './lights';
 import { pushShaftSource } from './postfx/shafts';
 import { NOISE } from './massif';
 import { makeToonMaterial, shared } from './materials';
-import { CLOUD_BREAK, type Palette } from './palette';
+import { cloudLetGo, type Palette } from './palette';
 import type { Particles } from './particles';
 import type { Detail } from './postfx/tiers';
 
@@ -66,8 +66,10 @@ const LAMP_AHEAD = 400;
  *  run across the course's middle, and measured in that frame (scripts/playtest/finishprobe.js) a lantern 35 m
  *  past the line and 12 m to the rider's side hangs over the rider's head in the left column the results leave
  *  open, about a seventh of the frame tall. Round 7 had it 36 m past the line on the run's middle, where it was
- *  off the frame's edge.) */
-const GREAT_Z = 35;
+ *  off the frame's edge. Round 8, the review: but a slow finisher stops 40 m past the line, under it, and in the
+ *  results it hung cut by the frame's top edge, only its foot in the picture; 14 m past the line it stands 30 m or more
+ *  behind any rider that stops, over the rider's head for a slow one and lower in the sky for a fast one.) */
+const GREAT_Z = 14;
 const GREAT_Y = 6.5;
 const GREAT_SIDE = 12;
 /** The guide light keeps this far ahead of the rider. */
@@ -96,7 +98,7 @@ export function cloudDepth(c: Course, z: number): number {
   const cl = c.cloud;
   if (!cl) return 0;
   const z0 = cl.z0 + 55;
-  const z1 = cl.z1 - CLOUD_BREAK;
+  const z1 = cloudLetGo(cl);
   if (z <= z0 || z >= z1 + 50) return 0;
   return smooth01((z - z0) / 150) * (1 - smooth01((z - (z1 - 10)) / 60));
 }
@@ -369,7 +371,13 @@ function sheetMaterial(low: boolean): ShaderMaterial {
         float cover = smoothstep(0.42 - vL * 0.9, 0.62 - vL * 0.8, n * 0.5 + 0.5);
         vec2 sxz = normalize(uMoon.xz + vec2(0.0001, 0.0));
         float facing = clamp(0.5 + (n - billow(q - sxz * 0.16)) * 3.2, 0.0, 1.0);
-        float l = clamp(facing * 0.7 + (n * 0.5 + 0.5) * 0.4 - 0.14 + (1.0 - vL) * 0.12, 0.0, 0.999) * 3.0;
+        float l = facing * 0.7 + (n * 0.5 + 0.5) * 0.4 - 0.14 + (1.0 - vL) * 0.12;
+        #ifdef POSTER
+          // (Low draws the floor alone: at the floor's own value, under the crests High lays over it, the sea read as
+          // dark water or a lava field from the Crown, the review loop. It takes the crests' light instead.)
+          l += 0.24;
+        #endif
+        l = clamp(l, 0.0, 0.999) * 3.0;
         float st = (floor(l) + smoothstep(0.35, 0.65, fract(l))) / 3.0;
         vec3 col = mix(uShade, uLit, st);
         col = mix(col, uRim, pow(facing, 3.0) * 0.4 * (1.0 - vL));
@@ -378,6 +386,10 @@ function sheetMaterial(low: boolean): ShaderMaterial {
         float pool = snoise(wq + vec2(1.7, -4.2)) * 0.6 + snoise(wq * 2.3 + vec2(-3.1, 2.6)) * 0.4;
         pool = smoothstep(0.22, 0.78, pool + 0.08 * sin(uTime * 0.21 + wq.x * 3.0));
         col += uWarm * pool * (0.3 + 0.7 * (1.0 - smoothstep(-0.35, 0.55, n))) * (0.45 + 0.55 * vL);
+        #ifdef POSTER
+          // (A warm pool over a cool floor in flat values is a peach glow, never a maroon blot.)
+          col = mix(col, uLit, 0.18 * pool);
+        #endif
         float d = distance(vW, cameraPosition);
         float a = cover * (1.0 - smoothstep(0.7, 1.0, length(vW.xz - cameraPosition.xz) / uR)) * smoothstep(3.0, 26.0, d);
         col = mix(col, uHaze, smoothstep(700.0, 2500.0, d) * 0.85);
@@ -1004,7 +1016,7 @@ export class LanternWorld {
     const list: WayLamp[] = [];
     let k = 0;
     for (let z = 46; z < c.finishZ - 20; k++) {
-      const inCloud = z > cl.z0 + 40 && z < cl.z1;
+      const inCloud = z > cl.z0 + 40 && z < cloudLetGo(cl);
       const side = k % 2 === 0 ? -1 : 1;
       const sec = c.section(z);
       const open = sec.kind !== 'street' && sec.kind !== 'bridge' && sec.kind !== 'tunnel' && sec.kind !== 'finish' && sec.kind !== 'start';
@@ -1256,7 +1268,7 @@ export class LanternWorld {
         u.uShade.value.copy(p.clouds.shade).lerp(p.skyHorizon, 0.1);
         u.uRim.value.copy(p.rim);
         // (Low's flat values have no bloom to soften the pools: at High's strength they read as lava.)
-        u.uWarm.value.copy(p.deck.glow).multiplyScalar(p.massif.seaWarm * (low ? 0.5 : 1.25));
+        u.uWarm.value.copy(p.deck.glow).multiplyScalar(p.massif.seaWarm * (low ? 0.4 : 0.95));
         u.uHaze.value.copy(p.skyHorizon).lerp(p.fog, 0.3);
         u.uMoon.value.copy(p.diskDir);
       }
@@ -1321,7 +1333,7 @@ export class LanternWorld {
     const rising = !!lg && lg.key === 'rising' && sim!.lg.phase === 2;
     this.surge += ((rising ? 1 : 0) - this.surge) * Math.min(1, dt * (rising ? 1.4 : 0.5));
     // Under the deck only: nothing of the valley shows from the Crown, or through the cloud.
-    const below = smooth01((z - (cl.z1 - CLOUD_BREAK - 12)) / 46);
+    const below = smooth01((z - (cloudLetGo(cl) - 12)) / 46);
     this.show += (below - this.show) * Math.min(1, dt * 6);
     if (this.valley) {
       const u = (this.valley.material as ShaderMaterial).uniforms;
@@ -1744,7 +1756,9 @@ export class LanternWorld {
     const full = this.greatWon ? 1 : 0.72;
     // (Round 8: banked low until it is lit, a lamp turned down and waiting. Dark, it hung behind the FINISH board on the
     // approach as a violet mass a critic read as "a dark unlit one" over the lettering.)
-    u.uEmissiveStrength.value = lit * full * (1.9 + 0.7 * flash + 0.06 * Math.sin(time * 5)) + (1 - lit) * 0.14;
+    // (Round 8, the review: at 0.14 the banked lantern read as a dim brown barrel over the square, a cage with nothing
+    // in it; a lamp turned down still glows through its paper.)
+    u.uEmissiveStrength.value = lit * full * (1.9 + 0.7 * flash + 0.06 * Math.sin(time * 5)) + (1 - lit) * 0.34;
     // (Round 8: once the rider is over the line and the finish lens has begun its swing round to the rider's front,
     // the lamplighters walk it along its yoke to the side away from the lens's, where the lens, looking back up the
     // run past the rider, finds it over the rider's head. Read from the lens itself, so the two always agree:
