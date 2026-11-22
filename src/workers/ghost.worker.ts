@@ -1,5 +1,7 @@
 /// <reference lib="webworker" />
 import { generatePool, type PoolRun } from '../bot/pool';
+import { trialFor } from '../game/trial';
+import { trialField } from '../game/trialfield';
 import { recordFromString, replayRecord } from '../sim/replay';
 import { FALL_DOWN, FALL_FALLING, FALL_UP } from '../sim/sim';
 import {
@@ -114,6 +116,14 @@ ctx.onmessage = (ev: MessageEvent<WorkerIn>) => {
       // The bot rides on past the line, so a pool ghost's `ticks` is no finish time: its Sim knows.
       const finish = new Map(runs.filter((r) => r.sim.finished).map((r) => [r.record.name, r.sim.s.finishTick]));
       post({ type: 'pool', reqId: msg.reqId, ghosts: ghosts.map((g) => ({ ...g, ...(finish.has(g.name) ? { finishTick: finish.get(g.name) } : {}) })) });
+    } catch (err) {
+      post({ type: 'error', id: -msg.reqId, message: String(err) });
+    }
+  } else if (msg.type === 'trial') {
+    // (Round 8, the trials lane: the week's Trial field, every rider on the Trial's own rules, and each one's tally.)
+    try {
+      const runs = trialField(trialFor(msg.week), msg.maxTicks);
+      post({ type: 'trial', reqId: msg.reqId, ghosts: runs.map((r) => r.ghost), tallies: runs.map((r) => r.tally) });
     } catch (err) {
       post({ type: 'error', id: -msg.reqId, message: String(err) });
     }

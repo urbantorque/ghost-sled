@@ -785,6 +785,20 @@
   color: var(--you);
 }
 
+/* Round 8, the trials lane: a Trial's medal line, its disc in its metal ahead of the words (meta.css .gs-medal). On a
+   phone the moment's fact gives way to the card's race line; a Trial's medal is what the run was for, so it stays. */
+.gs-mo-medal::before {
+  width: 18px;
+  height: 18px;
+}
+
+@media (max-aspect-ratio: 1/1) {
+  .gs-results .gs-mo .gs-mo-fact.is-trial,
+  .gs-results[data-view='story'] .gs-mo .gs-mo-fact.is-trial {
+    display: flex;
+  }
+}
+
 .gs-mo-fact.is-twelve {
   padding-left: 6px;
   border-radius: var(--r-card);

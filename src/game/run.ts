@@ -160,6 +160,8 @@ export class Run {
   /** What the rival rules decided, for the director (drainRivals). */
   readonly rivalPending: Array<{ tick: number; e: RivalEvent }> = [];
   paused = false;
+  /** Called after every sim step with the sim as it stands (round 8, the trials lane: a Trial's tally, trial.ts). */
+  onStep: ((sim: Sim) => void) | null = null;
   /** Log tokens to apply at the start of the next tick (a revive, a showdown won, a wisp stolen). */
   private readonly tokens: LogEvent[] = [];
 
@@ -204,6 +206,7 @@ export class Run {
     this.sim.step(byte);
     copySnap(s, this.cur);
     for (const e of this.sim.events) this.pending.push({ tick: this.sim.tick, e });
+    this.onStep?.(this.sim);
     if (this.rivalProbe && !s.crashed) {
       for (const e of this.rivalProbe(this.sim.tick - 1, riderPoint(this.sim))) {
         this.rivalPending.push({ tick: this.sim.tick, e });
