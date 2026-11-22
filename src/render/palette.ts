@@ -1231,7 +1231,9 @@ function round7(p: Palette, biome: BiomeId): void {
       // third of that colour, where with no film to roll it off it read as sand.)
       p.snowLit = c('#FFF2EA');
       p.posterSnowSat = 0.5;
-      p.snowShade = c('#7E8CD6');
+      // (Round 8's review: a cast shadow in the deep periwinkle lay on the snow as a flat puddle of paint. The shade a
+      // step lighter and greyer here and down the run, still a full step under the lit snow.)
+      p.snowShade = c('#8692D6');
       p.snowDeep = c('#6452AC');
       p.fog = c('#F4DAD8');
       p.low = c('#2E2A44');
@@ -1244,7 +1246,9 @@ function round7(p: Palette, biome: BiomeId): void {
       // polyhedra, not light coming through them.)
       p.leaf = 0.9;
       p.grade.lift = c('#1A1E2A');
-      p.grade.contrast = 1.1;
+      // (Round 8's review: at 1.1 the run-in was a peach veil with no darks at all; low contrast, but the few darks
+      // exact, ART.md 15.)
+      p.grade.contrast = 1.15;
       p.grade.saturation = 1.12;
       p.grade.exposure = 0.96;
       p.grade.hi = c('#FFF5EE');
@@ -1802,7 +1806,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.shadowK = 0.74;
         p.atmo.valley = 0.7;
         p.atmo.drift = 0.15;
-        p.grade.contrast = 1.12;
+        p.grade.contrast = 1.16;
         p.air.low = 0.65;
       },
     },
@@ -1816,7 +1820,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.lift.through = 1.25;
         p.atmo.rays = 1;
         p.grade.shafts = 0.75;
-        p.snowShade = c('#7482D4');
+        p.snowShade = c('#7C88D2');
         p.fog = c('#EEDADE');
         p.grade.saturation = 1.18;
         p.petals = 0.9;
@@ -1883,7 +1887,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       from: 3300, at: 3900, dusk: 0.6,
       edit: (p) => {
         p.skyZenith = c('#4A90DC');
-        p.snowShade = c('#6C7CD4');
+        p.snowShade = c('#7684D2');
         p.snowDeep = c('#5448AC');
         p.grade.contrast = 1.16;
         p.petals = 1.3;
@@ -3058,7 +3062,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         // (The lit snow keeps the morning's peach here: with a cold split tone the steps were one lavender.)
         p.grade.hi = c('#FFF4EA');
         p.grade.contrast += 0.05;
-        p.snowShade = c('#6878D2');
+        p.snowShade = c('#7482D0');
         p.air.low = 0.9;
       },
     },
