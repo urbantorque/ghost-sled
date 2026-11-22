@@ -38,7 +38,9 @@ import { NodeReserve, Voice } from './voices';
 
 /** A fixed sound's parts, built onto voice `v` from time `t`: the calls a live voice makes. Its parts
  *  must be mono (oscillators and the bank's mono buffers), since a take is one channel into the
- *  voice's out, and built-in waves only: the bank's PeriodicWaves belong to the live context. */
+ *  voice's out, unless the take is asked for in two (want's `channels`: a part playing the bank's
+ *  stereo noise, as the heartbeat's and the fuse tick's do), and built-in waves only: the bank's
+ *  PeriodicWaves belong to the live context. */
 export type Recipe = (v: Voice, t: number) => void;
 
 /** Frames per render quantum (Web Audio renders in blocks of this many from frame 0). */
@@ -62,6 +64,8 @@ type OfflineCtor = new (channels: number, length: number, sampleRate: number) =>
 
 interface Job {
   key: number;
+  /** 1, or 2 for parts that play the bank's stereo noise (a mono take would fold its two channels into one). */
+  channels: number;
   phase: number;
   seconds: number;
   starts: readonly number[];
@@ -158,6 +162,31 @@ export class Prerender {
     return true;
   }
 
+  /**
+   * Plays the take of `key` for a sound starting at t wherever t falls in its render quantum (round 8, the lowperf
+   * lane): a sound on the band's grid (the duel heartbeat, the fuse tick) has no one phase, so play() would refuse it
+   * nearly every time. The take starts on the frame nearest, so its parts land within half a frame of t (10 us at 48
+   * kHz) and a source started on a frame plays its samples as rendered. Only for parts with no input that reads where
+   * a block starts (no FM: oscillators, envelopes, noise). False while the take is not ready.
+   */
+  playNear(v: Voice, key: number, t: number, on: number): boolean {
+    const e = this.takes.get(key);
+    if (!e) {
+      this.misses++;
+      return false;
+    }
+    const sr = this.ctx.sampleRate;
+    const at = Math.round(t * sr - e.phase) / sr;
+    if (at < this.ctx.currentTime) {
+      this.misses++;
+      return false;
+    }
+    e.used = ++this.clock;
+    this.hits++;
+    v.play(e.buf, at, LEAD / sr, on);
+    return true;
+  }
+
   /** Whether want(key) would queue a render: a caller checks first, so it makes its recipe only then. */
   wants(key: number): boolean {
     return this.Offline !== null && !this.asked.has(key);
@@ -166,10 +195,10 @@ export class Prerender {
   /** Asks for the take of `key`, a sound `seconds` long from t whose parts `recipe` builds, starting
    *  at the offsets `starts` (s): rendered at t's phase, queued once (asks while it waits, renders,
    *  after it failed or after its take was let go add nothing); the scheduler pass starts it. */
-  want(key: number, t: number, seconds: number, starts: readonly number[], recipe: Recipe): void {
+  want(key: number, t: number, seconds: number, starts: readonly number[], recipe: Recipe, channels = 1): void {
     if (!this.wants(key)) return;
     this.asked.add(key);
-    this.queue.push({ key, phase: this.phaseOf(t), seconds, starts, recipe });
+    this.queue.push({ key, channels, phase: this.phaseOf(t), seconds, starts, recipe });
   }
 
   /** Scheduler pass (between frames): starts the next queued render if there is room. */
@@ -189,11 +218,11 @@ export class Prerender {
   private render(job: Job): void {
     const Offline = this.Offline;
     if (!Offline || this.disposed) return;
-    const { key, phase, seconds, starts, recipe } = job;
+    const { key, channels, phase, seconds, starts, recipe } = job;
     const sr = this.ctx.sampleRate;
     let octx: OfflineAudioContext;
     try {
-      octx = new Offline(1, Math.ceil(LEAD + phase + seconds * sr) + 1, sr);
+      octx = new Offline(channels, Math.ceil(LEAD + phase + seconds * sr) + 1, sr);
     } catch {
       // No offline rendering here (or not at this rate): everything plays live, as before.
       this.Offline = null;
@@ -225,7 +254,7 @@ export class Prerender {
       const frames = starts.map((s) => Math.ceil((t0 + s) * sr) - LEAD);
       const done = (buf: AudioBuffer | null | undefined): void => {
         this.inFlight--;
-        if (buf && buf.numberOfChannels === 1) this.keep(key, { buf, phase, starts, frames, used: 0 });
+        if (buf && buf.numberOfChannels === channels) this.keep(key, { buf, phase, starts, frames, used: 0 });
         else this.failures++;
       };
       // Old webkit returns nothing and fires oncomplete; newer engines return a promise.
@@ -245,7 +274,7 @@ export class Prerender {
     if (this.disposed) return;
     take.used = ++this.clock;
     this.takes.set(key, take);
-    this.samples += take.buf.length;
+    this.samples += take.buf.length * take.buf.numberOfChannels;
     // Past the cap: the take played longest ago goes (never the one just made). Its key stays asked,
     // so it plays live from then on instead of rendering again.
     while (this.samples > TAKE_SAMPLES) {
@@ -260,7 +289,7 @@ export class Prerender {
       const e = old === null ? undefined : this.takes.get(old);
       if (old === null || !e) break;
       this.takes.delete(old);
-      this.samples -= e.buf.length;
+      this.samples -= e.buf.length * e.buf.numberOfChannels;
     }
   }
 }
