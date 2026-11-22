@@ -4066,3 +4066,23 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
       446.7 and 449.2 after; Ember 502.2 and 502.9, 499.5 and 502.2); 15 KB of main script and 4.5 KB of worker.
     - *For the owner:* opening Trials earlier than page 35 is one line (`trialsOpen`; below page 21 a week could deal
       Lanternfall before it is open). A Trial medal has no album sticker. Nobody has ridden a Trial by hand.
+
+387. **Round 8 shipped on the owner's word, then its stretch** (the brief's last step: "Merge and publish only on the
+    owner's word"; given on 23 November).
+    - *Round 8.* `main` fast-forwarded to `round-8` (1fa9b74), as round 7 and the visual lift were, and pushed with the
+      `round-8` branch; the release build published to `gh-pages` (50546fa) and live at
+      https://urbantorque.github.io/ghost-sled/. Checked live in headless Chrome on a desk and a phone: the title and a
+      ride, the first frame at about 0.5 s, the console and the network clean (`shots/r8/final/live/`). The thin bar
+      on a fresh title there is the loading bar while the CrazyGames SDK's load times out off the portal (up to about
+      5 s, by design), not a fault.
+    - *The stretch.* "Finish off this roadmap" was read as its two stretch items, the only ones never built: Trials and
+      G11's clip, built in two lanes on `r8-stretch` (DECISIONS 385 and 386), merged (one conflict in the run's start,
+      both kept), 104 test files and 1,892 tests green, and smoked on the release build (`shots/r8/final/smoke2/`):
+      every mountain at two places on every tier, desk and phone, every console clean and the draw counts within the
+      replays' spread of the round's smoke; a Trial from title to results on a desk and a phone; three clips saved and
+      read back (MP4, 16.4 to 16.5 s and 5.2 MB on a desk, 3.9 MB on the phone). The build is 60.33 MB in 35 files
+      (56.77 MB zipped), the initial download 11.29 MB. `main` fast-forwarded to `r8-stretch` (4ed2942) and pushed;
+      published to `gh-pages` (e0cc335) and checked live: the title and a ride on a desk and a phone, and a Trial
+      ridden to its results with Save Clip beside its one button (`shots/r8/final/live2/`).
+    - *Left for the owner:* the report's open questions (`notes/r8-report.md`), the fifteen-minute route, and Save
+      Photo and Save Clip on the CrazyGames portal. Nobody has played round 8 by hand.
