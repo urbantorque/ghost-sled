@@ -63,8 +63,11 @@ export interface TitleTrial {
   medal: number;
   /** Your best figure this week, bare ("2:03.4", "17", "182,410"; the rule names the measure), or null. */
   best: string | null;
-  /** Bronze, silver and gold, bare as the best is, or null until the field is in. */
+  /** Bronze, silver and gold, bare as the best is, or null until the field is in; their unit ("points", "perfects", ''
+   *  on the clock); and the days the week has left ("4 days left", "Last day"). */
   targets: [string, string, string] | null;
+  unit: string;
+  left: string;
 }
 
 export interface TitleCup {
@@ -388,9 +391,10 @@ export interface ResultsModel {
   stages?: ResultsStages | null;
   /** The Twelve: this run was a duel or the last race, and how it went. */
   twelve?: ResultsTwelve | null;
-  /** Round 8, the trials lane: a Trial's run, its medal this run (0 none) and the line that says which and how far from
-   *  the next ("Trial: Silver. Gold at 1:54.2, 4.3 s faster."): the fact under the moment. */
-  trial?: { medal: number; line: string } | null;
+  /** Round 8, the trials lane: a Trial's run, its medal this run (0 none), the line that says which and how far from the
+   *  next (Details and the race line), and the moment's words under the place ("Silver in the Trial", null with no medal)
+   *  and its fact ("16 perfects, 2 short of gold"). */
+  trial?: { medal: number; line: string; figure: string | null; unit: string; word: string | null; fact: string | null } | null;
   /** Round 8: the spine's part of the results (the bar, what opened, the one button). */
   spine?: ResultsSpine | null;
 }

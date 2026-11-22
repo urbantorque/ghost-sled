@@ -97,8 +97,14 @@ export function resultsMoment(m: ResultsModel): Moment {
   let factTone: Moment['factTone'] = 'plain';
   // (Round 8, the trials lane: a Trial's run is for its medal, so the medal is the fact: which, and how far from the next.)
   if (m.trial) {
-    fact = m.trial.line;
+    fact = m.trial.fact;
     factTone = 'trial';
+    // (Round 8, the trials lane: a Trial's run leads with its own figure on the week's measure, lit by its medal: gold as a
+    // win, silver and bronze as a podium; the race's place stays in the place line and Details.)
+    if (fin && m.trial.figure) {
+      const md = m.trial.medal;
+      return { kind: md >= 3 ? 'win' : md > 0 ? 'podium' : 'finish', figure: m.trial.figure, of: m.trial.unit, word: m.trial.word ?? 'Across the line', fact, factTone, time: null };
+    }
   } else if (tw && (tw.tone === 'fell' || tw.tone === 'crowned')) {
     fact = tw.line;
     factTone = 'twelve';
@@ -1293,7 +1299,7 @@ function raceLine(m: ResultsModel): HTMLElement | null {
   if (!l || !l.text) return null;
   // The Daily, Cup or Trial medal line ("Daily: Silver. Gold at 2,410 m.") wears its medal disc in the icon
   // column, and a stage gold almost had wears the gold it almost was.
-  const medal = l.tone === 'event' ? /^(?:Daily|Cup|Trial): (Bronze|Silver|Gold)\./.exec(l.text) : null;
+  const medal = l.tone === 'event' ? (/^(?:Daily|Cup): (Bronze|Silver|Gold)\./.exec(l.text) ?? /^Trial: (Bronze|Silver|Gold)[. ]/.exec(l.text)) : null;
   const rank = l.tone === 'medal' ? 3 : medal ? ['Bronze', 'Silver', 'Gold'].indexOf(medal[1]) + 1 : 0;
   const disc = rank > 0 ? h('span', `gs-medal m-${rank} gs-res-line-ico`) : null;
   disc?.setAttribute('aria-hidden', 'true');

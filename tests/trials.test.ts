@@ -6,6 +6,7 @@ import {
   type TrialTally,
   TRIAL_WEEKS,
   atLeast,
+  daysLeftWords,
   familyPool,
   newTally,
   readTrials,
@@ -15,6 +16,7 @@ import {
   trialFor,
   trialKey,
   trialLine,
+  trialMoment,
   trialMedal,
   trialMountain,
   trialTargets,
@@ -84,6 +86,10 @@ describe("the week's Trial", () => {
       expect(trialFor(ws[i]).mountain, ws[i]).not.toBe(trialFor(ws[i - 1]).mountain);
     }
     for (let i = 0; i + 4 <= ws.length; i++) expect(new Set(ws.slice(i, i + 4).map((w) => trialFor(w).measure)).size).toBe(MEASURES.length);
+    // A week's days left: Monday 7, Sunday the last.
+    expect(daysLeftWords('2026-W48', Date.UTC(2026, 10, 23, 9))).toBe('7 days left');
+    expect(daysLeftWords('2026-W48', Date.UTC(2026, 10, 26, 9))).toBe('4 days left');
+    expect(daysLeftWords('2026-W48', Date.UTC(2026, 10, 29, 23))).toBe('Last day');
     // (A year that ends on week 53 runs on into week 1 with no gap.)
     expect(weekIndex('2027-W01') - weekIndex('2026-W53')).toBe(1);
   });
@@ -133,7 +139,7 @@ describe("the Trial's medal", () => {
 
   it('judges a run as the field is judged: the line crossed, and no get-up on a week without one', () => {
     expect(trialValue('time', newTally())).toBeNull();
-    expect(trialValue('time', tally(123.456, 1, 2))).toBe(123.5);
+    expect(trialValue('time', tally(123.456, 1, 2))).toBe(123.4);
     expect(trialValue('clean', tally(123.4, 1, 2, 1))).toBeNull();
     expect(trialValue('clean', tally(123.4, 1, 2, 0))).toBe(123.4);
     expect(trialValue('score', tally(123.4, 9876, 2))).toBe(9876);
@@ -143,11 +149,17 @@ describe("the Trial's medal", () => {
   it('says which medal and how far from the next', () => {
     const t = { ...trialFor(WEEK), measure: 'perfects' as const };
     const g = [10, 13, 16] as const;
-    expect(trialLine(t, 1, g, 11)).toBe('Trial: Bronze. Silver at 13 perfects, 2 more.');
-    expect(trialLine(t, 3, g, 17)).toBe('Trial: Gold.');
+    expect(trialLine(t, 1, g, 11)).toBe('Trial: Bronze with 11 perfects. Silver at 13 perfects, 2 more.');
+    expect(trialLine(t, 3, g, 17)).toBe('Trial: Gold with 17 perfects.');
+    expect(trialLine(t, 0, g, 4)).toBe('Trial: 4 perfects. Bronze at 10 perfects, 6 more.');
     expect(trialLine(t, 0, g, null)).toBe('Trial: Bronze at 10 perfects. Finish to take a medal.');
+    expect(trialMoment(t, 2, g, 14)).toEqual({ figure: '14', unit: 'perfects', word: 'Silver in the Trial', fact: '2 short of gold' });
+    expect(trialMoment(t, 3, g, 19)).toEqual({ figure: '19', unit: 'perfects', word: 'Gold in the Trial', fact: null });
+    expect(trialMoment(t, 0, g, null)).toEqual({ figure: null, unit: '', word: null, fact: 'Finish to take a medal' });
     const c = { ...t, measure: 'clean' as const };
-    expect(trialLine(c, 2, [130, 125, 120], 123.4)).toBe('Trial: Silver. Gold at 2:00.0, 3.4 s faster.');
+    expect(trialLine(c, 2, [130, 125, 120], 123.4)).toBe('Trial: Silver in 2:03.4. Gold at 2:00.0, 3.4 s faster.');
+    expect(trialMoment(c, 2, [130, 125, 120], 123.4)).toEqual({ figure: '2:03.4', unit: '', word: 'Silver in the Trial', fact: '3.4 s off gold' });
+    expect(trialMoment(c, 3, [130, 125, 120], 117.1)).toEqual({ figure: '1:57.1', unit: '', word: 'Gold in the Trial', fact: '2.9 s inside gold' });
     expect(trialLine(c, 0, [130, 125, 120], null, 1)).toBe('Trial: Bronze at 2:10.0. Ride it without a get-up.');
     expect(stageWords(c, [130, 125, 120], { seconds: 121, score: 0, perfects: 0, tumbles: 0 })).toBe('Silver under 2:05.0');
     expect(stageWords(c, [130, 125, 120], { seconds: 10, score: 0, perfects: 0, tumbles: 1 })).toBe('A get-up used: no medal');

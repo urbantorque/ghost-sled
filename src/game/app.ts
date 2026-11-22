@@ -57,7 +57,7 @@ import { lanternSignals } from './charmsignals';
 import { ALL_CHARMS, CHARMS } from '../sim/charms';
 import { TRICKS } from '../sim/tricks';
 import { CHAPTER_EXTRAS, GARAGE_EXTRAS, type GarageExtra, almanacOpens, featureOpen, hourOpen, legsOpen, mirrorOpen, shelfExtras } from './almanac';
-import { type Trial, type TrialOutcome, type TrialTally, type TrialTargets, figureShort, figureText, newTally, startWords, settleTrial, stageWords, tallyStep, trialConfig, trialFor, trialKey, trialMedalNow, trialMountain, trialTargets, trialValue } from './trial';
+import { type Trial, type TrialOutcome, type TrialTally, type TrialTargets, daysLeftWords, figureShort, figureText, newTally, startWords, settleTrial, stageWords, tallyStep, trialConfig, trialFor, trialKey, trialMedalNow, trialMountain, trialTargets, trialValue } from './trial';
 import { type Night, depthWords, mirrorKey, nightBeat, nightDepth, nightLeg, nightOn, settleLongNight, startNight } from './modes';
 import { showNightBeat } from '../ui/nightbeat';
 import { SYNERGY_KEYS } from './album';
@@ -562,6 +562,8 @@ export class App {
       medal: trialMedalNow(d.trials, t.week),
       best: best !== undefined ? figureShort(t.measure, best) : null,
       targets: g ? [figureShort(t.measure, g[0]), figureShort(t.measure, g[1]), figureShort(t.measure, g[2])] : null,
+      unit: t.measure === 'score' ? 'points' : t.measure === 'perfects' ? 'perfects' : '',
+      left: daysLeftWords(t.week, Date.now()),
     };
   }
 
@@ -744,6 +746,8 @@ export class App {
     if (this.phase !== 'title') return;
     this.applyHour();
     this.world.setCourse(this.mountain.seed);
+    // (The trials lane: the Trial picked is shown in its sky, so the title shows what its name says.)
+    this.world.setMood(this.trialPick ? this.trial.chaos.mood : Mood.None);
     this.audio.setMood(Mood.None, biomeForSeed(this.mountain.seed), this.mountain.id);
     this.setAttractField();
   }
@@ -765,7 +769,7 @@ export class App {
     this.refreshDaily();
     this.applyHour();
     this.world.setCourse(this.mountain.seed);
-    this.world.setMood(Mood.None);
+    this.world.setMood(this.trialPick ? this.trial.chaos.mood : Mood.None);
     // (The title is the mountain's key art, composed for the logo's side: it is never shown mirrored. The toggle says
     // what Ride rides.)
     this.input.mirrored = false;
@@ -1405,7 +1409,7 @@ export class App {
       runAgainLabel: { text, aria },
       spine: r.spine ? { ...r.spine, primary: { kind: 'again', text, sub, aria } } : r.spine,
       raceLine: { text: out.line, tone: 'event' },
-      trial: { medal: out.medal, line: out.line },
+      trial: { medal: out.medal, line: out.line, ...out.moment },
     };
   }
 

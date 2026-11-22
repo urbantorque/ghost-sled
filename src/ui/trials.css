@@ -53,6 +53,12 @@
   text-decoration-thickness: 2px;
 }
 
+/* The unit after the gold figure, in the text's colour: the medals' metals are for the figures. */
+.gs-t-trial-unit {
+  color: var(--text);
+  font-weight: 800;
+}
+
 .gs-t-trial-best {
   color: var(--dim);
   font-weight: 800;
@@ -81,5 +87,11 @@
 
   .gs-title:has(.gs-t-trial) .gs-t12 {
     display: none;
+  }
+
+  /* (The phone hides the greeting where The Twelve's row stands; the Trial's rule wears the greeting's type but takes
+     that row's place, so it stays.) */
+  .gs-title:has(.gs-t-trial) .gs-t-trial .gs-t-greet.gs-t-trial-rule {
+    display: flex;
   }
 }

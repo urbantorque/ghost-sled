@@ -71,6 +71,14 @@ export function weekIndex(week: string): number {
   return Math.floor((monday - Date.UTC(1969, 11, 29)) / (7 * 86400000));
 }
 
+/** The days a week's Trial has left at a moment (ms), today counted: "4 days left", "Last day" (7 at most, 1 at
+ *  least). Information only: nothing waits on it. */
+export function daysLeftWords(week: string, now: number): string {
+  const end = Date.UTC(1969, 11, 29) + (weekIndex(week) + 1) * 7 * 86400000;
+  const days = Math.max(1, Math.min(7, Math.ceil((end - now) / 86400000)));
+  return days === 1 ? 'Last day' : `${days} days left`;
+}
+
 const NAMES: Readonly<Record<string, string>> = { pinecrest: 'Pinecrest', frostfang: 'Frostfang', ember: 'Ember Peak', sakura: 'Sakura Ridge', lanternfall: 'Lanternfall' };
 /** Each mountain's other hour after its name (almanac.ts HOUR_PHRASES). */
 const HOURS: Readonly<Record<string, string>> = { pinecrest: 'at Dusk', frostfang: 'at Noon', ember: 'at Night', sakura: 'in the Evening', lanternfall: 'at First Light' };
@@ -197,14 +205,20 @@ export function trialValue(m: TrialMeasure, t: TrialTally): number | null {
   if (!l) return null;
   switch (m) {
     case 'time':
-      return Math.round(l.seconds * 10) / 10;
+      return clockTenths(l.seconds);
     case 'clean':
-      return t.tumbles === 0 ? Math.round(l.seconds * 10) / 10 : null;
+      return t.tumbles === 0 ? clockTenths(l.seconds) : null;
     case 'score':
       return l.score;
     case 'perfects':
       return l.perfects;
   }
+}
+
+/** A time in the clock's own tenths (standing.ts clock: cut, not rounded), so the figure a Trial judges is the one the
+ *  results show. */
+function clockTenths(s: number): number {
+  return Math.floor(s * 10 + 1e-6) / 10;
 }
 
 /** Lower is better on the clock. */
@@ -301,19 +315,53 @@ export function shortOf(m: TrialMeasure, v: number, target: number): string {
   return `${d.toLocaleString('en-US')} more`;
 }
 
+/** The run's own figure as a line says it after a medal: "in 2:01.0", "with 16 perfects", "with 132,223 points". */
+function withFigure(m: TrialMeasure, v: number): string {
+  return `${lowerBetter(m) ? 'in' : 'with'} ${figureText(m, v)}`;
+}
+
 /**
- * The results' line for a Trial's run, in the Cup's form so the results draw its medal disc: "Trial: Silver. Gold at
- * 18 perfects, 2 more.", "Trial: Gold.", "Trial: Bronze at 2:14.6, 1.3 s faster." With no figure: the run did not
- * finish, or a get-up was used on a week ridden without one.
+ * The results' line for a Trial's run (Details and the race line), which medal with the run's own figure, then the next
+ * and how far: "Trial: Silver with 16 perfects. Gold at 18 perfects, 2 more.", "Trial: Gold in 1:57.0.", "Trial: 4
+ * perfects. Bronze at 13 perfects, 9 more." With no figure the run did not finish, or a get-up was used on a week
+ * ridden without one.
  */
 export function trialLine(t: Trial, medal: number, targets: TrialTargets, value: number | null, tumbles = 0): string {
-  if (medal >= 3) return 'Trial: Gold.';
+  if (medal >= 3) return value === null ? 'Trial: Gold.' : `Trial: Gold ${withFigure(t.measure, value)}.`;
   const next = targets[medal];
   const at = `${MEDAL_NAMES[medal + 1]} at ${figureText(t.measure, next)}`;
-  const head = medal > 0 ? `Trial: ${MEDAL_NAMES[medal]}. ${at}` : `Trial: ${at}`;
-  if (value === null) return `${head}. ${t.measure === 'clean' && tumbles > 0 ? 'Ride it without a get-up.' : 'Finish to take a medal.'}`;
+  if (value === null) return `Trial: ${at}. ${t.measure === 'clean' && tumbles > 0 ? 'Ride it without a get-up.' : 'Finish to take a medal.'}`;
+  const head = medal > 0 ? `Trial: ${MEDAL_NAMES[medal]} ${withFigure(t.measure, value)}. ${at}` : `Trial: ${figureText(t.measure, value)}. ${at}`;
   const short = shortOf(t.measure, value, next);
   return short ? `${head}, ${short}.` : `${head}.`;
+}
+
+/** What a Trial's results lead with: the run's own figure (bare, "132,223", "1:57.0", "16") and its unit ("points",
+ *  "perfects", none on the clock), the words under it ("Silver in the Trial", null with no medal), and the fact under
+ *  those, how far from the next medal ("56,727 short of gold", "2.0 s off gold", "1.9 s inside gold") or why there is
+ *  none; null where there is nothing more to say (gold on a count). */
+export interface TrialMomentView {
+  figure: string | null;
+  unit: string;
+  word: string | null;
+  fact: string | null;
+}
+
+/**
+ * The results' moment for a Trial's run: the Trial is the headline, so the figure is the run's figure on the week's
+ * measure, not its place (the race still stands in the place line and Details), said short enough for a phone.
+ */
+export function trialMoment(t: Trial, medal: number, targets: TrialTargets, value: number | null, tumbles = 0): TrialMomentView {
+  const word = medal > 0 ? `${MEDAL_NAMES[medal]} in the Trial` : null;
+  const unit = t.measure === 'score' ? 'points' : t.measure === 'perfects' ? (value === 1 ? 'perfect' : 'perfects') : '';
+  if (value === null) return { figure: null, unit: '', word, fact: t.measure === 'clean' && tumbles > 0 ? 'A get-up used: no medal' : 'Finish to take a medal' };
+  const figure = figureShort(t.measure, value);
+  const tenths = (s: number): string => (Math.round(s * 10) / 10).toFixed(1);
+  if (medal >= 3) return { figure, unit, word, fact: lowerBetter(t.measure) ? `${tenths(targets[2] - value)} s inside gold` : null };
+  const next = targets[medal];
+  const name = MEDAL_NAMES[medal + 1].toLowerCase();
+  if (lowerBetter(t.measure)) return { figure, unit, word, fact: `${(Math.ceil(Math.round((value - next) * 100) / 10) / 10).toFixed(1)} s off ${name}` };
+  return { figure, unit, word, fact: `${Math.round(next - value).toLocaleString('en-US')} short of ${name}` };
 }
 
 /** The HUD's stage line in a Trial: the next medal this run can still take ("Gold under 2:03.5", "9 of 13 perfects for
@@ -376,6 +424,8 @@ export interface TrialOutcome {
   best: number;
   value: number | null;
   line: string;
+  /** The results' moment (trialMoment). */
+  moment: TrialMomentView;
 }
 
 /**
@@ -395,5 +445,5 @@ export function settleTrial(d: { trials?: Record<string, TrialSave> }, t: Trial,
     d.trials = readTrials(all) ?? undefined;
     if (!d.trials) delete d.trials;
   }
-  return { medal, was, best: rec.medal, value, line: trialLine(t, Math.max(medal, 0), targets, value, tally.tumbles) };
+  return { medal, was, best: rec.medal, value, line: trialLine(t, medal, targets, value, tally.tumbles), moment: trialMoment(t, medal, targets, value, tally.tumbles) };
 }

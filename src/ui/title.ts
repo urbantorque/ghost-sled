@@ -382,7 +382,7 @@ export class Title {
       { passive: false },
     );
     // The mountain cards sit directly above the Ride that rides them; the daily is its own card.
-    el.append(side, h('div', `gs-t-daily gs-t-anim${m.cup ? ' has-cup' : ''}`, m.cup ? this.cupCard(m.cup, m.selected === 'cup' || !!trialOn) : null, this.dailyCard(m.daily, m.selected === 'daily')));
+    el.append(side, h('div', `gs-t-daily gs-t-anim${m.cup ? ' has-cup' : ''}`, m.cup ? this.cupCard(m.cup, m.selected === 'cup' || !!trialOn, m.trial ?? null) : null, this.dailyCard(m.daily, m.selected === 'daily')));
     this.watchEnds(track, prev, next, strip);
     if (m.twelve) el.append(this.twelveCard(m.twelve, m));
 
@@ -508,7 +508,8 @@ export class Title {
     cup.setAttribute('aria-pressed', String(!t.on));
     cup.setAttribute('aria-label', 'Ride the Weekly Cup');
     const medal = Math.max(0, Math.min(3, Math.floor(t.medal)));
-    const disc = h('span', `gs-mdot m-${medal} gs-t-week-ico`);
+    // (The medal held, struck in its metal; none yet, the star the Trial's rule wears: an empty ring read as a radio.)
+    const disc = medal > 0 ? h('span', `gs-mdot m-${medal} gs-t-week-ico`) : icon('star', 'gs-t-week-ico');
     disc.setAttribute('aria-hidden', 'true');
     const trial = btn(
       this.ctx,
@@ -617,7 +618,7 @@ export class Title {
    * The week's Cup, the Daily's sibling: the same card, marigold-free (a Cup medal is the disc), with
    * the week's mood and event where the Daily says what day it is, and your best time this week.
    */
-  private cupCard(c: TitleCup, selected: boolean): HTMLButtonElement {
+  private cupCard(c: TitleCup, selected: boolean, trial: TitleTrial | null = null): HTMLButtonElement {
     const b = h('button', `gs-daily gs-cup${selected ? ' is-sel' : ''}`);
     b.type = 'button';
     b.dataset.fk = 'cup';
@@ -626,19 +627,24 @@ export class Title {
       b.setAttribute('aria-disabled', 'true');
       b.classList.add('is-waiting');
     }
-    const medal = Math.max(0, Math.min(3, Math.floor(c.medal)));
-    const what = c.ready ? [c.mood, c.event].filter(Boolean).join(', ') : 'Finding rivals…';
+    // (The trials lane: once Trials are open the card is the week's, "Cup and Trial", and says whichever of the two is
+    // picked: the Cup's mood and medal, or the Trial's measure, medal and best.)
+    const tOn = trial?.on === true;
+    const medal = Math.max(0, Math.min(3, Math.floor(tOn ? trial!.medal : c.medal)));
+    const what = tOn ? trial!.rule.split(',')[0] : c.ready ? [c.mood, c.event].filter(Boolean).join(', ') : 'Finding rivals…';
     // (A phone's half-width card keeps the mood: the reveal names the event.)
-    const tag = h('span', 'gs-tag gs-daily-status', c.ready ? c.mood : what, c.ready && c.event ? h('span', 'gs-cup-ev', `, ${c.event}`) : null);
+    const tag = h('span', 'gs-tag gs-daily-status', tOn ? what : c.ready ? c.mood : what, !tOn && c.ready && c.event ? h('span', 'gs-cup-ev', `, ${c.event}`) : null);
     const meta = h('span', 'gs-daily-meta', h('span', 'gs-daily-date gs-num', `Week ${c.week}`), tag);
-    b.append(h('span', 'gs-daily-ico', icon('trophy')), h('span', 'gs-daily-txt', h('span', 'gs-daily-title', 'Weekly Cup'), meta));
+    const title = trial ? 'Cup and Trial' : 'Weekly Cup';
+    b.append(h('span', 'gs-daily-ico', icon(tOn ? 'star' : 'trophy')), h('span', 'gs-daily-txt', h('span', 'gs-daily-title', title), meta));
     const disc = medal > 0 ? h('span', `gs-medal m-${medal}`, h('span', 'gs-medal-n', MEDAL[medal])) : null;
-    if (c.best > 0 || disc) {
-      const num = c.best > 0 ? h('span', 'gs-num', clock(c.best)) : null;
+    const best = tOn ? trial!.best : c.best > 0 ? clock(c.best) : null;
+    if (best || disc) {
+      const num = best ? h('span', 'gs-num', best) : null;
       b.append(h('span', `gs-daily-best${disc ? ' has-medal' : ''}`, disc, num ? h('span', 'gs-daily-score', h('span', 'gs-daily-best-l', 'Best'), num) : null));
     }
     b.append(h('span', 'gs-daily-go', icon('play')));
-    const said = [`Weekly Cup, week ${c.week}`, what.replace(/…$/, ''), medal > 0 ? `${MEDAL[medal]} medal this week` : '', c.best > 0 ? `Best ${clock(c.best)}` : ''];
+    const said = [`${tOn ? 'Weekly Trial' : 'Weekly Cup'}, week ${c.week}`, what.replace(/…$/, ''), medal > 0 ? `${MEDAL[medal]} medal this week` : '', best ? `Best ${best}` : '', trial && !tOn ? "This week's Trial is under Ride" : ''];
     b.setAttribute('aria-label', said.filter(Boolean).join('. '));
     b.addEventListener('click', () => {
       if (!c.ready) return;
@@ -1016,7 +1022,7 @@ export function medalDots(m: MedalSet, fresh: readonly number[] = [], quiet = fa
  * says it is being found.
  */
 function trialPanel(t: TitleTrial): HTMLElement {
-  const rule = h('p', 'gs-t-greet gs-t-trial-rule', icon('flag'), h('span', '', t.rule));
+  const rule = h('p', 'gs-t-greet gs-t-trial-rule', icon('star'), h('span', '', t.rule));
   const box = h('div', 'gs-t-trial', rule);
   if (t.targets) {
     const row = h('p', 'gs-t-trial-goals');
@@ -1025,7 +1031,10 @@ function trialPanel(t: TitleTrial): HTMLElement {
       // (The disc is drawn; a reader hears the medal's name before its figure.)
       row.append(h('span', `gs-medal m-${i + 1} gs-t-trial-goal${held ? ' is-held' : ''}`, sr(`${MEDAL[i + 1]} `), h('span', 'gs-num', v), held ? sr(', held') : null));
     });
+    // (The unit once, after gold: the discs alone read as coins. Then your best, and the days the week has left.)
+    if (t.unit) row.lastElementChild?.append(h('span', 'gs-t-trial-unit', ` ${t.unit}`));
     if (t.best) row.append(h('span', 'gs-t-trial-best', 'Best ', h('span', 'gs-num', t.best)));
+    row.append(h('span', 'gs-t-trial-best', t.left));
     box.append(row);
   } else box.append(h('p', 'gs-t-trial-goals is-waiting', 'Finding rivals…'));
   return box;
