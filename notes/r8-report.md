@@ -52,8 +52,9 @@ play, nothing more.
 
 - Every bar above is a pilot's, not a person's: the lab's pilots press the button the way a script presses it.
   "A near goal exists" and "the button names it" are counted, not felt.
-- Every look score is a fresh model critic's, told only ART.md and shown stills or strips. They were consistent
-  between passes but are not a player at speed.
+- Every look score is a fresh model critic's, told only ART.md and shown stills or strips. A new critic moved frames
+  nothing had touched by up to a point and a half, so a pass's mean is a band; what held is that a fault named and
+  fixed was not named again. None of them is a player at speed.
 - The trick map was tuned so a rider using all of it scores 1.67 times a spin-only one; whether a person finds the
   grabs, or grabs by accident when they meant a spin and flip, is unknown (a hint teaches "press, then steer").
 
@@ -72,7 +73,26 @@ play, nothing more.
 
 ## Open questions for the owner
 
-<!-- fill: decisions left (Low's ghost if the bar is short, the expert's race liveness, the flame, the hours, photo Save on CrazyGames, ...) -->
+1. **Low at 6x against round 7** (DECISIONS 382, 384). <!-- fill: the sitting's verdict --> Round 8's field rides
+   beside you, so a Low frame on Ember draws about two more ghosts than round 7's did; two lanes cut everything that
+   did not change the picture. Going further on Low means showing less of the field (fewer ghosts in glass, say). The
+   call is yours: restate Low's bar as round 7's plus the field, or carry it into round 9.
+2. **The expert's race** is live 0.67 of a run (round 7 0.70): a fast rider pulls away from the field on Ember and
+   Sakura. The mid and stunt pilots' races are more live than round 7's. Leave it, or let the field's pacer reach
+   further for an expert (a sim change, SIM_VERSION 11).
+3. **The flame on the scarf (7 of 12) and the snow's relief (7 of 10)** shipped short of their bars. Keep them, tune
+   them after you have seen them in motion, or take them out.
+4. **The other hours** shipped as Almanac rewards though their critics judged them short against ART.md's day. Keep
+   them as rewards, or hold them back until a later round lifts them.
+5. **Photo mode on CrazyGames.** Save Photo is a browser download; whether CrazyGames' frame allows downloads is
+   untested. If it does not, the photo needs another way out (the SDK has none we use today).
+6. **The camera.** Every mountain's worst frames are the camera's: through a leap's lip for a slow rider, the opening
+   and the First Drop seen from the big-air lens, a flip read as a fall, the rider a speck over the biggest leaps, the
+   phone's lower third empty. A camera lane is the largest look lift left.
+7. **Ghosts in the sky.** Pool riders' recorded lines sometimes put a ghost high over a town or at the lens. The sim
+   is closed, so a fix is in how a ghost is drawn (held to the snow, faded high), not where it is.
+8. **Geometry, not paint.** Frostfang's span and crevasse walls, Lanternfall's Cloud Sea, Ember's slots and Sakura's
+   terraces want built forms; the review lanes reached what palettes and dressing could.
 
 ## The fifteen-minute route
 
@@ -100,4 +120,14 @@ window is a fresh save.
 
 ## Where things are
 
-<!-- fill: captures under shots/r8/, the lanes' notes, the tools added -->
+- **The decisions:** DECISIONS 367 to 384. **The look:** ART.md 16 and the "round 8" bullets through sections 4 to 15.
+- **Each lane's notes:** `notes/r8-*.md` (the sim's design in `r8-sim-design.md`, the spine's in `r8-spine-design.md`,
+  the five review lanes in `r8-rev0.md` to `r8-rev4.md` with their per-frame scores, Low's cost in `r8-lowperf.md`).
+- **Captures** (git-ignored) under `shots/r8/`: each lane's own folder; the review loop's frames by mountain and pass
+  in `shots/r8/review/m0` to `m4`; the lab in `shots/r8/final/lab/`; the performance sittings in
+  `shots/r8/final/perf/` (the first, during the lanes) and `shots/r8/final/sit2/` (the last); Low's bisect and profiles
+  in `shots/r8/final/bisect/` and `prof/`; the merged build's smoke frames in `shots/r8/main/m4smoke/`.
+- **New tools** in `scripts/playtest/`: `r8-bars.ts` and `r8career.ts` (careers of 100 runs on the real sim),
+  `stills.js` and `stills-at.sh` (a run held still on a virtual clock, with each frame's draw calls), `blind-pairs.mjs`,
+  `workcal.js` (a frame's work against a ruler, for a shared machine), `browser-slot.sh` (one browser on the machine),
+  and the lowperf lane's `lowperf/glv.js` (GL calls over a held run) and `lowperf/prof.js`.
