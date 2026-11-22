@@ -554,7 +554,10 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
               // (The tray is an oval, 1.2 times as long as it is wide; the saucer round.)
               float rU = length(vec2(vSledP.x, (vSledP.z - 0.05) * 0.9));
               underC = mix(underC, mix(uSnowLit, uShadeTint, 0.62) * (0.66 + 0.08 * sin(rU * 46.0)), 0.42);
-              underC = mix(underC, vec3(0.66, 0.06, 0.025), smoothstep(0.5, 0.53, rU) * (1.0 - smoothstep(0.64, 0.68, rU)));
+              // (Seen side-on in a spin the full band read as "a red target disc" on Sakura: it is narrower, a step
+              // deeper, and fades as the hull turns edge-on to the lens, so it is there when the disc faces the lens.)
+              float faceU = smoothstep(0.35, 0.75, dot(n, v));
+              underC = mix(underC, vec3(0.56, 0.05, 0.022), smoothstep(0.54, 0.57, rU) * (1.0 - smoothstep(0.64, 0.67, rU)) * faceU);
             }
             col = mix(col, underC, underK);
           }
