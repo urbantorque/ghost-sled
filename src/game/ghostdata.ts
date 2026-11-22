@@ -66,7 +66,15 @@ export interface PoolGhostData {
 
 export type WorkerIn =
   | { type: 'replay'; jobs: Array<{ id: number; record: string }> }
-  | { type: 'pool'; reqId: number; seed: number; count: number; salt: number; budgetRuns?: number; maxTicks?: number };
+  | { type: 'pool'; reqId: number; seed: number; count: number; salt: number; budgetRuns?: number; maxTicks?: number }
+  /** Round 8, the trials lane: the week's Trial field (trialfield.ts), by its ISO week. */
+  | { type: 'trial'; reqId: number; week: string; maxTicks?: number };
+
+/** A Trial field rider's tally as the worker sends it (trial.ts TrialTally). */
+export interface TrialTallyData {
+  tumbles: number;
+  line: { seconds: number; score: number; perfects: number } | null;
+}
 
 export type WorkerOut =
   | {
@@ -86,4 +94,5 @@ export type WorkerOut =
       tricks: Int32Array;
     }
   | { type: 'error'; id: number; message: string }
-  | { type: 'pool'; reqId: number; ghosts: PoolGhostData[] };
+  | { type: 'pool'; reqId: number; ghosts: PoolGhostData[] }
+  | { type: 'trial'; reqId: number; ghosts: PoolGhostData[]; tallies: TrialTallyData[] };

@@ -27,6 +27,7 @@ import {
   FRAME_STRIDE,
   PoolGhostData,
   SAMPLE_EVERY,
+  type TrialTallyData,
   WorkerIn,
   WorkerOut,
 } from './ghostdata';
@@ -312,6 +313,32 @@ export class GhostManager {
     let n = 1;
     for (const t of this.tracks) if (t.ready || t.frames === null) n++;
     return n;
+  }
+
+  /** Round 8, the trials lane: the week's Trial field (trialfield.ts) in its own short-lived worker, as the Cup's pool
+   *  is: its riders, and each one's tally for the medal's targets. Empty when the worker fails. */
+  generateTrial(week: string, maxTicks?: number): Promise<{ ghosts: PoolGhostData[]; tallies: TrialTallyData[] }> {
+    return new Promise((resolve) => {
+      let w: Worker;
+      try {
+        w = new Worker(new URL('../workers/ghost.worker.ts', import.meta.url), { type: 'module' });
+      } catch {
+        return resolve({ ghosts: [], tallies: [] });
+      }
+      const reqId = nextReq++;
+      const done = (o: { ghosts: PoolGhostData[]; tallies: TrialTallyData[] }) => {
+        w.terminate();
+        resolve(o);
+      };
+      w.onmessage = (e: MessageEvent<WorkerOut>) => {
+        const m = e.data;
+        if (m.type === 'trial' && m.reqId === reqId) done({ ghosts: m.ghosts, tallies: m.tallies });
+        else if (m.type === 'error' && m.id === -reqId) done({ ghosts: [], tallies: [] });
+      };
+      w.onerror = () => done({ ghosts: [], tallies: [] });
+      const msg: WorkerIn = { type: 'trial', reqId, week, maxTicks };
+      w.postMessage(msg);
+    });
   }
 
   /** Runs the bot in its own short-lived worker so race replays are never queued behind it. */

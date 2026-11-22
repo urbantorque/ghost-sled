@@ -7,6 +7,7 @@ import { isPaint } from './paints';
 import { type AlbumSave, type ChapterSave, type ContractsSave, type FlameSave, type LeagueSave, type LongNightSave, type RankSave, type RecentRun, readAlbum, readChapters, readContracts, readFlame, readLeague, readLongNight, readRank, readRecent, seedXp } from './spinesave';
 import { xpToPage } from './almanac';
 import { readLit } from './lanterns';
+import { type TrialSave, readTrials } from './trial';
 import { dailyKey } from '../sim/mountains';
 import { hashString } from '../sim/prng';
 import { recordFromString } from '../sim/replay';
@@ -169,6 +170,9 @@ export interface SaveData {
   /** Round 8, the hours lane: the named mountains ridden at their other hour (palette.ts ALT_HOURS), by id, as the
    *  title last picked them; a look only, nothing reaches the sim, a record or a ghost. Written only when one is picked. */
   hours?: string[];
+  /** Round 8, the trials lane: each week's Trial ridden, by its ISO week: the medal held (never lowered) and the best
+   *  figure on its measure (trial.ts). The latest year kept; written only once a Trial has been ridden. */
+  trials?: Record<string, TrialSave>;
 }
 
 /** Where each garage shelf keeps what is owned, and what is worn, in the save. */
@@ -458,14 +462,16 @@ function loadMissions(p: unknown, fallback: MissionState, name: string, ghostsPa
   return s;
 }
 
-/** Drops Daily Mountain entries ('daily:<day>') other than today's, and Cup entries ('cup:<week>')
- *  other than this week's, from best, grudge and the run lists. The archive is never pruned. */
+/** Drops Daily Mountain entries ('daily:<day>') other than today's, and Cup and Trial entries ('cup:<week>',
+ *  'trial:<week>') other than this week's, from best, grudge and the run lists. The archive is never pruned. (A week's
+ *  Trial medal lives in `trials`, which keeps a year.) */
 export function pruneDaily(d: SaveData, today: string): void {
   const keep = `daily:${today}`;
   const week = `cup:${weekOfDay(today)}`;
+  const trial = `trial:${weekOfDay(today)}`;
   const prune = (rec: Record<string, unknown> | undefined): void => {
     if (!rec) return;
-    for (const k of Object.keys(rec)) if ((k.startsWith('daily:') && k !== keep) || (k.startsWith('cup:') && k !== week)) delete rec[k];
+    for (const k of Object.keys(rec)) if ((k.startsWith('daily:') && k !== keep) || (k.startsWith('cup:') && k !== week) || (k.startsWith('trial:') && k !== trial)) delete rec[k];
   };
   prune(d.best);
   prune(d.grudge);
@@ -557,6 +563,9 @@ export function merge(base: SaveData, p: Partial<SaveData>, today: string): Save
   const hours = readHours(p.hours);
   if (hours.length) d.hours = hours;
   else delete d.hours;
+  const trials = readTrials(p.trials);
+  if (trials) d.trials = trials;
+  else delete d.trials;
   pruneDaily(d, today);
   return d;
 }
