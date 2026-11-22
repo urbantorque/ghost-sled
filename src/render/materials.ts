@@ -263,7 +263,7 @@ const ROCK: Record<string, RockSet> = {
   // under the torii's warm bars, and the paler rock as a lilac wall at the snow's own value.)
   // (Round 8's review: in the navy of the shade, the torii row's cut walls and the chute's crags read as "navy cubes
   // under white lids", Frostfang's language. The ink leans to the wine of the spine's lacquer, so it is stone.)
-  cone: { lit: '#94868C', shade: '#4A3E4C', deep: '#2A2230', ledge: '#C4BCD0', style: [1.2, 2.5, 3, 0.02] },
+  cone: { lit: '#94868C', shade: '#4A3E4C', deep: '#2A2230', ledge: '#AEA4B6', style: [1.2, 2.5, 3, 0.02] },
 };
 
 function applyRock(p: Palette): void {

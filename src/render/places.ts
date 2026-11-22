@@ -515,7 +515,7 @@ function standMasts(ctx: SiteCtx, masts: ReadonlyArray<{ pos: V3; dz: number }>,
   const parts: BufferGeometry[] = [];
   for (const { pos, dz } of masts) {
     const top = pos[1] + 13 + (Math.round(dz) & 3);
-    parts.push(grade(seg([pos[0], pos[1] - 1, pos[2]], [pos[0], top, pos[2]], 0.15, ctx.biome === 'blossom' ? C('#93405A') : TIMBER_DARK, 5), pos[1], top, 0.8, 1.05));
+    parts.push(grade(seg([pos[0], pos[1] - 1, pos[2]], [pos[0], top, pos[2]], 0.15, ctx.biome === 'blossom' ? C('#6E2C48') : TIMBER_DARK, 5), pos[1], top, 0.8, 1.05));
     parts.push(box(1.5, 7.5, 0.08, cols[(Math.round(dz / 13) & 1) * 2], [pos[0], top - 4.6, pos[2] + 1]));
     parts.push(box(1.5, 0.3, 0.1, CREAM, [pos[0], top - 8.3, pos[2] + 1]));
     parts.push(pennant([pos[0], top, pos[2]], s, cols[0]));

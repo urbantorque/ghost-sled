@@ -1021,7 +1021,8 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
             // A festival mast: banded in the mood's colours, a gilt finial and a long pennant streaming.
             const st = keepStrings.find((x) => x.dz === q.dz);
             const top = st ? st.yA + 0.6 : gy + 9;
-            const mast = biome === 'blossom' ? C('#93405A') : biome === 'lantern' ? C('#2A2140') : TIMBER_DARK;
+            // (Round 8's review: in the late morning's light Sakura's masts read near the rider's vermillion; a deeper lacquer.)
+            const mast = biome === 'blossom' ? C('#6E2C48') : biome === 'lantern' ? C('#2A2140') : TIMBER_DARK;
             parts.push(grade(seg([pt.x, gy - 0.5, pt.z], [pt.x, top, pt.z], 0.17, mast, 6), gy, top, 0.8, 1.05));
             for (let y = gy + 3, k = 0; y < top - 1 && !low; y += 3.2, k++) parts.push(part(new CylinderGeometry(0.2, 0.2, 0.7, 4, 1, true), k % 2 ? CREAM : cols[0], { pos: [pt.x, y, pt.z] }));
             parts.push(heap([pt.x, gy, pt.z], [0.45, 0.2, 0.45]));
