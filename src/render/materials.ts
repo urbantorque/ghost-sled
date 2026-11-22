@@ -2300,6 +2300,10 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
             keep = min(keep, 1.0 - vCull * max(uResults, uTitleClear));
           #endif
           #ifdef COVERAGE_FADE
+            // (Through the same middle of the fade as the dither below: across the whole of it, a spire or a
+            // stone the lens passed on a wall ride hung over the rider for metres as milky glass, which the
+            // reconstruction held as a see-through slab, ART.md 12. Solid, then gone, with a soft edge.)
+            keep = smoothstep(0.42, 0.58, keep);
             if (keep < 0.02) discard;
           #else
             if (keep < 1.0) {
