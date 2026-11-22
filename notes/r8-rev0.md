@@ -421,7 +421,7 @@ Draw calls level on every tier. Triangles +1.1% on High, +2.7% on Low and +1.2% 
 outcrops in more, thinner beds of nine sides (pass 2's fix; in a batch already drawn) and the tray's two rings (about
 400 triangles on one sled). No new draw, pass, program or uniform, and nothing before the first frame; the glaze's
 warmth reads the mirrored colour it already has, and the shafts' near metres are one subtraction.
-Low's GL calls a frame (`glcount.js`) were not counted: the count against the pass-1 build (`dist/r8-rev0-base`, kept in the worktree; `rev0/glc.sh` runs it A B B A) had just taken the slot when the lane was told to hand back. Nothing in the branch adds a draw or a uniform call on Low (palette values, shader terms and a few triangles), so the count should be level; it is the main lane's to confirm.
+Low's GL calls a frame (`glcount.js`, Pinecrest, a live pilot from the start, 10 s): the pass-1 base 500.9 and 491.0, the branch 506.7 (one run; the first of an A B B A set failed to load). Uniform calls 224.8 and 220.7 against 226.3, programs 72 and 72. Within the ride's own spread (the base's two runs differ by 10), with no new draw or uniform in the branch; a fuller A B B A in a quiet sitting would settle it. Raw output: `shots/r8/review/m0/glcount/`.
 
 ## Shared code touched
 
