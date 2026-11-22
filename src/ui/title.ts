@@ -1,4 +1,4 @@
-import type { MedalSet, MissionView, MountainCard, ScreenRect, TitleCup, TitleModel, TitleSpine, TitleTwelve, TwelveRung, UIHandlers } from './contract';
+import type { MedalSet, MissionView, MountainCard, ScreenRect, TitleCup, TitleModel, TitleSpine, TitleTrial, TitleTwelve, TwelveRung, UIHandlers } from './contract';
 import { barShare } from './almanac';
 import type { InputMode } from '../game/input';
 import { oldLinkLine } from '../game/challenge';
@@ -11,6 +11,7 @@ import { icon } from './icons';
 import { EASE_OUT, SPRING, play, reduced } from './motion';
 import { pushRect } from './hud';
 import './hours.css';
+import './trials.css';
 
 // Title screen. Landscape: one column on the left reads logo, mountain cards, the Ride that rides
 // them, then the menu row; wallet and the daily and Cup cards keep to the right, and the 3D scene owns
@@ -181,7 +182,7 @@ export class Title {
    * line hold on the veil, and it sweeps on off the far edge to show the new shot. The controls stay
    * where they are, above it. Under reduced motion the mountain changes at once.
    */
-  private travel(id: string, name: string, go: () => void): void {
+  private travel(id: string, name: string, go: () => void, line?: string): void {
     if (this.travelling) return;
     if (reduced() || typeof this.veil.animate !== 'function') {
       go();
@@ -191,7 +192,7 @@ export class Title {
     this.closeMissions();
     this.veil.className = `gs-t-veil v-${id} is-in`;
     this.veilName.textContent = name;
-    this.veilLine.textContent = PLACES[id] ?? '';
+    this.veilLine.textContent = line ?? PLACES[id] ?? '';
     this.veil.hidden = false;
     const T = TRAVEL_TIMING;
     this.travelTimers.push(
@@ -245,8 +246,10 @@ export class Title {
     // words on the ink floor under the scene instead of floating over the sky.
     const tagline = h('p', 'gs-tagline', 'Race the ghosts of every great run.');
     // A returning player reads the mountain picked under the logo: its name and the feeling of its key art.
-    const placeLine = PLACES[m.selected];
-    const picking = m.selected === 'daily' ? 'Daily Mountain' : m.selected === 'cup' ? 'Weekly Cup' : (m.mountains.find((x) => x.id === m.selected)?.name ?? '');
+    // (The trials lane: the week's Trial picked reads "Week 48 Trial" over its twist, "Mirrored Ember Peak in a Blizzard".)
+    const trialOn = m.selected === 'trial' && m.trial ? m.trial : null;
+    const placeLine = trialOn ? trialOn.name : PLACES[m.selected];
+    const picking = trialOn ? `Week ${trialOn.week} Trial` : m.selected === 'daily' ? 'Daily Mountain' : m.selected === 'cup' ? 'Weekly Cup' : (m.mountains.find((x) => x.id === m.selected)?.name ?? '');
     const placeName = h('span', 'gs-t-place-n', picking);
     placeName.setAttribute('translate', 'no');
     const place = !m.firstVisit && placeLine && picking ? h('p', 'gs-t-place', placeName, h('span', 'gs-t-place-l', placeLine)) : null;
@@ -258,6 +261,9 @@ export class Title {
     if (m.challenge) {
       // A friend's link opens on their ghost: "Racing Mila's ghost" over how far it went and where.
       ride.append(challengeBanner(m.challenge));
+    } else if (trialOn) {
+      // The Trial picked: its rule and the three targets over Ride, where the greeting stands.
+      ride.append(trialPanel(trialOn));
     } else if (m.greet && !m.firstVisit) {
       // A returning player gets one line over Ride: who is waiting, what is close, or the nearest
       // mission. It is read in context right above Ride, so it carries no live role.
@@ -272,7 +278,7 @@ export class Title {
     // The Daily and the Cup are picked from cards of their own, so the button names those itself.
     // With a ladder to climb it carries the name above you: what the next run is for.
     const sel = m.mountains.find((x) => x.id === m.selected) ?? m.mountains[0];
-    const picked = m.selected === 'daily' ? 'Daily Mountain' : m.selected === 'cup' ? 'Weekly Cup' : null;
+    const picked = m.selected === 'daily' ? 'Daily Mountain' : m.selected === 'cup' ? 'Weekly Cup' : trialOn ? 'Weekly Trial' : null;
     const passed = m.firstVisit ? 0 : ghostsPassed(m);
     const bare = !picked && !!sel && !sel.locked && sel.best <= 0 && !sel.oldBest && passed <= 0;
     // Another day's Daily or another week's Cup: its course has gone, so nobody is being raced and the
@@ -311,7 +317,7 @@ export class Title {
       h('span', 'gs-btn-label gs-ride-label', h('span', 'gs-ride-verb', verb), mtn),
       rideKey(m.inputMode),
     );
-    rideBtn.setAttribute('aria-label', where ? `${verb}: ${duel ? `${duel} on ` : ''}${where}${aim && !duel ? `. ${aim}` : ''}${waiting ? `. ${status.slice(0, -1)}` : ''}` : verb);
+    rideBtn.setAttribute('aria-label', where ? `${verb}: ${duel ? `${duel} on ` : ''}${where}${trialOn ? `, ${trialOn.name}` : ''}${aim && !duel ? `. ${aim}` : ''}${waiting ? `. ${status.slice(0, -1)}` : ''}` : verb);
     if (waiting) rideBtn.setAttribute('aria-disabled', 'true');
     if (showKey) rideBtn.setAttribute('aria-keyshortcuts', 'Space');
     ride.append(rideBtn);
@@ -326,6 +332,8 @@ export class Title {
       tg.setAttribute('aria-label', `Ride ${sel?.name ?? 'this mountain'} mirrored`);
       opts.append(tg);
     }
+    // (The trials lane: the week's Cup or its Trial, while the Cup's card is picked; the card is the week's.)
+    if (m.trial && !raced && (m.selected === 'cup' || trialOn)) opts.append(this.weekPick(m.trial));
     if (opts.childElementCount) ride.append(opts);
     // A brand-new player learns the loop before the first tap: what the ghosts are for.
     if (m.firstVisit && !m.challenge) ride.append(h('p', 'gs-t-goal', 'Pass ghosts to unlock new mountains'));
@@ -374,7 +382,7 @@ export class Title {
       { passive: false },
     );
     // The mountain cards sit directly above the Ride that rides them; the daily is its own card.
-    el.append(side, h('div', `gs-t-daily gs-t-anim${m.cup ? ' has-cup' : ''}`, m.cup ? this.cupCard(m.cup, m.selected === 'cup') : null, this.dailyCard(m.daily, m.selected === 'daily')));
+    el.append(side, h('div', `gs-t-daily gs-t-anim${m.cup ? ' has-cup' : ''}`, m.cup ? this.cupCard(m.cup, m.selected === 'cup' || !!trialOn) : null, this.dailyCard(m.daily, m.selected === 'daily')));
     this.watchEnds(track, prev, next, strip);
     if (m.twelve) el.append(this.twelveCard(m.twelve, m));
 
@@ -489,6 +497,38 @@ export class Title {
     const g = h('div', 'gs-t-hour', half(false), half(true));
     g.setAttribute('role', 'group');
     g.setAttribute('aria-label', 'Hour');
+    return g;
+  }
+
+  /** Round 8, the trials lane: the week's two ways, the Cup and its Trial, as two halves of the hour's soft pill under
+   *  Ride. The Cup half wears the trophy; the Trial half the week's Trial medal held (an empty ring for none), so the
+   *  pick also says what is left to take. The picked half is lit, never in vermillion (Ride's alone). */
+  private weekPick(t: TitleTrial): HTMLElement {
+    const cup = btn(this.ctx, { cls: 'gs-t-hour-opt gs-t-week-opt', fk: 'week-cup', onClick: () => (t.on ? this.hd.onTrial?.(false) : undefined) }, icon('trophy', 'gs-t-week-ico'), h('span', 'gs-btn-label', 'Cup'));
+    cup.setAttribute('aria-pressed', String(!t.on));
+    cup.setAttribute('aria-label', 'Ride the Weekly Cup');
+    const medal = Math.max(0, Math.min(3, Math.floor(t.medal)));
+    const disc = h('span', `gs-mdot m-${medal} gs-t-week-ico`);
+    disc.setAttribute('aria-hidden', 'true');
+    const trial = btn(
+      this.ctx,
+      {
+        cls: `gs-t-hour-opt gs-t-week-opt${t.ready ? '' : ' is-waiting'}`,
+        fk: 'week-trial',
+        onClick: () => {
+          if (t.on || !t.ready) return;
+          this.travel(t.mountain, `Week ${t.week} Trial`, () => this.hd.onTrial?.(true), t.name);
+        },
+      },
+      disc,
+      h('span', 'gs-btn-label', 'Trial'),
+    );
+    trial.setAttribute('aria-pressed', String(t.on));
+    trial.setAttribute('aria-label', `Ride this week's Trial: ${t.name}. ${t.rule}${medal > 0 ? `. ${MEDAL[medal]} held` : ''}${t.ready ? '' : '. Finding rivals'}`);
+    if (!t.ready) trial.setAttribute('aria-disabled', 'true');
+    const g = h('div', 'gs-t-hour gs-t-week', cup, trial);
+    g.setAttribute('role', 'group');
+    g.setAttribute('aria-label', 'This week');
     return g;
   }
 
@@ -803,6 +843,11 @@ export class Title {
       const c = m.cup;
       list.append(h('li', 'gs-wall-row is-cup', h('span', 'gs-wall-name', `Week ${c.week} Cup`), h('span', 'gs-wall-rank gs-num', c.best > 0 ? clock(c.best) : 'No run yet'), medalDots({ stages: [], run: c.medal })));
     }
+    // (The trials lane: the week's Trial, your best figure and its medal, under the Cup.)
+    if (m.trial) {
+      const t = m.trial;
+      list.append(h('li', 'gs-wall-row is-cup', h('span', 'gs-wall-name', `Week ${t.week} Trial`), h('span', 'gs-wall-rank gs-num', t.best ? `Best ${t.best}` : 'No run yet'), medalDots({ stages: [], run: t.medal })));
+    }
     pop.append(list, h('p', 'gs-wall-key', 'Three stages, then the whole run. Stars: medals, sky gates, set pieces swept clean, home riders beaten, a clean finish.'));
     bar.append(pop);
     if (animate) play(pop, [{ opacity: 0, transform: 'translateY(8px) scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'cubic-bezier(0.2, 0.9, 0.2, 1.1)' });
@@ -962,6 +1007,28 @@ export function medalDots(m: MedalSet, fresh: readonly number[] = [], quiet = fa
     row.setAttribute('aria-label', medalWords(m));
   }
   return row;
+}
+
+/**
+ * Round 8, the trials lane: the Trial picked, over Ride where the greeting stands. Its rule in the greeting's own scene
+ * type, then the three targets struck as the medals they win (bronze, silver, gold, each disc in its metal with its
+ * figure), and your best this week. The targets are what a player sees before riding; until the field is in, the line
+ * says it is being found.
+ */
+function trialPanel(t: TitleTrial): HTMLElement {
+  const rule = h('p', 'gs-t-greet gs-t-trial-rule', icon('flag'), h('span', '', t.rule));
+  const box = h('div', 'gs-t-trial', rule);
+  if (t.targets) {
+    const row = h('p', 'gs-t-trial-goals');
+    t.targets.forEach((v, i) => {
+      const held = t.medal > i;
+      // (The disc is drawn; a reader hears the medal's name before its figure.)
+      row.append(h('span', `gs-medal m-${i + 1} gs-t-trial-goal${held ? ' is-held' : ''}`, sr(`${MEDAL[i + 1]} `), h('span', 'gs-num', v), held ? sr(', held') : null));
+    });
+    if (t.best) row.append(h('span', 'gs-t-trial-best', 'Best ', h('span', 'gs-num', t.best)));
+    box.append(row);
+  } else box.append(h('p', 'gs-t-trial-goals is-waiting', 'Finding rivals…'));
+  return box;
 }
 
 /** The speaker glyph struck out, in the icon family's 2 px round strokes. */

@@ -26,7 +26,7 @@ import { reduced } from '../ui/motion';
 import { REVEAL_TIMING } from '../ui/reveal';
 import { RESULTS_TIMING } from '../ui/results';
 import { forgetSeatedPortraits, prewarmSledPortraits, setSledPortraits } from '../ui/menus';
-import type { AlmanacModel, GarageShelf, GhostKind, HintKind, HudModel, MountainCard, PaintCard, ResultsModel, ResultsSpine, TitleSpine, LanternTownView, SettingsModel, TitleModel, TitleTwelve, TwelveRung } from '../ui/contract';
+import type { AlmanacModel, GarageShelf, GhostKind, HintKind, HudModel, MountainCard, PaintCard, ResultsModel, ResultsSpine, TitleSpine, LanternTownView, SettingsModel, TitleModel, TitleTrial, TitleTwelve, TwelveRung } from '../ui/contract';
 import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS, FINISH_RESULTS_MS, FINISH_SKIP_MS, IDLE_FEEL } from './beats';
 import { type OldLink, linkLine, linkMountain, readChallengeLink, targetZ } from './challenge';
 import { Director } from './director';
@@ -56,7 +56,8 @@ import { charmGatesOf, charmPoolOf, firstRunOf } from './charmpool';
 import { lanternSignals } from './charmsignals';
 import { ALL_CHARMS, CHARMS } from '../sim/charms';
 import { TRICKS } from '../sim/tricks';
-import { CHAPTER_EXTRAS, GARAGE_EXTRAS, type GarageExtra, almanacOpens, hourOpen, legsOpen, mirrorOpen, shelfExtras } from './almanac';
+import { CHAPTER_EXTRAS, GARAGE_EXTRAS, type GarageExtra, almanacOpens, featureOpen, hourOpen, legsOpen, mirrorOpen, shelfExtras } from './almanac';
+import { type Trial, type TrialOutcome, type TrialTally, type TrialTargets, figureShort, figureText, newTally, startWords, settleTrial, stageWords, tallyStep, trialConfig, trialFor, trialKey, trialMedalNow, trialMountain, trialTargets, trialValue } from './trial';
 import { type Night, depthWords, mirrorKey, nightBeat, nightDepth, nightLeg, nightOn, settleLongNight, startNight } from './modes';
 import { showNightBeat } from '../ui/nightbeat';
 import { SYNERGY_KEYS } from './album';
@@ -189,6 +190,22 @@ export class App {
   private cupPool: PoolGhostData[] = [];
   private cupReady = false;
   private cupAsked = '';
+  /** Round 8, the trials lane: this week's Trial (trial.ts), its field as the race's pool and the medal's targets read
+   *  from it, made in the worker after the Cup's; whether the title has it picked (it is ridden from the Cup's card);
+   *  and a link that asked for it (it opens the Trial on a save that has not opened Trials yet). */
+  private trial: Trial;
+  private trialPool: PoolGhostData[] = [];
+  private trialGoals: TrialTargets | null = null;
+  private trialReady = false;
+  private trialAsked = '';
+  private trialPick = false;
+  private trialLink = false;
+  /** The Trial a run under way rides (null: not one), held through its results for a revive; what it did as the
+   *  Trial judges it; the week's medal as it started; and what its settle found. */
+  private trialRun: Trial | null = null;
+  private trialTally: TrialTally = newTally();
+  private trialMedalAtStart = 0;
+  private trialOut: TrialOutcome | null = null;
   /** Each named mountain's ladder and medal times, read once from its pool. */
   private readonly boards = new Map<string, Board>();
   /** Your Climb here as the run started: what the results say this run earned, revive or not. */
@@ -333,6 +350,7 @@ export class App {
     if (DEV_ON && DEV.has('m')) this.mountain = MOUNTAINS[Number(DEV.get('m'))] ?? this.mountain;
     this.daily = dailyMountain(dailyKey(new Date()));
     this.cup = cupMountain(weekKey(new Date()));
+    this.trial = trialFor(this.trialWeek());
     // (The hours lane: the world's first light is the hour picked for the mountain it opens on.)
     setHour(this.hourPicked() ? 'alt' : 'day');
     this.world = new World(root, this.mountain.seed, qualityFor(this.tiers.tier));
@@ -369,6 +387,8 @@ export class App {
       onSelectMountain: (id) => this.selectMountain(id),
       onDaily: () => this.selectMountain('daily'),
       onCup: () => this.selectMountain('cup'),
+      // (The trials lane: the Cup's card's two halves under Ride, the week's Cup or its Trial.)
+      onTrial: (on) => this.pickTrial(on),
       onSelectSled: (id) => this.selectSled(id),
       onBuySled: (id) => this.buySled(id),
       onSettings: (s) => this.applySettings(s),
@@ -464,7 +484,85 @@ export class App {
         this.showMountain();
       }
       if (this.phase === 'title') this.refreshTitle();
+      this.generateTrial();
     });
+  }
+
+  // ---------------------------------------------------------------- the trials lane: the week's Trial
+
+  /** The week the Trial is (dev: `?debug&week=2026-W50` rides another week's, for captures and play-tests). */
+  private trialWeek(): string {
+    const w = DEV_ON ? DEV.get('week') : null;
+    return w && /^\d{4}-W\d{2}$/.test(w) ? w : weekKey(new Date());
+  }
+
+  /** Trials open on the Almanac's page 35, or once The Twelve are behind you (the crown): somewhere to go after them.
+   *  Either way every mountain, mirror and charm gate is open by then. A friend's link to this week's Trial opens it
+   *  for that link. (Dev: `?debug&trials` or `&week=`.) */
+  private trialsOpen(): boolean {
+    const d = this.save.data;
+    return featureOpen(d, 'trials') || d.twelve?.crowned === true || this.trialLink || (DEV_ON && (DEV.has('trials') || DEV.has('week')));
+  }
+
+  /** The week's Trial field in the worker, after the Cup's (the Daily's, then the Cup's, then this, so they never race
+   *  for the CPU), once Trials are open. Its riders ride the race; each one's figure on the week's measure sets the
+   *  medal's targets. */
+  private generateTrial(): void {
+    if (!this.trialsOpen() || !this.cupAsked) return;
+    const t = this.trial;
+    if (this.trialAsked === t.week) return;
+    this.trialAsked = t.week;
+    void this.ghosts.generateTrial(t.week, 60 * 60 * 3.5).then(({ ghosts, tallies }) => {
+      if (t !== this.trial) return;
+      this.trialPool = withSlowRiders(ghosts, `trial/${t.week}`);
+      this.trialGoals = trialTargets(t.measure, tallies.map((x) => trialValue(t.measure, x)));
+      this.trialReady = ghosts.length > 0 && this.trialGoals !== null;
+      if (this.trialPick && this.phase === 'title') {
+        if (!this.trialReady) this.trialPick = false;
+        this.showMountain();
+      }
+      if (this.phase === 'title') this.refreshTitle();
+    });
+  }
+
+  /** The Trial this moment is about: the one a run rides, else the one the title has picked. */
+  private trialHere(): Trial | null {
+    return this.trialRun ?? (this.trialPick && (this.phase === 'title' || this.phase === 'boot') ? this.trial : null);
+  }
+
+  /** The title's pick between the week's Cup and its Trial (the Cup card's two halves under Ride). The Trial travels to
+   *  its mountain, at its hour; never mirrored on the title, as no mountain is. */
+  private pickTrial(on: boolean): void {
+    if (this.phase !== 'title') return;
+    if (on) {
+      if (!this.trialReady) return;
+      this.trialPick = true;
+      this.mountain = trialMountain(this.trial);
+    } else {
+      this.trialPick = false;
+      this.mountain = this.cupReady ? this.cup : this.savedMountain();
+    }
+    this.showMountain();
+    this.refreshTitle();
+  }
+
+  /** The week's Trial as the title shows it. */
+  private trialModel(): TitleTrial {
+    const t = this.trial;
+    const d = this.save.data;
+    const g = this.trialGoals;
+    const best = d.trials?.[t.week]?.best;
+    return {
+      week: weekNumber(t.week),
+      mountain: t.mountain,
+      name: t.name,
+      rule: t.rule,
+      ready: this.trialReady,
+      on: this.trialPick,
+      medal: trialMedalNow(d.trials, t.week),
+      best: best !== undefined ? figureShort(t.measure, best) : null,
+      targets: g ? [figureShort(t.measure, g[0]), figureShort(t.measure, g[1]), figureShort(t.measure, g[2])] : null,
+    };
   }
 
   /** The mountain the save last picked. */
@@ -484,8 +582,8 @@ export class App {
   private duelHere(): Duel | null {
     const mi = MOUNTAINS.indexOf(this.mountain as MountainDef);
     if (mi < 0 || (this.challenge && this.challenge.record.seed === this.mountain.seed)) return null;
-    // (The Twelve ride their own ground as it stands: never on a mirror or a leg of the Long Night.)
-    if (this.night || this.mirrorHere()) return null;
+    // (The Twelve ride their own ground as it stands: never on a mirror, a leg of the Long Night or a Trial.)
+    if (this.night || this.mirrorHere() || this.trialHere()) return null;
     // (The first duel waits for the third run: one idea at a time, twelve.ts FIRST_DUEL_RUN.)
     return duelOn(this.save.data.twelve, mi, (i) => this.isOpen(MOUNTAINS[i]), this.save.data.runs);
   }
@@ -523,7 +621,7 @@ export class App {
 
   /** A link opened this Daily or Cup before its rivals were generated: its title stands, Ride waits. */
   private rivalsComing(): boolean {
-    return (this.mountain === this.daily && !this.dailyReady) || (this.mountain === this.cup && !this.cupReady);
+    return (this.mountain === this.daily && !this.dailyReady) || (this.mountain === this.cup && !this.cupReady) || (this.trialPick && !this.trialReady);
   }
 
   /** Today's Daily Mountain, recomputed on every title entry (a tab left open past UTC midnight). */
@@ -542,6 +640,16 @@ export class App {
       this.cup = week;
       this.cupPool = [];
       this.cupReady = false;
+    }
+    // (And a new week a new Trial.)
+    const trial = this.trialWeek();
+    if (trial !== this.trial.week) {
+      if (this.trialPick) this.mountain = this.savedMountain();
+      this.trial = trialFor(trial);
+      this.trialPool = [];
+      this.trialGoals = null;
+      this.trialReady = false;
+      this.trialPick = false;
     }
     this.generateDaily();
   }
@@ -614,6 +722,14 @@ export class App {
     if (link?.old) this.oldLink = link.old;
     const m = linkMountain(link?.ghost?.seed ?? link?.old?.seed, this.rideable());
     if (m) this.mountain = m;
+    // (The trials lane: a link to a run of this week's Trial opens the Trial, so the friend's ghost and you race the
+    // same rules; it opens it for that link on a save that has not opened Trials yet.)
+    const g = link?.ghost;
+    const t = this.trial;
+    if (g && m && g.seed === trialMountain(t).seed && g.chaos.mood === t.chaos.mood && g.chaos.event === t.chaos.event && g.chaos.seed === t.chaos.seed && (g.charmPool ?? -1) === t.charmPool) {
+      this.trialLink = true;
+      this.trialPick = true;
+    }
     // The title was built before the link was read: rebuild its course and reel on the link's mountain.
     if (this.mountain !== before) this.showMountain();
   }
@@ -643,6 +759,9 @@ export class App {
     this.run = null;
     this.loop = null;
     this.endNight();
+    // (A Trial's run is over; the title keeps the Trial picked if it was.)
+    this.trialRun = null;
+    this.trialOut = null;
     this.refreshDaily();
     this.applyHour();
     this.world.setCourse(this.mountain.seed);
@@ -747,11 +866,16 @@ export class App {
     const today = this.daily.tagline;
     const week = this.cup.tagline;
     const cupRoll = cupChaos(week);
-    const named = MOUNTAINS.some((m) => m === this.mountain);
+    // (The trials lane: a Trial picked rides a named mountain under the week's rules, on no ladder of its own.)
+    const tp = this.trialPick;
+    const named = MOUNTAINS.some((m) => m === this.mountain) && !tp;
     const flame = flameNow(d.flame, today);
+    this.generateTrial();
     const cupPool = (): PoolGhostData[] | null => (this.cupReady ? this.cupPool : null);
     const open = (id: string): boolean => MOUNTAINS.some((m) => m.id === id && this.isOpen(m));
     let spine: TitleSpine | undefined;
+    // (The trials lane: a week's Trial not yet ridden is the day's news when nothing else is.)
+    const trialNews = this.trialsOpen() && this.trialReady && !tp && !d.trials?.[this.trial.week] ? `This week's Trial: ${this.trial.name}. Pick it on the Cup.` : null;
     const model: TitleModel = {
       mountains: MOUNTAINS.map((m) => {
         const spot = this.spotFor(m.id);
@@ -780,12 +904,12 @@ export class App {
           },
         };
       }),
-      selected: this.mountain.id,
+      selected: tp ? 'trial' : this.mountain.id,
       // (Round 8: the flame, days in a row with a run of any kind, takes the Daily-only streak line's place.)
       daily: { key: today, best: d.daily.key === today ? d.daily.best : 0, time: d.daily.last === today ? d.daily.time : undefined, ready: this.dailyReady, medal: dailyMedalNow(d.daily, today), streak: flame.alive ? flame.streak : 0, flame: true },
-      best: topScore(d.best[this.mountain.id]),
-      bestTime: d.best[this.mountain.id]?.time ?? 0,
-      oldBest: oldBest(d, this.mountain.id)?.score ?? 0,
+      best: tp ? 0 : topScore(d.best[this.mountain.id]),
+      bestTime: tp ? 0 : (d.best[this.mountain.id]?.time ?? 0),
+      oldBest: tp ? 0 : (oldBest(d, this.mountain.id)?.score ?? 0),
       wallet: d.gifts,
       sledName: sledById(d.sled).name,
       challenge: this.challengeModel(),
@@ -794,12 +918,14 @@ export class App {
       firstVisit: d.runs === 0,
       master: d.settings.master,
       ghostsPassed: d.ghostsPassed,
-      greet: titleGreeting(d, this.mountainKey(), this.mountain.name),
+      greet: tp ? null : titleGreeting(d, this.mountainKey(), this.mountain.name),
       nextRung: named ? nextLine(this.spotFor(this.mountain.id), bestStanding(d.best[this.mountain.id])) : null,
       // (The modes lane: the picked mountain's mirror toggle, once its mirror is open.)
-      mirror: this.mirrorOpenHere() ? { on: this.mirrorPick } : null,
+      mirror: !tp && this.mirrorOpenHere() ? { on: this.mirrorPick } : null,
       // (The hours lane: the picked mountain's other hour, once the Almanac has opened it.)
-      hour: this.hourModel(),
+      hour: tp ? null : this.hourModel(),
+      // (The trials lane: the week's Trial, once open: ridden from the Cup's card.)
+      trial: this.trialsOpen() ? this.trialModel() : null,
       cup: {
         key: week,
         week: weekNumber(week),
@@ -813,13 +939,20 @@ export class App {
       // Round 8's spine (spineview.ts): built when a screen first reads it, since its album count plans every
       // mountain's set pieces and the title opens before the first frame.
       get spine() {
-        return (spine ??= titleSpine(d, today, { week, cupPool: cupPool(), open }));
+        if (!spine) {
+          spine = titleSpine(d, today, { week, cupPool: cupPool(), open });
+          if (!spine.whatsNew && trialNews) spine.whatsNew = trialNews;
+        }
+        return spine;
       },
     };
     this.ui.showTitle(model);
   }
 
   private selectMountain(id: string): void {
+    // (A mountain, the Daily or the Cup picked puts the Trial down; the Cup's card picks it back up under Ride.)
+    if (id === 'trial') return this.pickTrial(true);
+    this.trialPick = false;
     if (id === 'daily') {
       if (!this.dailyReady) return;
       this.mountain = this.daily;
@@ -1010,7 +1143,9 @@ export class App {
     const grudgeRec = d.grudge[key];
     const grudge = grudgeRec && validRecord(grudgeRec.record) ? grudgeRec : undefined;
     const friend = this.challenge && this.challenge.record.seed === this.mountain.seed ? this.challenge.record : null;
-    const cup = this.mountain.id === 'cup';
+    // (The trials lane: a Trial's field is its week's, the same for everyone, as the Cup's is.)
+    const trial = this.trialRun !== null;
+    const cup = this.mountain.id === 'cup' || trial;
     const mine = own?.record ? { name: d.name, score: own.score, distance: own.distance, record: own.record } : null;
     // A duel of The Twelve: the rider's real record on their home ground rides as the promised rival, whatever
     // the mood. The last race is its own field: all twelve on their Lanternfall records, and your best.
@@ -1023,8 +1158,8 @@ export class App {
     const duelRec = duel ? duelRecord(this.poolForMountain(this.mountain), duel.rider) : null;
     const promised = duelRec ? { key, name: duelRec.name, score: duelRec.score, record: duelRec.record } : this.promised?.key === key ? this.promised : null;
     const picks = pickField({
-      pool: this.poolForMountain(this.mountain),
-      kind: MOUNTAINS.some((m) => m === this.mountain) ? 'pool' : 'daily',
+      pool: trial ? this.trialPool : this.poolForMountain(this.mountain),
+      kind: MOUNTAINS.some((m) => m === this.mountain) && !trial ? 'pool' : 'daily',
       mood: chaos.mood,
       event: chaos.event,
       count: fieldCount(moodInfo(chaos.mood).params.extraGhosts, cup ? [] : recentFor(d.runTimes ?? {}, key)),
@@ -1045,7 +1180,8 @@ export class App {
     });
     if (cup && mine) picks.push({ name: mine.name, kind: 'you', score: mine.score, record: mine.record, distance: mine.distance });
     return picks.map((g) => {
-      const e: Omit<GhostEntry, 'id'> = { name: g.name, kind: g.kind, score: g.score, record: g.record };
+      // (A Trial's riders are the week's, not the day's: their tags carry no "Daily".)
+      const e: Omit<GhostEntry, 'id'> = { name: g.name, kind: trial && g.kind === 'daily' ? 'pool' : g.kind, score: g.score, record: g.record };
       if (g.role) e.role = g.role;
       if (g.nemesis) e.nemesis = true;
       if (g.rival) e.rival = true;
@@ -1056,6 +1192,9 @@ export class App {
 
   /** The save's key for this mountain (a Daily Mountain is keyed by its day). */
   private mountainKey(): string {
+    // (The trials lane: a Trial's runs keep their own key, the week's.)
+    const tr = this.trialHere();
+    if (tr) return trialKey(tr.week);
     if (this.mountain.id === 'cup') return `cup:${this.cup.tagline}`;
     if (this.mountain.id === 'daily') return `daily:${this.daily.tagline}`;
     // (Round 8, the modes lane: a Long Night's leg keeps its own key, a mirror mountain its own.)
@@ -1080,6 +1219,9 @@ export class App {
    *  A look only: the sim, the field, the ghosts and the records never hear of it (a ghost rides your hour with you).
    *  A Long Night's leg rides its mountain's day. */
   private hourPicked(): boolean {
+    // (A Trial rides the hour its week names, open or not: a look only.)
+    const tr = this.trialHere();
+    if (tr) return tr.hour && ALT_HOURS[courseFor(trialMountain(tr).seed).biome] !== undefined;
     if (this.night || !this.hourHere()) return false;
     return this.hourDev || (this.save.data.hours ?? []).includes(this.mountain.id);
   }
@@ -1169,16 +1311,27 @@ export class App {
     const legs = DEV_ON && DEV.has('legs') ? Number(DEV.get('legs')) : DEV_ON && DEV.has('night') && open === 0 ? 3 : open;
     const night = startNight((Math.random() * 4294967296) >>> 0, legs);
     if (!night) return false;
+    // (A night rides its own legs: the Trial picked on the title is put down.)
+    this.trialPick = false;
     this.night = night;
     this.nightEnd = null;
     return true;
   }
 
   /** An Almanac page's Ride: a mirror mountain picked and ridden, or the Long Night. */
-  private rideMode(mode: { kind: 'night' } | { kind: 'mirror'; mountain: string }): void {
+  private rideMode(mode: { kind: 'night' } | { kind: 'mirror'; mountain: string } | { kind: 'trial' }): void {
     if (this.phase !== 'title') return;
     this.ui.closeMenus();
     if (mode.kind === 'night') return this.rideNight();
+    // (The trials lane: the page that opens Trials rides this week's.)
+    if (mode.kind === 'trial') {
+      if (!this.trialReady) return;
+      this.trialPick = true;
+      this.mountain = trialMountain(this.trial);
+      this.ride();
+      return;
+    }
+    this.trialPick = false;
     const m = MOUNTAINS.find((x) => x.id === mode.mountain);
     if (!m || !this.isOpen(m) || !mirrorOpen(this.save.data, m.id)) return;
     this.mountain = m;
@@ -1200,6 +1353,7 @@ export class App {
       modes: {
         night: legs > 0 ? { legs, best: best && (best.legs > 0 || best.z > 0) ? depthWords(best) : null } : null,
         mirrors: MOUNTAINS.filter((x) => this.isOpen(x) && mirrorOpen(d, x.id)).map((x) => x.id),
+        trial: this.trialsOpen() && this.trialReady ? { name: this.trial.name, rule: this.trial.rule } : null,
       },
     };
   }
@@ -1232,6 +1386,26 @@ export class App {
       runAgainLabel: { text, aria },
       spine: r.spine ? { ...r.spine, primary: { kind: 'again', text, sub, aria } } : r.spine,
       raceLine: { text: `The Long Night: ${sub}`, tone: 'event' },
+    };
+  }
+
+  /** The trials lane: a Trial's results. The one button rides the Trial again, its line the medal to take next (or,
+   *  with gold, your best to beat); the race line says which medal and how far from the next. */
+  private trialResults(r: ResultsModel, t: Trial, out: TrialOutcome, g: TrialTargets): ResultsModel {
+    const d = this.save.data;
+    const held = out.best;
+    const best = d.trials?.[t.week]?.best;
+    const sub = held >= 3 ? (best !== undefined ? `Gold held. Your best: ${figureText(t.measure, best)}` : 'Gold held') : `${['Bronze', 'Silver', 'Gold'][held]} at ${figureText(t.measure, g[held])}`;
+    const text = 'Ride the Trial';
+    const aria = `Ride this week's Trial again: ${t.name}. ${sub}.`;
+    this.againTo = null;
+    this.promised = null;
+    return {
+      ...r,
+      runAgainLabel: { text, aria },
+      spine: r.spine ? { ...r.spine, primary: { kind: 'again', text, sub, aria } } : r.spine,
+      raceLine: { text: out.line, tone: 'event' },
+      trial: { medal: out.medal, line: out.line },
     };
   }
 
@@ -1305,7 +1479,15 @@ export class App {
     this.nightBeatOff = null;
     const leg = this.night ? nightLeg(this.night) : null;
     if (leg) this.mountain = MOUNTAINS.find((m) => m.id === leg.mountain) ?? this.mountain;
-    this.mirrorRun = leg ? leg.mirror : this.mirrorPick && this.mirrorOpenHere();
+    // (The trials lane: the week's Trial picked rides its mountain, mirrored or not, under its rules; never a night's leg.
+    // A run's Trial is fixed here, as its mirror is, and held through its results.)
+    const trial = !leg && this.trialPick && this.trialReady ? this.trial : null;
+    this.trialRun = trial;
+    this.trialOut = null;
+    this.trialTally = newTally();
+    this.trialMedalAtStart = trial ? trialMedalNow(d.trials, trial.week) : 0;
+    if (trial) this.mountain = trialMountain(trial);
+    this.mirrorRun = leg ? leg.mirror : trial ? trial.mirror : this.mirrorPick && this.mirrorOpenHere();
     // Chaos: the first run of a session is always plain. A friend's challenge replays their
     // conditions from the second attempt on (the rematch).
     const seed = (Math.random() * 4294967296) >>> 0;
@@ -1322,6 +1504,8 @@ export class App {
     if (DEV_ON && DEV.has('legend')) chaos = { ...chaos, event: ChaosEvent.None, legend: Number(DEV.get('legend')) };
     // A leg of the Long Night: its chaos is the night's, rising leg by leg (modes.ts legChaos).
     if (leg) chaos = leg.chaos;
+    // A Trial is its week's sky, whoever rides and however often (trial.ts trialFor).
+    if (trial) chaos = trial.chaos;
     this.chaos = chaos;
     if (chaos.mood !== Mood.None) this.lastMood = chaos.mood;
     this.sessionRuns++;
@@ -1350,7 +1534,8 @@ export class App {
     let sled = d.sled;
     let demo = false;
     if (DEV_ON && DEV.has('demo')) {
-      const pool = this.poolForMountain(this.mountain);
+      // (A Trial's demo replays a rider of its own field: that record rode the Trial's rules.)
+      const pool = trial ? this.trialPool : this.poolForMountain(this.mountain);
       const pick = pool[Math.max(0, pool.length - 1 - Number(DEV.get('demo')))];
       if (pick) {
         const rec = recordFromString(pick.record);
@@ -1383,7 +1568,16 @@ export class App {
     this.input.mirrored = this.mirrorRun;
     const extra = this.runExtra(demo);
     if (leg?.carry && !demo) extra.carry = leg.carry;
-    this.run = new Run(this.mountain.seed, chaos, sled, source, extra);
+    // (A Trial hands the sim its mountain, its chaos and its charm pool, and nothing else: trial.ts trialConfig. Its
+    // gates stand as on any run, three, and it is never a save's first run.)
+    const tc = trial ? trialConfig(trial, sled) : null;
+    if (tc) {
+      for (const k of Object.keys(extra) as Array<keyof RunExtra>) delete extra[k];
+      extra.charmPool = tc.charmPool;
+    }
+    this.run = new Run(tc ? tc.seed : this.mountain.seed, tc ? tc.chaos : chaos, sled, source, extra);
+    // (Its tally, tick by tick, as the field's riders were judged.)
+    if (tc) this.run.onStep = (s) => tallyStep(this.trialTally, s);
     this.run.draftProbe = demo ? null : this.ghosts.draftProbe;
     // (Round 8: the field's showdowns and spirit steals; a demo replays its own log and decides nothing.)
     this.run.rivalProbe = demo ? null : this.ghosts.rivalProbe(this.run.sim.course.finishZ);
@@ -1480,8 +1674,29 @@ export class App {
         reveal ? REVEAL_TIMING.T_LEAVE + REVEAL_TIMING.LEAVE_MS : 700,
       );
     }
+    // A Trial names its twist once as it starts, after the reveal card when there is one: its measure, and the family it
+    // deals or its name. (The stage line carries the medal's next target from here on.)
+    if (trial) {
+      const run = this.run;
+      window.setTimeout(
+        () => {
+          if (this.run !== run || this.phase !== 'run') return;
+          const w = startWords(trial);
+          this.ui.toast(w.text, 'info', w.sub);
+        },
+        reveal ? REVEAL_TIMING.T_LEAVE + REVEAL_TIMING.LEAVE_MS : 700,
+      );
+    }
     this.platform.gameplayStart();
     return reveal;
+  }
+
+  /** The trials lane: the stage line's words in a Trial, the medal's next target as the run stands (trial.ts stageWords). */
+  private trialStage(sim: Sim): string | undefined {
+    const t = this.trialRun;
+    const g = this.trialGoals;
+    if (!t || !g) return undefined;
+    return stageWords(t, g, { seconds: (sim.finished ? sim.s.finishTick : sim.tick) / 60, score: sim.score, perfects: sim.stats.perfects, tumbles: this.trialTally.tumbles });
   }
 
   /** The ghost layer's field: each track's id, name, kind and the sled it rode, with its role and
@@ -2388,18 +2603,23 @@ export class App {
     const sum = this.summary();
     const settled = settleRun(d, sum, this.settlement, this.mountainKey(), medals);
     this.settlement = settled.settlement;
+    // (The trials lane: a Trial's run is judged on its week's measure against the targets its field set, and its medal
+    // kept for the week, never lowered. A revive's second card settles it again from the medal held as it started.)
+    const trial = this.trialRun;
+    if (trial && this.trialGoals) this.trialOut = settleTrial(d, trial, this.trialTally, this.trialGoals, this.trialMedalAtStart);
     // A named mountain's ladder and lines: pays each rung and medal once, however often this settles.
     const key = this.mountainKey();
     const you = this.youStanding(sim);
     // (A Long Night's leg stands on no ladder and fills no mastery board: its lantern and chaos were carried in.)
-    const board = MOUNTAINS.some((m) => m === this.mountain) && !this.night ? this.boardFor(this.mountain.id) : null;
+    // (Nor does a Trial's: its twist is the week's, not the mountain's.)
+    const board = MOUNTAINS.some((m) => m === this.mountain) && !this.night && !trial ? this.boardFor(this.mountain.id) : null;
     // (Round 8: rides of this mountain, this one in: the ladder and the mastery board open a step a ride.)
     const rides = Math.max(1, d.runTimes?.[key]?.length ?? 1);
     const climb: ClimbOutcome | null = board ? settleClimb(d, key, board, SIM_VERSION, this.climbAtStart, { standing: you, best: bestStanding(d.best[key]), bestBefore: bestStanding(this.bestAtStart), ticks: sim.stageTicks, rides }) : null;
     // A named mountain's mastery board: what this run added, each new star paid once.
     let mastery: ResultsModel['mastery'] = null;
     const mi = MOUNTAINS.indexOf(this.mountain as (typeof MOUNTAINS)[number]);
-    if (mi >= 0 && !this.night) {
+    if (mi >= 0 && !this.night && !trial) {
       d.mastery ??= {};
       const rec = readMastery(d.mastery[key]);
       // (A mirror's board is its own, under its own key; its riders are the mountain's.)
@@ -2540,7 +2760,8 @@ export class App {
         ? null
         : {
             seconds: you.time,
-            medal: medals ? medalFor(you.time, medals) : 0,
+            // (A Trial's medal is the week's measure's, whatever the clock says against the mountain's pool.)
+            medal: this.trialOut ? this.trialOut.medal : medals ? medalFor(you.time, medals) : 0,
             splits: sim.stageTicks.map((t, i) => {
               const best = at?.splits?.[i];
               return { name: sim.course.stages[i].name, seconds: t / 60, vsBest: best === undefined ? null : t / 60 - best };
@@ -2583,7 +2804,7 @@ export class App {
       mastery,
       raceLine: resultsRaceLine({
         friend: this.friendLine(sim),
-        daily: settled.daily?.line ?? settled.cup?.line ?? null,
+        daily: settled.daily?.line ?? settled.cup?.line ?? this.trialOut?.line ?? null,
         grudge: this.grudgeLine ? { text: this.grudgeLine, strong: this.grudgeStrong } : null,
         crash: crashNote,
         event: sim.finished ? null : this.director.eventNote(sim),
@@ -2624,6 +2845,7 @@ export class App {
       return this.nightBetween(sim);
     }
     if (this.nightEnd) this.results = this.nightResults(this.results, this.nightEnd);
+    if (trial && this.trialOut && this.trialGoals) this.results = this.trialResults(this.results, trial, this.trialOut, this.trialGoals);
     this.ui.showResults(this.results);
     this.audio.setScene('results');
     // The card's sounds start on its first painted frame, where its CSS beats start: anchored here, a
@@ -2692,7 +2914,8 @@ export class App {
       rungs: climb && climb.rankWas !== null && climb.spot.rank !== null ? Math.max(0, climb.rankWas - climb.spot.rank) : 0,
       stageMedals: climb ? climb.fresh.filter((i) => i < 3).map((i) => held.stages[i]) : [],
       runMedal: climb && climb.fresh.includes(3) ? held.run : 0,
-      dayMedal: dayMedal && dayMedal.best > this.dayMedalAtStart ? dayMedal.best : 0,
+      // (A Trial's medal raised pays as the Daily's and the Cup's do.)
+      dayMedal: dayMedal && dayMedal.best > this.dayMedalAtStart ? dayMedal.best : this.trialOut && this.trialOut.best > this.trialMedalAtStart ? this.trialOut.best : 0,
       stars: this.masteryFresh.length,
       duelWon: kept?.fell && kept.duel?.kind === 'duel' ? kept.duel.rider.key : null,
       duelLost: kept?.duel?.kind === 'duel' && !kept.fell,
@@ -3471,7 +3694,7 @@ export class App {
         score: sim.score,
         distance: sim.distance,
         clock: (sim.finished ? sim.s.finishTick : sim.tick) / 60,
-        stage: { index: Math.min(sim.stageTicks.length, stages.length - 1), of: stages.length, progress: Math.min(1, sim.distance / sim.course.finishZ) },
+        stage: { index: Math.min(sim.stageTicks.length, stages.length - 1), of: stages.length, progress: Math.min(1, sim.distance / sim.course.finishZ), words: this.trialRun ? this.trialStage(sim) : undefined },
         // Get-ups: shown from the run's first fall (a free one too: it shows the three you have), with how far
         // the next has come back.
         wipeouts: sim.s.getUps < GET_UPS || this.tumbles > 0 ? { left: sim.s.getUps, of: GET_UPS, back: sim.s.getUps < GET_UPS ? Math.min(1, Math.max(0, (sim.s.z - sim.s.getUpZ) / GET_UP_BACK_M)) : 0 } : null,

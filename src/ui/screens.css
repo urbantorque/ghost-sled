@@ -785,6 +785,12 @@
   color: var(--you);
 }
 
+/* Round 8, the trials lane: a Trial's medal line, its disc in its metal ahead of the words (meta.css .gs-medal). */
+.gs-mo-medal::before {
+  width: 18px;
+  height: 18px;
+}
+
 .gs-mo-fact.is-twelve {
   padding-left: 6px;
   border-radius: var(--r-card);

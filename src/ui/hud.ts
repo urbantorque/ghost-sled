@@ -2256,7 +2256,7 @@ export class Hud {
 
   /** The stage line: its words, and each stage's hairline filled as far as you have ridden it. */
   private stageLine(s: NonNullable<HudModel['stage']>): void {
-    this.legT.str(`Stage ${s.index + 1} of ${s.of}`);
+    this.legT.str(s.words ?? `Stage ${s.index + 1} of ${s.of}`);
     if (this.legSegs.length !== s.of) {
       this.legSegs = [];
       this.legBar.replaceChildren();

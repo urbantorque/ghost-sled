@@ -78,7 +78,7 @@ export interface Moment {
   /** The fact that made it: a rider of The Twelve beaten, a new best, the ladder climbed, a medal. */
   fact: string | null;
   /** What the fact is, for its colour: The Twelve's news, your own best, or plain. */
-  factTone: 'twelve' | 'best' | 'plain';
+  factTone: 'twelve' | 'best' | 'plain' | 'trial';
   /** The finish time, shown with a place (null on a wreck, or when the time is the figure). */
   time: string | null;
 }
@@ -95,7 +95,11 @@ export function resultsMoment(m: ResultsModel): Moment {
   const tw = m.twelve ?? null;
   let fact: string | null = null;
   let factTone: Moment['factTone'] = 'plain';
-  if (tw && (tw.tone === 'fell' || tw.tone === 'crowned')) {
+  // (Round 8, the trials lane: a Trial's run is for its medal, so the medal is the fact: which, and how far from the next.)
+  if (m.trial) {
+    fact = m.trial.line;
+    factTone = 'trial';
+  } else if (tw && (tw.tone === 'fell' || tw.tone === 'crowned')) {
     fact = tw.line;
     factTone = 'twelve';
   } else if (fin && fin.newBest) {
@@ -1226,6 +1230,9 @@ function momentEl(m: ResultsModel): HTMLElement {
       fact.style.setProperty('--rider', tw.rider.accent);
       fact.append(bust);
     }
+    // (A Trial's medal leads its line, struck as the Daily's and the Cup's are.)
+    const medal = mo.factTone === 'trial' ? Math.max(0, Math.min(3, Math.floor(m.trial?.medal ?? 0))) : 0;
+    if (medal > 0) fact.append(h('span', `gs-medal m-${medal} gs-mo-medal`));
     const t = h('span', 'gs-mo-fact-t', mo.fact);
     t.setAttribute('translate', 'no');
     fact.append(t);
@@ -1284,9 +1291,9 @@ function raceLine(m: ResultsModel): HTMLElement | null {
   if (m.twelve) return twelveLine(m);
   const l = m.raceLine;
   if (!l || !l.text) return null;
-  // The Daily or Cup medal line ("Daily: Silver. Gold at 2,410 m.") wears its medal disc in the icon
+  // The Daily, Cup or Trial medal line ("Daily: Silver. Gold at 2,410 m.") wears its medal disc in the icon
   // column, and a stage gold almost had wears the gold it almost was.
-  const medal = l.tone === 'event' ? /^(?:Daily|Cup): (Bronze|Silver|Gold)\./.exec(l.text) : null;
+  const medal = l.tone === 'event' ? /^(?:Daily|Cup|Trial): (Bronze|Silver|Gold)\./.exec(l.text) : null;
   const rank = l.tone === 'medal' ? 3 : medal ? ['Bronze', 'Silver', 'Gold'].indexOf(medal[1]) + 1 : 0;
   const disc = rank > 0 ? h('span', `gs-medal m-${rank} gs-res-line-ico`) : null;
   disc?.setAttribute('aria-hidden', 'true');

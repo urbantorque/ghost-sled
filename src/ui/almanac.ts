@@ -80,7 +80,7 @@ export function chapterBox(c: ChapterView): HTMLElement {
   return box;
 }
 
-export type RideMode = { kind: 'night' } | { kind: 'mirror'; mountain: string };
+export type RideMode = { kind: 'night' } | { kind: 'mirror'; mountain: string } | { kind: 'trial' };
 
 /** Round 8, the modes lane: an opened page that opens a mode rides it from here (a mirror mountain, or the Long Night
  *  on each page that adds to its legs). One small control a page, after the page's rewards; null where the page
@@ -90,7 +90,9 @@ function rideOn(m: AlmanacModel, rewards: AlmanacModel['pages'][number]['rewards
   if (!modes) return null;
   const mirror = rewards.find((r) => r.kind === 'mirror' && r.mountain && modes.mirrors.includes(r.mountain));
   const night = modes.night && rewards.some((r) => r.kind === 'legs') ? modes.night : null;
-  if (!mirror?.mountain && !night) return null;
+  // (The trials lane: the page that opens Trials rides this week's.)
+  const trial = modes.trial && rewards.some((r) => r.kind === 'feature' && r.name === 'Trials') ? modes.trial : null;
+  if (!mirror?.mountain && !night && !trial) return null;
   const b = h('button', 'gs-btn gs-btn-soft gs-bk-ride', icon('play'), h('span', 'gs-btn-label', 'Ride'));
   b.type = 'button';
   if (mirror?.mountain) {
@@ -102,6 +104,10 @@ function rideOn(m: AlmanacModel, rewards: AlmanacModel['pages'][number]['rewards
     b.dataset.fk = 'ride-night';
     b.setAttribute('aria-label', `Ride the Long Night, ${night.legs} legs${night.best ? `. Your deepest: ${night.best}` : ''}`);
     b.addEventListener('click', () => ride({ kind: 'night' }));
+  } else if (trial) {
+    b.dataset.fk = 'ride-trial';
+    b.setAttribute('aria-label', `Ride this week's Trial: ${trial.name}. ${trial.rule}`);
+    b.addEventListener('click', () => ride({ kind: 'trial' }));
   }
   return b;
 }

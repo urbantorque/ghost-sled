@@ -45,6 +45,28 @@ export interface MedalSet {
 }
 
 /** The weekly Cup on the title. best: your best time this week, seconds (0 for none). */
+/** Round 8, the trials lane: the week's Trial as the title shows it. Picked from the Cup's card (its two halves under
+ *  Ride, the Cup or the Trial), it names its twist over Ride and the three targets a player can see before riding. */
+export interface TitleTrial {
+  week: number;
+  /** The named mountain it rides (its veil's air on the title). */
+  mountain: string;
+  /** "Mirrored Ember Peak in a Blizzard". */
+  name: string;
+  /** "Most perfect landings, survival charms only". */
+  rule: string;
+  /** Its field is in (the targets are read from it): it can be picked and ridden. */
+  ready: boolean;
+  /** Picked: Ride rides it. */
+  on: boolean;
+  /** The week's medal held (0 none, 1 bronze, 2 silver, 3 gold). */
+  medal: number;
+  /** Your best figure this week, bare ("2:03.4", "17", "182,410"; the rule names the measure), or null. */
+  best: string | null;
+  /** Bronze, silver and gold, bare as the best is, or null until the field is in. */
+  targets: [string, string, string] | null;
+}
+
 export interface TitleCup {
   key: string;
   week: number;
@@ -200,6 +222,8 @@ export interface TitleModel {
   hour?: { name: string; phrase: string; on: boolean; day: [string, string]; alt: [string, string] } | null;
   /** The weekly Cup, when there is one to show. */
   cup?: TitleCup | null;
+  /** Round 8, the trials lane: the week's Trial, once Trials are open (ridden from the Cup's card). */
+  trial?: TitleTrial | null;
   /** The Twelve: the campaign's card and ladder (absent on a first visit). */
   twelve?: TitleTwelve | null;
   /** Round 8: Rider Rank, the flame, contracts, the league, the chapter, the album and the one line of news. */
@@ -212,7 +236,8 @@ export interface HudModel {
   /** The run clock, seconds. It stops on the finish line. */
   clock: number;
   /** The stage you are riding (0 based), of how many, and how far down the whole descent (0..1). */
-  stage: { index: number; of: number; progress: number } | null;
+  /** words: what the line says in place of "Stage 2 of 3" (round 8, the trials lane: a Trial's next medal target). */
+  stage: { index: number; of: number; progress: number; words?: string } | null;
   /** Get-ups (round 7): how many are left of how many, and how far the next one has come back (0 to 1); null
    *  until the run's first fall. */
   wipeouts: { left: number; of: number; back?: number } | null;
@@ -363,6 +388,9 @@ export interface ResultsModel {
   stages?: ResultsStages | null;
   /** The Twelve: this run was a duel or the last race, and how it went. */
   twelve?: ResultsTwelve | null;
+  /** Round 8, the trials lane: a Trial's run, its medal this run (0 none) and the line that says which and how far from
+   *  the next ("Trial: Silver. Gold at 1:54.2, 4.3 s faster."): the fact under the moment. */
+  trial?: { medal: number; line: string } | null;
   /** Round 8: the spine's part of the results (the bar, what opened, the one button). */
   spine?: ResultsSpine | null;
 }
@@ -441,6 +469,8 @@ export interface UIHandlers {
   onDaily(): void;
   /** Select the weekly Cup. */
   onCup?(): void;
+  /** Round 8, the trials lane: pick the week's Trial (true) or its Cup (false), from the Cup's card under Ride. */
+  onTrial?(on: boolean): void;
   onSelectSled(id: number): void;
   onBuySled(id: number): void;
   /** A sled paint: buy it (if not owned) and put it on. */
@@ -462,7 +492,7 @@ export interface UIHandlers {
   onMirror?(on: boolean): void;
   /** Round 8, the hours lane: the title's pick of the day (false) or the picked mountain's other hour (true). */
   onHour?(on: boolean): void;
-  onRideMode?(mode: { kind: 'night' } | { kind: 'mirror'; mountain: string }): void;
+  onRideMode?(mode: { kind: 'night' } | { kind: 'mirror'; mountain: string } | { kind: 'trial' }): void;
   /** Round 8 (the photo lane): photo mode, from pause or from the results while the scene stands. */
   onPhoto?(): void;
   /** A sled sound's Listen button: a few seconds of it under a carving rider, bought or not. */
@@ -740,7 +770,7 @@ export interface AlmanacModel {
   chapter: ChapterView | null;
   /** Round 8, the modes lane: what the opened pages let you ride from here (only on the title): the Long Night (its
    *  legs and your deepest night in words) and the mirrors open, by mountain id. */
-  modes?: { night: { legs: number; best: string | null } | null; mirrors: string[] };
+  modes?: { night: { legs: number; best: string | null } | null; mirrors: string[]; trial?: { name: string; rule: string } | null };
 }
 
 /** The Spirit Album's screen: each mountain's stickers and the rest, held or a silhouette with where to find it. */

@@ -1,0 +1,85 @@
+/* Round 8, the trials lane: the week's Trial on the title (title.ts). Picked from the Cup's card, it is one more pair of
+   halves in the hour's soft pill under Ride (the Cup and the Trial, hours.css's own pill), and over Ride, where the
+   greeting stands, its rule in the greeting's scene type and the three targets struck as the medals they win. No new
+   panel, no new colour: the medals' metals are the Daily's and the Cup's (meta.css .gs-medal), the flag the greeting's
+   off-white, and nothing moves but the press every button has. */
+
+/* The week's pill: the Cup's trophy and the Trial's medal held sit where the hour's sky swatches do. */
+.gs-t-week .gs-t-week-ico {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.gs-t-week .gs-mdot.gs-t-week-ico {
+  width: 14px;
+  height: 14px;
+  margin: 1px;
+}
+
+.gs-t-week .gs-t-week-opt.is-waiting {
+  opacity: 0.55;
+}
+
+/* Over Ride: the rule, then the targets. */
+.gs-t-trial {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.gs-t-trial-goals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin: 0;
+  padding-left: calc(4px + 1.3em + 8px);
+  font-size: clamp(14px, calc(var(--u) * 1.06), 19px);
+  font-weight: 850;
+  line-height: 1.2;
+  text-shadow: var(--halo);
+}
+
+.gs-t-trial-goal::before {
+  width: 16px;
+  height: 16px;
+}
+
+/* A target already won this week is struck through: what is left to take keeps its metal at full strength. */
+.gs-t-trial-goal.is-held .gs-num {
+  opacity: 0.62;
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+
+.gs-t-trial-best {
+  color: var(--dim);
+  font-weight: 800;
+}
+
+.gs-t-trial-best .gs-num {
+  color: var(--text);
+}
+
+.gs-t-trial-goals.is-waiting {
+  color: var(--dim);
+}
+
+/* A phone held upright: centred under the logo's column like the greeting, and it takes The Twelve's row above Ride
+   (one line of direction there, as the greeting does). */
+@media (max-aspect-ratio: 1/1) {
+  .gs-t-trial {
+    justify-items: center;
+  }
+
+  .gs-t-trial-goals {
+    justify-content: center;
+    padding-left: 0;
+    font-size: clamp(14px, 3.7vw, 16px);
+  }
+
+  .gs-title:has(.gs-t-trial) .gs-t12 {
+    display: none;
+  }
+}
