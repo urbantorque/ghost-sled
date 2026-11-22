@@ -402,7 +402,9 @@ export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: nu
     // A low eave roof along the street, swept up at the ends, and a pent roof over the lattice. (Round 7: a
     // late spring morning's snow lies on the upper half of each slope only, so a street seen from above is
     // ink roofs and not a field of white lids.)
-    parts.push(...place(gable(d + zr, w, 0, d * 0.24, Math.min(1.6, eave), t.roof, upper, 0.5), 0, top, zr / 2, Math.PI / 2));
+    // (Round 8's review: at half a slope the street's roofs from the air and the lens were cream slabs. A late spring
+    // morning leaves snow on the ridge's quarter.)
+    parts.push(...place(gable(d + zr, w, 0, d * 0.24, Math.min(1.6, eave), t.roof, upper, 0.25), 0, top, zr / 2, Math.PI / 2));
     if (eave > 0.55) {
       const pent = Math.min(1.6, eave + 0.3);
       parts.push(box(w + 0.6, 0.3, pent, t.roof, [0, F + SH + 0.15, zf + pent * 0.44], [0.32, 0, 0]));

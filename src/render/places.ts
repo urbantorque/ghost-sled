@@ -191,8 +191,11 @@ export function viaductPiece(ctx: SiteCtx): Piece {
         } else if (biome === 'blossom') {
           // (Round 8's review: Sakura's portals were plum boxes under a white lid. A lacquered tower: ink bands at
           // two storeys and a swept pyramid roof in the town's ink, its snow on the upper half only.)
-          parts.push(grade(box(w, h + 8, w, st.post, [pt.x, g + (h - 8) / 2, pt.z]), g - 8, g + h, 0.65, 1.05));
+          // (Pass 2: still "purple boxes". A frame of four lacquer posts round a dark core, so it is timber.)
+          parts.push(grade(box(w * 0.72, h + 8, w * 0.72, st.dark, [pt.x, g + (h - 8) / 2, pt.z]), g - 8, g + h, 0.65, 1.05));
+          for (const cx of [-1, 1]) for (const cz of [-1, 1]) parts.push(grade(part(new CylinderGeometry(0.36, 0.42, h + 8, 8), st.post, { pos: [pt.x + cx * w * 0.4, g + (h - 8) / 2, pt.z + cz * w * 0.4] }), g - 8, g + h, 0.65, 1.08));
           for (const y of [g + h * 0.42, g + h - 0.2]) parts.push(box(w + 0.3, 0.38, w + 0.3, st.dark, [pt.x, y, pt.z]));
+          parts.push(box(w + 0.1, 0.26, w + 0.1, st.post, [pt.x, g + h * 0.72, pt.z]));
           parts.push(part(new ConeGeometry(w * 1.05, 1.5, 4, 1), C('#2E2A3E'), { pos: [pt.x, g + h + 0.75, pt.z], rot: [0, Math.PI / 4, 0] }));
           parts.push(part(new ConeGeometry(w * 0.55, 0.8, 4, 1), SNOW, { pos: [pt.x, g + h + 1.12, pt.z], rot: [0, Math.PI / 4, 0] }));
         } else {
