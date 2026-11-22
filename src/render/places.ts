@@ -365,7 +365,8 @@ function finishArch(ctx: SiteCtx, rail: Rail, F: number): BufferGeometry[] {
   const B = 6;
   const top = H + B + 2.2;
   const blossom = biome === 'blossom';
-  const towerC = blossom ? C('#93405A') : biome === 'volcanic' ? shade(p.low, 0.55) : biome === 'glacier' ? C('#B5523E') : biome === 'lantern' ? stone(p, 0.85) : TIMBER;
+  // (Round 8's review: the finish arch's towers in Sakura's lighter lacquer read as a vermillion post down the street.)
+  const towerC = blossom ? C('#6E2C48') : biome === 'volcanic' ? shade(p.low, 0.55) : biome === 'glacier' ? C('#B5523E') : biome === 'lantern' ? stone(p, 0.85) : TIMBER;
   const parts: BufferGeometry[] = [];
   for (const s of [-1, 1]) {
     const x = s * X;

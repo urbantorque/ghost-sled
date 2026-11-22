@@ -153,11 +153,13 @@ function shoulderGeometry(biome: BiomeId): BufferGeometry {
     // pass of two rounds. Its shoulders are outcrops in beds as Pinecrest's are, in the cone's wine-leaning stone
     // (materials.ts ROCK.cone), thin beds dipping and jutting, snow on every ledge, a drift round the foot.
     const f = new Facets();
-    const rock = [new Color('#4A3E4A'), new Color('#665662'), new Color('#8A7A84')];
+    // (Pass 4: in the lip's shade the darkest bed still went to ink, "dark blocks on white plinths". A step paler, and
+    // taller, so each stack shows its ledges from the run.)
+    const rock = [new Color('#66586A'), new Color('#827280'), new Color('#A4969E')];
     const stacks: Array<[number, number, number, number, number, number, number]> = [
-      [0, 0, 2.7, 2.2, 4.2, 0.48, 0.2],
-      [2.3, 0.7, 1.9, 1.6, 2.8, 0.5, 1.2],
-      [-2.2, 0.4, 1.8, 1.5, 2.1, 0.54, -0.8],
+      [0, 0, 2.7, 2.2, 5.4, 0.42, 0.2],
+      [2.3, 0.7, 1.9, 1.6, 3.6, 0.46, 1.2],
+      [-2.2, 0.4, 1.8, 1.5, 2.8, 0.5, -0.8],
     ];
     stacks.forEach(([x, z, rx, rz, h, taper, yaw], k) => {
       const from = f.triangles;
