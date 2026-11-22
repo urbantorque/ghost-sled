@@ -540,6 +540,9 @@ export class World {
     this.post.pipe.after.kept.push(this.sky.root, this.midground.root, this.overlooks.root);
     // (As setCourse: a run on the mountain the world was built for never passes through it.)
     this.post.fringeK = this.course.biome === 'blossom' ? 0 : 1;
+    // (Round 8's review: the lens's speed blur at the frame's sides smeared Sakura's near snow into "claw marks" and
+    // "crawling lavender streaks" in a dozen frames and two strips. The calm mountain keeps half of it.)
+    this.cam.blurCalm = this.course.biome === 'blossom' ? 0.5 : 1;
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.spirit.fireworks.lightK = this.palette.grade.flash ?? 1;
     this.spirit.lightK = Math.max(0.5, this.palette.grade.flash ?? 1);
@@ -770,6 +773,7 @@ export class World {
     // Sakura is the calm mountain (ART.md 15): its lens shows no colour fringe at speed (a third of the
     // others' still split the blossom's trunks green and the crowd to noise at the frame's edge).
     this.post.fringeK = c.biome === 'blossom' ? 0 : 1;
+    this.cam.blurCalm = c.biome === 'blossom' ? 0.5 : 1;
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.spirit.fireworks.lightK = this.palette.grade.flash ?? 1;
     this.spirit.lightK = Math.max(0.5, this.palette.grade.flash ?? 1);
@@ -983,7 +987,7 @@ export class World {
       // A hard crosswind: streaks race sideways across the frame rather than falling.
       this.weather.configure({ density: cap, kind: 0, color: new Color('#FFFFFF'), streak: 0.8, size: 0.09, alpha: 0.85, fall: new Vector3(16, -3, 2), additive: false });
     } else if (p.petals > 0) {
-      this.weather.configure({ density: cap * 0.5 * p.petals, kind: 1, color: new Color('#FFB3CC'), streak: 0, size: 0.13, alpha: 0.9, fall: new Vector3(1.4, -1.2, 0.6), additive: false });
+      this.weather.configure({ density: cap * 0.5 * p.petals, kind: 1, color: new Color('#FFB3CC'), streak: 0, size: 0.1, alpha: 0.82, fall: new Vector3(1.4, -1.2, 0.6), additive: false });
     } else if (p.embers > 0) {
       this.weather.configure({ density: (cap * 0.22 * p.embers) / 0.6, kind: 2, color: new Color('#FF8A40'), streak: 0, size: 0.08, alpha: 0.9, fall: new Vector3(0.6, 1.1, 0.4), additive: true });
     } else if (p.wisps > 0) {
@@ -1426,7 +1430,9 @@ export class World {
     this.streakK += ((v.mode === 'run' && !this.rider.crashing && !s.crashed ? 1 : 0) - this.streakK) * Math.min(1, dt * 6);
     // (Sakura, the calm mountain, keeps half the streaks: at full strength the bottom of its pale frames was
     // a radial smear, and its ripples and shade lost their shape. ART.md 15: a lens that stays out of the way.)
-    const calm = this.course.biome === 'blossom' ? 0.55 : 1;
+    // (Round 8's review: at 0.55 the near snow still read as a radial smear converging on the rider in eleven of
+    // thirty-six frames. A third of the streaks: the calm mountain's speed is in its petals, posts and lens.)
+    const calm = this.course.biome === 'blossom' ? 0.35 : 1;
     pp.speed = v.mode === 'run' ? streakK(s.speed) * (tall ? 0.6 : 1) * (feel.reduced ? 0.5 : 1) * this.streakK * calm : 0;
     pp.streakFoot = tall ? 0 : 0.12;
     // Round 8 (speed): Spirit Flow's colour (kept under reduced motion) and its breath (dropped under it).

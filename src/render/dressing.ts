@@ -281,6 +281,9 @@ function cable(): BufferGeometry {
 
 /** The bank rock's three values, darkest first. */
 function bankRock(p: Palette): Color[] {
+  // (Round 8's review: Sakura's ink navy made the chute's bands "black boxes under white lids". Its rock is the
+  // cone's, a wine-leaning stone, materials.ts ROCK.)
+  if (p.massif.peak === 'cone') return [new Color('#3A3038'), new Color('#54464E'), new Color('#7C6E76')];
   return [shade(p.low, 0.62), shade(p.low, 0.8), shade(p.lowLit, 0.84)];
 }
 

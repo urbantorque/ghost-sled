@@ -261,7 +261,9 @@ const ROCK: Record<string, RockSet> = {
   volcano: { lit: '#43383F', shade: '#17131A', deep: '#0B0910', ledge: '#7A7076', style: [1.5, 6.5, 2, 0] },
   // (Sakura's rock is the spine's ink, with snow lying on its ledges: moss on them read as olive banks
   // under the torii's warm bars, and the paler rock as a lilac wall at the snow's own value.)
-  cone: { lit: '#86788C', shade: '#3C3554', deep: '#221E34', ledge: '#C4BCD0', style: [1.2, 2.5, 3, 0.02] },
+  // (Round 8's review: in the navy of the shade, the torii row's cut walls and the chute's crags read as "navy cubes
+  // under white lids", Frostfang's language. The ink leans to the wine of the spine's lacquer, so it is stone.)
+  cone: { lit: '#94868C', shade: '#4A3E4C', deep: '#2A2230', ledge: '#AEA4B6', style: [1.2, 2.5, 3, 0.02] },
 };
 
 function applyRock(p: Palette): void {
@@ -1844,7 +1846,10 @@ export function makeSnowMaterial(): ShaderMaterial {
           // The fork's strip glints from far up the run: a scribed bright edge, and hard points of light
           // that wink as the view sweeps over them, on any bearing to the sun.
           float scribe = smoothstep(0.1, 0.4, vPaint.y) * (1.0 - smoothstep(0.4, 0.8, vPaint.y));
-          col += mix(uSnowLit, vec3(1.0), 0.4) * scribe * 0.45;
+          // (Round 8's review: at 0.45 the two edges ran down the fall line either side of the rider as white rails,
+          // smeared longer by the speed blur at the frame's foot, ART.md 4's "never a long straight line down the
+          // fall line". Half as bright, the edge still catches from far up the run.)
+          col += mix(uSnowLit, vec3(1.0), 0.4) * scribe * 0.22;
           vec2 sq = vWorldPos.xz * vec2(0.8, 0.22);
           vec2 sc = floor(sq);
           float sh = hash13(vec3(sc, 31.0));

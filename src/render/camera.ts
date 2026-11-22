@@ -483,6 +483,8 @@ export class ChaseCamera {
   /** Portrait results (contract C6): the share of the height, from the top, that the card leaves
    *  open for the hero shot (the safe-area inset included); the wreck is centred in that band. */
   heroBand = 0.28;
+  /** How much of speed's blur the mountain keeps (Sakura, the calm mountain, half; 1 elsewhere). world.ts sets it. */
+  blurCalm = 1;
   /** The eased look-ahead point of the landscape chase, before the rival bias turns the view. */
   private lookS = new Vector3();
   /** Sell top fix 1: the eased turn (radians, + toward screen right) and extra FOV (degrees) that
@@ -1151,7 +1153,7 @@ export class ChaseCamera {
       box = Math.max(this.heroK, this.wideK * this.flightK * WIDE_BOX, this.trackK * TRACK_BOX, this.placeShotK * PLACE_BOX);
       // Speed's blur, held back in the hero frame (a slow frame is a sharp one) and halved under reduced
       // motion, as the streaks are; the whip smears the whole frame for its fifth of a second.
-      const speedBlur = blurK(t.speed) * (reduced ? 0.5 : 1) * (1 - 0.7 * this.heroK);
+      const speedBlur = blurK(t.speed) * (reduced ? 0.5 : 1) * (1 - 0.7 * this.heroK) * this.blurCalm;
       blur = Math.max(speedBlur, this.whipBlur);
       // (Round 8: speed's blur keeps to the frame's edge; the whip's is the whole frame's.)
       edge = this.whipBlur > speedBlur * 0.5 ? 0 : 1;

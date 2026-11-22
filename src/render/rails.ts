@@ -148,6 +148,26 @@ function shoulderGeometry(biome: BiomeId): BufferGeometry {
   const mid = lf ? new Color('#454070') : blossom ? new Color('#4E4456') : new Color('#7A7088');
   const pale = lf ? new Color('#625C92') : blossom ? new Color('#665A6C') : new Color('#94889E');
   const lid = SNOW;
+  if (blossom) {
+    // Sakura (round 8's review): the fins read as "navy crystal spikes" by the lips, Frostfang's language, on every
+    // pass of two rounds. Its shoulders are outcrops in beds as Pinecrest's are, in the cone's wine-leaning stone
+    // (materials.ts ROCK.cone), thin beds dipping and jutting, snow on every ledge, a drift round the foot.
+    const f = new Facets();
+    // (Pass 4: in the lip's shade the darkest bed still went to ink, "dark blocks on white plinths". A step paler, and
+    // taller, so each stack shows its ledges from the run.)
+    const rock = [new Color('#66586A'), new Color('#827280'), new Color('#A4969E')];
+    const stacks: Array<[number, number, number, number, number, number, number]> = [
+      [0, 0, 2.7, 2.2, 5.4, 0.42, 0.2],
+      [2.3, 0.7, 1.9, 1.6, 3.6, 0.46, 1.2],
+      [-2.2, 0.4, 1.8, 1.5, 2.8, 0.5, -0.8],
+    ];
+    stacks.forEach(([x, z, rx, rz, h, taper, yaw], k) => {
+      const from = f.triangles;
+      strataInto(f, { rx, rz, h: h + 0.8, foot: 0.3, layers: k === 0 ? 5 : 4, sides: 9, rock, lie: SNOW, taper, shift: 0.28, dip: 0.18, dipZ: 0.16, warp: 0.7, jut: 0.3, rough: 0.4, bays: 0.25, lieMin: 0.02, apron: 0.22, seed: 7811 + k * 13 });
+      f.place(from, x, -0.8, z, yaw);
+    });
+    return merge([f.build(), softPart(new SphereGeometry(1, 7, 3), SNOW, { pos: [0, -0.5, 0.4], scale: [4.6, 1.2, 3.8] })]);
+  }
   if (biome === 'alpine') {
     // Pinecrest (the review loop): the fins below stood either side of every lip as flat violet prisms
     // eight metres tall, the one untextured thing in the mountain's hero frames. Its shoulders are

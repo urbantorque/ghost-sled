@@ -438,7 +438,9 @@ function biomeBase(biome: BiomeId): Palette {
       p.massif.peak = 'cone';
       p.massif.rock = c('#6A5A86');
       p.massif.glow = c('#FFA0B8');
-      p.petals = 0.7;
+      // (Round 8's review: the air was confetti, flat pink discs over every sky. Fewer, so they read as petals on the
+      // wind in depth: about two thirds of the round 7 count down the run.)
+      p.petals = 0.45;
       p.clouds = { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFEAF0'), shade: c('#B49CCC'), rim: c('#FFB4C6'), shadow: 0.28 };
       p.atmo.valleyColor = c('#F0CCDA');
       return p;
@@ -1060,7 +1062,7 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.massif.heroAz = 27;
       p.massif.veil = 0.3;
       p.clouds = { low: 0.3, high: 0.35, top: 0.16, lit: c('#FFF8EE'), shade: c('#E4DCCF'), rim: c('#FFDCC4'), shadow: 0.1 };
-      p.shadowK = 0.82;
+      p.shadowK = 0.7;
       p.grade = { lift: c('#22282E'), gain: c('#FFFDF8'), saturation: 1.06, contrast: 1.03, grain: 0.5, foot: 0.14, shafts: 0.7, lens: 0.3, focal: 0.5, gust: 0, glitter: 0.1 };
       // (Low's poster: the calm mountain, low contrast on purpose: three soft steps of peach sky, a light foot, the snow
       // in its smooth light: in flat steps its banks read as camouflage.)
@@ -1251,7 +1253,9 @@ function round7(p: Palette, biome: BiomeId): void {
       // third of that colour, where with no film to roll it off it read as sand.)
       p.snowLit = c('#FFF2EA');
       p.posterSnowSat = 0.5;
-      p.snowShade = c('#7E8CD6');
+      // (Round 8's review: a cast shadow in the deep periwinkle lay on the snow as a flat puddle of paint. The shade a
+      // step lighter and greyer here and down the run, still a full step under the lit snow.)
+      p.snowShade = c('#8692D6');
       p.snowDeep = c('#6452AC');
       p.fog = c('#F4DAD8');
       p.low = c('#2E2A44');
@@ -1264,7 +1268,9 @@ function round7(p: Palette, biome: BiomeId): void {
       // polyhedra, not light coming through them.)
       p.leaf = 0.9;
       p.grade.lift = c('#1A1E2A');
-      p.grade.contrast = 1.1;
+      // (Round 8's review: at 1.1 the run-in was a peach veil with no darks at all; low contrast, but the few darks
+      // exact, ART.md 15.)
+      p.grade.contrast = 1.15;
       p.grade.saturation = 1.12;
       p.grade.exposure = 0.96;
       p.grade.hi = c('#FFF5EE');
@@ -1824,10 +1830,13 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.fogFar = 720;
         p.massif.veil = 0;
         p.massif.bands = 0.4;
-        p.shadowK = 0.95;
+        // (Round 8's review: at 0.95 a tree's or a lantern's shadow lay on the snow as a flat, hard-edged lavender
+        // puddle, "spilled paint", in nine frames. Under 1 the shadow is a middle value and its penumbra widens
+        // (materials.ts snowShadow), so the calm mountain's shadows are soft and the bars of the torii keep theirs.)
+        p.shadowK = 0.74;
         p.atmo.valley = 0.7;
         p.atmo.drift = 0.15;
-        p.grade.contrast = 1.12;
+        p.grade.contrast = 1.16;
         p.air.low = 0.65;
       },
     },
@@ -1841,10 +1850,10 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.lift.through = 1.25;
         p.atmo.rays = 1;
         p.grade.shafts = 0.75;
-        p.snowShade = c('#7482D4');
+        p.snowShade = c('#7C88D2');
         p.fog = c('#EEDADE');
         p.grade.saturation = 1.18;
-        p.petals = 0.9;
+        p.petals = 0.6;
         p.massif.bands = 0;
         p.clouds.shadow = 0.26;
       },
@@ -1891,11 +1900,13 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.air.scatter = 0.8;
         p.bloom = 0.17;
         p.massif.veil = 0;
-        p.petals = 1.1;
+        p.petals = 0.75;
         p.grade.exposure = 0.9;
         // (The valley under the Leap opens: the sea of cloud thins so the far plane is flat blue openings
         // between white, not one white floor, and the cloud's shadows break the slopes either side.)
-        p.massif.sea = 0.8;
+        // (Round 8's review: at 0.8 the gaps were flat blue cut-outs on a white floor, read as lakes with no shore. A
+        // fuller sea keeps a few, small, so the valley is cloud with the far plane's blue beyond it.)
+        p.massif.sea = 1;
         p.clouds.shadow = 0.22;
         // Late morning's light on the snow is a warm cream (white, the Leap's slopes were one pale sheet).
         p.snowLit = c('#FFF2E6');
@@ -1906,10 +1917,10 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       from: 3300, at: 3900, dusk: 0.6,
       edit: (p) => {
         p.skyZenith = c('#4A90DC');
-        p.snowShade = c('#6C7CD4');
+        p.snowShade = c('#7684D2');
         p.snowDeep = c('#5448AC');
         p.grade.contrast = 1.16;
-        p.petals = 1.3;
+        p.petals = 0.85;
         p.lamps = 0.45;
         // (The clearest light on the mountain: the air thins so the town under the last leap and the pagoda
         // over the square stand in it, not a pale ghost of them.)
@@ -3105,7 +3116,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         // (The lit snow keeps the morning's peach here: with a cold split tone the steps were one lavender.)
         p.grade.hi = c('#FFF4EA');
         p.grade.contrast += 0.05;
-        p.snowShade = c('#6878D2');
+        p.snowShade = c('#7482D0');
         p.air.low = 0.9;
       },
     },
@@ -3119,6 +3130,9 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.grade.shafts = 1;
         // (A deep plum-blue between the bars, so each bar of sun lands on the snow as a hard band.)
         p.snowShade = c('#5C56A8');
+        // (The posts' shadows are the dark between the bars: they keep their depth here, where the rest of the
+        // mountain's shadows are soft.)
+        p.shadowK = 0.95;
         lamps(p, 0.7);
       },
     },
