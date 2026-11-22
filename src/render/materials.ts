@@ -2315,7 +2315,9 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
               // few centimetres of travel.
               // (It moves each frame while the temporal reconstruction runs, which rebuilds it into a fade.)
               float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy + uNoiseFrame * 5.588238, vec2(0.06711056, 0.00583715))));
-              if (ign >= (keep - 0.42) / 0.16) discard;
+              // (Round 8, the review loop: a crowd's heads and a standing stone caught in the band still read as
+              // stipple at the lens; the band is a third as wide.)
+              if (ign >= (keep - 0.475) / 0.05) discard;
             }
             keep = 1.0;
           #endif
