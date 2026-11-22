@@ -43,7 +43,6 @@ const DIM = new Color('#8A5A3A');
 const MUTE = new Color('#B48A5E');
 /** A mark on sunlit snow: deep marigold, so it has value against white as well as hue. */
 const MARK = new Color('#FF9E1A');
-const BLOOM = new Color('#FF6FA8');
 const INK = new Color('#2A2D48');
 const PETALS: readonly Color[] = [new Color('#FFC9DA'), new Color('#FFE3EC'), new Color('#FF9DBB')];
 
@@ -883,7 +882,9 @@ export class VerbWorld {
       // An arch's light: on the stair, its own stomp; down a street, the count so far, arriving as a wave
       // that runs on ahead of the sled.
       let lum = stair ? 0.75 : 0.5;
-      let col = stair ? BLOOM : LIGHT;
+      // (Round 8's review: a stair's waiting lanterns were the blossom's pink, which under the peach morning read as
+      // crimson paper beside the rider's vermillion. A lantern is marigold, the lantern's own colour, ART.md 14.)
+      let col = LIGHT;
       if (stair) {
         if (l.st[i] === 1) {
           const age = ctx.time - l.at[i];
@@ -911,7 +912,9 @@ export class VerbWorld {
       }
       if (lum > 0.8 && !ctx.low) kit.glow((xa + xb) / 2, y - 1.4, z, 5, col, 0.16 * lum, GLOW_SOFT, 3);
       // In a row: one garland ties each arch to the next, so a row is seen before it is ridden.
-      if (p.row && i + 1 < l.arches.length && !ctx.low) {
+      // (Round 8's review: from an arch the sled has passed, the garland ran from over the lens down to the next arch,
+      // a black wire splitting the sky from the frame's top. It is drawn only from an arch still ahead.)
+      if (p.row && i + 1 < l.arches.length && !ctx.low && z > s.z + 10) {
         const z2 = l.arches[i + 1];
         const y2 = Math.max(c.ground(c.centerX(z2) - c.halfWidth(z2) - 1.5, z2), c.ground(c.centerX(z2) + c.halfWidth(z2) + 1.5, z2), c.baseY(z2)) + 6.4;
         const xm = (xa + xb) / 2;
