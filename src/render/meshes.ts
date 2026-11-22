@@ -1163,6 +1163,11 @@ export function sledGeometryFor(id: number, lite = false): BufferGeometry {
         part(new CylinderGeometry(0.66, 0.57, 0.055, 20), under, { pos: [0, 0.035, 0.05], scale: [1, 1, 1.2] }),
         part(new CylinderGeometry(0.655, 0.655, 0.022, 20), pewter, { pos: [0, 0.071, 0.05], scale: [1, 1, 1.2] }),
         part(new TorusGeometry(0.64, 0.03, 5, 24), lip, { pos: [0, 0.09, 0.05], rot: [Math.PI / 2, 0, 0], scale: [1, 1.2, 1] }),
+        // (Round 8's review loop: from the chase lens the face read as a plain grey coaster, the biggest thing by the
+        // lens with nothing painted on it. A chased ring round the face in lip pewter, and inside it the trim's
+        // vermillion, the player's on every sled.)
+        part(new TorusGeometry(0.52, 0.016, 4, 24), lip, { pos: [0, 0.083, 0.05], rot: [Math.PI / 2, 0, 0], scale: [1, 1.2, 1] }),
+        part(new TorusGeometry(0.45, 0.02, 4, 24), C.accent, { pos: [0, 0.083, 0.05], rot: [Math.PI / 2, 0, 0], scale: [1, 1.2, 1] }),
         part(new TorusGeometry(0.1, 0.025, 5, 10, Math.PI), lip, { pos: [0, 0.12, -0.78], rot: [Math.PI / 2, 0, 0] }),
       ]);
     }

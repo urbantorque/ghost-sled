@@ -351,7 +351,9 @@ export class Trail {
             float kw = wallSh * 0.6;
             P = mix(uShade, uDeep, 0.55) * kw + P * (1.0 - kw);
             A = kw + A * (1.0 - kw);
-            float kc = cut * (0.36 + 0.4 * deep + 0.06 * D) * mix(1.0, 0.8, soft) * mix(1.0, 0.6, scr);
+            // (Round 8's review loop, Pinecrest: on a glazed patch the two frost scratches ran from the sled to the frame's
+            // foot as ruled white stripes. Fainter: a scratch in the glaze, not a line on it.)
+            float kc = cut * (0.36 + 0.4 * deep + 0.06 * D) * mix(1.0, 0.8, soft) * mix(1.0, 0.42, scr);
             P = cutCol * kc + P * (1.0 - kc);
             A = kc + A * (1.0 - kc);
             float kwl = wallLit * 0.15;
