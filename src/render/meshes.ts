@@ -1156,9 +1156,11 @@ export function sledGeometryFor(id: number, lite = false): BufferGeometry {
       // the lit rim as the only highlight.
       // A dark underside band under the face, so from the low chase camera it reads as a round sled
       // with depth rather than a flat disc of snow.
+      // (Round 8's review: a step under the pewter, not slate-black. Turned to the lens in a flip or a tumble the
+      // underside is the whole sled, and at #3A4256 every critic read it as an ink-navy disc, a hole, not a tray.)
       const pewter = new Color('#8C95A6');
       const lip = new Color('#B9C1CF');
-      const under = new Color('#3A4256');
+      const under = new Color('#626C82');
       return merge([
         part(new CylinderGeometry(0.66, 0.57, 0.055, 20), under, { pos: [0, 0.035, 0.05], scale: [1, 1, 1.2] }),
         part(new CylinderGeometry(0.655, 0.655, 0.022, 20), pewter, { pos: [0, 0.071, 0.05], scale: [1, 1, 1.2] }),
