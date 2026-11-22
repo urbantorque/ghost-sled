@@ -1175,13 +1175,21 @@ function round7(p: Palette, biome: BiomeId): void {
       // shadows cross the open slopes from the start line, and Low's lit snow stops short of paper.)
       p.grade.exposure = 1.0;
       p.grade.contrast = 1.12;
+      // (Round 8's review loop: the run-in and the First Drop still read milky and high-key, no darks and the shade
+      // a pale wash. A step down and a step more contrast, the shade a clean blue rather than a grey-lilac.)
+      // (0.97: the chute's place takes 0.88 of it and the places' floor is 0.85, tests/palette.test.ts.)
+      p.grade.exposure = 0.97;
+      p.grade.contrast = 1.17;
+      p.snowShade = c('#6E9CEA');
+      p.snowDeep = c('#2856C0');
       p.clouds.shadow = 0.34;
       p.grade.posterKey = 0.92;
       p.grade.posterCool = 0.16;
       // (Round 8's review loop: the phone's lower half and Low's foreground read as blank white snow under the
       // rider, frame after frame. The frame's foot takes a deeper step of the periwinkle, painted on Low.)
-      p.grade.foot = 0.38;
-      p.poster.foot = 0.44;
+      // (Pass 3: still the phone's lower half empty: 0.44 and 0.5.)
+      p.grade.foot = 0.44;
+      p.poster.foot = 0.5;
       // (And Low's shaft cards stood over the opening's crest as hard glass panes: fewer of them.)
       p.poster.shafts = 0.6;
       return;
@@ -1430,8 +1438,10 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         // (Third pass: the second pass's quieter shade and a cream fog left the whole stretch one milky
         // cream with nothing in long shadow. The shade takes back a step of violet, and the air is a
         // deeper honey that holds its value, so the far planes and the shadows read against the light.)
-        p.snowShade = c('#6670C6');
-        p.snowDeep = c('#3A44A4');
+        // (Round 8's review loop: the gold's snow read as the old lilac, ART.md 15's one thing it must not be: the
+        // shade a step bluer, violet-blue rather than violet, and the split tone's low end with it.)
+        p.snowShade = c('#5E76CA');
+        p.snowDeep = c('#3048A8');
         p.rim = c('#FFD2A0');
         p.fog = c('#DDB494');
         p.fogFar = 760;
@@ -1454,7 +1464,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.grade.contrast = 1.17;
         p.grade.exposure = 0.97;
         p.grade.hi = c('#FFF4DE');
-        p.grade.lo = c('#DCD8FF');
+        p.grade.lo = c('#D8E0FF');
         p.grade.lens = 0.1;
         p.grade.posterSnow = 0.7;
         p.grade.posterMute = 0.3;
@@ -1480,8 +1490,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyHorizon = c('#FFB07A');
         p.skyBelow = c('#C89C98');
         p.snowLit = c('#FBEEE2');
-        p.snowShade = c('#6068B8');
-        p.snowDeep = c('#2A389C');
+        p.snowShade = c('#5A6EBE');
+        p.snowDeep = c('#2A3CA0');
         p.fog = c('#D8B4B0');
         p.hemiSky = c('#7888D8');
         p.air.far = c('#6A6CB8');
@@ -1490,7 +1500,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.massif.glowK = 0.9;
         p.massif.glowLine = 120;
         p.grade.hi = c('#FFEED6');
-        p.grade.lo = c('#DCDCFF');
+        p.grade.lo = c('#D8E0FF');
         p.grade.posterSnow = 0.75;
         p.hazardDim = 0.9;
         p.stars = 0.2;

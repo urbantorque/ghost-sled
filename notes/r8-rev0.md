@@ -121,11 +121,39 @@ named by no one; Low +0.20 and the phone +0.21; the gold half the "close" part. 
 - **Frost scratches on a glaze fainter** (trails.ts, shared: the cut's alpha on ice x0.42, was x0.6): from the sled to
   the frame's foot they read as ruled white stripes on the Valley Leap's glazed patch.
 
-## Where the loop stopped
+## Pass 3 (`75c1068`)
 
-Pass 3's Low, phone and strips were shot on `75c1068` (`shots/r8/review/m0/pass3/`, console clean); its High stills
-failed to shoot (the session's browser did not open: `high-m0.json` holds the CLI's error) and were being re-shot when
-the lane was told to hand back. No pass 3 critic has run. The preview server is stopped and no slot is held.
+Means: High 7.57 (minimum 6), Low 7.05 (6), phone 6.86 (6), strips 7.13 (6). Hero vistas: the opening 6.5, the First Drop
+7.5, Mirror Lake 7.5, Old Town 8, the Valley Leap 8.5. The best frames 8.5 (z1200, z1593, z2550, z4050). Console clean.
+(Its High stills were shot twice: the first try's browser did not open after a usage-limit stop, and the capture script
+now checks the session is open after `open` and retries.)
+
+Against pass 2: High +0.27 and its minimum 5 to 6, Low +0.58, the phone +0.37. The flipped tray read as "a vermillion
+ring" (High 1050 from 5 to 7.5, 1500 from 5.5 to 7; Low 5 to 7 and 6.5). Low "reads as a poster and almost never
+breaks". What it named, by cost:
+
+1. The morning bleached and milky, 0 to 1500 m: no darks, the shade a pale wash, the First Drop's lake white milk.
+2. The gold turned to the old lilac from 2550 m: snow, banks and street floors lavender or mauve-grey.
+3. Empty snow planes (the phone's lower half above all) and torn-paper shadows.
+4. The hero unreadable in the opening's aerial lens (150, 707, strip 165) and the tumble at 2850.
+5. Boxes: the mauve retaining slab of the opening's fall, the hotel, the lip's cubes, the lake bank's grey blocks, the
+   cornice's white boxes at the lips.
+6. Ghosts in the sky (1650, 3750) and an opaque one (2429).
+7. Lanterns as flat drums; one dissolving as a stipple by the lens on the phone (3750).
+8. The rider dead centre over the vanishing point.
+9. The lake's crack net and a detached reflection on the phone.
+
+### What changed after pass 3
+
+- **The morning a step down with darks** (palette.ts `round7` alpine): exposure 1.0 to 0.97 (the places' floor of 0.85 under the chute's 0.88), contrast 1.12 to 1.17,
+  the shade a clean blue (`#7CA6EC` to `#6E9CEA`, deep `#2F62C8` to `#2856C0`).
+- **The gold's shade violet-blue, not violet** (`JOURNEY.alpine` gold stop: shade `#6670C6` to `#5E76CA`, deep
+  `#3A44A4` to `#3048A8`, the split tone's low `#DCD8FF` to `#D8E0FF`; the dusk stop's shade `#6068B8` to
+  `#5A6EBE`, deep `#2A389C` to `#2A3CA0`, low to `#D8E0FF`). The Dusk hour builds on both stops and moves with them.
+- **The frame's foot again** (grade 0.38 to 0.44, Low's painted 0.44 to 0.5).
+- **The flipped hull's vermillion band softer** (rider.ts, at the main lane's word: the Sakura lane's pass 3 critic read it
+  side-on in a spin as "a red target disc"): r 0.54 to 0.67 (was 0.5 to 0.68), `vec3(0.56, 0.05, 0.022)` (was 0.66, 0.06,
+  0.025), and weighted by `smoothstep(0.35, 0.75, dot(n, v))`, so it fades as the hull turns edge-on to the lens.
 
 ## Cost (the stills' JSON, mean / max draw calls, mean triangles)
 
