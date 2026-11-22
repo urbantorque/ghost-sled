@@ -58,8 +58,13 @@ async (page) => {
       }
       const q = vc.q;
       vc.q = [];
+      // (The frame's cost, summed over its passes as frames.js counts it: the last step's frame is the shot's.)
+      if (gl && gl.info) gl.info.reset();
       for (const cb of q) cb(vc.t);
     };
+    const gl = window.__gs.world && window.__gs.world.renderer;
+    if (gl && gl.info) gl.info.autoReset = false;
+    window.__stCost = () => (gl && gl.info ? { calls: gl.info.render.calls, tris: gl.info.render.triangles } : {});
     const zNow = () => {
       const r = window.__gs.run;
       return r && window.__gs.phase === 'run' ? r.sim.s.z : -1;
@@ -94,7 +99,8 @@ async (page) => {
     if (st.z < 0) break;
     const name = `m${c.m}-z${String(z).padStart(4, '0')}.png`;
     await page.screenshot({ path: `${c.out}${name}` });
-    shots.push({ z, at: Math.round(st.z * 10) / 10, tick: st.tick });
+    const cost = await page.evaluate(() => window.__stCost());
+    shots.push({ z, at: Math.round(st.z * 10) / 10, tick: st.tick, ...cost });
   }
   await page.goto('about:blank');
   return JSON.stringify({ m: c.m, tier: c.tier, demo: c.demo, shots, errors });
