@@ -1320,6 +1320,7 @@ function rock(col: Color, pos: V3, scale: V3, jitter = 0.28): BufferGeometry {
   // wall beside the lens is rock in facets and not a few panes a tenth of the frame wide.)
   // (The lowperf lane tried round 7's cut on Low, twenty facets to every mass, for a quarter of a tunnel's build: at
   // the lens it brought back the shards a tenth of the frame wide that this cut removed, so every tier keeps it.)
+  // (A second try kept the finer cut's lighter jitter on twenty facets: still shards at Ember's 1260 m, so not either.)
   const big = Math.max(scale[0], scale[1], scale[2]) > 2.2;
   return part(rockCut(big ? 1 : 0), col, { pos, scale, jitter: big ? jitter * 0.55 : jitter });
 }
