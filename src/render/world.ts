@@ -212,6 +212,13 @@ const smooth01 = (x: number) => {
 /** The least time between two re-blends of the colour script on Low (ms). */
 const JOURNEY_LOW_MS = 200;
 
+/** A dash's after-images by the grade's flash dial (rider.ts echoK). Round 8's review loop: at night over lilac cloud
+ *  they read as a milky second sled (Lanternfall, so at least 0.35 and no more than the flash); by day on bright
+ *  snow too, as pale copies of the tray and rider trailing down the frame (Sakura), so never over 0.6. */
+function echoOf(flash: number | undefined): number {
+  return Math.max(0.35, Math.min(0.6, flash ?? 1));
+}
+
 export class World {
   readonly renderer: WebGLRenderer;
   readonly scene = new Scene();
@@ -546,7 +553,7 @@ export class World {
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.spirit.fireworks.lightK = this.palette.grade.flash ?? 1;
     this.spirit.lightK = Math.max(0.5, this.palette.grade.flash ?? 1);
-    this.rider.echoK = Math.max(0.35, this.palette.grade.flash ?? 1);
+    this.rider.echoK = echoOf(this.palette.grade.flash);
     this.rider.setHeroRim(this.palette.heroRim);
     this.lakeMirror = new LakeMirror(this.renderer);
     this.applyWeather();
@@ -779,7 +786,7 @@ export class World {
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.spirit.fireworks.lightK = this.palette.grade.flash ?? 1;
     this.spirit.lightK = Math.max(0.5, this.palette.grade.flash ?? 1);
-    this.rider.echoK = Math.max(0.35, this.palette.grade.flash ?? 1);
+    this.rider.echoK = echoOf(this.palette.grade.flash);
     this.rider.setHeroRim(this.palette.heroRim);
     this.applyWeather();
     this.lastChunkRange = '';
@@ -844,7 +851,7 @@ export class World {
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.spirit.fireworks.lightK = this.palette.grade.flash ?? 1;
     this.spirit.lightK = Math.max(0.5, this.palette.grade.flash ?? 1);
-    this.rider.echoK = Math.max(0.35, this.palette.grade.flash ?? 1);
+    this.rider.echoK = echoOf(this.palette.grade.flash);
     this.rider.setHeroRim(this.palette.heroRim);
     this.lakeMirror.invalidate();
     this.applyWeather();
@@ -895,7 +902,7 @@ export class World {
     this.spirit.fireworks.lightK = p.grade.flash ?? 1;
     this.spirit.fireworks.noRed = this.course.biome === 'lantern';
     this.spirit.lightK = Math.max(0.5, p.grade.flash ?? 1);
-    this.rider.echoK = Math.max(0.35, p.grade.flash ?? 1);
+    this.rider.echoK = echoOf(p.grade.flash);
     this.rider.setHeroRim(p.heroRim);
     // The falling weather thickens in coarse steps (configuring it is not free).
     const fall = Math.round((p.embers + p.petals + p.snowfall) * 20);
