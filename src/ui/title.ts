@@ -1,4 +1,4 @@
-import type { MedalSet, MissionView, MountainCard, TitleCup, TitleModel, TitleSpine, TitleTwelve, TwelveRung, UIHandlers } from './contract';
+import type { MedalSet, MissionView, MountainCard, ScreenRect, TitleCup, TitleModel, TitleSpine, TitleTwelve, TwelveRung, UIHandlers } from './contract';
 import { barShare } from './almanac';
 import type { InputMode } from '../game/input';
 import { oldLinkLine } from '../game/challenge';
@@ -9,6 +9,7 @@ import { btn, captureFocus, h, kbd, Layer, padBtn, restoreFocus, sr, type Ctx } 
 import { dailyDate, fmt, metres, NBSP, progFigures, rewardsLine } from './fmt';
 import { icon } from './icons';
 import { EASE_OUT, SPRING, play, reduced } from './motion';
+import { pushRect } from './hud';
 import './hours.css';
 
 // Title screen. Landscape: one column on the left reads logo, mountain cards, the Ride that rides
@@ -143,6 +144,21 @@ export class Title {
     if (!main) return;
     const bottom = this.el.offsetTop + main.offsetTop + main.offsetHeight;
     this.el.parentElement?.style.setProperty('--title-dock', `${Math.round(bottom)}px`);
+  }
+
+  /** The title's panels, for the ghost tags to keep off (ui.ts occluders). Round 8's smoke: with none, the title's
+   *  one tag sat on the mountain's name on a phone and on the strip's arrow on a desk. Each block's own children, so
+   *  a block's empty width (the wordmark's row on a phone) stays open to the scene; the scrim, the dip and the veil
+   *  cover the whole frame and are left out. */
+  measure(out: ScreenRect[], n: number): number {
+    if (!this.layer.open) return n;
+    for (const block of Array.from(this.el.children)) {
+      if (block === this.veil || block.classList.contains('gs-title-scrim') || block.classList.contains('gs-title-dip')) continue;
+      for (const c of Array.from(block.children)) n = pushRect(out, n, c);
+    }
+    // (The strip's arrows hang outside the strip's own box. One faded out at the strip's end is left out.)
+    for (const a of Array.from(this.el.querySelectorAll('.gs-mtns-prev, .gs-mtns-next'))) if (a.checkVisibility?.({ visibilityProperty: true, opacityProperty: true }) !== false) n = pushRect(out, n, a);
+    return n;
   }
 
   hide(): void {

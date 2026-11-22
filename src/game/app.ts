@@ -3313,6 +3313,8 @@ export class App {
       airTicks: 0,
       ghostPoses: this.ghostPoses,
       playerVisible: focus !== null,
+      // (The title's panels: its one ghost tag keeps off them.)
+      occluders: this.ui.occluders(),
     });
   }
 

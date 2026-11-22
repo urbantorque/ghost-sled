@@ -224,6 +224,8 @@ export class UI implements GameUI {
       // The hint where it lands (not mid-entry), and one still fading out after a swap.
       n = this.hints.measure(pool, n);
     }
+    // The title's panels (while it is up), so its one ghost tag never sits on them.
+    n = this.title.measure(pool, n);
     this.occ.length = 0;
     for (let i = 0; i < n; i++) this.occ.push(pool[i]);
   }
@@ -308,6 +310,9 @@ export class UI implements GameUI {
   showTitle(m: TitleModel): void {
     this.setMode(m.inputMode);
     this.title.show(m);
+    // Measured again once the panels have risen into place (the entrance is over by 620 ms).
+    this.markOcc();
+    window.setTimeout(() => this.markOcc(), 700);
   }
 
   hideTitle(): void {
