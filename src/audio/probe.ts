@@ -9,7 +9,8 @@ import type { AudioFrame } from './engine';
 import { Listener, type ListenSources, newView } from './listen';
 import type { Section } from '../sim/course';
 import { Prerender, type Recipe } from './prerender';
-import { GIFT_BIG_S, GIFT_BIG_STARTS, GIFT_S, GIFT_SECOND, GIFT_STARTS, GIFT_THIRD, giftKey, giftParts } from './sfx';
+import { FUSE_S, GIFT_BIG_S, GIFT_BIG_STARTS, GIFT_S, GIFT_SECOND, GIFT_STARTS, GIFT_THIRD, HEART_TAIL, fuseClickK, fuseKey, fuseParts, giftKey, giftParts, heartKey, heartParts, tickClick } from './sfx';
+import { ping } from './instruments';
 import { ladder, mtof } from './theory';
 import { PRIO, type Voice, VoicePool } from './voices';
 
@@ -724,11 +725,127 @@ async function renderTakes(): Promise<Record<string, number | number[]>> {
   return res;
 }
 
+
+/**
+ * 'pulseTakes' (round 8, the lowperf lane): the duel heartbeat and the fuse tick as the game plays them, from a rendered
+ * take (prerender.ts) on a voice at the beat's loudness, against the same beat built live, each at two loudnesses
+ * (duel 0.2 and 1, fuse 0.1 and 0.9), the take rendered at one phase and played at four (Prerender.playNear), on a
+ * centred voice as the game plays both. The noise in both starts at the same place (Math.random held for the pair: in
+ * the game each of a pulse's takes has its own). Per pair: nullOf's blockDb and residDb, the largest sample difference
+ * and the RMS difference against the live beat's peak and RMS; the fuse tick's ping and click apart too; and
+ * clickLiveVsLive, two live clicks with their noise at two places, for scale.
+ */
+async function renderPulseTakes(): Promise<Record<string, number | number[]>> {
+  const core = new Core(new OfflineAudioContext(2, SR, SR));
+  core.music.setTarget('run', Mood.None, 'alpine');
+  const k = core.music.key();
+  const dur = 60 / 112 / 4;
+  const res: Record<string, number> = {};
+  const rnd = Math.random;
+  const held = (): number => 0.37;
+  const one = async (name: string, level: number, key: number, secs: number, starts: number[], take: (v: Voice, t: number) => void, build: (v: Voice, t: number) => void): Promise<void> => {
+    const on = starts[starts.length - 1];
+    // (Rendered once at the phase of a first beat, then played at four, as a pulse on the grid falls anywhere in a block.)
+    for (const phase of [32, 0, 8.6, 64.37]) {
+      const r = new Prerender(core.ctx, core.bank);
+      const t0 = (50 * 128 + phase) / SR;
+      Math.random = held;
+      try {
+        r.want(key, (37 * 128 + 32) / SR, secs, starts, take, 2);
+        for (let tries = 0; r.renders + r.failures === 0 && tries < 500; tries++) {
+          r.pump();
+          await new Promise((ok) => setTimeout(ok, 4));
+        }
+        const len = Math.ceil((t0 + secs + 0.05) * SR);
+        const render = async (fn: (v: Voice) => void): Promise<AudioBuffer> => {
+          const ctx = new OfflineAudioContext(2, len, SR);
+          // (Centred, as the game plays both: a panner on a voice that is mono for part of its length switches pan law.)
+          fn(new VoicePool(ctx, core.bank, 4).voice(t0, level, ctx.destination, null, 0, 0, PRIO.low));
+          return ctx.startRendering();
+        };
+        const live = await render((v) => build(v, t0));
+        let played = false;
+        const took = await render((v) => {
+          played = r.playNear(v, key, t0, t0 + on);
+        });
+        const x = nullOf(live, took);
+        let peak = 0;
+        let maxD = 0;
+        let sig = 0;
+        let dif = 0;
+        let n = 0;
+        for (let ch = 0; ch < 2; ch++) {
+          const a = live.getChannelData(ch);
+          const b = took.getChannelData(ch);
+          for (let i = 0; i < a.length; i++) {
+            peak = Math.max(peak, Math.abs(a[i]));
+            maxD = Math.max(maxD, Math.abs(b[i] - a[i]));
+            sig += a[i] * a[i];
+            dif += (b[i] - a[i]) ** 2;
+            n++;
+          }
+        }
+        const tag = `${name}@${phase}`;
+        res[tag + '.played'] = played ? 1 : 0;
+        res[tag + '.blockDb'] = Math.round(x.blockDb * 1000) / 1000;
+        res[tag + '.residDb'] = Math.round(x.residDb * 10) / 10;
+        res[tag + '.peak'] = Math.round(peak * 1e5) / 1e5;
+        res[tag + '.maxDiff'] = Math.round(maxD * 1e7) / 1e7;
+        res[tag + '.maxDiffDb'] = Math.round(db(maxD / Math.max(peak, 1e-12)) * 10) / 10;
+        res[tag + '.rmsDiffDb'] = Math.round((10 * Math.log10((dif + 1e-30) / (sig + 1e-30))) * 10) / 10;
+        res[tag + '.rms'] = Math.round(Math.sqrt(sig / n) * 1e6) / 1e6;
+      } finally {
+        Math.random = rnd;
+        r.dispose();
+      }
+    }
+  };
+  for (const duel of [0.2, 1]) {
+    const a = 0.07 * (0.6 + 0.6 * duel);
+    const parts = (v: Voice, t: number): void => heartParts(v, t, dur, null);
+    await one(`heart${duel}`, a, heartKey(dur, 0), dur + HEART_TAIL, [0, dur], parts, parts);
+  }
+  for (const fuse of [0.1, 0.9]) {
+    const step = Math.round(4 * fuse);
+    const f = mtof(ladder(k, 6 + step));
+    const amp = 0.026 + 0.02 * fuse;
+    const exact = (0.012 + 0.008 * fuse) / amp;
+    // The take is rendered with the step's click; the live tick with this fuse's own (as the game does).
+    const key = fuseKey(f, step, 0);
+    const r0 = fuseClickK(step);
+    await one(`fuse${fuse}`, amp, key, FUSE_S, [0], (v, t) => fuseParts(v, t, f, r0), (v, t) => fuseParts(v, t, f, exact));
+    // (Its two parts apart: the ping alone, and the click alone, each against itself built live.)
+    await one(`fusePing${fuse}`, amp, key + 1, FUSE_S, [0], (v, t) => void ping(v, t, f, 1, 0.022), (v, t) => void ping(v, t, f, 1, 0.022));
+    await one(`fuseClick${fuse}`, amp, key + 2, FUSE_S, [0], (v, t) => tickClick(v, t, r0), (v, t) => tickClick(v, t, r0));
+  }
+  {
+    const len = Math.ceil(0.3 * SR);
+    const live = async (x: number): Promise<AudioBuffer> => {
+      const ctx = new OfflineAudioContext(2, len, SR);
+      Math.random = () => x;
+      try {
+        tickClick(new VoicePool(ctx, core.bank, 4).voice(0.1, 0.03, ctx.destination, null, 0, 0.2, PRIO.low), 0.1, 0.46);
+      } finally {
+        Math.random = rnd;
+      }
+      return ctx.startRendering();
+    };
+    const a = await live(0.37);
+    const b = await live(0.61);
+    const x = nullOf(a, b);
+    res['clickLiveVsLive.blockDb'] = Math.round(x.blockDb * 1000) / 1000;
+    res['clickLiveVsLive.residDb'] = Math.round(x.residDb * 10) / 10;
+  }
+  core.dispose();
+  return res;
+}
+
 export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}): Promise<Record<string, number | number[]>> {
   if (kind === 'layers') return renderLayers();
   if (kind === 'descent') return renderDescent();
   if (kind === 'scape' || kind === 'scapeOnly' || kind === 'scapeMusic') return renderScape(kind, seconds, opts);
   if (kind === 'giftTakes') return renderTakes();
+  if (kind === 'pulseTakes') return renderPulseTakes();
   const snuffK = SNUFF_KINDS[kind];
   if (snuffK && opts.part === undefined) return renderSnuff(kind, opts);
   const part: SnuffPart = opts.part ?? 'all';

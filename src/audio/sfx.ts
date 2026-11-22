@@ -117,6 +117,61 @@ export function giftParts(v: Voice, t: number, f1: number, f2: number, f3: numbe
   }
 }
 
+// Round 8 (the lowperf lane): the duel heartbeat (about twelve nodes a beat, a beat every quarter note) and the
+// fuse tick (six, up to every 16th) play from rendered takes too (prerender.ts), as the gifts do: a voice, its out and
+// one source. Both are linear in their loudness, so a take is rendered at unit loudness and played through a voice
+// set to the beat's own. Their noise starts at a random place in the bank's loop, so each sound keeps PULSE_TAKES
+// takes, each with its own, and takes turns among them.
+/** Takes kept a pulse (each its own noise). */
+export const PULSE_TAKES = 4;
+/** A heartbeat's take: the lub, the dub a 16th later (`dur`), and the dub's tail. */
+export const HEART_TAIL = 0.34;
+/** A fuse tick's take: the ping's tail. */
+export const FUSE_S = 0.125;
+
+/** A heartbeat's take key: its 16th's length (to 0.1 ms) and which of its takes. */
+export function heartKey(dur: number, n: number): number {
+  return 0x4000000 + (n % PULSE_TAKES) * 0x100000 + Math.round(dur * 10000);
+}
+
+/** A fuse tick's take key: its pitch (to 0.1 Hz), its step on the ladder (0 to 4) and which of its takes. */
+export function fuseKey(f: number, step: number, n: number): number {
+  return 0x8000000 + (n % PULSE_TAKES) * 0x100000 + step * 0x20000 + Math.round(f * 10);
+}
+
+/** A fuse tick's click against its ping at a ladder step's own fuse (step / 4): the live tick's ratio at any fuse
+ *  in that step to within 1.3%, about 38 dB under the click. */
+export function fuseClickK(step: number): number {
+  const f = step / 4;
+  return (0.012 + 0.008 * f) / (0.026 + 0.02 * f);
+}
+
+/** A heartbeat at unit loudness: a lub on t, the dub `dur` later (`later` builds it from a later scheduler pass on a
+ *  live voice; null builds it at once, for a render). */
+export function heartParts(v: Voice, t: number, dur: number, later: ((t: number, fn: (t: number) => void) => void) | null): void {
+  thump(v, t, 58, 44, 1, 0.05);
+  puff(v, t, 0.35, 320, 120, 0.035, v.bank.brown);
+  const dub = (tn: number): void => {
+    thump(v, tn, 52, 40, 0.8, 0.06);
+    puff(v, tn, 0.28, 280, 110, 0.04, v.bank.brown);
+  };
+  if (later) later(t + dur, dub);
+  else dub(t + dur);
+}
+
+/** A fuse tick at unit loudness: a ping at f and a click `clickK` as loud. */
+export function fuseParts(v: Voice, t: number, f: number, clickK: number): void {
+  ping(v, t, f, 1, 0.022);
+  tickClick(v, t, clickK);
+}
+
+/** A tick of noise high-passed at 4 kHz (the bank's clickNoise, filtered once, not per click). */
+export function tickClick(v: Voice, t: number, amp: number): void {
+  const g = v.gain(0, v.out);
+  const e = perc(g.gain, t, amp, 0.0005, 0.003);
+  v.buffer(v.bank.clickNoise, t, e, g);
+}
+
 /** What the cues read from the band (music.ts Music). */
 export interface Band {
   grid(): { t0: number; dur: number } | null;
@@ -597,9 +652,7 @@ export class Sfx {
 
   /** A tick of noise high-passed at 4 kHz (the bank's clickNoise, filtered once, not per click). */
   private click(v: Voice, t: number, amp: number): void {
-    const g = v.gain(0, v.out);
-    const e = perc(g.gain, t, amp, 0.0005, 0.003);
-    v.buffer(v.bank.clickNoise, t, e, g);
+    tickClick(v, t, amp);
   }
 
   /** Bright major add9 bell chord, strummed upward. `shift` moves every voice that many steps up the
@@ -2879,21 +2932,32 @@ export class Sfx {
     }
   }
 
+  /** Which of a pulse's takes plays next (PULSE_TAKES). */
+  private pulseN = 0;
+
   private fuseTick(t: number, fuse: number): void {
-    const v = this.voice(t, 0.04, 0, 1, PRIO.low);
-    ping(v, t, this.note(6 + Math.round(4 * clamp(fuse, 0, 1))), 0.026 + 0.02 * fuse, 0.022);
-    this.click(v, t, 0.012 + 0.008 * fuse);
+    // (At unit loudness through a voice at the tick's: the same sound, and from a take once one is ready.)
+    const step = Math.round(4 * clamp(fuse, 0, 1));
+    const f = this.note(6 + step);
+    const amp = 0.026 + 0.02 * fuse;
+    const v = this.voice(t, 0.04, 0, amp, PRIO.low);
+    const key = fuseKey(f, step, this.pulseN++);
+    const r = this.renders;
+    if (r && r.playNear(v, key, t, t)) return;
+    fuseParts(v, t, f, (0.012 + 0.008 * fuse) / amp);
+    if (r && r.wants(key)) {
+      const k = fuseClickK(step);
+      r.want(key, t, FUSE_S, [0], (rv, rt) => fuseParts(rv, rt, f, k), 2);
+    }
   }
 
   private heartbeat(t: number, dur: number, duel: number): void {
     const a = 0.07 * (0.6 + 0.6 * clamp(duel, 0, 1));
-    const v = this.voice(t, 0.04, 0, 1, PRIO.low);
-    thump(v, t, 58, 44, a, 0.05);
-    puff(v, t, a * 0.35, 320, 120, 0.035, v.bank.brown);
-    const td = t + dur;
-    this.at(v, td, (tn) => {
-      thump(v, tn, 52, 40, a * 0.8, 0.06);
-      puff(v, tn, a * 0.28, 280, 110, 0.04, v.bank.brown);
-    });
+    const v = this.voice(t, 0.04, 0, a, PRIO.low);
+    const key = heartKey(dur, this.pulseN++);
+    const r = this.renders;
+    if (r && r.playNear(v, key, t, t + dur)) return;
+    heartParts(v, t, dur, (tn, fn) => this.at(v, tn, fn));
+    if (r && r.wants(key)) r.want(key, t, dur + HEART_TAIL, [0, dur], (rv, rt) => heartParts(rv, rt, dur, null), 2);
   }
 }
