@@ -145,100 +145,167 @@ frame than round 7 (about 58 calls).
 Medium 888.6 to 838.4, a phone's frame (390 by 844, Medium) 841.0 to 790.2. Nothing is added on any tier; the ghosts'
 saving is on every tier.
 
+## Second pass (the main lane's calls of 22 November, after the merge as bec2ece)
+
+The calls: (1) Low draws a far ghost without its depth pass; (2) the duel heartbeat and the fuse tick through
+prerender.ts, proven to sound the same; (3) Low's coarser rock once more, with the finer cut's lighter jitter; (4) the
+HUD's race pill, its delta and ring, the draft pill and the combo bar written only on change; (5) only if those do
+not reach the bar, every ghost body in one draw a pass on Low. Builds: pass 1 = r8-lowperf at 37717f2 (`dist/lp1`),
+pass 2 = this branch (`dist/lp2`); raw output in `shots/r8/lowperf/h` to `k` and `stills2/`.
+
+1. **A far ghost on Low is its glass alone** (d4eea25, `src/render/ghosts.ts`, Low only). Under 1/12 of the frame's
+   height (its 1.7 m at its chest's depth) its depth pass is not drawn; on Medium and up, and for any ghost larger on
+   Low, nothing changes. Held run, Low, z 230 to 1230 (`h/gv-*.json`), depth passes and GL calls a frame:
+
+   | mountain | depth passes pass 1 / pass 2 | GL calls pass 1 / pass 2 | round 7 |
+   |---|---|---|---|
+   | Pinecrest | 1.55 / 0.15 | 467.7 / **450.2** | 463.2 |
+   | Ember | 2.8 / 0.4 | 537.4 / **504.4** | 476.6 |
+   | Sakura | 0.4 / 0.05 | 464.7 / **461.2** | 478.4 |
+
+   Nearly nine in ten of the ghosts Low draws are far ones. Looked at in the stills (`stills2/lp2-low/`, `lp2f-low/`): the
+   worst case is a ghost just under the line (Nessa Lumen mid-flip at Ember's 1500 m, about 55 px of 720): a mint
+   silhouette with its rim and sled, its wisp streaming; no limb rim or wisp reads through its chest at that size.
+   Near ghosts keep both passes. The threshold stays at 1/12.
+2. **The heartbeat and the fuse tick from takes** (a749b9c, `src/audio/sfx.ts`, `prerender.ts`, every tier). Both are
+   linear in their loudness, so a take is rendered at unit loudness and played through a voice set to the beat's
+   (the live path is built the same way, so it is the same sound too). Two things the gifts never met: their noise is
+   the bank's stereo noise (a mono take folded it to one channel: these render in two, Prerender.want's `channels`), and a
+   pulse on the band's grid falls anywhere in a render quantum, where play() refuses any phase but the take's own
+   (in a ride the first build of this played no take at all), so they play through Prerender.playNear: started on
+   the frame nearest, their parts land within half a frame (10 us). Each pulse keeps four takes with their noise at
+   four places, as live hits never match. The proof, `engine.debugRender('pulseTakes')`
+   (`scripts/playtest/lowperf/pulse.js`, `j/pulse.json`): each pulse at two loudnesses, the take rendered at one phase
+   and played at four against the beat built live, the noise held at the same place:
+
+   | pulse | at the take's phase: residual, largest sample difference | at other phases: residual, largest difference | worst block level |
+   |---|---|---|---|
+   | heartbeat, duel 0.2 and 1 | -147 / -149 dB, -143 / -142 dB | -40.8 to -48.5 dB, -34.7 to -40.1 dB | 0.10 dB |
+   | fuse tick, fuse 0.1 and 0.9 | -64.7 / -73.6 dB, -53.9 / -62.8 dB | -13.6 to -26.6 dB, -15.1 to -18.7 dB | 0.09 dB |
+
+   (Differences against the live beat's RMS and peak.) The fuse tick's residual off its phase is its click: high-passed
+   noise moved by under half a sample decorrelates (the click alone: -1 to -2 dB at a fractional phase, -194 to -272
+   dB at a whole one), and two live clicks with their noise at two places differ more than that (+3.4 dB): no two live
+   ticks ever matched. Its ping alone off phase is -24 to -30 dB (its sine moved by under half a sample) and at a whole phase
+   -115 dB or better; at the take's own phase the tick is -65 to -74 dB, the click's level a step's own (within 1.3%).
+   Node rate in a ride (Ember, prof.js, two runs each, `i/prof-*`): the heartbeat's connects 5.7 and 3.9 a second to
+   1.4 and 1.7; all nodes made, gains 21 to 24 a second either side (the ride's duels and fuses vary run to run more
+   than this moves).
+3. **Low's rock with the lighter jitter**: tried and withdrawn (8b5ca62 keeps only a comment). Twenty facets with the
+   finer cut's jitter still read as shards at Ember's 1260 m (`stills2/lp2-low/m2-z1260.png` against
+   `stills2/lp1-low/m2-z1260.png`), not round 8's rounded rock.
+4. **The HUD**: nothing to fix. Every element named writes only when what it shows changes: the race pill's number,
+   its "of N" and its delta through `Txt` (text written only when it differs), its ring and crown as animations played
+   on a rank change, the draft pill's chevrons and state through `Flag` (a class toggled only when it flips), the combo
+   bar's fill on the page's beat and only past 0.004 of change. In a ride on Ember (`k/lt-*.json`), per frame against round 7's: the combo bar's inline style 0.25 (0.28), text
+   replaced 0.3 (0.22), the chevrons' style 0.08; nothing in the HUD is restyled every frame. What remains above round
+   7's (0.9 paints a frame against 0.58, 4.1 elements styled against 2.0) is the HUD saying more (more passes, banks
+   and calls), not one element writing when nothing changed.
+5. **(b), every ghost body in one draw a pass**: not done, because its bound is under the noise. A workcal build that
+   draws no far ghost at all on Low (`scripts/playtest/lowperf/wcx.js`, `#hidefar`: the most merging their glass into
+   one draw could save) read no cheaper than pass 2 in the same sitting (Pinecrest 2.87 against 2.82, Ember 2.89
+   against 2.73, raw, `j/wcx.json`); after (1) a far ghost costs Low one draw, and the rest of its cost (its pose,
+   wisp and tag) stays whatever draws it.
+
+**Work a Low frame at 6x, this pass** (workcal, two rounds a mountain, interleaved; at 45 fps as before):
+
+| sitting | round 7 | pass 1 | pass 2 |
+|---|---|---|---|
+| 13:30 to 13:42 (`i/wc.json`; pass 2 with the rock trial in) | 2.18 / 2.27 / 2.18 (mean 2.21) | 2.31 / 2.36 / 2.38 (2.35) | 2.26 / 2.39 / 2.44 (2.36) |
+| 14:57 to 15:07 (`j/wcx.json`, raw, Pinecrest / Ember) | 2.34 / 2.45 | | 2.82 / 2.73 |
+
+(Mountains Pinecrest / Ember / Sakura.) The machine ran slow in both (26 to 42 fps) and the slope that reads a run
+at 45 fps came out 1.23 in one sitting and 0.25 in the other, so neither says more than this: **the bar is not met**,
+Low at 6x stays about 6 to 15% over round 7's work, and nothing this pass did shows above the sittings' noise.
+**The rest unharmed** (held run, Pinecrest, z 230 to 830, `k/gv-*`, GL calls a frame, pass 1 to pass 2): High 1,049.0
+to 1,010.7 (nothing of this pass touches High's draws; the held run's field is not exactly the same run to run),
+Medium 833.2 to 833.1, a phone's frame 785.8 to 790.0. No tier draws more; the takes save audio nodes on every tier.
+
 ## For DECISIONS (to paste)
 
-**Low at 6x after the play and screens merges: the cost is the field on screen, and a quarter of it is given back**
-(`notes/r8-lowperf.md`, the lowperf lane; raw output in `shots/r8/lowperf/`). The bisect's fast point, 9685d8b, was a
-build whose pools were still SIM_VERSION 9's (a95ad26 regenerated them after it): its Low frame drew no ghost at all and
-its rider, with nothing to draft, rode a quarter slower, so its work (2.14 to 2.21) and its GL calls (446 on Ember) are a
-frame without the field, not a bar a build with ghosts can meet; round 7 is the bar. Counted on a held run (a pool
-rider replayed on exact steps, so two builds draw the same frames; a live pilot's count moved by 30 with one ghost
-more or less on screen), what a Low frame draws more than round 7's is the field: round 8 draws 2.85 ghosts a frame on
-Ember against round 7's 0.7 (two draws and about 27 GL calls each, and four shared draws whenever any is), and one draw
-each for the composed places' framing, the poster and a charm gate in reach. Profiled at matched machine speed the
-frame callback is 9% over round 7's and spread thin (the renderer is 59% of it on both builds); the idle builds of a
-tunnel cost 2.7 times round 7's (the forest lane's finer rock cut); audio makes 2.2 times the nodes a second (the same
-engine, the duel heartbeat and fuse ticks played more); the page's lifecycle paints twice as often (the race pill and
-draft pill told more often). *The fix, render only:* a ghost off screen is no longer posed or given its wisp, shadow,
-halo and glass sled, and with none on screen those four draws and six uploads rest (every tier; nothing on screen
-changes); every tier copies a rock's mass instead of building it (round 7's coarser rock on Low
-halved a tunnel's build but brought back shards a tenth of the frame wide at the lens, and was withdrawn); gates out of
-reach skip their slope. Held-run GL calls a Low frame: Pinecrest 491.6 to 474.4 (round 7 463.2), Sakura
-511.9 to 465.2 (478.4), Ember 537.6 to 537.0 (476.6); High, Medium and a phone's frame each 46 to 51 fewer. Work a frame
-at a common 45 fps, two rounds interleaved on a shared machine: round 7 2.14, base 2.49, this lane 2.40. *Not met:* Low
-at 6x is still about 13% over round 7's work, most of it Ember's field on screen. Rejected: drawing far ghosts without
-their depth pass, or fewer ghosts in glass on Low (a look change the owner should see first); prerendering the
-heartbeat and fuse ticks (an audio lane's work, about 0.3 ms a frame at 6x).
+**Low at 6x after the play and screens merges: the cost is the field on screen; two passes give part of it back and
+the bar is not met** (`notes/r8-lowperf.md`, the lowperf lane; raw output in `shots/r8/lowperf/`). The bisect's fast
+point, 9685d8b, was a build whose pools were still SIM_VERSION 9's (a95ad26 regenerated them after it): its Low frame
+drew no ghost at all and its rider, with nothing to draft, rode a quarter slower, so its work and its GL calls are a
+frame without the field; round 7 is the bar (the GL half now counted on a held run, glv.js: a pool rider replayed on
+exact steps, so two builds draw nearly the same frames). What a Low frame draws more than round 7's is the field:
+2.85 ghosts a frame on Ember against round 7's 0.7, each two draws, plus one draw each for the composed places'
+framing, the poster and a gate in reach; profiled at matched machine speed the frame callback is 9% over round 7's
+and spread thin; audio makes 2.2 times the nodes a second (the same engine, the duel heartbeat and the fuse ticks
+played more); the HUD paints more because it says more, with no element written when nothing changed. *First pass*
+(every tier, nothing on screen changes): a ghost off screen is not posed or given its wisp, shadow, halo and glass
+sled, and with none on screen those four draws and six uploads rest; a rock's mass is copied, not built; gates out of
+reach skip their slope. *Second pass:* on Low a ghost under a twelfth of the frame's height is drawn as its glass
+alone, without its depth pass (nearly nine in ten of Low's ghosts; at that size no limb or wisp reads through its
+chest); the duel heartbeat and the fuse tick play from rendered takes on every tier (in two channels for the bank's
+stereo noise, started on the frame nearest wherever the grid puts them: at the take's own phase sample-exact, off it
+within half a frame, block levels within 0.1 dB of the live beat). Held-run GL calls a Low frame, round 7 / before /
+after: Pinecrest 463.2 / 491.6 / 450.2, Ember 476.6 / 537.6 / 504.4, Sakura 478.4 / 511.9 / 461.2; High, Medium and a
+phone's frame draw no more. Work a Low frame at a common 45 fps, interleaved on shared sittings: round 7 2.14 to 2.21,
+this branch 2.36 to 2.40. *Not met:* Low at 6x is still about 6 to 15% over round 7's work, and Ember draws two more
+ghosts than round 7 did. Rejected: round 7's coarser rock on Low, twice (shards at the lens); every ghost body in one
+draw on Low (a build drawing no far ghost at all was no cheaper within the noise, so merging their glass could not
+reach the bar); fewer ghosts in glass on Low (the field in glass is the round's design).
 
 ## For the README
 
 For the performance section, beside the perf lane's Low numbers:
 
 > Ghosts off screen cost a frame nothing: only a ghost the lens can see is posed and given its wisp, shadow, halo and
-> glass sled, and with none in view those draws rest (a Low frame on Pinecrest asks WebGL for 474 calls, round 7's
-> 463). Round 8's field races beside you, so a Low frame on Ember draws about two more ghosts than round 7's did;
-> each is two draws.
+> glass sled, and with none in view those draws rest. On Low a far ghost, under a twelfth of the frame's height, is
+> drawn as its glass alone, one draw where a near one takes two. The duel heartbeat and the fuse tick play from
+> rendered takes, as the gift pickups do. A Low frame asks WebGL for 450 calls on Pinecrest and 461 on Sakura (round
+> 7: 463 and 478); on Ember, where round 8's field races beside you, 504 (477).
 
-And under the tools: `scripts/playtest/lowperf/glv.js` (GL calls over a held run, the same frames on any build with
-the same pools), `scripts/playtest/lowperf/drawlist.js` (GL calls by the draw they belong to),
+And under the tools: `scripts/playtest/lowperf/glv.js` (GL calls over a held run, nearly the same frames on any build
+with the same pools), `scripts/playtest/lowperf/drawlist.js` (GL calls by the draw they belong to),
 `scripts/playtest/lowperf/prof.js` with `scripts/playtest/lowperf/tree.cjs` (a profile kept as a tree, with a ruler
-and the stacks that make audio nodes).
+and the stacks that make audio nodes), `scripts/playtest/lowperf/pulse.js` (the pulses' takes against the live beat).
 
 ## Touched
 
 - `src/render/ghosts.ts` (the ghosts lane's and the play lane's): the update's order (visibility before the pose),
   `restGhost`, `wispPath` and `reactMotes` split out of `poseGhost` and `updateWisp`, a `snap` through `poseGhost`
   and `moveGhost`, `hideFx` once per ghost, the shared fx meshes' `visible` and their uploads. Item gains `posed`
-  and `fxOn`.
-- `src/render/town.ts` (the forest lane's rock): `rockCut()`, the two cuts made once and copied (the Low cut tried
-  in 2966514 is undone in d133b57).
+  and `fxOn`. Second pass: `LOW_DEPTH_FROM` and `it.depth.visible` (Low's far ghosts).
+- `src/audio/sfx.ts` (the music and sound lane's): `heartbeat` and `fuseTick` through takes; `heartParts`,
+  `fuseParts`, `tickClick`, `heartKey`, `fuseKey`, `fuseClickK`, `PULSE_TAKES`, `HEART_TAIL`, `FUSE_S` exported
+  (the private `click` calls `tickClick`). `src/audio/prerender.ts`: `want(..., channels)` (two-channel takes; the
+  memory cap counts both), `playNear`. `src/audio/probe.ts`: `'pulseTakes'`.
+- `src/render/town.ts` (the forest lane's rock): `rockCut()`, the two cuts made once and copied (the Low cuts tried
+  in 2966514 and in the second pass are undone; a comment says why).
 - `src/render/charmgates.ts` (the play lane's): the reach test before the slope.
 - New tools in `scripts/playtest/lowperf/`: prof.js, tree.cjs, drawlist.js, lifetrace.js, paintwho.js, scenestat.js,
-  gates.js, glz.js, glv.js, pixdiff.mjs, batch.sh (one slot, one browser, a jobs file of `script|config|output`
-  lines), profdiff.cjs (the main lane's, renamed for this package's ES modules).
+  gates.js, glz.js, glv.js, pixdiff.mjs, pulse.js, wcx.js, batch.sh (one slot, one browser, a jobs file of
+  `script|config|output` lines), profdiff.cjs (the main lane's, renamed for this package's ES modules).
 
 ## What the main lane must decide
 
-1. **The bar's second half.** "glcount at or under the 9685d8b count" asks for a frame with no ghosts (finding 1).
-   Restate it against round 7 (held-run counts, `scripts/playtest/lowperf/glv.js`), or keep it knowing no build with a
-   field meets it.
-2. **Whether Low gets a cheaper ghost.** The rest of the gap is round 8's field on screen, which is the round's
-   design (the pacer keeps riders in frame, the pools draft each other, showdowns). If Low must reach round 7's work,
-   the next steps are a Low ghost of its own, each a look change to show the owner first: (a) a ghost under about a
-   twelfth of the frame's height drawn without its depth pass (one draw, not two; at that size its limbs' rims and its
-   wisp behind its chest are a few pixels), about 12 calls and 0.03 rulers a far ghost; (b) every ghost body in one
-   draw a pass, laid end to end as the glass sleds already are (two draws for the field, not two a ghost: a lane's
-   work, and blending between overlapping ghosts must be looked at); (c) at most two ghosts in glass on Low, the rest
-   as their wisp and tag. I did none of them.
-3. **The confirming sitting.** On this machine's shared sittings the raw workcal moved with the machine (one build 17
-   and 49 fps on one mountain a minute apart) more than with the build; only a quiet sitting can say whether the 13%
-   that remains at a common frame rate is real. Suggested: `workcal.js` with five rounds,
-   `window.__wcCfg = { builds: ['<round 7>', '<base>', '<this branch>'], ms: [0, 2, 3], rounds: 5 }`, and perf-vl.sh's
-   Low loop, round 7 against this branch.
-4. **Audio** (an audio lane's, if anyone's): the duel heartbeat and the fuse tick through prerender.ts as the gifts
-   are (a heartbeat is linear in its loudness, so one take at unit level played through the voice's gain is the live
-   sound), from about twelve nodes a beat to three.
-5. **Low's tunnel rock**, if a look call can take it: round 7's twenty-facet cut on Low halves a tunnel's idle build
-   (finding 4) but reads as shards at the lens (`stills/{base,lp}-low-tunnel/m2-z1260.png`); a coarser cut with the
-   finer cut's lighter jitter might hold the look. Withdrawn here.
+1. **Whether the bar holds as written.** Two passes leave Low at 6x about 6 to 15% over round 7's work (the shared
+   sittings cannot narrow it), and what remains is Ember's field on screen and a frame callback 9% heavier in a dozen
+   small places. The next Low saving would change what Low shows: fewer ghosts in glass (your call: not), or a
+   cheaper ghost body (a merged draw's bound is under the noise). The alternatives are to accept round 8's field as
+   Low's cost and restate V9 for Low against round 7 plus the field, or to keep the bar open into the next round.
+2. **The confirming sitting.** Only a quiet one can say where Low stands: `workcal.js` with five rounds,
+   `window.__wcCfg = { builds: ['<round 7>', '<round-8 head>'], ms: [0, 2, 3], rounds: 5 }`, and perf-vl.sh's Low loop.
+3. **The audio lane**, if it wants takes elsewhere: Prerender.playNear and two-channel takes now exist for any fixed
+   sound on the band's grid (the draft's breath note, the stomp tick).
 
 ## Still short
 
-- **The bar.** Work a Low frame at 6x is about 13% over round 7's at a common frame rate (2.40 against 2.14), and GL
-  calls are over round 7's on Ember (537 against 477) and Pinecrest (474 against 463), under on Sakura. Not proven in
-  fps: no quiet sitting.
+- **The bar.** Work a Low frame at 6x is over round 7's at a common frame rate in every sitting (2.36 to 2.40 against
+  2.14 to 2.21); GL calls are under round 7's on Pinecrest and Sakura and 28 over on Ember. Not proven in fps: no quiet
+  sitting.
 - The frame callback's own excess (about 9% at matched speed) is spread over a dozen systems of 0.1 to 0.3 ms at 6x
   each (the sim's ticks, the chase, the far field's update, Spirit Flow, the journey's palette); none is one fix.
-- The page's lifecycle paints and lays out twice as often as round 7's in a ride, from the race and draft pills
-  told more often; Low draws the running figures in the canvas, and the race pill could follow (a HUD lane's call).
-- Audio's node rate (item 4 above).
-- **Stills** (`stills/{base,lp}-{low,high}/`, stills-at.sh, demo rider 0, Ember 130 to 1552 m, Pinecrest 130 to
-  1552, Sakura 1500 and 1552: past the first gate with a charm held, a gate coming up at 1500 and ridden at 1552, the
-  rider's flip at Pinecrest's 130, ghosts beside and ahead with wisps, tags and the edge chip; Ember's lava tunnel on
-  Low in `stills/{base,lp}-low-tunnel/`). Looked at side by side: ghosts, wisps, tags, gates and glyphs draw as on the
-  base; the console is clean on every still of both builds (`errors: []`). A pair is not the same frame, though:
-  stills.js holds the player's run (the same tick, score and clock on both builds) but not the field, which differs
-  between two runs of one build too (base Low and base High at Ember's 600 m show different ghosts), so no pixel
-  comparison proves "nothing changed"; what the code does for a ghost on screen is unchanged by construction, and a
-  ghost off screen had every alpha at zero before. No showdown fell inside these frames; the play lane's r8-play.js
-  shoots one.
+- The HUD paints and lays out more than round 7's in a ride because it says more; Low draws the running figures in
+  the canvas, and the race pill could follow (a HUD lane's call).
+- The fuse tick's takes are keyed by pitch step, music key and four noise places, so a ride's first ticks of each are
+  still built live until their takes are ready.
+- **Stills.** First pass: `stills/{base,lp}-{low,high}/` and `stills/{base,lp}-low-tunnel/`. Second pass:
+  `stills2/lp1-low/`, `stills2/lp2-low/`, `stills2/lp2-high/` (the rock trial in), and `stills2/lp2f-{low,high}/`
+  (the branch as committed: Ember 900, 1260, 1500 and 1552 m, Pinecrest 130). A gate coming up (1500) and ridden
+  (1552), the rider's flip at Pinecrest's 130, a charm held past the first gate, near and far ghosts with wisps and
+  tags, the tunnel's rock as round 8's. The console is clean on every still (`errors: []`). The held run holds the
+  player's run but not the field exactly (two runs of one build differ in which ghosts are where), so a pair is
+  judged by eye, not by pixel; no showdown fell inside these frames (the play lane's r8-play.js shoots one).
