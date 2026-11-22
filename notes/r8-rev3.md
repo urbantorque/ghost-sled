@@ -272,7 +272,7 @@ target disc" seen side-on; that is rev0's ring, for the main lane to weigh (belo
 Cost: High 108.4 draw calls (117), 891k triangles (1.11M); Low 48.4 (54), 115k (170k); the phone 92.2 (101), 631k
 (851k). Console clean.
 
-### After pass 3 (a936d10 to ef19329): built, tested, not yet judged
+### After pass 3 (a936d10 to ef19329)
 
 - **Navy crystal spikes at the lips (600 every tier, strip 2672).** Sakura's leap shoulders are outcrops in thin
   dipping beds of its wine-leaning stone with snow on every ledge, as Pinecrest's are (`rails.ts`, a branch of
@@ -281,11 +281,152 @@ Cost: High 108.4 draw calls (117), 891k triangles (1.11M); Low 48.4 (54), 115k (
 - **Masts near the vermillion (4330).** The street's and the square's masts on Sakura `#93405A` to `#6E2C48`.
 - **Confetti petals (most frames).** Sakura's petals about two thirds as many (0.7/0.9/1.1/1.3 to 0.45/0.6/0.75/0.85).
 
-## Where it stopped
+## Pass 4 (ef19329; a fresh Opus critic at high effort)
 
-The lane was told to hand back during pass 4's capture (after the three passes the brief requires; five were
-allowed). Pass 4's capture was stopped, the preview server stopped and every session closed; no slot is held. The
-build at ef19329 passed `tsc` and the full vitest (102 files, 1863 tests) and has not been shot or judged.
+(A hand-back request mid-capture stopped pass 4 once; the main lane had not asked for it, and the loop went on.
+pass.sh now checks each batch's count, 36 stills and 8 strips, and retries a short one.)
+
+| z | High | Low | Phone | Weakest thing (High unless named) |
+| --- | --- | --- | --- | --- |
+| 150 | 6.5 | 6 | 5.5 | The bottom 40% a lavender smear; no near darks; a small ghost over the horizon |
+| 300 | 6 | 5.5 | 5.5 | Mid-tumble from above: the tray a red-and-blue target disc (every tier) |
+| 450 | 6 | 6 | 6 | Lilac cloud-shadow blotches; a teal hut cut at the right edge |
+| 600 | 7 | 6 | 5.5 | The lip's rocks dark blocks on white plinths (Low: no crowd ledges) |
+| 750 | 6 | 5.5 | 6 | Terraces slatted grey-blue grids; two pills over a ghost's hand |
+| 820 | 6.5 | 6 | 6 | Terraces grids; a flat grey slab on the left wall |
+| 900 | 7 | 6 | 6.5 | A dark pine at the left lens; puddles |
+| 970 | 7 | 6 | 5.5 | Tree shadows smeared into blue claw marks |
+| 1026 | 7 | 5 | 6 | A blotchy lavender smear (Low: the lower 60%) |
+| 1200 | 6.5 | 5.5 | 6 | The draft's cyan stripe through the sled |
+| 1301 | 6 | 6.5 | 6.5 | The street's depth of field softens the rider; lantern bokeh as stains |
+| 1350 | 5.5 | 6 | 6 | A big mint ghost over the torii's beam like a balloon |
+| 1500 | 7 | 6.5 | 6 | A puddle; small charm gates; smeared near snow |
+| 1650 | 6 | 6 | 6 | Smooth untextured blue domes either side; boulders on white bases |
+| 1754 | 7 | 6.5 | 6.5 | The tunnel mouth a flat slab with a door |
+| 1800 | 6 | 6 | 6.5 | A blossom canopy at the left lens (20%); stacked walls with white lids |
+| 1971 | 7.5 | 7 | 6.5 | Bars in the air and on the walls, the floor flat lavender |
+| 2100 | 6.5 | 6.5 | 6.5 | Smooth blue domes; the rider upside down a red blob |
+| 2210 | 5 | 5.5 | 6.5 | A mint ghost in the sky over the cone; the cairn's tag on the line |
+| 2410 | 6.5 | 6 | 6.5 | The ice lane pale lavender with a hex grid, no dark heart |
+| 2580 | 7.5 | 6.5 | 6 | The orchard scattered puffs, not rows; rider small |
+| 2700 | 7 | 6.5 | 6 | The cone cropped at the top; puddles |
+| 2850 | 7 | 6.5 | 6.5 | The landing powder a grey ring; two white quads on the dark flank |
+| 3000 | 5.5 | 5.5 | 5 | The kilometre arch's beam and lanterns across the foot; the rider head-down |
+| 3060 | 6 | 6 | 5.5 | Rider tiny from above; an untextured dark flank |
+| 3150 | 7 | 6 | 6 | Puddles; smeared near snow |
+| 3300 | 7 | 6 | 5.5 | Bare smeared banks; a thin middle plane |
+| 3405 | 7.5 | 6.5 | 6.5 | A white hot spot at the lower left; disc petals |
+| 3450 | 7 | 6.5 | 6.5 | White streaks at the lower left; ice with no dark heart |
+| 3600 | 7 | 6.5 | 6.5 | A blossom canopy over a quarter of the left edge |
+| 3706 | 6.5 | 6 | 6.5 | A dark slab under a white lid; milky ice |
+| 3926 | 6.5 | 5.5 | 5 | Temple Town white boxes; rider tiny (phone: black hexagons in the corners) |
+| 4076 | 7 | 6.5 | 6 | Roofs flat beige slabs |
+| 4200 | 7 | 6 | 6.5 | Lavender blotches; smeared near snow |
+| 4330 | 5 | 6 | 5.5 | A dithered black board in the sky; a vermillion post down the street; lanterns cut at the top corners |
+| 4440 | 8 | 7 | 7 | The pagoda small and pale behind the board |
+| **Mean** | **6.58** | **6.10** | **6.07** | |
+| **Minimum** | **5** (2210, 4330) | **5** (1026) | **5** (3000, 3926) | |
+
+Strips: 40 6.5, 220 6.5, 980 6.5, 1840 7, 2672 5.5, 2730 6, 4060 6.5, 4400 8 (mean 6.56).
+
+| Vista | Score | A 9? |
+| --- | --- | --- |
+| The cone through the lifting mist | 7 (600) | No: one peach wash, no layers lifting |
+| The flooded terraces | 6.5 (820) | No: slatted grids, no sky in them |
+| The Blossom Leap | 7.5 (2580) | No: puffs, not combed rows; petals as dots; rider a speck in the strips |
+| The torii's bars of light | 7.5 (1971) | No: bars on the walls and in the air, not on the snow under the rider |
+| The pagoda over the square | 8 (4440) | No, the closest: small and pale behind the board; no petal storm |
+
+The harshest of the four critics: its scores sit about half a point under pass 3's on the same pictures. Laid side by
+side, pass 3's and pass 4's frames differ only where the last fixes reach (the shoulders now stone stacks, the petals
+thinner, the ledges greyer): no regression in what changed. The frames it marks hardest, 2210, 1350 and 4330, are
+the ghost in the sky and the board over the square, unchanged since pass 1. Its finds new to this lane: the shoulders
+still "dark blocks" in the lip's shade; the foreground smear named in thirteen frames and two strips, worse in motion
+than in the stills; the finish arch's tower read as a vermillion post down the street.
+
+Cost: High 108.5 draw calls (117), 906k triangles (1.15M: the shoulders' beds); Low 49.1 (53), 121k (170k); the phone
+92.2 (101), 644k (881k). Console clean.
+
+### After pass 4 (r8-rev0's e5bfba2 carried, then the commits below)
+
+- **The flipped hull's band (300).** r8-rev0's e5bfba2 cherry-picked as it stands (the band narrower, deeper, and
+  fading as the hull turns edge-on to the lens); `rider.ts` is again identical to r8-rev0's.
+- **The foreground smear (thirteen frames, strips 220 and 980).** Sakura keeps half of speed's lens blur
+  (`camera.ts blurCalm`, set by `world.ts` beside the calm lens's fringe: 0.5 on Sakura, 1 elsewhere), as it already
+  keeps a third of the streaks.
+- **The shoulders as dark blocks (600).** Their beds a step paler and the stacks taller, so each shows its ledges.
+- **Disc petals.** Smaller and a little fainter (size 0.13 to 0.1, alpha 0.9 to 0.82; the petal weather is Sakura's
+  alone).
+- **A vermillion post down the street (4330).** The finish arch's towers on Sakura the deeper lacquer `#6E2C48`.
+
+## Pass 5 (a10b12a; a fresh Opus critic at high effort): the last pass
+
+| z | High | Low | Phone | Weakest thing (High unless named) |
+| --- | --- | --- | --- | --- |
+| 150 | 7 | 7 | 6.5 | A low-value lavender floor with streaky shadow bars, no darks; rider small |
+| 300 | 6 | 6 | 6 | From above, the rider across a tilted tray reads as a fall |
+| 450 | 6 | 5.5 | 6.5 | A hut cut by the lens at the right edge; cloud shadows as blue puddles |
+| 600 | 7.5 | 6 | 6.5 | The lip's outcrops small lumpy stacks on white plinths (Low: grey blobs, no crowd ledges) |
+| 750 | 6 | 5.5 | 5.5 | Rider tiny in the air; two labels collide over a ghost cut at the edge; terraces as bleacher slats |
+| 820 | 6.5 | 6.5 | 7 | Terraces as grandstand rows; a flat dark slab of hill at the left |
+| 900 | 7 | 6.5 | 7 | A pine cut by the lens at the left; periwinkle blotches |
+| 970 | 7 | 6.5 | 7 | Smeared dark-blue streak marks on the right of the floor |
+| 1026 | 6.5 | 6 | 6.5 | The same blotches; an empty middle plane |
+| 1200 | 7 | 6 | 6.5 | The draft beam a mint stripe down the fall line into the rider |
+| 1301 | 6.5 | 6 | 6.5 | Fronts flat slabs with window grids; the depth of field milky (phone: orange ring copies behind the sled) |
+| 1350 | 6.5 | 6 | 6.5 | A full-size ghost in the air over the torii; a pale double of the tray |
+| 1500 | 6.5 | 6.5 | 6.5 | A near-featureless floor with a puddle; the charm medallions tiny |
+| 1650 | 6 | 6 | 6 | Dark stacked crates on both banks; a smooth hill |
+| 1754 | 7 | 6.5 | 7 | The torii tunnel's mouth a flat monolith |
+| 1800 | 6 | 5 | 7 | A blossom canopy filling the left third at the lens; rock as capped boxes with icicles |
+| 1971 | 7.5 | 5.5 | 7 | Bars on the walls and the far floor, not across the rider (Low: no bars) |
+| 2100 | 6.5 | 5.5 | 6 | Bridge towers capped boxes; the inverted rider reads as a crash |
+| 2210 | 5.5 | 5 | 6 | A giant mint ghost dead centre in the sky over the cone; a pale glow on the rider's head |
+| 2410 | 7 | 6 | 7 | The ice's crack net a regular hexagonal tiling |
+| 2580 | 7.5 | 6.5 | 6.5 | Grey plank debris at the left edge; the blossom flat pink |
+| 2700 | 7.5 | 6.5 | 7 | Blue puddles; unlit blossom; rider small |
+| 2850 | 7.5 | 6.5 | 7 | Rider small in the powder; the pagoda stacked boxes (Low: no pagoda) |
+| 3000 | 5.5 | 5 | 5.5 | The kilometre arch's lantern-strung beam across the foot at the lens; the rider inverted |
+| 3060 | 6 | 5.5 | 6.5 | Grey boards in mid-air at the left edge; a vast empty floor |
+| 3150 | 7 | 6.5 | 7 | Puddles; the pagoda stacked rectangles |
+| 3300 | 7.5 | 6.5 | 5.5 | A plain blue sky; a thin middle plane (phone: a bar at the foot, pale tray copies) |
+| 3405 | 7 | 6.5 | 7 | A white flare at the lower left; a black box rock |
+| 3450 | 7.5 | 6 | 7 | The hexagonal ice tiling; glare streaks |
+| 3600 | 7 | 5.5 | 7 | A blossom canopy at the left lens |
+| 3706 | 6 | 6 | 5 | The rider bleached by the ice's glare; the mirror a milky double (phone: a stack of rider copies) |
+| 3926 | 6.5 | 5.5 | 5 | Temple Town a bleached cream mass; rider tiny (phone: black lanterns at the lens) |
+| 4076 | 6.5 | 5 | 6.5 | Roofs flat beige slabs over a third of the frame |
+| 4200 | 6.5 | 6.5 | 6.5 | An orange glow washing the rider; a faint tray double; puddles |
+| 4330 | 5 | 4.5 | 4.5 | Lanterns at the lens: their black caps hang in the sky, their paper blurs into the top corners |
+| 4440 | 8 | 6.5 | 7 | The stands a fizz of figures; a plain lilac floor |
+| **Mean** | **6.67** | **5.96** | **6.42** | |
+| **Minimum** | **5** (4330) | **4.5** (4330) | **4.5** (4330) | |
+
+Strips: 40 6.5 (an oversized ghost sweeps past the lens), 220 6.5, 980 7, 1840 7, 2672 6 (rider tiny at the lip; a
+sawtooth cornice; rock shards at both edges), 2730 6.5, 4060 6.5, 4400 8 (mean 6.75).
+
+| Vista | Score | A 9? |
+| --- | --- | --- |
+| The cone through the lifting mist | 7 (150) | No: one flat peach wash; no exact darks; streaky foreground |
+| The flooded terraces | 6.5 (820) | No: benches or bleachers, no sky in them |
+| The Blossom Leap | 7.5 (2580, 2700) | No: rider tiny, blossom flat pink, no river of petals, shards at the lip |
+| The torii's bars of light | 7.5 (1971) | No: the bars on the walls and the far floor, not across the rider |
+| The pagoda over the square | 8 (4440, strip 4400) | No, the closest: small, behind the board; the stands noise |
+
+Read against pass 4 (both the harsher critics): High 6.58 to 6.67, the phone 6.07 to 6.42, the strips 6.56 to 6.75,
+Low 6.10 to 5.96; 600 7 to 7.5, 1200 6.5 to 7, 1350 5.5 to 6.5, 2700 7 to 7.5, 2850 7 to 7.5, 4330 5 to 5. Low's
+drop is in frames this lane did not touch (1971 7 to 5.5: no bars on Low, as round 7 softened them; 4076 6.5 to 5;
+1800 6 to 5): the critic's spread. New in this pass's words: pale copies of the tray and the rider trailing down the
+phone's frames and on High near the rider (1301, 1350, 2210, 3300, 3706, 4200), and the climax lanterns' caps left
+black in the sky at 4330. This lane traced neither. The copies follow the tray, which carries rev0's new rings since
+pass 4; on High the rebuild's history is one suspect, but the phone's Medium has no rebuild, so it is not the whole
+story. The lantern caps are the climax's (`climaxworld.ts`) or the street's strings, whose dissolve near the lens
+leaves the dark caps. Both are for the main lane.
+
+Cost: High 108.3 draw calls (117), 904k triangles (1.15M); Low 48.4 (54), 120k (170k); the phone 91.7 (99), 643k
+(880k). Console clean.
+
+No fix follows pass 5: the brief's loop ends at five passes.
 
 ## Every pass at a glance
 
@@ -294,15 +435,28 @@ build at ef19329 passed `tsc` and the full vitest (102 files, 1863 tests) and ha
 | 1 | 9a93aa8 (base) | 6.76 (5.5) | 6.15 | 6.26 | 6.38 | 7.5 | 6.5 to 7 | 7.5 | 7.5 | 8 |
 | 2 | a5fdac9 | 6.93 (5.5) | 6.32 | 6.43 | 6.5 | 7.5 | 7 | 7 (strip 4.5) | 8 | 8 |
 | 3 | b01b191 | 7.08 (6) | 6.57 | 6.61 | 6.88 | 7 | 6.5 to 7 | 8 (strips 6 to 6.5) | 8 | 8 |
+| 4 | ef19329 | 6.58 (5) | 6.10 | 6.07 | 6.56 | 7 | 6.5 | 7.5 (strip 5.5) | 7.5 | 8 |
+| 5 | a10b12a | 6.67 (5) | 5.96 | 6.42 | 6.75 | 7 | 6.5 | 7.5 (strip 6) | 7.5 | 8 |
 
-Each pass a fresh critic (Opus, high effort), told only ART.md and the frames; a fresh critic moves a frame by about
-half a point on its own, so the means and the minimum are the signal. Round 7's last pass on this mountain (a
-different course, SIM_VERSION 9, and critics at extra-high effort) read High 7.38, Low 6.86, the phone 7.24.
+Each pass a fresh critic (Opus, high effort), told only ART.md and the frames. A fresh critic moves a frame by about
+half a point on its own, and the five did not judge alike: passes 4 and 5 scored the same pictures half a point under
+pass 3 (laid side by side, their frames differ from pass 3's only where the last fixes reach). So the climb from pass
+1 to pass 3 (High 6.76 to 7.08, its minimum 5.5 to 6, Low 6.15 to 6.57, the phone 6.26 to 6.61) is this lane's, and
+pass 4 to pass 5 under the two harsher critics (High 6.58 to 6.67, the phone 6.07 to 6.42) is too; pass 3 to pass 4
+is the critic. The frames that sink every critic's minimum are the same from pass 1 to pass 5 and are shared code:
+the ghost in the sky (1350, 2210), the kilometre arch at the lens (3000), the lanterns at the lens over the square
+(4330), the tray in a flip (300). Round 7's last pass on this mountain (a different course, SIM_VERSION 9, critics at
+extra-high effort) read High 7.38, Low 6.86, the phone 7.24.
 
-## Stopping rule: not met
+## Stopping rule: not met after five passes
 
-No frame reached 9 and no hero vista is a 9. What is still short, and why:
+No critic gave any frame a 9 and no hero vista is a 9: the pagoda over the square holds at 8 on every pass, the
+Blossom Leap and the torii at 7.5 to 8, the cone at 7 to 7.5, the terraces at 6.5 to 7. What is still short, and why:
 
+- **Lanterns and arches at the lens (4330 at 4.5 to 5 on every tier in pass 5; 3000 at 5 to 5.5).** The square's
+  strings leave their dark caps in the sky as they dissolve; the kilometre arch's beam crosses the frame's foot when the
+  lens rides high over a flip (`meshes.ts kmArchGeometry` has no near dissolve). Shared code, every mountain.
+- **Pale copies of the tray and the rider** (pass 5, High and phone): not traced; see pass 5.
 - **The rider small in the air** (750, 1650, 2580 to 2850, 3926; strips 2672 and 2730 at 1/20 to 1/25 of the frame):
   the leap's held wide and the reveal's whip are `camera.ts` and `shots.ts`, every mountain's framing.
 - **The flooded terraces read as tile grids.** `makePaddies` cuts cells down the fall line so each holds its own
@@ -311,17 +465,17 @@ No frame reached 9 and no hero vista is a 9. What is still short, and why:
   new far geometry (midground or a set piece).
 - **The blossom is lit from the front, never backlit**, the one image's "tunnel of backlit blossom": round 7's and
   the lift's open item, new canopy geometry or a translucent shell over every tree.
-- **Shared things at the lens:** the kilometre arch at 3000 m passes under a raised lens as a beam strung with lanterns
-  across the frame's foot (`meshes.ts kmArchGeometry` has no near dissolve); a banner over the square at 4330 m
-  dissolves with the props' dither and reads as a black slab in the sky; the climax's lanterns at a phone's lower
+- **More at the lens:** the climax's lanterns at a phone's lower
   corners during the last flight (3926) as black hexagons; a blossom canopy at the left lens (1800, 3600).
 - **Ghosts:** a mint ghost a fifth of the frame in the sky over the cone (2210), one passing the lens at the start at
   twice the rider's size (strip 40), the draft's cyan sheet through the rider (1200): `ghosts.ts`, which round-8 has
   since changed (174 lines) on its own branch.
 - **The radial smear the critics still name** after the streaks came down is mostly the ghosts' ruts fanning from the
   start and the lens's edge blur on the relief's shadows; Low's is its painted slab. Shared systems.
-- **The flip at 300 m** now carries rev0's fix; seen side-on its vermillion rim ring reads as "a red target disc"
-  (pass 3). For the main lane with rev0's notes.
+- **The flip at 300 m** carries rev0's fix with its e5bfba2; the critics now read the tumble itself, the tray over the
+  rider seen from above, as a fall (6 on every tier in pass 5). The camera's framing of a flip is shared.
+- **Shards at the frame's sides:** a blossom canopy at the left lens (1800, 3600), a pine (900), a hut (450): the
+  forest lane's dissolve goes at about 4 m beside the rider; a canopy ahead of the rider is a threat and stays.
 - **Low** misses the pagoda at 2850 to 3150 and the leap's crowd ledges at 600: Low draws no point landmarks and no
   villages (`landmarks.ts drawn`, `midground.ts` TIERS), by design for its budget.
 
@@ -335,57 +489,83 @@ All small, general and safe for the other mountains:
 - `src/render/materials.ts`: a fork's ice strip's scribed edge at 0.22 where it was 0.45 (every mountain); the `cone`
   rock set (Sakura's only).
 - `src/render/rider.ts`, `src/render/meshes.ts`: r8-rev0's flipped-hull change carried byte for byte (b6a6dc7, after
-  this lane's own tray-paint change 5cac2f0 was reverted in the same commit): identical to r8-rev0, so the merge sees
-  one change. Exactly what it does: a round hull's underside (saucer, tray) mixes 42% toward the snow's cool light in
-  spun rings and carries a vermillion ring at 0.5 to 0.68 of its radius; the Tea Tray's face gains a lip-pewter ring
-  and a vermillion one.
-- `src/render/world.ts`: Sakura keeps 0.35 of the speed streaks (was 0.55; 1 elsewhere).
+  this lane's own tray-paint change 5cac2f0 was reverted in the same commit; then rev0's e5bfba2 cherry-picked as
+  9654f96): identical to r8-rev0's, so the merge sees one change. What it does: a round hull's underside (saucer,
+  tray) mixes 42% toward the snow's cool light in spun rings and carries a vermillion band at 0.54 to 0.67 of its
+  radius that fades as the hull turns edge-on to the lens; the Tea Tray's face gains a lip-pewter ring and a
+  vermillion one. Pass 2 judged this lane's paint change; passes 3 to 5 judged rev0's (pass 5 with e5bfba2).
+- `src/render/world.ts`: Sakura keeps 0.35 of the speed streaks (was 0.55; 1 elsewhere) and sets the camera's
+  `blurCalm` to 0.5 on Sakura (1 elsewhere), beside the calm lens's fringe.
+- `src/render/camera.ts`: a public `blurCalm` (1 by default) scales speed's lens blur in `writeCine`; nothing else.
 - `src/render/dressing.ts`: `bankRock` returns Sakura's stone when the palette's peak is the cone (unchanged elsewhere).
 - `src/render/rails.ts`: a Sakura branch for the leap shoulders (the fins remain for Frostfang, Ember, Lanternfall).
 - `src/render/town.ts`: Sakura-only branches (storeys, screens, pent roofs, roof snow 0.25, masts). Note: round-8 has
   since changed `town.ts` (11 lines) on its own; merge with care.
-- `src/render/places.ts`: Sakura-only (the bridge's rib and portals, the finish pagoda's size, the square's masts).
+- `src/render/places.ts`: Sakura-only (the bridge's rib and portals, the finish pagoda's size, the square's masts, the
+  finish arch's towers).
 - `src/render/palette.ts`: Sakura's palette, journey and places only.
 
 ## Cost
 
-| Tier | Pass 1 draw calls (max) | Pass 3 | Pass 1 triangles (max) | Pass 3 |
+| Tier | Draw calls, pass 1 (max) | Pass 5 | Triangles, pass 1 (max) | Pass 5 |
 | --- | --- | --- | --- | --- |
-| High | 108.4 (117) | 108.4 (117) | 896k (1.12M) | 891k (1.11M) |
-| Low | 48.8 (54) | 48.4 (54) | 116k (172k) | 115k (170k) |
-| Phone, Medium | 91.7 (99) | 92.2 (101) | 635k (869k) | 631k (851k) |
+| High | 108.4 (117) | 108.3 (117) | 896k (1.12M) | 904k (1.15M) |
+| Low | 48.8 (54) | 48.4 (54) | 116k (172k) | 120k (170k) |
+| Phone, Medium | 91.7 (99) | 91.7 (99) | 635k (869k) | 643k (880k) |
 
-From the stills' JSON at the same ticks. No fix adds a draw, a program, a pass or a uniform: they are colours, palette
-numbers and merged geometry in pieces already drawn (the townhouses' screens and pent roofs, the portals' posts, the
-shoulders' beds). Low's GL calls a frame on a live ride (`glcount.js`): pass 1 510.2, 512.2 (200 to 570 m) and
-528.8, 522.3 (1390 to 1740 m); pass 2 517.4, 535.9 and 546.4, 546.9. The windows fall at different metres with a
-different field each run, and the stills' Low draw calls at fixed ticks are level (48.8, 48.4, 48.4); an interleaved
-A/B on one window was not run before the stop and is the main lane's to settle if it wants the number. Nothing new
-runs before the first frame. Frames per second not judged (shared machine).
+From the stills' JSON, summed over every pass of a frame, at the same ticks. No fix adds a draw, a program, a pass or
+a uniform: the fixes are colours, palette numbers, two constants on the lens and merged geometry in pieces already
+drawn (the townhouses' screens and pent roofs, the bridge portals' posts and roofs, the leap shoulders' beds, about
++1% triangles on High and the phone, +3% on Low's mean).
+
+**Low's GL calls a frame, held** (`scripts/playtest/lowperf/glv.js` from round-8: stills.js's virtual clock, so both
+builds draw the same frames), the base 9a93aa8 against the last build a10b12a, Low on Sakura:
+
+| Stretch | Frames | Base | Last | Uniform calls, base / last |
+| --- | --- | --- | --- | --- |
+| 230 to 1230 m (the run-in, the first lip, Petal Steps) | 1437 | 520.9 | 520.5 | 241.9 / 241.6 |
+| 3000 to 4000 m (the third stage, the last lip, Temple Town's run-in) | 1289 / 1290 | 489.0 | 482.0 | 226.1 / 223.0 |
+
+Low is no heavier: level on the run-in, seven calls lighter toward Temple Town (two storeys where there were three and
+four). The live-ride counts of passes 1 and 2 (`glcount.js`, 510 to 547) moved with the field and are superseded.
+Nothing new runs before the first frame. Frames per second not judged (a shared machine).
 
 ## For DECISIONS (the main lane's text to fold in)
 
-"The review loop, Sakura Ridge (`notes/r8-rev3.md`): three passes of five on round 8's final build, a fresh critic
-each; High's mean 6.76 to 7.08 (its minimum 5.5 to 6), Low 6.15 to 6.57, the phone 6.26 to 6.61, the strips 6.38 to
-6.88; no frame and no vista at 9 (the Blossom Leap, the torii and the pagoda at 8). Fixed: the townhouses as eaves
-and paper screens, not brick terraces; soft middle-value shadows; marigold stair lanterns and no wire from a passed
-arch; the bridge in one lacquer with framed towers; the leap's shoulders in stone beds; a third of the streaks; fewer
-petals. Short: the rider small in the air, the terraces' grid, the valley's missing rows, the blossom never backlit,
-shared things at the lens."
+"The review loop, Sakura Ridge (`notes/r8-rev3.md`): five passes on round 8's final build, a fresh critic each, told
+only ART.md and the frames. High's mean 6.76, 6.93, 7.08, then 6.58 and 6.67 under the two harsher critics of passes
+4 and 5 (its minimum 5.5, 5.5, 6, 5, 5); Low 6.15, 6.32, 6.57, 6.10, 5.96; the phone 6.26, 6.43, 6.61, 6.07, 6.42;
+the strips 6.38, 6.5, 6.88, 6.56, 6.75. No frame and no hero vista reached 9: the pagoda over the square held at 8,
+the Blossom Leap and the torii at 7.5 to 8, the cone at 7 to 7.5, the terraces at 6.5 to 7. What changed for a
+player: Temple Town and the first street as two-storey houses of paper screens behind dark slats under ink pent roofs,
+snow at the ridge only; soft middle-value shadows and a lighter, greyer shade; marigold stair lanterns and no garland
+drawn from an arch already passed; the bridge in one lacquer with framed towers and swept roofs; the cut stone and the
+leap shoulders a wine-leaning stone in beds, never navy; a calm lens (a third of the streaks, half the speed blur);
+fewer, smaller petals; the finish pagoda taller; a fork's ice edges half as bright; deeper lacquer on the masts and
+the finish arch. Low's held GL calls level or lighter (520.9 to 520.5, 489.0 to 482.0); no draw or pass added. Still
+short, all shared: the rider small in the air, ghosts in the sky and at the lens, lanterns and the kilometre arch at
+the lens, a flip read as a fall, the terraces' grid, the valley's missing rows, the blossom never backlit."
 
 ## For ART.md 15, Sakura, "As built in round 8"
 
-"Temple Town's houses are two storeys (three now and then) of paper screens behind dark slats under ink pent roofs,
-with a quarter slope of snow at the ridge. The cut stone and the leap's shoulders are a wine-leaning stone in beds,
-never navy. Shadows are soft and a middle value; the calm lens keeps a third of the streaks; the air holds fewer
-petals. The stair's lanterns wait in marigold."
+"Temple Town's houses are two storeys (three now and then) of paper screens behind close dark slats, an ink pent roof
+at each storey line and snow on the ridge's quarter of the roof; the inn three or four. The cut walls, the chute's
+crags and the leaps' shoulders are one stone leaning to the lacquer's wine, in beds with snow on the ledges, never
+navy. Cast shadows lie soft and a middle value, the shade a step lighter and greyer than round 7's. The calm lens
+keeps a third of the speed streaks and half the speed blur at the frame's sides. Fewer, smaller petals ride the air.
+Petal Steps' lanterns wait in marigold. The bridge is one deep lacquer on framed towers under swept roofs; the masts
+and the finish arch a deeper lacquer than the torii, never near the rider's vermillion."
 
 ## For the README
 
-Nothing a player needs told; the review loop's line in the round's table is the main lane's.
+Nothing a player needs told; the review loop's row in the round's table is the main lane's.
 
 ## Where things are
 
-Frames under `C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r8/review/m3/pass1` to `pass3` (high, low,
-phone-medium, sheets, strips); `pass1/glcount-low.txt` and `pass2/glcount-low.txt`. Helpers (not committed): the
-worktree's `rev3/` (stills with cost, strips, ffmpeg sheets, the critic's prompt).
+- Frames: `C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r8/review/m3/pass1` to `pass5` (`high`, `low`,
+  `phone-medium`, the `sheets` the critics read, `strips/frames` and `strips/tiled`), each tier's JSON beside them
+  (every still's draw calls and triangles, the console).
+- GL counts: `pass1/glcount-low.txt`, `pass2/glcount-low.txt` (live rides); `pass5/glv-low-base.txt` and
+  `pass5/glv-low-final.txt` (held).
+- Helpers (not committed): the worktree's `rev3/` (the stills copy that records cost, the strips, the ffmpeg sheets,
+  the batch-checking pass script, the critic's prompt, the held GL count).
