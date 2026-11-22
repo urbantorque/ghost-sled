@@ -593,7 +593,9 @@ export class PostFX {
               // Light in the air, not on the ground: the beams are full over the sky and the far
               // ranges, cross the distant snow and the treeline more faintly, and barely touch the near
               // slope under the lens, so they read as depth between the rider and the light.
-              float air = mix(0.3, 1.0, smoothstep(uHorizon - 0.3, uHorizon + 0.02, uv.y));
+              // (Round 8's review, Frostfang: at 0.3 a low sun's rays still streaked the near snow under the rider in
+              // every dawn frame, which ART.md 12 forbids; a tenth of them reaches it now.)
+              float air = mix(0.1, 1.0, smoothstep(uHorizon - 0.3, uHorizon + 0.02, uv.y));
               float ang = atan(toS.y, toS.x * uAspect);
               float rays = 0.35 + 0.65 * vnoise(vec2(ang * 11.0 + uTime * 0.03, 1.7)) * vnoise(vec2(ang * 23.0 + 4.0 - uTime * 0.05, 3.1));
               float fall = (exp(-dS * 2.7) + 0.12 * exp(-dS * 0.9)) * (1.0 - smoothstep(0.6, 0.95, dS));

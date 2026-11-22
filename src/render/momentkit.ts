@@ -140,9 +140,10 @@ export function litMaterial(): ShaderMaterial {
         // (The review loop: dithered from 7 m in, a street's near lanterns hung as half-transparent
         // scanline ghosts across the top of a still. Each holds solid to 5.2 m and is gone by 4.4 m.)
         // (Round 8's review, Frostfang: a gate's lanterns hanging over the run 5 to 7 m ahead of the lens were two great
-        // blocks of their colour across the top of the frame in the Ice Cavern. What hangs over the lens goes over
-        // ART.md 14's last 7 m, gone by 6.6 m; a bell or a wheel by the snow, which the rider meets, keeps 4.4 m.)
-        float near0 = mix(4.4, 6.6, smoothstep(0.2, 1.4, vUp));
+        // blocks of their colour across the top of the frame in the Ice Cavern. What hangs over the lens goes before
+        // it is over the rider's head, gone by 8.2 m (at 6.6 the pair still filled the top of the frame); a bell or a
+        // wheel by the snow, which the rider meets, keeps 4.4 m.)
+        float near0 = mix(4.4, 8.2, smoothstep(0.2, 1.4, vUp));
         float thr = (mod(floor(gl_FragCoord.x), 2.0) + 2.0 * mod(floor(gl_FragCoord.y), 2.0)) / 4.0 + 0.125;
         if (smoothstep(near0, near0 + 0.8, vDist) < thr) discard;
         vec3 c = vCol * vForm;

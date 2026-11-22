@@ -142,3 +142,52 @@ the Fang a straight slab, not a curved needle; the ice floor's cracks a hexagon 
 - **The Ice Cavern's floor**: the place's lamps at 0.7 (1 still ran the gates' pools into one gold floor). The overhead
   lanterns' dissolve is measured at each lantern's own origin, so a lantern goes whole, never cut through with a ragged
   top.
+
+## Pass 3 (`ef256e8`)
+
+Console clean on every set.
+
+| Group | Mean | Min |
+| --- | --- | --- |
+| High (35) | 6.81 | 5.0 (2250) |
+| Low (35) | 6.11 | 4.5 (2250) |
+| Phone, Medium (35) | 6.16 | 5.0 (2250, 3000) |
+| Strips (6) | 6.58 | 6.0 (1230, 2650) |
+
+High: 150 7, 300 7, 450 7.5, 595 7.5, 750 7, 900 7, 975 6.5, 1045 7, 1195 6, 1343 7.5, 1500 6.5, 1550 7, 1650 8,
+1800 5.5, 1917 6.5, 2137 6.5, 2250 5, 2297 7.5, 2405 6, 2548 6.5, 2700 7.5, 2783 7.5, 2850 6, 3000 7, 3154 6.5,
+3304 6.5, 3418 6.5, 3549 7, 3600 7.5, 3750 7.5, 3940 7, 4050 5.5, 4200 7.5, 4330 7, 4440 7.
+
+Low: 150 6.5, 300 6.5, 450 6.5, 595 6, 750 6, 900 6.5, 975 6, 1045 6.5, 1195 5.5, 1343 6.5, 1500 6, 1550 6, 1650 7,
+1800 5.5, 1917 6, 2137 6, 2250 4.5, 2297 6.5, 2405 5.5, 2548 6, 2700 6, 2783 6, 2850 5.5, 3000 6.5, 3154 6.5, 3304 6,
+3418 6, 3549 6.5, 3600 6.5, 3750 7, 3940 6.5, 4050 6, 4200 5.5, 4330 6, 4440 6.
+
+Phone: 150 6.5, 300 6.5, 450 6.5, 595 6, 750 6, 900 6.5, 975 6, 1045 6.5, 1195 5.5, 1343 6.5, 1500 6, 1550 6.5,
+1650 7, 1800 5.5, 1917 6, 2137 6, 2250 5, 2297 7, 2405 5.5, 2548 5.5, 2700 6.5, 2783 6.5, 2850 6, 3000 5, 3154 6,
+3304 6.5, 3418 5.5, 3549 6, 3600 6.5, 3750 6.5, 3940 6, 4050 6.5, 4200 6.5, 4330 6.5, 4440 6.5.
+
+Strips: 200 7.5, 1230 6, 2300 6.5, 2650 6, 3400 7, 3880 6.5.
+
+Hero vistas (none a 9): the opening 7.5 (strip 200); the span 7.5 (1343); the aurora 7.5 (2297, 2700, 2783); the cavern
+mouth 7 (3549); the Fang at dawn 5.5 at its own frame (4050, the hero frame over the last leap, "depth of field turns the
+whole vista to mush"; its approaches 3750 at 7.5 and 3940 at 7).
+
+This critic was the harshest of the three on Low and the phone (6.11 and 6.16), and every mean fell a little. Read
+against pass 2 frame by frame, two things are this lane's: the fluted ice read as "stripes" and, from the air at 1195, "a
+plaid tile grid" (1195 6.5 to 6, 900 7.5 to 7: the cut is back to pass 2's); and the near-snow shafts were still there,
+because the composite's own screen-space shafts (round 6's, under the depth-marched ones) still laid 30% of their light
+below the horizon. The rest moved by about the half point a fresh critic moves a frame on its own.
+
+### After pass 3
+
+- **The walls back to pass 2's cut** (diagonal shards 2.4 m by 9.5 m, a fifth of the mesh's facets): the fluted drums lost.
+- **Shafts off the near snow, the other half** (`post.ts`, shared): the screen-space shafts lay a tenth of their light under
+  the horizon, not 0.3. The dawn's lens ghosts at 0.1 (one lay as an orange disc on the near snow).
+- **The dawn's key light at 25 degrees** (was 20; the disc and the shadows' height unchanged), so more of the slope facing
+  down the run takes the rose-gold and less sits mauve on the shade's side.
+- **The hero frame's depth of field at half** (`camera.ts HERO_DOF` 0.5, shared): over the last leap, at a beat's full blur
+  the town and the Fang were unreadable.
+- **The overhead lanterns go by 8.2 m** (were 6.6): at 6.6 a gate's pair still filled the top of the cavern frame.
+- Tried and dropped: Fang Town's pools as warm lifts of the snow (`poolSilver` in the finish place) to answer Low's white
+  ovals; the hours lane's test keeps silver pools to Lanternfall, and the ovals are left for the main lane (Low's painted
+  pool steps are shared).

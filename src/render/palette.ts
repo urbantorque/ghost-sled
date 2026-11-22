@@ -1596,7 +1596,10 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       // (It turns in the cavern's first hundred metres, so the far mouth is the dawn from the moment it shows.)
       from: 3291, at: 3451, dusk: 1,
       edit: (p) => {
-        setSun(p, 30, 3.6, 20, 9);
+        // (Round 8's review: the light that shades the snow stands at 25 degrees, was 20: at 20 most of the slope
+        // facing down the run sat on the shade's side and read mauve-grey; the disc and the long shadows keep their
+        // height.)
+        setSun(p, 30, 3.6, 25, 9);
         // (Round 8's review: the dawn's snow still read lilac-grey with one warm patch, never rose-gold. The light is
         // a step more gold, the lit snow and the rim with it, and the air a touch rosier. A warm bounce under the coat
         // went to the grudge's rose, tests/lift.test.ts.)
@@ -1640,6 +1643,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         // near snow, where ART.md 12 keeps them in the air.)
         p.atmo.rays = 0.8;
         p.grade.shafts = 0.7;
+        // (And the lens's ghosts strung from the sun lay an orange disc on the near snow.)
+        p.grade.lens = 0.1;
         p.grade.gain = c('#FFF4EE');
         p.grade.exposure = 1.04;
         p.grade.contrast = 1.08;

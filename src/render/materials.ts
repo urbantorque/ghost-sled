@@ -255,8 +255,9 @@ interface RockSet {
 
 const ROCK: Record<string, RockSet> = {
   summit: { lit: '#94889E', shade: '#3C3654', deep: '#25213A', ledge: '#FFFFFF', style: [1.35, 3.6, 0, 0.1] },
-  // (Round 8's review: flutes a little wider, broken into drums about 6.5 m tall.)
-  fang: { lit: '#8FCDF2', shade: '#1B4A9E', deep: '#071A58', ledge: '#D6ECFF', style: [2.2, 6.5, 1, 0] },
+  // (Round 8's review: wider, taller shards, so a wall reads as a few cut planes of ice and not a fine crumple. Upright
+  // flutes broken into drums were tried after it and read as stripes and a plaid from the air.)
+  fang: { lit: '#8FCDF2', shade: '#1B4A9E', deep: '#071A58', ledge: '#D6ECFF', style: [2.4, 9.5, 1, 0] },
   // (Basalt is near black, so the lava's light and the sky's edge are what model it: a mid grey-mauve rock
   // read as brown walls in an even light.)
   volcano: { lit: '#43383F', shade: '#17131A', deep: '#0B0910', ledge: '#7A7076', style: [1.5, 6.5, 2, 0] },
@@ -1101,18 +1102,17 @@ export function makeSnowMaterial(): ShaderMaterial {
           tone = 0.74 + 0.5 * a;
           ledge = step(0.6 + 0.32 * b, fy) * step(0.34, h);
         } else if (kind < 1.5) {
-          // Frostfang: crevasse ice in upright flutes, each with a face to the light and a face from it, broken across
-          // into drums at uneven heights; a pale fracture along some breaks and down some seams between flutes.
-          // (Round 8's review: each flute split along its diagonal drew long thin triangles up a 30 m wall, and every
-          // critic read them as stretched, smeared facets; a fluted face is the ice's own structure.)
-          float face = step(0.5, fy);
-          float a = hash13(vec3(c, r, 2.1));
-          float b = hash13(vec3(c, r, 4.7));
-          tilt = vec2(mix(-0.75, 0.75, face) + (a - 0.5) * 0.5, (b - 0.5) * 0.5);
-          tone = (0.66 + 0.62 * a) * mix(0.9, 1.08, face);
-          float across = min(fx, 1.0 - fx) * cw;
-          float seam = min(fy, 1.0 - fy) * uRockStyle.x;
-          crack = max((1.0 - smoothstep(0.03, 0.08 + fp * 0.6, across)) * step(0.45, b), (1.0 - smoothstep(0.02, 0.05 + fp * 0.6, seam)) * step(0.7, a));
+          // Frostfang: crevasse ice in tall shards, each flute split along its own diagonal, pale
+          // fractures running down some of the splits.
+          float diag = (h < 0.5 ? fx : 1.0 - fx) - fy;
+          float tri = step(diag, 0.0);
+          float a = hash13(vec3(c, r, 2.1 + tri));
+          float b = hash13(vec3(c, r, 4.7 + tri));
+          // (Round 8's review: with the wall's mesh facets eased off (below), each shard is a plane of its own, tilted
+          // a step harder, and the fractures down its splits are wide enough to read past the lens.)
+          tilt = vec2((a - 0.5) * 1.8 + (fy - 0.5) * 0.8, (b - 0.5) * 0.8);
+          tone = 0.66 + 0.62 * a;
+          crack = (1.0 - smoothstep(0.014, 0.034 + fp * 0.5, abs(diag))) * step(0.5, b);
         } else if (kind < 2.5) {
           // Ember: basalt columns, two faces a column, ash on their broken tops, and thin lava in some
           // of the joints between them.
