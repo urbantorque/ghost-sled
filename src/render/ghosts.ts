@@ -273,6 +273,8 @@ const GRAVE_RANGE = 95;
 
 /** How long a pass beat keeps the ghost in it on screen (about as long as the HUD's pass toast). */
 const PASS_HOLD = 2.6;
+/** On Low a ghost under this share of the frame's height is drawn without its depth pass (round 8, the lowperf lane). */
+const LOW_DEPTH_FROM = 1 / 12;
 /** A passed ghost's pill flashes, drops back and shrinks, then settles (s). */
 const DROP_HOLD = 0.9;
 
@@ -1714,6 +1716,8 @@ export class GhostVisuals {
       let body = 1;
       let lens = 1;
       let crop = 0;
+      // (Its height on screen as a share of the frame's, for Low's far ghosts below.)
+      let tall = 1;
       it.sr = 0;
       tmpP.copy(pos).addScaledVector(UP, 0.8);
       const depth = (tmpP.x - camera.position.x) * fwd.x + (tmpP.y - camera.position.y) * fwd.y + (tmpP.z - camera.position.z) * fwd.z;
@@ -1721,6 +1725,7 @@ export class GhostVisuals {
       else {
         const pxPerM = h / (2 * tanV * depth);
         const size = (1.7 * pxPerM) / sizeRef;
+        tall = (1.7 * pxPerM) / h;
         const c = tmpP.project(camera);
         const cx = (c.x * 0.5 + 0.5) * w;
         const cy = (-c.y * 0.5 + 0.5) * h;
@@ -1817,6 +1822,10 @@ export class GhostVisuals {
       // clean mint edge. A faint ghost (beside you, passing the lens, poofing) draws after every solid
       // ghost and wisp instead, so its depth never hard-cuts anything behind it along its outline.
       it.mesh.renderOrder = vis > 0.6 ? 5 : 7;
+      // Round 8 (the lowperf lane): Low draws a far ghost, under about a twelfth of the frame's height, as its glass alone,
+      // without the depth pass (one draw, not two). At that size its limbs' rims behind its chest are a pixel or two, and
+      // the field races beside you, so most of a Low frame's ghosts are far ones.
+      it.depth.visible = this.glass > 0 || tall >= LOW_DEPTH_FROM;
       if (!p.done && this.trails) {
         if (p.grounded) this.trails.add(i, p.x, p.z, time);
         else if (it.wasGrounded) this.trails.lift(i);
