@@ -78,8 +78,9 @@ export interface Palette {
    *  snowfield on the valley floor and its openings as frozen lakes that hold still (Pinecrest's Clear
    *  Skies); 0 keeps them gaps in a sea of cloud. seaWarm lights the sea from beneath in patches, in the
    *  deck's glow colour (Lanternfall: the valley of lanterns under the cloud). bands lays mist in three
-   *  layers across the panorama's lower slopes (Sakura's run-in: the mist lifting off the cone). */
-  massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number; flow: number; heroAz: number; seaIce: number; seaWarm: number; bands: number };
+   *  layers across the panorama's lower slopes (Sakura's run-in: the mist lifting off the cone). seaLava 1 paints
+   *  the sea as a lake of lava, crust on cracks of the seaWarm glow (Ember's Caldera Leap; 0 everywhere else). */
+  massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number; flow: number; heroAz: number; seaIce: number; seaWarm: number; seaLava: number; bands: number };
   /** grain: film grain strength (night moods run light, where grain reads as digital noise in the
    *  dark). foot: how much the bottom edge of the frame darkens and cools (see post.ts). */
   grade: Grade;
@@ -134,6 +135,9 @@ export interface Palette {
   /** How much of the lit snow's colour Low's poster keeps (1: all of it). With no film to roll it off, a
    *  warm light on the snow that reads as light on High reads as sand on Low. */
   posterSnowSat: number;
+  /** How much of the key light's colour Low's poster keeps (1: all of it). Round 8's review: Ember's orange key on
+   *  Low's ungraded warm-white snow read as desert sand and dunes from the start line to the shield. */
+  posterSunSat: number;
   /** Low's poster (the visual lift, ART.md 15 "Tiers, designed"): what Low paints where the other tiers
    *  draw an effect. None of it touches another tier. See PosterLook below. */
   poster: PosterLook;
@@ -312,7 +316,7 @@ function base(): Palette {
     ridge: [c('#C8B4DE'), c('#9A8AC6'), c('#6660A6')],
     mist: null,
     mistK: 0,
-    massif: { peak: 'summit', rock: c('#5A4E7A'), glow: c('#FF9AA2'), glowK: 0, glowLine: -6000, veil: 0, sea: 1, lava: 0, flow: 0, heroAz: 0, seaIce: 0, seaWarm: 0, bands: 0 },
+    massif: { peak: 'summit', rock: c('#5A4E7A'), glow: c('#FF9AA2'), glowK: 0, glowLine: -6000, veil: 0, sea: 1, lava: 0, flow: 0, heroAz: 0, seaIce: 0, seaWarm: 0, seaLava: 0, bands: 0 },
     grade: { lift: c('#0A0F2A'), gain: c('#FFF8F0'), saturation: 1.08, contrast: 1.04, grain: 1, foot: 0.3, shafts: 1, lens: 1, focal: 1, gust: 0, glitter: 0.15 },
     clouds: { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFE6CF'), shade: c('#A48CC0'), rim: c('#FFB088'), shadow: 0.3 },
     deck: { k: 0, lit: c('#FFFFFF'), shade: c('#FFFFFF'), glow: c('#FFFFFF') },
@@ -328,6 +332,7 @@ function base(): Palette {
     leaf: 0,
     lift: { bounce: 0, sun: 0.7, tint: c('#FFFFFF'), sky: 0, through: 0, sheen: 0 },
     posterSnowSat: 1,
+    posterSunSat: 1,
     // (After the lane's critic: no rings by default, a hard-edged disc round the sun read as a sticker; the snow's
     // steps softer, hard-edged they turned the macro tone into camouflage; a cast shadow's edge only a little
     // harder than the field gives it; the hero's rim stronger, it was not seen. After the merge's critics: the
@@ -1222,12 +1227,20 @@ function round7(p: Palette, biome: BiomeId): void {
       // cold plum-teal shade, so a wide slope is never one even peach (which read as sand).
       p.clouds.shadow = 0.6;
       p.grade.exposure = 1.08;
-      p.grade.saturation = 1.18;
+      // (Round 8's review: at 1.18 and a warmer split the firelit snow turned sand-orange from the shield to the
+      // halls; the light carries the orange once, ART.md 15, and the grade only a trace of it.)
+      p.grade.saturation = 1.12;
       p.grade.contrast = 1.12;
-      p.grade.hi = c('#FFE8CE');
+      p.grade.hi = c('#FFEEDA');
       p.grade.lo = c('#CCE4F2');
       // (Glints: snow glitters in firelight, where sand would not.)
       p.sparkle = 0.9;
+      // (Round 8's review: on Low, with no film to roll it off, the orange key turned the warm-white snow to sand, and
+      // the graded snow itself was a tan: the poster keeps less of both, and its lit snow leans a little to the
+      // cold shade's hue, so the slopes read as snow in firelight and not as desert dunes.)
+      p.posterSunSat = 0.45;
+      p.posterSnowSat = 0.5;
+      p.grade.posterCool = 0.12;
       return;
     case 'blossom':
       // A peach morning, not a yellow one: the light leans to rose, and the shafts are thin until the
@@ -1718,8 +1731,11 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyHorizon = c('#E8481A');
         // As the day goes the light is the deck's and the lava's, and it is ember, not peach: a pale
         // light on a dusk snow gave a grey-mauve floor that nothing lit.
-        p.sunColor = c('#FFB490');
-        p.snowLit = c('#FCE6DA');
+        // (Round 8's review: at #FFB490 on a #FCE6DA snow, under the shader's day line, the snow facing the light
+        // was sand-orange from the halls' slot to the third stage; a step paler, and the snow bright enough to read
+        // as day, so the light's orange is a tint on snow and the lava's pools the orange.)
+        p.sunColor = c('#FFC4A4');
+        p.snowLit = c('#FFEEE4');
         p.lift.tint = c('#FFF4B0');
         p.snowShade = c('#585484');
         // The ash stands off the lens: thick from the first metre it turned the shade under it brown.
@@ -2392,6 +2408,9 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.grade.shafts = 0;
       p.grade.glitter = 0.15;
       p.posterSnowSat = 0.7;
+      // (The night's own key and snow on Low, as its lane judged them: the day's paler poster is for the day.)
+      p.posterSunSat = 1;
+      p.grade.posterCool = 0;
       Object.assign(p.poster, { shadow: c('#7C6AA8'), shadowK: 0.5 });
       p.stars = 0;
       p.sparkle = 0.35;
@@ -3037,8 +3056,12 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.clouds.lit = c('#3A1610');
         p.clouds.shade = c('#160808');
         p.massif.seaWarm = 1.1;
+        // (Still read as grey-beige mud by the next critic: the valley under the flight is a lava lake, its crust
+        // in rafts on cracks of the fire's colour, massif.ts uSeaLava.)
+        p.massif.seaLava = 1;
         p.embers = 1.7;
-        p.grade.hi = c('#FFDCB4');
+        // (Round 8's review: with the landing now snow, a warmer split turned it to sand under the fire.)
+        p.grade.hi = c('#FFE8D2');
         p.grade.exposure! *= 1.04;
         p.bloom += 0.15;
         lamps(p, 1.2);
@@ -3325,7 +3348,7 @@ interface LaidPlace {
   roof?: boolean;
 }
 
-const LAID ={ day: new WeakMap<Course, LaidPlace[]>(), alt: new WeakMap<Course, LaidPlace[]>() };
+const LAID = { day: new WeakMap<Course, LaidPlace[]>(), alt: new WeakMap<Course, LaidPlace[]>() };
 
 /** A course's places, in order down the run, laid on first use (a walk of its sections, once). */
 function laidPlaces(course: Course): LaidPlace[] {
@@ -3483,6 +3506,11 @@ export function tierLook(p: Palette): Palette {
   if (g.posterKey) {
     const l = Math.max(o.snowLit.r, o.snowLit.g, o.snowLit.b);
     if (l > g.posterKey) o.snowLit.multiplyScalar(g.posterKey / l);
+  }
+  if (p.posterSunSat < 1) {
+    const s = o.sunColor;
+    const l = Math.max(s.r, s.g, s.b);
+    s.setRGB(l + (s.r - l) * p.posterSunSat, l + (s.g - l) * p.posterSunSat, l + (s.b - l) * p.posterSunSat);
   }
   if (p.posterSnowSat < 1) {
     const s = o.snowLit;

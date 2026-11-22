@@ -99,6 +99,7 @@ export const SEA_GLSL = /* glsl */ `
   uniform vec3 uSeaDeep;
   uniform vec3 uSeaSun;
   uniform vec3 uSeaWarm;
+  uniform float uSeaLava;
   ${NOISE}
   float seaBillow(vec2 p, float detail) {
     vec2 q = p * 0.0009 + vec2(uTime * 0.0032, uTime * 0.0011);
@@ -165,6 +166,18 @@ export const SEA_GLSL = /* glsl */ `
       float thin = 1.0 - smoothstep(-0.35, 0.55, n);
       col += uSeaWarm * pool * (0.35 + 0.65 * thin) * cov * (1.0 - smoothstep(1400.0, 5200.0, t));
     }
+    // Round 8's review (Ember's Caldera Leap): where the palette asks (uSeaLava), the valley under the smoke is a
+    // lake of lava. Its crust is the billows near black, broken into rafts by the noise's own folds, and the melt
+    // runs in the cracks between them in the fire's colour, wider in the hot pools, so from the lip and the air it
+    // reads as lava lit from below and never as a pale sea of cloud.
+    if (uSeaLava > 0.0) {
+      float crack = 1.0 - smoothstep(0.02, 0.1 + 0.05 * detail, abs(n + 0.12));
+      float hotK = 0.45 + 0.55 * smoothstep(-0.35, 0.4, -n);
+      vec3 crust = mix(uSeaDeep, uSeaShade, 0.4) * (0.35 + 0.3 * facing);
+      vec3 melt = uSeaWarm * mix(0.8, 1.4, hotK) + vec3(0.12, 0.03, 0.0);
+      vec3 lava = mix(crust + uSeaWarm * 0.12 * hotK, melt, crack);
+      col = mix(col, lava, uSeaLava * (1.0 - smoothstep(2500.0, 9000.0, t)));
+    }
     // Aerial perspective: the far sea melts into the horizon.
     col = mix(col, uSeaHaze, smoothstep(1200.0, 12000.0, t) * 0.92);
     return vec4(col, step(0.001, uSea));
@@ -184,6 +197,7 @@ export function makeSeaUniforms() {
     uSeaDeep: { value: new Color() },
     uSeaSun: { value: new Vector3(0, 0.2, -1) },
     uSeaWarm: { value: new Color(0, 0, 0) },
+    uSeaLava: { value: 0 },
   };
 }
 export type SeaUniforms = ReturnType<typeof makeSeaUniforms>;
@@ -199,6 +213,7 @@ export function paletteSea(u: SeaUniforms, p: Palette): void {
   u.uSeaDeep.value.copy(p.ridge[2]).lerp(p.snowDeep, 0.4);
   u.uSeaSun.value.copy(p.diskDir);
   u.uSeaWarm.value.copy(p.deck.glow).multiplyScalar(p.massif.seaWarm * 0.85);
+  u.uSeaLava.value = p.massif.seaLava;
 }
 
 const VERT = /* glsl */ `
