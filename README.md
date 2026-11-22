@@ -261,9 +261,9 @@ picked.
 
 | | The check | Measured at the last merge | CrazyGames allows |
 | --- | --- | --- | --- |
-| Whole build | at most 80 MB | 60.30 MB | 250 MB |
-| Files | at most 1,500 | 32 | 1,500 |
-| Initial download | at most 20 MB | 11.25 MB | 50 MB, and 20 MB for the mobile homepage |
+| Whole build | at most 80 MB | 60.33 MB | 250 MB |
+| Files | at most 1,500 | 35 | 1,500 |
+| Initial download | at most 20 MB | 11.29 MB | 50 MB, and 20 MB for the mobile homepage |
 
 (CrazyGames' figures are from docs.crazygames.com/requirements/technical, read 2026-11-12.) Upload the zip in
 the CrazyGames developer portal and enable "Progress Save" so the data module is active.
