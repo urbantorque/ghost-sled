@@ -1185,6 +1185,12 @@ function round7(p: Palette, biome: BiomeId): void {
       p.clouds.shadow = 0.34;
       p.grade.posterKey = 0.92;
       p.grade.posterCool = 0.16;
+      // (Round 8's review loop, pass 4: from a lens in the air, over the opening and the First Drop, the valley went to
+      // one white haze, its floor's white the same value as the near snow. The valley's haze is the morning's blue
+      // and thinner, so the floor, its lakes and the far range keep their planes.)
+      p.atmo.valleyColor = c('#A6C6EE');
+      p.atmo.valley = 0.38;
+      p.air.low = 0.36;
       // (Round 8's review loop: the phone's lower half and Low's foreground read as blank white snow under the
       // rider, frame after frame. The frame's foot takes a deeper step of the periwinkle, painted on Low.)
       // (Pass 3: still the phone's lower half empty: 0.44 and 0.5.)
@@ -1454,7 +1460,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         // (Round 8's review loop: with the sun low under them the cumulus banks stood over the vanishing point as one
         // smooth orange crown, their rim colour from foot to top, in every frame of the gold and the dusk. They sink
         // to shoulders on the ridges, so the faceted peaks hold the sky's middle; the high wisps stay.)
-        p.clouds.low = 0.42;
+        // (Pass 4: at 0.42 what was left of them was a translucent peach mound behind the peaks, a ghost mountain on
+        // Low and the phone. The gold keeps its high wisps and no banks: the sun has dropped under the cloud.)
+        p.clouds.low = 0;
         p.massif.glowK = 0.7;
         p.massif.glowLine = -60;
         p.atmo.rays = 0.8;

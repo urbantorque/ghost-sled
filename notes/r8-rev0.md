@@ -155,6 +155,42 @@ breaks". What it named, by cost:
   side-on in a spin as "a red target disc"): r 0.54 to 0.67 (was 0.5 to 0.68), `vec3(0.56, 0.05, 0.022)` (was 0.66, 0.06,
   0.025), and weighted by `smoothstep(0.35, 0.75, dot(n, v))`, so it fades as the hull turns edge-on to the lens.
 
+## Pass 4 (`742418a`)
+
+Means: High 7.20 (minimum 5.5), Low 6.50 (5), phone 6.16 (5), strips 6.94 (5.5). Hero vistas: the opening 7.5, the First
+Drop 7.5, Mirror Lake 6.5, Old Town 8, the Valley Leap 8. Best frame 8.5 (z2700). Console clean.
+
+A harsher critic than pass 3's (it marked down frames pass 3 had marked up with nothing changed in them, such as z1593
+from 8.5 to 8 and z2429 from 8 to 6.5); the fixes it saw held: no frame of the gold was called lilac snow, only the left
+massif "lavender". What it named, by cost:
+
+1. Aerial whiteout: from a lens in the air (150, 707, strips 165 and 598) the valley, its lake and the far range one
+   pale value; the rider a dot. Two vistas lost to it.
+2. The phone's lower 40 to 50% empty snow (the main reason for its mean).
+3. Shafts lying on the near ice and snow as white fans (1950, 2100, 3940 on every tier).
+4. Boxes: the lip's rocks (still read as cubes after pass 2's beds), the cornice's blocks, the lake bank's crates, the
+   bridge's towers.
+5. The hero unreadable in flips ("a beetle shell") and the tumble at 2850.
+6. Streak smear across the lower frame (4200, 3300).
+7. A translucent peach mound behind the far peaks in the gold (what pass 1's change left of the cloud banks), most on
+   Low and the phone.
+8. Ghosts in the sky over Old Town, on the trestle, smeared at the lens.
+9. A lantern dissolving as a checkerboard at the top of the phone's frame (3750, named twice now).
+10. Mirror Lake mid-cobalt with a hex grid; no cable car; the reflection once.
+
+### What changed after pass 4
+
+- **No banks in the gold** (`JOURNEY.alpine` gold stop: `clouds.low` 0.42 to 0): the high wisps stay; the sun has dropped
+  under the cloud.
+- **The morning's valley haze blue and thinner** (`round7` alpine: `atmo.valleyColor` `#E8F3FC` to `#A6C6EE`,
+  `atmo.valley` 0.5 to 0.38, `air.low` 0.5 to 0.36).
+- **No shaft light in the first 10 m of air** (postfx/shafts.ts, shared: `1 - exp(-max(reach - 10, 0) / uShaftAir)`),
+  so a low sun ahead lays no fan of rays over the near snow and ice (ART.md 12).
+- **A set piece's lantern by the lens is solid, then gone** (momentkit.ts, shared: discarded inside 4.8 m, was a 2x2
+  dither from 5.2 to 4.4 m).
+- **Mirror Lake darker under the lens** (materials.ts, lake only: the mirror's floor 0.5 to 0.34, its reach 0.5 to 0.64)
+  **and its plates fainter again** (0.18 to 0.1).
+
 ## Cost (the stills' JSON, mean / max draw calls, mean triangles)
 
 | Tier | Pass 1 (`9a93aa8`) | Pass 2 (`855c261`) |

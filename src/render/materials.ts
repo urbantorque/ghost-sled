@@ -1593,7 +1593,9 @@ export function makeSnowMaterial(): ShaderMaterial {
           // Polished glaze reflects a little even looking straight down, so the ice under the lens
           // carries the sky's blue instead of reading as a matte pale floor.
           // A strong mirror (critics read a weaker one as matte snow with crack lines).
-          float fr = mix(0.32 + 0.68 * pow(frs, 2.6), 0.5 + 0.5 * pow(frs, 1.7), lakeK);
+          // (Round 8's review loop: the lake read mid-cobalt, not black ice; its mirror a step weaker under the lens, so
+          // the black-cyan body shows there and the sky takes over toward the far shore.)
+          float fr = mix(0.32 + 0.68 * pow(frs, 2.6), 0.34 + 0.64 * pow(frs, 1.7), lakeK);
           vec3 rr = reflect(-v, ng);
           vec3 body = mix(uSnowShade, uSnowDeep, 0.55) * (0.6 + 0.4 * shadow);
           // The lake's body is black ice over deep water; the fork's strip a clear blue, so it holds
@@ -1608,7 +1610,7 @@ export function makeSnowMaterial(): ShaderMaterial {
             // (A lake's plates a little fainter: on the black body they drew a white grid, the review loop.)
             // (Round 8's review loop: still a regular hexagonal mesh over the lake's black. Fainter again, so the
             // long fractures and the bubbles carry the ice.)
-            body = mix(body, mix(uSnowShade, uSnowLit, 0.6), crack * nearC * mix(0.5, 0.18, lakeK));
+            body = mix(body, mix(uSnowShade, uSnowLit, 0.6), crack * nearC * mix(0.5, 0.1, lakeK));
           }
           col = mix(col, body, 0.62 * ice);
           // The mirror: the sky, and low along the horizon the far ridges, mirrored dark and soft in
