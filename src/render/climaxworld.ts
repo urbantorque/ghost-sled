@@ -59,7 +59,10 @@ export class ClimaxWorld {
     // (Round 8: the strings stop 40 m short of the line, not 12. From the last 60 m of the approach a string within
     // 12 to 46 m of the line hung across the FINISH board's lettering at its own height; 40 m short, it is overhead by
     // then and the board reads clear.)
-    for (let z = this.cx.landZ + 20; z < this.cx.lineZ - 40; z += STRING_STEP) {
+    // (Round 8, the review loop: on Lanternfall the last string 40 m short still hung
+    // across the board's top from 60 m out, and on a phone over its letters: there they stop 70 m short.)
+    const short = c.biome === 'lantern' ? 70 : 40;
+    for (let z = this.cx.landZ + 20; z < this.cx.lineZ - short; z += STRING_STEP) {
       this.strings.push(z);
       const hw = c.halfWidth(z) + 1.6;
       const y = c.baseY(z) + STRING_H;

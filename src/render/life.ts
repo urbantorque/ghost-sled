@@ -3,6 +3,7 @@ import {
   BoxGeometry,
   BufferAttribute,
   BufferGeometry,
+  CapsuleGeometry,
   Color,
   ConeGeometry,
   CylinderGeometry,
@@ -474,16 +475,20 @@ function fox(): BufferGeometry {
 
 function skier(board: boolean): BufferGeometry {
   const pants = '#2C3046';
+  // (Round 8, the review loop: a box for a coat and boxes for legs; the snowboarder who drops in off the bank stands a
+  // few metres from the lens and read as a figure built of boxes. A tapered coat, round limbs and a round head, in the
+  // crowd's toy proportions.)
   const P: BufferGeometry[] = [
-    rp(new BoxGeometry(0.3, 0.44, 0.24), '#FFFFFF', { pos: [0.04, 0.82, 0], rot: [0, 0, -0.25] }, 5),
-    rp(new IcosahedronGeometry(0.12, 0), '#E8C8B0', { pos: [0.12, 1.16, 0] }),
-    rp(new ConeGeometry(0.12, 0.14, 5), '#FFFFFF', { pos: [0.12, 1.28, 0] }, 5),
+    rp(new CylinderGeometry(0.13, 0.17, 0.46, 7), '#FFFFFF', { pos: [0.04, 0.82, 0], rot: [0, 0, -0.25] }, 5),
+    rp(new IcosahedronGeometry(0.12, 1), '#E8C8B0', { pos: [0.12, 1.16, 0] }),
+    rp(new ConeGeometry(0.12, 0.14, 7), '#FFFFFF', { pos: [0.12, 1.28, 0] }, 5),
   ];
   if (board) {
-    // Stood across the board, which runs along the travel; turned to face the slope's side (+z).
-    P.push(rp(new BoxGeometry(0.11, 0.5, 0.11), pants, { pos: [0.18, 0.3, 0], rot: [0, 0, 0.2] }));
-    P.push(rp(new BoxGeometry(0.11, 0.5, 0.11), pants, { pos: [-0.16, 0.3, 0], rot: [0, 0, -0.2] }));
-    P.push(rp(new BoxGeometry(1.4, 0.04, 0.3), '#4A4E66', { pos: [0, 0.03, 0] }));
+    // Stood across the board, which runs along the travel; turned to face the slope's side (+z), arms out.
+    P.push(rp(new CapsuleGeometry(0.055, 0.4, 1, 6), pants, { pos: [0.18, 0.3, 0], rot: [0, 0, 0.2] }));
+    P.push(rp(new CapsuleGeometry(0.055, 0.4, 1, 6), pants, { pos: [-0.16, 0.3, 0], rot: [0, 0, -0.2] }));
+    for (const sd of [-1, 1]) P.push(rp(new CapsuleGeometry(0.04, 0.34, 1, 5), '#FFFFFF', { pos: [0.02 + sd * 0.2, 0.9, 0], rot: [0, 0, sd * 1.05] }, 5));
+    P.push(rp(new CapsuleGeometry(0.15, 1.1, 2, 8), '#4A4E66', { pos: [0, 0.03, 0], rot: [0, 0, Math.PI / 2], scale: [0.14, 1, 1] }));
   } else {
     for (const s of [-1, 1]) {
       P.push(rp(new BoxGeometry(0.11, 0.5, 0.11), pants, { pos: [0.05, 0.32, s * 0.1], rot: [0, 0, -0.35] }));

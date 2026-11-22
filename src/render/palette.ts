@@ -61,6 +61,9 @@ export interface Palette {
   ghost: Color;
   /** Ghost glow for GhostVisuals.setGlow: above 1 the ghosts blaze (Blizzard). */
   ghostGlow: number;
+  /** How strongly the frame's key light rims the rider (rider.ts, ART.md 15 rule 4): 1 everywhere but where a
+   *  place's light is too soft to cut the hero out (round 8, the review loop: Lanternfall's moon and its cloud). */
+  heroRim: number;
   /** Distant ridge colours, farthest (palest) first: three atmospheric value steps. */
   ridge: [Color, Color, Color];
   /** Night moods: a moonlit mist pooled in the valleys between the ridge layers (sky.ts), and how
@@ -306,6 +309,7 @@ function base(): Palette {
     accentProp: c('#FF4D2E'),
     ghost: c('#8FF3E4'),
     ghostGlow: 1.25,
+    heroRim: 1,
     ridge: [c('#C8B4DE'), c('#9A8AC6'), c('#6660A6')],
     mist: null,
     mistK: 0,
@@ -1117,7 +1121,8 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.massif.glow = c('#FFC49C');
       p.massif.heroAz = -18;
       p.massif.sea = 1;
-      p.massif.seaWarm = 0.75;
+      // (Round 8, the review loop: at 0.75 the warm pools read from the Crown as salmon smears over the sea.)
+      p.massif.seaWarm = 0.55;
       p.deck = { k: 0, lit: c('#8E82CE'), shade: c('#3C3284'), glow: c('#FFB24E') };
       p.grade = { lift: c('#08062A'), gain: c('#F4F2FF'), saturation: 1.1, contrast: 1.08, grain: 0.6, foot: 0.3, shafts: 0, lens: 0.1, focal: 0.9, gust: 0, glitter: 0.5 };
       // (Low's poster: the indigo night in six printed steps, a silver rim.)
@@ -1144,6 +1149,8 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       // over the rider and in the lantern sky, which belongs to marigold.)
       p.ghostGlow = 1.1;
       p.lanternGlow = 0.45;
+      // (Round 8, the review loop: a navy coat under a low moon had no edge in half the frames.)
+      p.heroRim = 1.4;
       return;
   }
 }
@@ -3174,19 +3181,23 @@ export const PLACES: Record<BiomeId, Place[]> = {
       kind: 'ravine',
       span: (course) => {
         const cl = course.cloud;
-        return cl ? { z0: cl.z0 + 55, z1: cl.z1 - CLOUD_BREAK, rise: 150, fall: 50 } : null;
+        return cl ? { z0: cl.z0 + 55, z1: cloudLetGo(cl), rise: 150, fall: 50 } : null;
       },
       edit: (p) => {
         // (A value under the white it was: in a cloud as bright as its snow the lamps' halos had nothing to
         // loom out of, and the frame was one lilac wash.)
-        p.fog = c('#9A92D8');
+        // (Round 8, the review loop: a step deeper again, with the near walls kept out of it: every frame of the cloud
+        // was read as one milky value.)
+        p.fog = c('#8E86D2');
         p.air.far = c('#8A80CE');
         p.air.cool = c('#F2F0FF');
         p.air.low = 0.2;
         p.air.scatter = 0.4;
         // (The near plane keeps its whole palette for the first few metres, so the snow under the rider is
         // snow and the cloud is beyond it: from 2 m the near, the middle and the far were one violet.)
-        p.fogNear = 7;
+        // (Round 8, the review loop: from 7 m the slot's near walls were already in the cloud, a pale plane with nothing
+        // on it, and every frame of the Cloud Sea was one milky value. The walls beside the rider keep their own.)
+        p.fogNear = 12;
         p.fogFar = 49;
         p.skyZenith = c('#6A60BC');
         p.skyMid = c('#9A90DA');
@@ -3221,14 +3232,16 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.sparkle = 0.5;
         // (Less bloom and more contrast than a white-out would have: at 0.85 and 1.02 the cloud was a milky
         // veil of one lilac value over everything, the rider bleached in it as it came out.)
-        p.bloom = 0.62;
+        p.bloom = 0.5;
         p.grade.exposure = 1.0;
-        p.grade.contrast = 1.1;
+        p.grade.contrast = 1.16;
         p.grade.saturation = 1.04;
         p.grade.hi = c('#F8F6FF');
         p.grade.lo = c('#E4DCFF');
         p.grade.focal = 0.5;
         lamps(p, 1.3);
+        // (In the cloud the light has no side: the rider had no rim in any frame of it, the review loop.)
+        p.heroRim = 2.1;
       },
     },
     {
@@ -3317,8 +3330,18 @@ export const PLACES: Record<BiomeId, Place[]> = {
 };
 
 /** Lanternfall's cloud lets go this many metres above the lip of the break, so the camera's whip onto the
- *  valley (game/shots.ts lands it 26 m short of the lip) finds it already open. */
-export const CLOUD_BREAK = 80;
+ *  valley (game/shots.ts lands it 26 m short of the lip) finds it already open. (Round 8, the review: 80 m
+ *  until the sim batch moved the break's lip from 1568 to 1715 m; the cloud followed the lip and closed over the
+ *  run to 1635 m, so ART.md 15's break "about 1500" was ridden blind and no frame before the lip saw the valley.
+ *  It now lets go as the Cloud Sea's set piece ends, about 1455 m, and the run comes out under the deck with the
+ *  valley of lanterns opening ahead over the last of the high ground, the whip still landing on it open.) */
+export const CLOUD_BREAK = 260;
+
+/** Where Lanternfall's cloud lets go (sim z): CLOUD_BREAK above the break's lip, but never sooner than 360 m
+ *  into the cloud nor later than 80 m above the lip (a Daily's acts may lie closer together). */
+export function cloudLetGo(cl: { z0: number; z1: number }): number {
+  return Math.min(cl.z1 - 80, Math.max(cl.z1 - CLOUD_BREAK, cl.z0 + 360));
+}
 
 const copyOf = (p: Palette): Palette => lerpPalette(p, p, 0, {} as Palette);
 

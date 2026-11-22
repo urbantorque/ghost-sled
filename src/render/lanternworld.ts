@@ -14,7 +14,7 @@ import { pushLocalLight } from './lights';
 import { pushShaftSource } from './postfx/shafts';
 import { NOISE } from './massif';
 import { makeToonMaterial, shared } from './materials';
-import { CLOUD_BREAK, type Palette } from './palette';
+import { cloudLetGo, type Palette } from './palette';
 import type { Particles } from './particles';
 import type { Detail } from './postfx/tiers';
 
@@ -48,7 +48,7 @@ const LAMP_RGB: [number, number, number] = [1, 0.66, 0.2];
 
 /** Lanterns in the valley by tier, the lanterns a win lets go, and the banks of cloud at the lens. */
 const BUDGET: Record<Detail, { valley: number; release: number; puffs: number; sheets: number; sprites: number; floats: number; lampAhead: number }> = {
-  low: { valley: 1500, release: 160, puffs: 10, sheets: 1, sprites: 160, floats: 0, lampAhead: 170 },
+  low: { valley: 2100, release: 160, puffs: 10, sheets: 1, sprites: 160, floats: 0, lampAhead: 170 },
   medium: { valley: 3600, release: 360, puffs: 18, sheets: 2, sprites: 320, floats: 36, lampAhead: 240 },
   high: { valley: 6000, release: 600, puffs: 28, sheets: 3, sprites: 480, floats: 72, lampAhead: 300 },
 };
@@ -66,10 +66,16 @@ const LAMP_AHEAD = 400;
  *  run across the course's middle, and measured in that frame (scripts/playtest/finishprobe.js) a lantern 35 m
  *  past the line and 12 m to the rider's side hangs over the rider's head in the left column the results leave
  *  open, about a seventh of the frame tall. Round 7 had it 36 m past the line on the run's middle, where it was
- *  off the frame's edge.) */
-const GREAT_Z = 35;
+ *  off the frame's edge. Round 8, the review: but a slow finisher stops 40 m past the line, under it, and in the
+ *  results it hung cut by the frame's top edge, only its foot in the picture; 14 m past the line it stands 30 m or more
+ *  behind any rider that stops, over the rider's head for a slow one and lower in the sky for a fast one.) */
+const GREAT_Z = 14;
 const GREAT_Y = 6.5;
 const GREAT_SIDE = 12;
+/** And let down this far on its chains as it is walked (round 8, the review: measured in the results of a slow
+ *  finisher, scripts/playtest/rev4-motion.js, the paper's middle stood at the frame's top edge; let down, it hangs
+ *  in the top third over the rider's head. It goes down once the rider is under and past it, and off the run.) */
+const GREAT_DROP = 3.6;
 /** The guide light keeps this far ahead of the rider. */
 const GUIDE_AHEAD = 26;
 /** The canal's reaches lie this far past the edge. */
@@ -96,7 +102,7 @@ export function cloudDepth(c: Course, z: number): number {
   const cl = c.cloud;
   if (!cl) return 0;
   const z0 = cl.z0 + 55;
-  const z1 = cl.z1 - CLOUD_BREAK;
+  const z1 = cloudLetGo(cl);
   if (z <= z0 || z >= z1 + 50) return 0;
   return smooth01((z - z0) / 150) * (1 - smooth01((z - (z1 - 10)) / 60));
 }
@@ -133,8 +139,20 @@ const LIGHT_FRAG = /* glsl */ `
       // (Every halo reaches nothing inside the point's circle: cut off at the square's edge, a near light
       // was a glowing card.)
       float halo = exp(-dot(q, q) * 2.4) * 0.4 * (1.0 - smoothstep(0.45, 1.0, dot(q, q)));
-      return col * (body * (0.5 + 0.3 * (0.5 - q.y)) + halo) + vec3(1.0, 0.93, 0.72) * flame * body * 0.9;
+      // (Round 8, the review loop: paper with ribs, ART.md 14, palest at its waist and rounding away at its sides:
+      // a body of one glow read as an orange disc or a bokeh blob, never a paper lantern.)
+      float waist = 1.0 - 0.5 * b.y * b.y;
+      float roundK = 1.0 - 0.42 * b.x * b.x;
+      float rib = 1.0 - 0.38 * (1.0 - smoothstep(0.0, 0.075, abs(fract(b.y * 2.0 + 0.5) - 0.5)));
+      return col * (body * (0.42 + 0.42 * waist) * roundK * rib + halo) + vec3(1.0, 0.93, 0.72) * flame * body * 0.7;
     #endif
+  }
+  // A paper lantern's dark cap over it and its foot under it (round 8, the review loop): 1 on them, 0 elsewhere.
+  float lanternCap(vec2 q) {
+    float cap = (1.0 - smoothstep(0.24, 0.28, abs(q.x))) * smoothstep(0.5, 0.52, q.y) * (1.0 - smoothstep(0.64, 0.66, q.y));
+    float foot = (1.0 - smoothstep(0.16, 0.2, abs(q.x))) * smoothstep(-0.65, -0.63, q.y) * (1.0 - smoothstep(-0.53, -0.51, q.y));
+    float tassel = (1.0 - smoothstep(0.02, 0.04, abs(q.x))) * smoothstep(-0.9, -0.86, q.y) * (1.0 - smoothstep(-0.65, -0.63, q.y));
+    return max(max(cap, foot), tassel * 0.8);
   }
   vec3 flameShape(vec2 q, vec3 col, float seed, float t) {
     // A teardrop that leans and licks: wide at its foot, a point at its head.
@@ -242,6 +260,12 @@ function valleyMaterial(low: boolean): ShaderMaterial {
         // (A paper lantern near the lens covers what is behind it; a far mote covers little: thousands of them
         // each taking 85% of the air behind them made the lit valley under the break a dark hole full of dots.)
         float cover = mix(min(dotK, 1.0) * 0.28, bodyK * 0.92, vBig) * vA;
+        #ifndef POSTER
+          // Its cap and foot in ink, where it is big enough to read as a lantern.
+          float capK = lanternCap(q) * smoothstep(0.7, 1.0, vBig);
+          col *= 1.0 - capK;
+          cover = max(cover, capK * 0.95 * vA);
+        #endif
         gl_FragColor = vec4(col * vA * uGain, cover);
       }
     `,
@@ -363,21 +387,38 @@ function sheetMaterial(low: boolean): ShaderMaterial {
         return n;
       }
       void main() {
-        vec2 q = vW.xz * 0.0032 + vec2(uTime * 0.004, uTime * 0.0015);
+        // (Round 8, the review loop: billows a third of a kilometre across read from the Crown as one mottled sheet;
+        // two thirds of that size, they read as heaped cloud, each with its moonlit rim.)
+        vec2 q = vW.xz * 0.0048 + vec2(uTime * 0.004, uTime * 0.0015);
         float n = billow(q);
         // The top sheet is the billows' crests alone; each one under it is fuller, and the floor is whole.
         float cover = smoothstep(0.42 - vL * 0.9, 0.62 - vL * 0.8, n * 0.5 + 0.5);
         vec2 sxz = normalize(uMoon.xz + vec2(0.0001, 0.0));
         float facing = clamp(0.5 + (n - billow(q - sxz * 0.16)) * 3.2, 0.0, 1.0);
-        float l = clamp(facing * 0.7 + (n * 0.5 + 0.5) * 0.4 - 0.14 + (1.0 - vL) * 0.12, 0.0, 0.999) * 3.0;
+        float l = facing * 0.7 + (n * 0.5 + 0.5) * 0.4 - 0.14 + (1.0 - vL) * 0.12;
+        #ifdef POSTER
+          // (Low draws the floor alone: at the floor's own value, under the crests High lays over it, the sea read as
+          // dark water or a lava field from the Crown, the review loop. It takes the crests' light instead.)
+          l += 0.5;
+        #endif
+        l = clamp(l, 0.0, 0.999) * 3.0;
         float st = (floor(l) + smoothstep(0.35, 0.65, fract(l))) / 3.0;
-        vec3 col = mix(uShade, uLit, st);
-        col = mix(col, uRim, pow(facing, 3.0) * 0.4 * (1.0 - vL));
+        #ifdef POSTER
+          // (Its shade a step lighter too: Low's floor in the night's navy read as water under the moon.)
+          vec3 col = mix(mix(uShade, uLit, 0.3), uLit, st);
+        #else
+          vec3 col = mix(uShade, uLit, st);
+        #endif
+        col = mix(col, uRim, pow(facing, 3.0) * 0.6 * (1.0 - vL));
         // Lit from beneath in pools that hold their place (massif.ts paints the same pools on the far sea).
         vec2 wq = vW.xz * 0.00042;
         float pool = snoise(wq + vec2(1.7, -4.2)) * 0.6 + snoise(wq * 2.3 + vec2(-3.1, 2.6)) * 0.4;
         pool = smoothstep(0.22, 0.78, pool + 0.08 * sin(uTime * 0.21 + wq.x * 3.0));
         col += uWarm * pool * (0.3 + 0.7 * (1.0 - smoothstep(-0.35, 0.55, n))) * (0.45 + 0.55 * vL);
+        #ifdef POSTER
+          // (A warm pool over a cool floor in flat values is a peach glow, never a maroon blot.)
+          col = mix(col, uLit, 0.18 * pool);
+        #endif
         float d = distance(vW, cameraPosition);
         float a = cover * (1.0 - smoothstep(0.7, 1.0, length(vW.xz - cameraPosition.xz) / uR)) * smoothstep(3.0, 26.0, d);
         col = mix(col, uHaze, smoothstep(700.0, 2500.0, d) * 0.85);
@@ -756,7 +797,7 @@ export class LanternWorld {
     this.greatWon = false;
     this.greatSide = 0;
     this.greatWalk = -1;
-    if (this.greatNode) this.greatNode.position.x = 0;
+    if (this.greatNode) this.greatNode.position.set(0, 0, 0);
     this.surge = 0;
     this.tallZ = 0;
     if (this.valley) (this.valley.material as ShaderMaterial).uniforms.uRelease.value = -1;
@@ -837,9 +878,11 @@ export class LanternWorld {
       if (near) {
         // Beside the run: lanterns a rider passes among, each a paper lantern at the lens. They drift up
         // slowly through the first few tens of metres, so a frame always holds some at the rider's height.
-        off = hw + 11 + Math.pow(rnd(), 1.4) * 70;
+        // (Round 8, the review loop: from 11 m out and at 2.2 m they were orange discs at frame size; nearer and a
+        // little larger, a rider passes paper lanterns with ribs and caps.)
+        off = hw + 8 + Math.pow(rnd(), 1.4) * 60;
         y0 = c.ground(cx + side * off, zc) + 1.5 + rnd() * 12;
-        size = 2.2 + rnd() * 1.8;
+        size = 2.6 + rnd() * 1.8;
       } else if (r < 0.22) {
         // Over the road, well above any flight.
         off = rnd() * (hw + 13);
@@ -1004,7 +1047,7 @@ export class LanternWorld {
     const list: WayLamp[] = [];
     let k = 0;
     for (let z = 46; z < c.finishZ - 20; k++) {
-      const inCloud = z > cl.z0 + 40 && z < cl.z1;
+      const inCloud = z > cl.z0 + 40 && z < cloudLetGo(cl);
       const side = k % 2 === 0 ? -1 : 1;
       const sec = c.section(z);
       const open = sec.kind !== 'street' && sec.kind !== 'bridge' && sec.kind !== 'tunnel' && sec.kind !== 'finish' && sec.kind !== 'start';
@@ -1256,7 +1299,7 @@ export class LanternWorld {
         u.uShade.value.copy(p.clouds.shade).lerp(p.skyHorizon, 0.1);
         u.uRim.value.copy(p.rim);
         // (Low's flat values have no bloom to soften the pools: at High's strength they read as lava.)
-        u.uWarm.value.copy(p.deck.glow).multiplyScalar(p.massif.seaWarm * (low ? 0.5 : 1.25));
+        u.uWarm.value.copy(p.deck.glow).multiplyScalar(p.massif.seaWarm * (low ? 0.4 : 0.95));
         u.uHaze.value.copy(p.skyHorizon).lerp(p.fog, 0.3);
         u.uMoon.value.copy(p.diskDir);
       }
@@ -1321,7 +1364,7 @@ export class LanternWorld {
     const rising = !!lg && lg.key === 'rising' && sim!.lg.phase === 2;
     this.surge += ((rising ? 1 : 0) - this.surge) * Math.min(1, dt * (rising ? 1.4 : 0.5));
     // Under the deck only: nothing of the valley shows from the Crown, or through the cloud.
-    const below = smooth01((z - (cl.z1 - CLOUD_BREAK - 12)) / 46);
+    const below = smooth01((z - (cloudLetGo(cl) - 12)) / 46);
     this.show += (below - this.show) * Math.min(1, dt * 6);
     if (this.valley) {
       const u = (this.valley.material as ShaderMaterial).uniforms;
@@ -1352,7 +1395,9 @@ export class LanternWorld {
       // few metres in, so a lamp lit nothing a rider could see. (Medium and High: Low keeps its draws.)
       if (!low && d > -24 && d < 150) {
         const toward = Math.sign(c.centerX(l.z) - l.x);
-        this.pool(c, l.x + toward * 3.2, l.z, 11, 12, MARIGOLD, 0.16 * fl * Math.min(1.2, p.lamps));
+        // (Round 8, the review loop: a fifth stronger, so a road reads as pools and not even lilac; the pool keeps the
+        // snow's silver with marigold at its heart, palette.ts poolSilver.)
+        this.pool(c, l.x + toward * 3.2, l.z, 11, 12, MARIGOLD, 0.2 * fl * Math.min(1.2, p.lamps));
       }
     }
     // The stone lamps the sim stands in the run: lit, unless one waits to be kindled.
@@ -1575,7 +1620,9 @@ export class LanternWorld {
       for (let zt = from - (from % 5) + 5, n = 0; zt < zl - 2 && n < (low ? 6 : 9); zt += 5, n++) {
         const xt = pathX(c, p.path, zt);
         const near = 1 - Math.min(1, Math.abs(zt - s.z) / 40);
-        this.pool(c, xt, zt, 2 * p.hw + 0.6, 6.4, col, (inWake ? 0.5 : 0.2) * (0.5 + 0.5 * near) * (0.85 + 0.15 * Math.sin(time * 3 - zt * 0.3)));
+        // (Low adds it with no tone curve over the cloud's pale snow: at High's strength it clipped to a white glare
+        // beside the sled, the review loop.)
+        this.pool(c, xt, zt, 2 * p.hw + 0.6, 6.4, col, (inWake ? 0.5 : 0.2) * (low ? 0.45 : 1) * (0.5 + 0.5 * near) * (0.85 + 0.15 * Math.sin(time * 3 - zt * 0.3)));
       }
       if (inWake) pushLocalLight(pathX(c, p.path, s.z + 8), c.ground(s.x, s.z + 8) + 1.2, -(s.z + 8), 1, 0.8, 0.36, 10, 0.55 * lampK);
     }
@@ -1744,7 +1791,9 @@ export class LanternWorld {
     const full = this.greatWon ? 1 : 0.72;
     // (Round 8: banked low until it is lit, a lamp turned down and waiting. Dark, it hung behind the FINISH board on the
     // approach as a violet mass a critic read as "a dark unlit one" over the lettering.)
-    u.uEmissiveStrength.value = lit * full * (1.9 + 0.7 * flash + 0.06 * Math.sin(time * 5)) + (1 - lit) * 0.14;
+    // (Round 8, the review: at 0.14 the banked lantern read as a dim brown barrel over the square, a cage with nothing
+    // in it; a lamp turned down still glows through its paper.)
+    u.uEmissiveStrength.value = lit * full * (1.9 + 0.7 * flash + 0.06 * Math.sin(time * 5)) + (1 - lit) * 0.34;
     // (Round 8: once the rider is over the line and the finish lens has begun its swing round to the rider's front,
     // the lamplighters walk it along its yoke to the side away from the lens's, where the lens, looking back up the
     // run past the rider, finds it over the rider's head. Read from the lens itself, so the two always agree:
@@ -1758,10 +1807,12 @@ export class LanternWorld {
         this.greatWalk = time;
       }
       const reach = Math.min(GREAT_SIDE, node.userData.reach as number);
-      node.position.x = this.greatSide * reach * (this.greatWalk < 0 ? 0 : smooth01((time - this.greatWalk) / 1.2));
+      const walk = this.greatWalk < 0 ? 0 : smooth01((time - this.greatWalk) / 1.2);
+      node.position.x = this.greatSide * reach * walk;
+      node.position.y = -GREAT_DROP * walk;
     }
     const x = root.position.x + (node ? node.position.x : 0);
-    const y = root.position.y + GREAT_Y + 11.6 - 2.2 - 3.3;
+    const y = root.position.y + (node ? node.position.y : 0) + GREAT_Y + 11.6 - 2.2 - 3.3;
     // It sways a little on its chains.
     paper.rotation.z = 0.02 * Math.sin(time * 0.9);
     if (lit > 0) {

@@ -763,7 +763,9 @@ const COLOUR = /* glsl */ `vColor = color;
 
 /** The crowd's material: the shared toon model, patched to colour and animate each figure. */
 export function crowdMaterial(u: CrowdUniforms): ShaderMaterial {
-  const m = makeToonMaterial({ coolShade: 0.4, rim: 0.42, nearFade: [1.8, 3.6] });
+  // (Round 8, the review loop: from 1.8 m a street's front row stood at the lens as toy heads a fifth of the frame tall,
+  // cut by its edge, in the street's low lens. A figure goes, whole, before it is nearer than about 4 m.)
+  const m = makeToonMaterial({ coolShade: 0.4, rim: 0.42, nearFade: [3.4, 5.0] });
   if (!m.vertexShader.includes('#include <begin_vertex>') || !m.vertexShader.includes('vColor = color;')) throw new Error('crowdMaterial: shader hooks missing');
   m.vertexShader = ATTRS + m.vertexShader.replace('vColor = color;', COLOUR).replace('#include <begin_vertex>', ANIMATE);
   Object.assign(m.uniforms, u, { uRoar: crowdRoar, uProp: crowdProp });

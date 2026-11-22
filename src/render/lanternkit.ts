@@ -451,6 +451,18 @@ function lightBridgePiece(ctx: SiteCtx): Piece {
       // The pier, battered, and the approach wall stepping down the bank to the snow.
       parts.push(grade(tbox(5.4, 4.2, deck(cx) - g + 1.5, st, [cx, g - 1.5, 0]), g - 1, deck(cx), 0.66, 1.03, 0.1));
       parts.push(box(4.6, 0.34, 4.6, stD, [cx, soffit(s * X) - 0.2, 0]));
+      // (Round 8, the review loop: over a deep cut the piers stand twenty metres tall, and as banded stone alone they
+      // read as two dark striped boxes: each carries a lantern storey of lit paper over the deck, as a lamp tower does,
+      // and a slot of light up its face toward the run.)
+      lanternStorey(parts, cx, deck(cx) + 0.5, 0, 3.6, 3.2, !low);
+      parts.push(...hipRoof(4.6, 4.6, 2.8, deck(cx) + 3.95, C(LAMP_SLATE), [cx, 0, 0]));
+      for (const z of [-1, 1]) {
+        const top = deck(cx) - 2.2;
+        const bot = Math.max(g + 1.2, top - 9);
+        // (On the battered face: half its width where the slot's middle stands.)
+        const t = ((top + bot) / 2 - (g - 1.5)) / Math.max(1, deck(cx) - g + 1.5);
+        if (top - bot > 2) parts.push(grade(box(0.7, top - bot, 0.14, paper(0.8), [cx, (top + bot) / 2, z * ((5.4 - 1.2 * t) / 2 + 0.05)]), bot, top, 1.15, 0.7, 0.03));
+      }
       for (let k = 1; k <= 5; k++) {
         const x = cx + s * k * 3.4;
         const gk = ctx.gy(x, 0);

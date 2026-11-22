@@ -398,7 +398,10 @@ function finishArch(ctx: SiteCtx, rail: Rail, F: number): BufferGeometry[] {
   }
   // The board.
   const W = 2 * X + 3.4;
-  parts.push(box(W, B, 1.5, CREAM, [0, H + B / 2, 0]));
+  // (Round 8, the review loop: Lanternfall's board a lilac paper a step under cream: in the lit great lantern's light
+  // its back hung over the results as a flat, blown cream slab.)
+  const boardC = ctx.biome === 'lantern' ? C('#CEC2E2') : CREAM;
+  parts.push(box(W, B, 1.5, boardC, [0, H + B / 2, 0]));
   parts.push(box(W + 0.3, 0.5, 1.8, towerC, [0, H + 0.1, 0]));
   parts.push(box(W + 0.3, 0.5, 1.8, towerC, [0, H + B + 0.05, 0]));
   if (blossom) {
@@ -417,8 +420,8 @@ function finishArch(ctx: SiteCtx, rail: Rail, F: number): BufferGeometry[] {
   for (const z of [0.78, -0.78]) {
     for (let i = 0; i < n; i++) {
       const x = -W / 2 + (i + 0.5) * (W / n);
-      parts.push(box(W / n, 0.72, 0.06, (i & 1) === 0 ? INK : CREAM, [x, H + 0.74, z]));
-      parts.push(box(W / n, 0.72, 0.06, (i & 1) === 1 ? INK : CREAM, [x, H + B - 0.54, z]));
+      parts.push(box(W / n, 0.72, 0.06, (i & 1) === 0 ? INK : boardC, [x, H + 0.74, z]));
+      parts.push(box(W / n, 0.72, 0.06, (i & 1) === 1 ? INK : boardC, [x, H + B - 0.54, z]));
     }
   }
   parts.push(...letters('FINISH', H + 1.42, 0.86, 0.46, INK));
@@ -1047,7 +1050,17 @@ export function liftPiece(ctx: SiteCtx): Piece {
     // Rows of windows up the base, toward the run and up the slope.
     // (Lanternfall's is a stone stem with its lit hall only at the top: four rows of windows up a tower read
     // as flats.)
-    for (let y = lf ? Math.max(g1 + 2.6, hall - 5.0) : g1 + 2.6; y < hall - 1.6; y += 3.3) {
+    // (Round 8, the review: and even one row of small lit windows high on a sheer stone box read as an office block on
+    // the Crown. Lanternfall's stem has none: it is coursed stone, battered, with snow on each course, and the light is
+    // the hall's, a lantern storey of lit paper at its head.)
+    if (lf) {
+      for (let y = g1 + 3.4, k = 0; y < hall - 1.2; y += 3.6, k++) {
+        const wk = W + 0.5 - k * 0.12;
+        parts.push(box(wk, 0.42, D + 0.5 - k * 0.12, stone(p, 0.62), [hx, y, 0]));
+        parts.push(box(wk + 0.1, 0.14, D + 0.6 - k * 0.12, SNOW, [hx, y + 0.27, 0]));
+      }
+    }
+    for (let y = g1 + 2.6; !lf && y < hall - 1.6; y += 3.3) {
       for (let i = 0; i < 4; i++) {
         parts.push(box(1.5, 1.5, 0.14, glass, [hx - W / 2 + (i + 0.5) * (W / 4), y, D / 2 + 0.04]));
         parts.push(box(0.14, 1.5, 1.5, glass, [hx - (s * W) / 2 - s * 0.04, y, -D / 2 + (i + 0.5) * (D / 4)]));
@@ -1071,7 +1084,16 @@ export function liftPiece(ctx: SiteCtx): Piece {
     }
     parts.push(box(W + 0.5, 0.4, D + 0.5, trim, [hx, hall, 0]));
     // The cable hall, open toward the run, its bull wheel showing under a long overhanging roof.
-    parts.push(grade(box(W + 2, 6.4, D + 2, upper, [hx + s * 0.6, hall + 3.2, 0]), hall, hall + 6.4, 0.84, 1.02));
+    parts.push(grade(box(W + 2, 6.4, D + 2, lf ? paper(0.72) : upper, [hx + s * 0.6, hall + 3.2, 0]), hall, hall + 6.4, lf ? 1.1 : 0.84, lf ? 0.66 : 1.02));
+    if (lf) {
+      // The hall's paper in its timber lattice, as a lamp tower's storey: posts round it and a rail along each face.
+      for (let i = 0; i <= 6; i++) {
+        const u = -0.5 + i / 6;
+        parts.push(box(0.22, 6.4, 0.22, upper, [hx + s * 0.6 + u * (W + 2), hall + 3.2, D / 2 + 1.04]));
+        parts.push(box(0.22, 6.4, 0.22, upper, [hx + s * 0.6 + u * (W + 2), hall + 3.2, -D / 2 - 1.04]));
+      }
+      for (const z of [D / 2 + 1.06, -D / 2 - 1.06]) parts.push(box(W + 2.1, 0.16, 0.16, upper, [hx + s * 0.6, hall + 4.1, z]));
+    }
     parts.push(box(1.6, 5, D + 2.2, C('#1E2238'), [hx - s * (W / 2 + 0.7), hall + 3.1, 0]));
     const wheel = new TorusGeometry(LINE_Z, 0.26, 6, 18);
     wheel.rotateX(Math.PI / 2);

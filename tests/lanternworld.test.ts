@@ -61,6 +61,9 @@ describe('Lanternfall is its own mountain', () => {
     // The camera's whip lands WHIP_BEFORE_LIP short of the lip of the break: the cloud is gone by then.
     expect(CLOUD_BREAK).toBeGreaterThan(WHIP_BEFORE_LIP + 40);
     expect(cloudDepth(c, cl.z1 - WHIP_BEFORE_LIP)).toBeLessThan(0.02);
+    // (Round 8, the review: the break is out under the deck by about 1500 m, ART.md 15, wherever the sim put the lip.)
+    expect(cloudDepth(c, 1520)).toBe(0);
+    expect(at(1530).fogFar).toBeGreaterThan(500);
     expect(at(cl.z1 - WHIP_BEFORE_LIP + 4).fogFar).toBeGreaterThan(500);
     // Under the deck: a ceiling of cloud, no moon, and the valley's light from below.
     const under = at(cl.z1 + 60);
