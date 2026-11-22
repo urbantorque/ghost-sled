@@ -146,7 +146,9 @@ export function viaductPiece(ctx: SiteCtx): Piece {
         for (let i = 0; i < N; i++) {
           const a = -L + (2 * L * i) / N;
           const b = -L + (2 * L * (i + 1)) / N;
-          parts.push(seg(at(a, y(a)), at(b, y(b)), 0.5, i % 2 ? st.beam : st.dark, 5));
+          // (Round 8's review: Sakura's rib in two lacquers read as a candy-striped barrier, red and cream, beside the
+          // rider's vermillion. It is one deep lacquer.)
+          parts.push(seg(at(a, y(a)), at(b, y(b)), 0.5, i % 2 && biome !== 'blossom' ? st.beam : st.dark, 5));
           if (i % 2 === 0 && i > 0) parts.push(seg(at(a, y(a)), at(a, 0.2), 0.1, st.rail, 4));
           if (biome === 'glacier') {
             // Icicles hung along the rib.
@@ -186,6 +188,13 @@ export function viaductPiece(ctx: SiteCtx): Piece {
           // A pier of stacked ice, the fall's own.
           for (let k = 0; k < 4; k++) parts.push(crag(k % 2 ? st.beam : st.dark, [pt.x, g + 1 + k * 2.7, pt.z], [w * 0.8, 1.9, w * 0.8], 0.22));
           parts.push(drift([pt.x, g + 11.4, pt.z], [1.9, 0.6, 1.9]));
+        } else if (biome === 'blossom') {
+          // (Round 8's review: Sakura's portals were plum boxes under a white lid. A lacquered tower: ink bands at
+          // two storeys and a swept pyramid roof in the town's ink, its snow on the upper half only.)
+          parts.push(grade(box(w, h + 8, w, st.post, [pt.x, g + (h - 8) / 2, pt.z]), g - 8, g + h, 0.65, 1.05));
+          for (const y of [g + h * 0.42, g + h - 0.2]) parts.push(box(w + 0.3, 0.38, w + 0.3, st.dark, [pt.x, y, pt.z]));
+          parts.push(part(new ConeGeometry(w * 1.05, 1.5, 4, 1), C('#2E2A3E'), { pos: [pt.x, g + h + 0.75, pt.z], rot: [0, Math.PI / 4, 0] }));
+          parts.push(part(new ConeGeometry(w * 0.55, 0.8, 4, 1), SNOW, { pos: [pt.x, g + h + 1.12, pt.z], rot: [0, Math.PI / 4, 0] }));
         } else {
           parts.push(grade(box(w, h + 8, w, biome === 'volcanic' ? st.dark : st.post, [pt.x, g + (h - 8) / 2, pt.z]), g - 8, g + h, 0.65, 1.05));
           parts.push(box(w + 0.8, 0.5, w + 0.8, st.dark, [pt.x, g + h, pt.z]));
@@ -597,8 +606,10 @@ export function finishPiece(ctx: SiteCtx): Piece {
       // over the roofs from the last leap and fills the finish gate's opening down the street. Scaled about
       // its own foot.
       // (Taller than it is wide grown: at 2.1 all round it stood under the finish banner from the street.)
-      const K = 2.1;
-      const KY = 2.6;
+      // (Round 8's review: at 2.6 high it stood tiny behind the FINISH board from the approach, its body under the
+      // banner. Its upper storeys now clear the board from the last 100 m.)
+      const K = 2.5;
+      const KY = 3.5;
       const pg = pagodaParts(night, top, top - 1, p);
       for (const g of pg) g.translate(0, -top, 0).scale(K, KY, K).translate(0, top, 0);
       parts.push(...tall.out(place(pg, 0, 0, -1, 0)));
