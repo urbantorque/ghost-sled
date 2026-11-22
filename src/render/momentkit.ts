@@ -98,6 +98,7 @@ export function litMaterial(): ShaderMaterial {
       varying vec3 vCol;
       varying float vForm;
       varying float vDist;
+      varying float vUp;
       void main() {
         vCol = color;
         #ifdef USE_INSTANCING_COLOR
@@ -116,6 +117,7 @@ export function litMaterial(): ShaderMaterial {
         vForm = (0.5 + 0.6 * facing * facing) * (0.9 + 0.1 * n.y);
         vec4 mv = viewMatrix * wp;
         vDist = -mv.z;
+        vUp = wp.y - cameraPosition.y;
         gl_Position = projectionMatrix * mv;
       }
     `,
@@ -127,6 +129,7 @@ export function litMaterial(): ShaderMaterial {
       varying vec3 vCol;
       varying float vForm;
       varying float vDist;
+      varying float vUp;
       void main() {
         // (A light in fog is seen further than a wall is: half the fog.)
         float f = 0.5 * smoothstep(uFogNear, uFogFar, vDist);
@@ -134,8 +137,12 @@ export function litMaterial(): ShaderMaterial {
         // lens it would be a block of its colour across the frame.)
         // (The review loop: dithered from 7 m in, a street's near lanterns hung as half-transparent
         // scanline ghosts across the top of a still. Each holds solid to 5.2 m and is gone by 4.4 m.)
+        // (Round 8's review, Frostfang: a gate's lanterns hanging over the run 5 to 7 m ahead of the lens were two great
+        // blocks of their colour across the top of the frame in the Ice Cavern. What hangs over the lens goes over
+        // ART.md 14's last 7 m, gone by 6.6 m; a bell or a wheel by the snow, which the rider meets, keeps 4.4 m.)
+        float near0 = mix(4.4, 6.6, smoothstep(0.2, 1.4, vUp));
         float thr = (mod(floor(gl_FragCoord.x), 2.0) + 2.0 * mod(floor(gl_FragCoord.y), 2.0)) / 4.0 + 0.125;
-        if (smoothstep(4.4, 5.2, vDist) < thr) discard;
+        if (smoothstep(near0, near0 + 0.8, vDist) < thr) discard;
         vec3 c = vCol * vForm;
         c *= min(1.0, uCap / max(max(c.r, max(c.g, c.b)), 0.001));
         gl_FragColor = vec4(mix(c, uFog, f), 1.0);

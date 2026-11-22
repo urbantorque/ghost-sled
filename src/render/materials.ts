@@ -255,7 +255,8 @@ interface RockSet {
 
 const ROCK: Record<string, RockSet> = {
   summit: { lit: '#94889E', shade: '#3C3654', deep: '#25213A', ledge: '#FFFFFF', style: [1.35, 3.6, 0, 0.1] },
-  fang: { lit: '#8FCDF2', shade: '#1B4A9E', deep: '#071A58', ledge: '#D6ECFF', style: [1.8, 8.5, 1, 0] },
+  // (Round 8's review: wider, taller shards, so a wall reads as a few cut planes of ice and not a fine crumple.)
+  fang: { lit: '#8FCDF2', shade: '#1B4A9E', deep: '#071A58', ledge: '#D6ECFF', style: [2.4, 9.5, 1, 0] },
   // (Basalt is near black, so the lava's light and the sky's edge are what model it: a mid grey-mauve rock
   // read as brown walls in an even light.)
   volcano: { lit: '#43383F', shade: '#17131A', deep: '#0B0910', ledge: '#7A7076', style: [1.5, 6.5, 2, 0] },
@@ -1106,9 +1107,11 @@ export function makeSnowMaterial(): ShaderMaterial {
           float tri = step(diag, 0.0);
           float a = hash13(vec3(c, r, 2.1 + tri));
           float b = hash13(vec3(c, r, 4.7 + tri));
-          tilt = vec2((a - 0.5) * 1.5 + (fy - 0.5) * 0.7, (b - 0.5) * 0.7);
+          // (Round 8's review: with the wall's mesh facets eased off (below), each shard is a plane of its own, tilted
+          // a step harder, and the fractures down its splits are wide enough to read past the lens.)
+          tilt = vec2((a - 0.5) * 1.8 + (fy - 0.5) * 0.8, (b - 0.5) * 0.8);
           tone = 0.66 + 0.62 * a;
-          crack = (1.0 - smoothstep(0.008, 0.02 + fp * 0.3, abs(diag))) * step(0.55, b);
+          crack = (1.0 - smoothstep(0.014, 0.034 + fp * 0.5, abs(diag))) * step(0.5, b);
         } else if (kind < 2.5) {
           // Ember: basalt columns, two faces a column, ash on their broken tops, and thin lava in some
           // of the joints between them.
@@ -1451,8 +1454,9 @@ export function makeSnowMaterial(): ShaderMaterial {
           vec2 ap = vWorldPos.xz * vec2(0.013, 0.0046) + vec2(uGroundTime * 0.012, uGroundTime * 0.004);
           float cur = vnoise(ap) * 0.62 + vnoise(ap * vec2(2.3, 2.1) + 3.7) * 0.38;
           // (Round 7's review: the curtains cover most of the sky-facing snow, so the night's lit side is the
-          // aurora's and the steel is what shows between them, not the other way about.)
-          float a2 = smoothstep(0.22, 0.52, cur) * clamp(n.y * 1.25 - 0.25, 0.0, 1.0) * mix(0.3, 1.0, shadow);
+          // aurora's and the steel is what shows between them, not the other way about. Round 8's review: at
+          // 0.22 the green flooded the whole floor and the violet shade was gone; a little less of it.)
+          float a2 = smoothstep(0.3, 0.6, cur) * clamp(n.y * 1.25 - 0.25, 0.0, 1.0) * mix(0.3, 1.0, shadow);
           float lv = dot(col, vec3(0.2126, 0.7152, 0.0722));
           // Between the curtains the snow's shade is violet, and it is the shade that takes it (the lit
           // snow stays the moon's steel): three hues on the ground, where there was one blue.
@@ -1859,7 +1863,11 @@ export function makeSnowMaterial(): ShaderMaterial {
           vec3 gn = normalize(vNormalW);
           vec3 fl = normalize(cross(dpx, dpy));
           fl *= sign(dot(fl, gn));
-          gn = normalize(mix(fl, gn, 0.4 + 0.6 * smoothstep(40.0, 120.0, dist)));
+          // (Round 8's review, Frostfang: a crevasse wall's mesh is stretched up a face 30 m tall, so its own flat
+          // facets read as long smears of light and dark; there the painted shards carry the form and the mesh's
+          // facets keep only a fifth of it. Every other cut keeps its facets as it was.)
+          float meshK = kind > 0.5 && kind < 1.5 ? 0.8 : 0.4;
+          gn = normalize(mix(fl, gn, meshK + (1.0 - meshK) * smoothstep(40.0, 120.0, dist)));
           vec3 tu = cross(vec3(0.0, 1.0, 0.0), gn);
           tu /= max(length(tu), 0.08);
           vec3 tv = cross(gn, tu);
@@ -1884,7 +1892,7 @@ export function makeSnowMaterial(): ShaderMaterial {
             float fres = pow(1.0 - clamp(dot(rn, v), 0.0, 1.0), 3.0);
             rc += mix(uSkyHorizon, uSnowLit, 0.5) * fres * 0.25;
             rc += uSunColor * pow(max(dot(reflect(-v, rn), uSunDir), 0.0), 26.0) * 0.5 * shadow;
-            rc = mix(rc, uRockLit * 1.15, crack * fine * (0.3 + 0.5 * dk));
+            rc = mix(rc, uRockLit * 1.15, crack * fine * (0.45 + 0.45 * dk));
             // (Round 7's review: under the Ice Cavern's roof, the only place darker than the night, the
             // sky in the glaze and the skin of the shards go down too, so the walls are near-black cobalt
             // and the glow at their feet, the lamps and the mouth are the light.)

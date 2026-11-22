@@ -34,6 +34,8 @@ const RING_S = 0.62;
 /** Round 8: how much of the sled's pace the broken lantern keeps. At round 7's 0.88 a shard fell back 5 m a second
  *  at 40 m/s, under the lens in a blink; now it hangs beside the rider as it flies out and only slowly drops back. */
 const KEEP = 0.95;
+/** Round 8's review: a broken shard's size against its panel (a whole panel flying past read as flat yellow card). */
+const SHARD_K = 0.6;
 
 /** The lantern's radius at height `h` (0 at its foot to LANTERN_H at its top): a round paper lantern,
  *  pinched at both ends where the rims are. */
@@ -85,6 +87,7 @@ function wardMaterial(): ShaderMaterial {
       varying vec4 vWard;
       varying float vSeed;
       varying float vFace;
+      varying float vDist;
       void main() {
         vUv = uv;
         vWard = aWard;
@@ -92,6 +95,7 @@ function wardMaterial(): ShaderMaterial {
         vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
         vec3 n = normalize(mat3(modelMatrix * instanceMatrix) * vec3(0.0, 0.0, 1.0));
         vFace = abs(dot(n, normalize(cameraPosition - wp.xyz)));
+        vDist = distance(cameraPosition, wp.xyz);
         gl_Position = projectionMatrix * viewMatrix * wp;
       }
     `,
@@ -103,9 +107,12 @@ function wardMaterial(): ShaderMaterial {
       varying vec4 vWard;
       varying float vSeed;
       varying float vFace;
+      varying float vDist;
       float h1(float x) { return fract(sin(x * 91.17) * 43758.5453); }
       void main() {
-        float alpha = vWard.x;
+        // (Round 8's review: a shard flying past the lens was a flat card of marigold a fifth of the frame wide. Broken
+        // free, it thins out inside 5 m of the lens and is gone by 2.5 m.)
+        float alpha = vWard.x * (vWard.y > 0.5 && vWard.w < 0.5 ? smoothstep(2.5, 5.0, vDist) : 1.0);
         float crack = vWard.y;
         float heat = vWard.z;
         vec2 q = vUv - 0.5;
@@ -272,7 +279,8 @@ export class WardFx {
         sh.q.premultiply(this.q.setFromAxisAngle(sh.axis, sh.spin * dt));
         const left = Math.max(0, sh.life);
         const fade = Math.min(1, left / 0.4);
-        const shrink = 0.7 + 0.3 * fade;
+        // (Round 8's review: broken, a panel is a few flakes of it, not the whole panel flying as one card.)
+        const shrink = (0.7 + 0.3 * fade) * SHARD_K;
         this.m.compose(sh.p, sh.q, this.s.set(sh.w * shrink, sh.h * shrink, 1));
         this.mesh.setMatrixAt(n, this.m);
         const heat = Math.max(0, 1 - since / 0.6);

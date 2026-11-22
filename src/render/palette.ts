@@ -1182,6 +1182,9 @@ function round7(p: Palette, biome: BiomeId): void {
     case 'glacier':
       p.air = { far: c('#27469C'), cool: c('#D8E2FF'), low: 0.5, scatter: 1.25 };
       p.lamps = 0.6;
+      // (Round 8's review: Low's pools in Fang Town and Station Street read as hard white ovals on the pale snow; the
+      // pool is a paler, warmer step of the snow it lies on, kept under white. Low only.)
+      p.poolSoft = 0.8;
       p.grade.exposure = 1.05;
       p.grade.hi = c('#FFF8E4');
       p.grade.lo = c('#DCE4FF');
@@ -1558,7 +1561,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.bloom = 0.7;
         p.giftGlow = 0.6;
         p.ghostGlow = 1.7;
-        p.lanternGlow = 0.55;
+        // (Round 8's review: at 0.55 a landing's veil of powder inside the sled lantern's light went to one milky
+        // sheet over the lower frame, the rider's feet lost in it.)
+        p.lanternGlow = 0.4;
         p.lamps = 1;
         p.grade.exposure = 1.1;
         p.grade.contrast = 1.14;
@@ -1580,7 +1585,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.snowLit = c('#93ACE2');
         p.aurora = 1.3;
         p.key2.k = 0.7;
-        p.lanternGlow = 0.6;
+        p.lanternGlow = 0.42;
       },
     },
     {
@@ -1591,7 +1596,10 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       from: 3291, at: 3451, dusk: 1,
       edit: (p) => {
         setSun(p, 30, 3.6, 20, 9);
-        p.sunColor = c('#FFC8A4');
+        // (Round 8's review: the dawn's snow still read lilac-grey with one warm patch, never rose-gold. The light is
+        // a step more gold, the lit snow and the rim with it, and the air a touch rosier. A warm bounce under the coat
+        // went to the grudge's rose, tests/lift.test.ts.)
+        p.sunColor = c('#FFBE90');
         p.sunCore.setRGB(2.9, 2.1, 1.5);
         p.sunDisc = 1;
         p.sunGlow = 1.2;
@@ -1605,14 +1613,14 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyBand.k = 1;
         p.skyBelow = c('#B88EB4');
         // (Round 7's review: rose-gold, not lilac: the lit snow takes the sun's warmth.)
-        p.snowLit = c('#FFD8C4');
+        p.snowLit = c('#FFD2B2');
         // (Round 7's review: Fang Town sank into a lilac haze, the middle plane and the Fang lost in it. The
         // shade is a deeper violet and the air clearer, so the lit snow, the long shadows and the far range
         // stand in three planes.)
         p.snowShade = c('#4E54B2');
         p.snowDeep = c('#242C88');
-        p.rim = c('#FFD2B4');
-        p.fog = c('#8E84C2');
+        p.rim = c('#FFC89C');
+        p.fog = c('#9A86BE');
         p.fogFar = 620;
         p.hemiSky = c('#8A98DC');
         p.air.far = c('#7064B6');
@@ -1627,12 +1635,14 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.massif.glowLine = -40;
         p.aurora = 0.12;
         p.stars = 0.15;
-        p.atmo.rays = 1;
-        p.grade.shafts = 1;
+        // (Round 8's review: at full strength the sun's shafts laid radial streaks over the whole lower third, on the
+        // near snow, where ART.md 12 keeps them in the air.)
+        p.atmo.rays = 0.8;
+        p.grade.shafts = 0.7;
         p.grade.gain = c('#FFF4EE');
         p.grade.exposure = 1.04;
         p.grade.contrast = 1.08;
-        p.grade.hi = c('#FFE6D2');
+        p.grade.hi = c('#FFE0C2');
         p.grade.lo = c('#E0D8FF');
         p.bloom = 0.6;
         p.giftGlow = 0.3;
@@ -2921,7 +2931,9 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.grade.lo = c('#D6DCFF');
         p.lanternGlow = 0.7;
         p.bloom = 0.9;
-        lamps(p, 1.35);
+        // (Round 8's review: at 1.35 the gates' lanterns laid one amber floor down the cavern, a gold floor with no
+        // cobalt between; at 1 each is a pool in the dark.)
+        lamps(p, 1);
         // (Round 8: the cavern's lanterns stand in a glow of their own light; the ice holds it.)
         p.lampAir = 0.2;
         // (The visual lift: the floor under the roof is dark, so it bounces little, and that cold.)
