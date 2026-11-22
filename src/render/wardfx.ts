@@ -13,6 +13,8 @@ import { ghostStencil } from './materials';
 const MARIGOLD = new Color('#FFD34D');
 const WHITE_GOLD = new Color('#FFF3C4');
 const CREAM = new Color('#FFF1D6');
+/** A broken shard's torn edge: the deep marigold a set piece's marks take (ART.md 14). */
+const AMBER = new Color('#FF9E1A');
 
 /** The lantern round the seated rider: its height, its widest radius and how far over the sled it starts. */
 // (Round 8, the events lane: a size larger, so from the chase lens behind the rider the lantern stands out past
@@ -77,6 +79,7 @@ function wardMaterial(): ShaderMaterial {
       uMarigold: { value: MARIGOLD.clone() },
       uWhiteGold: { value: WHITE_GOLD.clone() },
       uCream: { value: CREAM.clone() },
+      uAmber: { value: AMBER.clone() },
     },
     vertexShader: /* glsl */ `
       attribute vec4 aWard;
@@ -85,6 +88,7 @@ function wardMaterial(): ShaderMaterial {
       varying vec4 vWard;
       varying float vSeed;
       varying float vFace;
+      varying float vNear;
       void main() {
         vUv = uv;
         vWard = aWard;
@@ -92,6 +96,8 @@ function wardMaterial(): ShaderMaterial {
         vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
         vec3 n = normalize(mat3(modelMatrix * instanceMatrix) * vec3(0.0, 0.0, 1.0));
         vFace = abs(dot(n, normalize(cameraPosition - wp.xyz)));
+        // (A shard that flies up past the lens goes before it can fill the frame's top as a flat card.)
+        vNear = smoothstep(1.6, 4.2, distance(cameraPosition, wp.xyz));
         gl_Position = projectionMatrix * viewMatrix * wp;
       }
     `,
@@ -99,10 +105,12 @@ function wardMaterial(): ShaderMaterial {
       uniform vec3 uMarigold;
       uniform vec3 uWhiteGold;
       uniform vec3 uCream;
+      uniform vec3 uAmber;
       varying vec2 vUv;
       varying vec4 vWard;
       varying float vSeed;
       varying float vFace;
+      varying float vNear;
       float h1(float x) { return fract(sin(x * 91.17) * 43758.5453); }
       void main() {
         float alpha = vWard.x;
@@ -140,7 +148,10 @@ function wardMaterial(): ShaderMaterial {
         // Broken free, a shard is a solid flake of the lantern's marigold, so it reads on white snow.
         // (Round 8: a shard keeps more of the lit paper and burns longer, so the larger lantern breaks into light,
         // not flat yellow card.)
-        paper = mix(paper, uMarigold, 0.35 * crack);
+        // (Round 8, the review: broken free, a shard is lit paper, not card: a pale heart that deepens to amber at
+        // its torn edges, so fifty flakes of one flat marigold no longer read as cut-out yellow quads at night.)
+        float torn = smoothstep(0.0, 0.16, min(-d1, -d2));
+        paper = mix(paper, mix(uAmber * 0.85, mix(uMarigold, uCream, 0.3), torn * (0.55 + 0.45 * g)), crack);
         // The cracks burn white-gold along the cut lines before it breaks; a shard runs hot, then cools.
         float lines = (1.0 - smoothstep(0.0, 0.035, abs(d1))) + (1.0 - smoothstep(0.0, 0.035, abs(d2)));
         // (Under the bloom's knee but for the cracks' hottest frames: a whole lantern of light past it bloomed over
@@ -148,7 +159,7 @@ function wardMaterial(): ShaderMaterial {
         vec3 glow = uWhiteGold * (lines * heat * 1.25 * (1.0 - crack) + heat * 0.6 * crack);
         // A paper lantern is densest at its rims, where the eye looks through more of it; face on it stays
         // thin, so it never turns into a wall between the lens and the rider.
-        float a = alpha * mix(0.34 + 0.22 * g + 0.3 * (1.0 - vFace), 0.62, crack);
+        float a = alpha * mix(0.34 + 0.22 * g + 0.3 * (1.0 - vFace), 0.62 * vNear, crack);
         gl_FragColor = vec4(linearToOutputTexel(vec4(paper, 1.0)).rgb * a + linearToOutputTexel(vec4(glow, 1.0)).rgb * alpha, a);
       }
     `,
@@ -299,7 +310,8 @@ export class WardFx {
   private breakOpen(base: Vector3): void {
     this.broken = true;
     this.ringAt.copy(base).setY(base.y + 0.25);
-    for (const sh of this.shards) {
+    for (let i = 0; i < this.shards.length; i++) {
+      const sh = this.shards[i];
       sh.p.copy(sh.rest).add(this.anchor);
       sh.q.copy(sh.restQ);
       // Out to the sides and up, where the lens behind the rider sees them (round 8): what flew straight back was
@@ -311,7 +323,10 @@ export class WardFx {
       sh.v.y += 2.2 + Math.random() * 3.2;
       sh.axis.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
       sh.spin = (this.reduced ? 3 : 7) + Math.random() * 8;
-      sh.life = 0.85 + Math.random() * 0.5;
+      // (Round 8, the review: every other panel flies and the rest are spent in the break's light, and they burn
+      // out sooner: fifty cards over the rider for over a second read as a swarm of yellow quads, not a lantern
+      // broken open.)
+      sh.life = i % 2 === 0 ? 0.6 + Math.random() * 0.35 : 0;
     }
   }
 
