@@ -191,3 +191,47 @@ below the horizon. The rest moved by about the half point a fresh critic moves a
 - Tried and dropped: Fang Town's pools as warm lifts of the snow (`poolSilver` in the finish place) to answer Low's white
   ovals; the hours lane's test keeps silver pools to Lanternfall, and the ovals are left for the main lane (Low's painted
   pool steps are shared).
+
+## Pass 4 (`f92758f`)
+
+Console clean on every set. (Its first critic was cut off by a usage limit; a fresh one judged the same frames.)
+
+| Group | Mean | Min |
+| --- | --- | --- |
+| High (35) | 6.83 | 5.0 (3304) |
+| Low (35) | 6.21 | 5.0 (2250, 3304) |
+| Phone, Medium (35) | 6.33 | 4.5 (3000) |
+| Strips (6) | 6.58 | 5.5 (1230) |
+
+High: 150 7, 300 6.5, 450 7, 595 7, 750 6.5, 900 7.5, 975 6.5, 1045 6.5, 1195 6, 1343 7.5, 1500 7, 1550 6.5, 1650 7,
+1800 6, 1917 6, 2137 7.5, 2250 5.5, 2297 7.5, 2405 6, 2548 6, 2700 7.5, 2783 7.5, 2850 6.5, 3000 7, 3154 6, 3304 5,
+3418 6.5, 3549 7.5, 3600 8, 3750 8, 3940 7.5, 4050 7.5, 4200 7.5, 4330 7, 4440 7.
+
+Low: 150 6, 300 6.5, 450 6.5, 595 6.5, 750 6, 900 6.5, 975 6, 1045 6.5, 1195 6, 1343 6, 1500 6, 1550 6.5, 1650 6.5,
+1800 5.5, 1917 5.5, 2137 6.5, 2250 5, 2297 6.5, 2405 5.5, 2548 6.5, 2700 6.5, 2783 6.5, 2850 5.5, 3000 6.5, 3154 6.5,
+3304 5, 3418 6, 3549 6.5, 3600 7, 3750 7, 3940 6.5, 4050 6.5, 4200 6.5, 4330 6, 4440 6.5.
+
+Phone: 150 6.5, 300 6, 450 7, 595 6.5, 750 6, 900 6.5, 975 6.5, 1045 6, 1195 6.5, 1343 6.5, 1500 6.5, 1550 6.5, 1650 7,
+1800 5.5, 1917 6, 2137 7, 2250 5.5, 2297 7, 2405 6, 2548 5.5, 2700 6.5, 2783 6.5, 2850 6, 3000 4.5, 3154 5.5, 3304 6.5,
+3418 6, 3549 7, 3600 6.5, 3750 7, 3940 6.5, 4050 6.5, 4200 6.5, 4330 6.5, 4440 7.
+
+Strips: 200 7, 1230 5.5, 2300 6.5, 2650 6.5, 3400 7, 3880 7.
+
+Hero vistas (none a 9): the opening 7 (150, strip 200); the span 7.5 (1343); the aurora 7.5 (2700, 2137, 2297, 2783);
+the cavern mouth not in any frame (3549 7.5 just out of it, the bridge at 3600 8, the best on the mountain); the Fang at
+dawn 7.5 at its own hero frame (4050, was 5.5: the halved depth of field reads now, though "the Fang and the town melt to
+one lilac value").
+
+Against pass 3: the walls back to pass 2's held (900 7 to 7.5, 2137 6.5 to 7.5, 1195 6); 4050 rose two points; 3304
+fell to 5 (the pool rider standing at the lens in front of the cavern's entrance: the same tick every pass, this critic
+named it worst). No critic named shafts on the near snow this pass; it named the radial streaks on the phone's lower half
+and "milky" night frames (1800, 2548, 3154: the dash's glow and the landing's veil blooming), the dawn's snow still mauve
+at 3549 (the cavern's violet lets go over 85 m and still lay on the bridge 26 m past the mouth), and a flat lilac panel
+past the last leap's lip (3750, 3940: the landing below the lip, seen from above in one value).
+
+### After pass 4
+
+- **The cavern lets go over 62 m** (was 85; the places' blend test, no step over 0.2 between neighbouring metres, allows no
+  less), so the dawn is the dawn on the bridge out of the mouth and not the cavern's violet. A place that lets go faster
+  than a roof steps the re-blend stamp finer (`laidPlaces`, shared, only where a place sets `fall` under 75: this one).
+- **The night's bloom at 0.5** (was 0.7, Frostfang's polar night and the deep night after it).

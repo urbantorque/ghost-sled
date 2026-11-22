@@ -1559,7 +1559,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.aurora = 1.7;
         p.stars = 1;
         p.massif.flow = 1;
-        p.bloom = 0.7;
+        // (Round 8's review: at 0.7 a dash's glow and a landing's veil bloomed to a milky haze over the lower frame and
+        // the rider in the night's frames; the aurora and the lights still bloom at 0.5.)
+        p.bloom = 0.5;
         p.giftGlow = 0.6;
         p.ghostGlow = 1.7;
         // (Round 8's review: at 0.55 a landing's veil of powder inside the sled lantern's light went to one milky
@@ -2907,7 +2909,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // The Ice Cavern: near-black cobalt. The only light is what the cavern holds.
       kind: 'tunnel',
       // (Night to full dawn is the widest step in the game: it takes ten metres more than a roof's 75.)
-      fall: 85,
+      // (Round 8's review: over 85 m the cavern's violet still lay on the bridge out of its mouth, 26 m past it, and
+      // the dawn's snow read mauve-grey there in every pass; it lets go over 62, the fastest the places' blend test
+      // allows, under two seconds at speed.)
+      fall: 62,
       edit: (p) => {
         // (Round 7's review: the hour outside is the dawn by the cavern's middle, so the far mouth is a
         // blade of rose gold in the dark. Inside, the sun's own light is held down to a dim violet and
@@ -3357,7 +3362,9 @@ function laidPlaces(course: Course): LaidPlace[] {
       // A roof closes over quickly and lets go quickly (the burst out of a cavern is under two seconds);
       // an open place comes in over its section's own blend.
       const roof = sec.kind === 'tunnel';
-      laid.push({ z0: sec.z0 + (roof ? sec.blend * 0.5 : 0), z1: sec.z1 - (pl.ends ?? 0), rise: roof ? Math.max(30, sec.blend * 0.5) : Math.max(40, sec.blend), fall: pl.fall ?? (roof ? 75 : 90), pal });
+      // (A place that lets go faster than a roof steps the stamp finer, so the world re-blends as often as its light
+      // moves: Frostfang's cavern, round 8's review.)
+      laid.push({ z0: sec.z0 + (roof ? sec.blend * 0.5 : 0), z1: sec.z1 - (pl.ends ?? 0), rise: roof ? Math.max(30, sec.blend * 0.5) : Math.max(40, sec.blend), fall: pl.fall ?? (roof ? 75 : 90), pal, steps: pl.fall !== undefined && pl.fall < 75 ? 160 : undefined });
       break;
     }
     if (sec.kind === 'finish') break;
