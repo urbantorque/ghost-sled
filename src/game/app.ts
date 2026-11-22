@@ -349,7 +349,7 @@ export class App {
     this.mountain = this.savedMountain();
     if (DEV_ON && DEV.has('m')) this.mountain = MOUNTAINS[Number(DEV.get('m'))] ?? this.mountain;
     this.daily = dailyMountain(dailyKey(new Date()));
-    this.cup = cupMountain(weekKey(new Date()));
+    this.cup = cupMountain(this.trialWeek());
     this.trial = trialFor(this.trialWeek());
     // (The hours lane: the world's first light is the hour picked for the mountain it opens on.)
     setHour(this.hourPicked() ? 'alt' : 'day');
@@ -490,7 +490,7 @@ export class App {
 
   // ---------------------------------------------------------------- the trials lane: the week's Trial
 
-  /** The week the Trial is (dev: `?debug&week=2026-W50` rides another week's, for captures and play-tests). */
+  /** This week (dev: `?debug&week=2026-W50` rides another week's Cup and Trial, for captures and play-tests). */
   private trialWeek(): string {
     const w = DEV_ON ? DEV.get('week') : null;
     return w && /^\d{4}-W\d{2}$/.test(w) ? w : weekKey(new Date());
@@ -634,7 +634,7 @@ export class App {
     this.dailyReady = false;
     if (wasDaily) this.mountain = this.savedMountain();
     // A new day can be a new week.
-    const week = cupMountain(weekKey(new Date()));
+    const week = cupMountain(this.trialWeek());
     if (week.tagline !== this.cup.tagline) {
       if (this.mountain === this.cup) this.mountain = this.savedMountain();
       this.cup = week;
