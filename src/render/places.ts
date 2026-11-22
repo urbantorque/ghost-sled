@@ -385,7 +385,10 @@ function finishArch(ctx: SiteCtx, rail: Rail, F: number): BufferGeometry[] {
   }
   // The board.
   const W = 2 * X + 3.4;
-  parts.push(box(W, B, 1.5, CREAM, [0, H + B / 2, 0]));
+  // (Round 8, the review loop: Lanternfall's board a lilac paper a step under cream: in the lit great lantern's light
+  // its back hung over the results as a flat, blown cream slab.)
+  const boardC = ctx.biome === 'lantern' ? C('#CEC2E2') : CREAM;
+  parts.push(box(W, B, 1.5, boardC, [0, H + B / 2, 0]));
   parts.push(box(W + 0.3, 0.5, 1.8, towerC, [0, H + 0.1, 0]));
   parts.push(box(W + 0.3, 0.5, 1.8, towerC, [0, H + B + 0.05, 0]));
   if (blossom) {
@@ -404,8 +407,8 @@ function finishArch(ctx: SiteCtx, rail: Rail, F: number): BufferGeometry[] {
   for (const z of [0.78, -0.78]) {
     for (let i = 0; i < n; i++) {
       const x = -W / 2 + (i + 0.5) * (W / n);
-      parts.push(box(W / n, 0.72, 0.06, (i & 1) === 0 ? INK : CREAM, [x, H + 0.74, z]));
-      parts.push(box(W / n, 0.72, 0.06, (i & 1) === 1 ? INK : CREAM, [x, H + B - 0.54, z]));
+      parts.push(box(W / n, 0.72, 0.06, (i & 1) === 0 ? INK : boardC, [x, H + 0.74, z]));
+      parts.push(box(W / n, 0.72, 0.06, (i & 1) === 1 ? INK : boardC, [x, H + B - 0.54, z]));
     }
   }
   parts.push(...letters('FINISH', H + 1.42, 0.86, 0.46, INK));
