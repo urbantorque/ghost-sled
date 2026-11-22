@@ -3888,3 +3888,62 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
       body in one draw on Low (a build drawing no far ghost at all was no cheaper within the noise, so merging their
       glass could not reach the bar); fewer ghosts in glass on Low (the field in glass is the round's design); a cheaper
       HUD (nothing in it writes when unchanged).
+
+383. **Milestone 4's critic loop: five mountains, five passes each, no frame a 9; what each pass fixed was not named
+    again** (`notes/r8-rev0.md` to `notes/r8-rev4.md`, one review lane a mountain; per-frame scores in
+    `notes/r8-rev0-scores.json`, `notes/r8-rev2-scores.json` and the lanes' notes; frames under `shots/r8/review/m0/`
+    to `m4/`). Each pass shot the mountain's fixed frames as stills on High (1280x720), Low and a phone on Medium, plus
+    strips in motion, and a fresh critic (Opus at high effort, told only ART.md and the frames, the same words every
+    pass) scored them; the lane fixed what was named, `tsc` and the full vitest green, then the next pass.
+    - *The scores,* High's mean (its lowest frame) pass 1 to pass 5, Low's and the phone's means, the strips, and the best
+      frame:
+
+      | Mountain | High | Low | Phone | Strips | Best frames |
+      | --- | --- | --- | --- | --- | --- |
+      | Pinecrest | 7.28 (6) to 7.20 (5), 7.57 at pass 3 | 6.27 to 6.42 | 6.28 to 6.35 | 7.25 to 6.88 | 8.5 (2700, 4050, 4330 m) |
+      | Frostfang | 6.60 (4.5) to 6.94 (5.5) | 6.20 to 6.27 | 6.50 to 6.37 | 6.80 to 6.50 | 8 (the dawn span, 3600 m) |
+      | Ember | 7.00 (5) to 6.96 (6) | 6.56 to 6.21 | 6.65 to 6.49 | 6.90 to 6.58 | 8 (the Caldera's lake, 2441 m) |
+      | Sakura | 6.76 (5.5) to 6.67 (5), 7.08 at pass 3 | 6.15 to 5.96 | 6.26 to 6.42 | 6.38 to 6.75 | 8 (the pagoda) |
+      | Lanternfall | 6.72 (5.5) to 6.56 (5.8), 7.08 at pass 4 | 6.32 to 5.98 | 6.49 to 6.18 | 5.93 to 6.22 | 8 (the break) |
+
+      The stopping rule (no frame under 8, every hero vista 9) was met nowhere. A new critic moved frames nothing had
+      touched by up to a point and a half (Ember's 993 m: 7.5, 7.5, 7, 5.5, 7), and passes 4 and 5 were the harshest on
+      every mountain, so a pass's mean is a band, not a measure; what moved for certain is that each fault a critic
+      named stopped being named once fixed, and the worst frames rose (Frostfang's minimum 4.5 to 5.5, Ember's 5 to 6).
+      Against round 7's last pass (342: 6.55, 6.69, 6.97, 7.38, 6.49 on High), with other critics at another effort,
+      the comparison is loose.
+    - *What a player sees, every mountain:* a flipped saucer or tray shows the snow's light on its underside with a
+      vermillion band round the rim (fading as it turns edge-on), not an ink disc over the rider; ice under a warm sky
+      keeps a cool tint; no shaft light in the first 10 m of air, and the composite's screen-space shafts under the
+      horizon at a tenth (the near-snow streaks every critic named); props, lanterns and street crowds at the lens solid
+      then gone, never milky or a checkerboard (a lantern over the lens gone by 8.2 m, a bell by the snow 4.8 m); a
+      ward breaks into torn paper flakes that fade near the lens; a tunnel's colour holds only a sled under its roof;
+      the hero frame's depth of field at half; a garland never drawn from an arch already passed; a fork's ice edges
+      at half the light.
+    - *What a player sees, a mountain at a time:* Pinecrest's gold without its orange cloud crown, amber pools in Old
+      Town and on the covered bridge, the lip's outcrops in dipping beds; Frostfang's crevasse walls as cut shards of
+      ice, the aurora in curtains, the cavern's gates pools in the dark and the dawn on the bridge straight out of the
+      mouth; Ember's Caldera a lake of lava with a groomed landing, a cold dark lane for the fork's ice, snow in
+      firelight not sand, organ pipes along the opening's crest; Sakura's townhouses of paper screens under ink pent
+      roofs, soft middle-value shadows, marigold stair lanterns, wine stone, a calmer lens and fewer petals;
+      Lanternfall's break opening where the colour script puts it (the sim batch had moved the lip and it was ridden
+      blind), the great lantern in the results' top third, paper lanterns in the valley, its buildings lit paper and
+      coursed stone.
+    - *Cost.* No draw, program, pass or uniform array on any tier, nothing before the first frame; triangles +1 to +3%
+      (outcrops' beds, organ pipes, the tray's rings); Low's GL calls level with each lane's base on every mountain.
+    - *At the merges.* Pinecrest and Sakura both changed the flipped hull: one change kept (rev0's, softened after
+      Sakura's critic read the band as a red target disc). Frostfang's shafts (8 to 30 m) and Pinecrest's (none in 10 m)
+      are one: Pinecrest's. Frostfang's overhead lanterns (dithered, 4.4 to 8.2 m by height) and Pinecrest's (solid,
+      4.8 m) are one: solid then gone at 4.8 to 8.2 m by height. The ward's two near fades are both kept on one varying.
+      Ember's cold glaze lies after Pinecrest's warm-sky tint. Two small fixes by the main lane: a dash's after-images
+      by day at most 0.6 of their strength (on bright snow they read as pale copies of the tray and rider trailing down
+      the frame, Sakura's critics; Lanternfall's night floor of 0.35 holds), and the cairn "Cinder Rest", an Ember name
+      on Lanternfall, renamed in place to Pale Rest.
+    - *Still short, all shared, the biggest lifts left for a later round:* the lens through a leap's lip for a slow
+      rider (pale shards over a black gap, any leap); a flip read as a fall from behind; the opening and First Drop from
+      the high big-air lens, and the rider a speck over the biggest leaps (camera framing); ghosts hanging in the sky
+      or at the lens (the pool riders' own positions; the sim is closed); the kilometre arch's beam across the lens;
+      the phone's portrait framing with its lower third empty; walls that want geometry, not paint (Frostfang's span
+      and crevasse, Lanternfall's Cloud Sea, Ember's slots, Sakura's terraces); props that still read as boxes. No
+      fixed frame shows Frostfang's cavern mouth or Lanternfall's canal of lights, and The Great Rising cannot be told
+      from a plain run.
