@@ -10,6 +10,8 @@ import { ReelCam } from '../render/reelcam';
 import { resetCine } from '../render/cine';
 import { ReelUi } from '../ui/reelui';
 import { reelCard, reelKicker } from '../ui/reelcopy';
+import { clipCut } from './clip';
+import type { ClipLook } from './cliptake';
 
 // The reel as it plays (round 7): this file, the reel's lenses and its cards are one lazy chunk, loaded
 // the first time a player asks to watch a run. It scans the record a slice a frame under an opening
@@ -67,8 +69,23 @@ export interface ReelHost {
   rank: number | null;
   /** Sends the reel as a link (absent: no Share button). */
   share?: () => void;
+  /** Round 8, G11: the reel plays to be saved as a clip (absent: it is only watched). */
+  clip?: ReelClip;
   /** The reel has ended or been skipped: the app takes the picture back. */
   done(): void;
+}
+
+/** A reel played into a clip (game/cliptake.ts through the app). The clip is the reel's best shots (clip.ts clipCut);
+ *  the reel says what it shows over the picture each frame, starts the recording at its first cut, and ends it after
+ *  its last frame, or drops it when the player cancels. */
+export interface ReelClip {
+  look: ClipLook;
+  /** The first cut: false where the browser will not record (the reel then ends, and the app says so). */
+  start(): boolean;
+  /** The last frame is in. */
+  end(): void;
+  /** The player cancelled (Cancel, or Escape). */
+  cancel(): void;
 }
 
 /** Ticks of the record scanned or run on in one frame, and the wall time a frame may spend on it (ms). */
@@ -92,6 +109,9 @@ const OPEN_S = 0.9;
 /** The slow frame at a leap's apex: the reel's own clock eases to this, over these seconds round the apex. */
 const SLOW_RATE = 0.28;
 const SLOW_SPAN = 0.42;
+/** The last frame's hold (s): a clip's is longer, for the run's card to be read. */
+const END_S = 1.1;
+const CLIP_END_S = 1.8;
 
 type Stage = 'scan' | 'seek' | 'play' | 'end';
 
@@ -116,11 +136,12 @@ export class ReelShow {
     this.ui = new ReelUi(host.root, {
       onPause: () => this.setPaused(!this.paused),
       onReplay: () => this.replay(),
-      onSkip: () => this.finish(),
-      onShare: host.share,
+      onSkip: () => this.finish(false),
+      onShare: host.clip ? undefined : host.share,
       sound: host.click,
+      recording: !!host.clip,
     });
-    this.ui.say('Your run, directed', 'Cutting the reel…');
+    this.ui.say(host.clip ? 'Your run, as a clip' : 'Your run, directed', host.clip ? 'Cutting the clip…' : 'Cutting the reel…');
     this.ui.cut(true);
     host.world.beginRun(this.player.view, host.record.chaos.event, host.record.sled);
     host.world.lens = this.cam.frame;
@@ -141,37 +162,52 @@ export class ReelShow {
   private lined = false;
 
   setPaused(on: boolean): void {
+    // (A clip records the reel as it plays: it has no pause of its own; the game's pause holds the recording.)
+    if (this.host.clip) return;
     this.paused = on;
     this.ui.paused(on);
   }
 
   /** From the top: the record runs again from its first tick. */
   replay(): void {
-    if (this.stage === 'scan' || this.over) return;
+    if (this.stage === 'scan' || this.over || this.host.clip) return;
     this.setPaused(false);
     this.i = 0;
     this.begin();
   }
 
-  private finish(): void {
+  /** The clip's recording has started (at the first cut). */
+  private rolling = false;
+
+  /** The reel is over: played to its end (`whole`) or skipped. A clip played whole is saved, one skipped is dropped. */
+  private finish(whole: boolean): void {
     if (this.over) return;
     this.over = true;
     this.host.world.lens = null;
     resetCine();
     this.ui.dispose();
+    const clip = this.host.clip;
+    if (clip) {
+      if (whole && this.rolling) clip.end();
+      else clip.cancel();
+    }
     this.host.done();
   }
 
   /** Sets the next shot up: its card over the dip, and the record running on to its first tick. */
   private begin(): void {
     const s = this.shots[this.i];
-    if (!s) return this.finish();
+    if (!s) return this.finish(true);
     this.stage = 'seek';
     this.lined = false;
     this.wait = CARD_S;
     this.ui.cut(true);
-    this.ui.say(reelKicker(s), reelCard(s));
+    const kicker = reelKicker(s);
+    const line = reelCard(s);
+    this.ui.say(kicker, line);
     this.ui.progress(this.i, 0);
+    const look = this.host.clip?.look;
+    if (look) Object.assign(look, { dip: true, kicker, line, cardT: 0, shotT: -1, endT: -1 });
   }
 
   /** One frame. The app calls it in place of its own run frame while the reel is up. */
@@ -190,7 +226,9 @@ export class ReelShow {
         const scan = sc.result();
         this.scanner = null;
         const bar = host.bar();
-        this.shots = cutOnBars(planReel(scan), bar ? Math.round(bar * 60) : 0);
+        // (A clip keeps the reel's best shots, a short cut a phone can share: clip.ts clipCut.)
+        const plan = planReel(scan);
+        this.shots = cutOnBars(host.clip ? clipCut(plan) : plan, bar ? Math.round(bar * 60) : 0);
         for (const s of this.shots) if (s.kind === 'finish' && host.rank) s.rank = host.rank;
         this.ui.setShots(this.shots.map((s) => s.t1 - s.t0));
         this.i = 0;
@@ -198,8 +236,11 @@ export class ReelShow {
       }
       return;
     }
+    const look = host.clip?.look;
+    if (this.stage === 'end') return this.hold(dt);
     const s = this.shots[this.i];
-    if (!s) return this.finish();
+    if (!s) return this.finish(true);
+    if (look) look.cardT += this.paused ? 0 : dt;
     if (this.stage === 'seek') {
       if (!this.paused) this.wait -= dt;
       const t0 = performance.now();
@@ -216,6 +257,16 @@ export class ReelShow {
         this.cam.cut();
         this.stage = 'play';
         this.ui.cut(false);
+        if (look) {
+          look.dip = false;
+          look.shotT = 0;
+        }
+        // A clip starts recording on its first cut, so it opens on the picture, not on ink.
+        if (host.clip && !this.rolling) {
+          if (!host.clip.start()) return this.finish(false);
+          this.rolling = true;
+          this.ui.recording('on');
+        }
       }
       this.lensFor(s, 1);
       this.draw(0, this.none);
@@ -236,21 +287,29 @@ export class ReelShow {
       this.draw(step, this.paused ? this.none : this.player.events);
       if (!this.paused) host.sound(this.player.sim, this.player.events, step);
       this.ui.progress(this.i, (this.player.drawn - s.t0) / Math.max(1, s.t1 - s.t0));
+      if (look) look.shotT += dt;
       if (!more || this.player.drawn >= s.t1) {
         this.i++;
         if (this.i >= this.shots.length) {
-          // The last frame holds a moment, then the results come back.
+          // The last frame holds a moment, then the results come back (a clip's a little longer, under the run's card).
           this.stage = 'end';
-          this.wait = 1.1;
+          this.wait = host.clip ? CLIP_END_S : END_S;
+          if (look) look.endT = 0;
         } else this.begin();
       }
       return;
     }
-    // The end: the last frame held.
+  }
+
+  /** The end: the last frame held. (Round 8: it was reached only past the last shot, where the frame's first look
+   *  for a shot ended the reel at once; it now holds, as it says, and a clip's last second carries the run's card.) */
+  private hold(dt: number): void {
+    const look = this.host.clip?.look;
     this.wait -= this.paused ? 0 : dt;
+    if (look) look.endT += this.paused ? 0 : dt;
     this.lensFor(this.shots[this.shots.length - 1], 1);
     this.draw(0, this.none);
-    if (this.wait <= 0) this.finish();
+    if (this.wait <= 0) this.finish(true);
   }
 
   private lensFor(s: ReelShot, rate: number): void {

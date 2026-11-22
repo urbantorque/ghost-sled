@@ -14,6 +14,9 @@ export interface ReelUiHandlers {
   /** Absent: no Share button (a friend's reel, or nowhere to send a link). */
   onShare?: () => void;
   sound(kind: 'tap' | 'back'): void;
+  /** Round 8, G11: the reel plays to be saved as a clip. Its controls are what it is doing and Cancel (Skip's place
+   *  and Escape): a clip has no pause and no watch-again of its own. */
+  recording?: boolean;
 }
 
 export class ReelUi {
@@ -23,6 +26,7 @@ export class ReelUi {
   private readonly line: HTMLElement;
   private readonly bar: HTMLElement;
   private readonly pauseBtn: HTMLButtonElement;
+  private readonly recEl: HTMLElement | null;
   private fills: HTMLElement[] = [];
   private filled: number[] = [];
   private readonly onKey: (e: KeyboardEvent) => void;
@@ -43,8 +47,15 @@ export class ReelUi {
     this.card = h('div', 'gs-film-card', this.kicker, this.line);
     this.card.setAttribute('aria-live', 'polite');
     this.pauseBtn = b('pause', 'Pause', null, 'tap', hd.onPause);
-    const skip = b('close', 'Skip', 'Skip', 'back', hd.onSkip);
-    const ctl = h('div', 'gs-film-ctl', this.pauseBtn, b('back', 'Watch again', null, 'tap', hd.onReplay), hd.onShare ? b('link', 'Share', 'Share', 'tap', hd.onShare) : null, skip);
+    const rec = !!hd.recording;
+    const skip = b('close', rec ? 'Cancel' : 'Skip', rec ? 'Cancel' : 'Skip', 'back', hd.onSkip);
+    // (A clip: a quiet chip says what it is doing, the dot vermillion once it records; Cancel drops it.)
+    this.recEl = rec ? h('span', 'gs-film-rec', h('i', 'gs-film-rec-dot'), h('span', 'gs-film-rec-t', 'Getting Ready…')) : null;
+    this.recEl?.setAttribute('role', 'status');
+    this.recEl?.firstElementChild?.setAttribute('aria-hidden', 'true');
+    const ctl = rec
+      ? h('div', 'gs-film-ctl', this.recEl, skip)
+      : h('div', 'gs-film-ctl', this.pauseBtn, b('back', 'Watch again', null, 'tap', hd.onReplay), hd.onShare ? b('link', 'Share', 'Share', 'tap', hd.onShare) : null, skip);
     this.bar = h('div', 'gs-film-bar');
     this.bar.setAttribute('aria-hidden', 'true');
     this.el = h('section', 'gs-film', h('div', 'gs-film-dip'), this.bar, h('div', 'gs-film-foot', this.card, ctl));
@@ -55,7 +66,7 @@ export class ReelUi {
       if (e.key === 'Escape') {
         e.preventDefault();
         hd.onSkip();
-      } else if ((e.key === ' ' || e.key === 'k') && !(e.target instanceof HTMLButtonElement)) {
+      } else if (!rec && (e.key === ' ' || e.key === 'k') && !(e.target instanceof HTMLButtonElement)) {
         e.preventDefault();
         hd.onPause();
       }
@@ -97,6 +108,15 @@ export class ReelUi {
       this.filled[j] = v;
       this.fills[j].style.transform = `scaleX(${v / 50})`;
     }
+  }
+
+  /** A clip's chip: recording from the first cut. */
+  recording(state: 'on'): void {
+    const el = this.recEl;
+    if (!el) return;
+    el.classList.toggle('is-on', state === 'on');
+    const t = el.querySelector('.gs-film-rec-t');
+    if (t) t.textContent = 'Recording';
   }
 
   cut(on: boolean): void {

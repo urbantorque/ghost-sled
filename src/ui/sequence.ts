@@ -182,6 +182,8 @@ export interface StoryHooks {
   paid(): void;
   /** Round 8 (the photo lane): photo mode over the scene as it stands (absent: no button). */
   photo?: () => void;
+  /** Round 8, G11 (the share lane): the run's reel saved as a clip (absent: no button). */
+  clip?: () => void;
 }
 
 /**
@@ -311,7 +313,12 @@ export class Story {
     // (Round 8, the photo lane: the lens, beside Home, for the scene the results stand over.)
     const shot = this.hooks.photo;
     const photo = shot ? btn(ctx, { cls: 'gs-btn-soft gs-sq-photo', icon: 'camera', aria: 'Photo mode', sound: 'tap', fk: 'st-photo', onClick: () => shot() }) : null;
-    const foot = h('div', 'gs-sq-foot gs-sq-step', home, photo, ...offers, more);
+    // (Round 8, G11, the share lane: the clip, beside the lens, a soft pill like Home with its words: a film frame alone
+    // read as a ticket or a replay to a fresh critic.)
+    const take = this.hooks.clip;
+    const clip = take ? btn(ctx, { cls: 'gs-btn-soft gs-sq-clip', icon: 'clip', label: 'Save Clip', sound: 'tap', fk: 'st-clip', onClick: () => take() }) : null;
+    if (photo) photo.title = 'Photo Mode';
+    const foot = h('div', 'gs-sq-foot gs-sq-step', home, photo, clip, ...offers, more);
     this.steps.push(foot);
     this.el.append(...[place, rank, row, go, foot].filter((x): x is HTMLElement => x !== null));
     this.plan = seqPlan({ place: place !== null, segments: this.segs, bar: rank !== null, cards: this.cardEls.length });

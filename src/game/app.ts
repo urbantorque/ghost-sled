@@ -82,6 +82,22 @@ import { FINISH_Z, type Standing, aheadOf, byStanding, clock, marginPhrase, plac
  *  its results (the sim still ticks). A finish is never a crash: only `crashed()` opens the first. */
 type Phase = 'boot' | 'title' | 'run' | 'crashed' | 'finished' | 'results' | 'home' | 'reel';
 
+/** Round 8, G11: whether this browser can record the canvas as a video at all (a recorder, a canvas stream and a
+ *  container it writes). The results show the clip's control only where it can; the recorder's code (cliptake.ts) is
+ *  loaded when a player asks, and checks the codecs itself. */
+function canRecordClip(): boolean {
+  try {
+    return (
+      typeof MediaRecorder === 'function' &&
+      typeof MediaRecorder.isTypeSupported === 'function' &&
+      typeof HTMLCanvasElement.prototype.captureStream === 'function' &&
+      (MediaRecorder.isTypeSupported('video/mp4') || MediaRecorder.isTypeSupported('video/webm'))
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Dev-only overrides for play-tests and screenshots: ?mood=3&event=1&m=2&autoride=1. */
 const DEV = new URLSearchParams(location.search);
 const DEV_ON = import.meta.env.DEV || DEV.has('debug');
@@ -386,6 +402,8 @@ export class App {
       onResultsBeat: (kind, i) => this.resultsBeat(kind, i),
       // Round 8 (the photo lane): photo mode, from pause and from the results.
       onPhoto: () => this.openPhoto(),
+      // (Round 8, G11, the share lane: the reel saved as a clip, where the browser can record the canvas.)
+      onSaveClip: canRecordClip() ? () => this.saveClip() : undefined,
       onOpenSettings: () => this.ui.showSettings(this.settingsModel()),
       onUiSound: (k) => {
         this.audio.unlock();
@@ -577,6 +595,8 @@ export class App {
     document.addEventListener('visibilitychange', () => {
       const hidden = document.hidden;
       this.audio.setMuted('hidden', hidden);
+      // (A clip being taken holds while the page is hidden: no frames are drawn, so none may be recorded.)
+      this.clip?.hold(hidden);
       if (hidden) {
         this.input.releaseAll();
         // The platform handles focus and visibility itself, so this pause must not send gameplayStop.
@@ -1383,6 +1403,7 @@ export class App {
     this.input.mirrored = this.mirrorRun;
     const extra = this.runExtra(demo);
     if (leg?.carry && !demo) extra.carry = leg.carry;
+    this.clipKept = null;
     this.run = new Run(this.mountain.seed, chaos, sled, source, extra);
     this.run.draftProbe = demo ? null : this.ghosts.draftProbe;
     // (Round 8: the field's showdowns and spirit steals; a demo replays its own log and decides nothing.)
@@ -1890,7 +1911,9 @@ export class App {
     const finished = sim !== null && sim.finished;
     const time = sim ? (finished ? clock(sim.s.finishTick / 60) : metres(sim.distance)) : '';
     const of = st ? Math.max(st.of, this.ghosts.fieldSize) : 0;
-    return { mountain: this.mountain.name, time, place: st && of > 1 ? `${ordinal(st.rank)} of ${of}` : null, first: !!st && st.rank === 1 && finished, name: this.save.data.name };
+    // (A mirror mountain is named as the results name it, so a mirrored run's photo or clip says so: the share lane.)
+    const mountain = this.mirroredView() ? `Mirror ${this.mountain.name}` : this.mountain.name;
+    return { mountain, time, place: st && of > 1 ? `${ordinal(st.rank)} of ${of}` : null, first: !!st && st.rank === 1 && finished, name: this.save.data.name };
   }
 
   /** Saves the picture as it stands as a PNG at the canvas's size (the run's card in a corner when asked). */
@@ -2025,16 +2048,108 @@ export class App {
     this.startReel(this.run.toRecord(this.save.data.name), true);
   }
 
+  // ------------------------------------------------------------------ the reel saved as a clip (round 8, G11)
+
+  /** The clip being taken (cliptake.ts, loaded with it when a player asks), from its first cut to its file. */
+  private clip: import('./cliptake').ClipTake | null = null;
+  /** The last clip saved (play-tests read it). */
+  lastClip: { name: string; type: string; bytes: number; w: number; h: number; sound: boolean; frames: number; drawMs: number; secs: number } | null = null;
+
+  /** The results' clip: the run's reel cut short, played again, and recorded from the canvas as it plays. */
+  private saveClip(): void {
+    if (this.phase !== 'results' || !this.run || this.homeRide || this.clip) return;
+    // Asked again on the same results: the clip already made is handed over again, inside the tap (a phone's share
+    // sheet, which takes a file only straight from a tap; a download where there is none), not recorded twice.
+    const kept = this.clipKept;
+    if (kept && kept.run === this.run) return this.offerClip(kept.blob, kept.name, true);
+    this.audio.unlock();
+    this.startReel(this.run.toRecord(this.save.data.name), true, true);
+  }
+
+  /** The clip made from this run's results (kept while they stand, for a second tap to share it again). */
+  private clipKept: { run: object; blob: Blob; name: string } | null = null;
+
+  /** Where the page can hand a file to the share sheet (a phone): the clip's second tap shares it. */
+  private canShareFile(blob: Blob, name: string): File | null {
+    const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
+    if (typeof File !== 'function' || typeof nav.canShare !== 'function' || typeof navigator.share !== 'function') return null;
+    try {
+      const file = new File([blob], name, { type: blob.type });
+      return nav.canShare({ files: [file] }) ? file : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The clip to the player: downloaded as a file (named like a photo), or from a tap on a phone, the share sheet. */
+  private offerClip(blob: Blob, name: string, tapped: boolean): void {
+    const file = tapped ? this.canShareFile(blob, name) : null;
+    if (file) {
+      (navigator.share as (d: { files: File[]; title: string }) => Promise<void>)({ files: [file], title: `${this.mountain.name}, Ghost Sled` }).catch(() => undefined);
+      return;
+    }
+    if (!download(blob, name)) return this.ui.toast('The clip could not be saved', 'info', 'Try Save Clip again');
+    // (A phone, or a page in a portal's frame that may drop a download made without a tap: the second tap shares it.)
+    const again = this.canShareFile(blob, name) !== null || window.self !== window.top;
+    this.ui.toast('Clip saved', 'info', again && !tapped ? 'Tap the clip again to share it' : name);
+  }
+
+  /** The reel's hooks for a clip: the take draws each frame from the picture's own callback, starts at the first cut,
+   *  and on the end hands the file to the browser to save. */
+  private clipHooks(take: import('./cliptake').ClipTake): import('./reelshow').ReelClip {
+    const draw = (c: HTMLCanvasElement) => take.draw(c);
+    const letGo = () => {
+      if (this.world.onPicture === draw) this.world.onPicture = null;
+      if (this.clip === take) this.clip = null;
+    };
+    const t0 = { at: 0 };
+    return {
+      look: take.look,
+      start: () => {
+        this.clip = take;
+        this.world.onPicture = draw;
+        t0.at = performance.now();
+        const ok = take.start();
+        if (!ok) {
+          letGo();
+          this.ui.toast('The clip could not be recorded', 'info', 'Try Save Clip again');
+        }
+        return ok;
+      },
+      end: () => {
+        const secs = (performance.now() - t0.at) / 1000;
+        void take.stop().then((blob) => {
+          letGo();
+          if (!blob) return this.ui.toast('The clip could not be saved', 'info', 'Try Save Clip again');
+          const name = take.name(this.mountain.name, new Date());
+          if (this.run) this.clipKept = { run: this.run, blob, name };
+          this.lastClip = { name, type: blob.type, bytes: blob.size, w: take.canvas.width, h: take.canvas.height, sound: take.sound, frames: take.frames, drawMs: take.drawMs, secs };
+          this.offerClip(blob, name, false);
+        });
+      },
+      cancel: () => {
+        take.cancel();
+        letGo();
+      },
+    };
+  }
+
   /** Loads the reel's code (its own chunk: never with the first frame) and plays a record: your own
-   *  run from the results, with its ghosts as they rode, or a friend's from a link, on the title. */
-  private startReel(rec: RunRecord, own: boolean): void {
+   *  run from the results, with its ghosts as they rode, or a friend's from a link, on the title. `clip`: the reel
+   *  plays cut short into a clip (its recorder's code loaded with it). */
+  private startReel(rec: RunRecord, own: boolean, clip = false): void {
     if (this.reelLoading || this.runReel) return;
     this.reelLoading = true;
     const from: Phase = own ? 'results' : 'title';
-    import('./reelshow').then(
-      (m) => {
+    Promise.all([import('./reelshow'), clip ? import('./cliptake') : null]).then(
+      ([m, ct]) => {
         this.reelLoading = false;
         if (this.phase !== from) return;
+        let take: import('./cliptake').ClipTake | null = null;
+        if (ct) {
+          take = ct.ClipTake.open({ source: this.world.renderer.domElement, mirrored: this.mirroredView(), reduced: reduced(), audio: this.audio.clipTap(), card: this.runCard(), bars: () => pipeUniforms.uBars.value });
+          if (!take) return this.ui.toast('This browser cannot save a clip', 'info');
+        }
         const tracks = own ? this.ghosts.tracks : [];
         const tmp = emptyPose();
         const finished = own && this.run ? this.run.sim.finished : false;
@@ -2106,12 +2221,13 @@ export class App {
           reduced: () => reduced(),
           rank: finished && this.frameStandings ? this.frameStandings.rank : null,
           share: own && rec.score > 0 ? () => this.shareReel(rec) : undefined,
+          clip: take ? this.clipHooks(take) : undefined,
           done: () => this.endReel(own),
         });
       },
       () => {
         this.reelLoading = false;
-        this.ui.toast('The reel could not load', 'info');
+        this.ui.toast(clip ? 'The clip could not load' : 'The reel could not load', 'info');
       },
     );
   }
@@ -2955,7 +3071,10 @@ export class App {
       this.linkReel = null;
       this.startReel(rec, false);
     }
-    if (this.phase === 'reel') this.runReel?.frame(this.paused || this.adPlaying ? 0 : dt);
+    if (this.phase === 'reel') {
+      this.clip?.hold(this.paused || this.adPlaying || document.hidden);
+      this.runReel?.frame(this.paused || this.adPlaying ? 0 : dt);
+    }
     else if (this.phase === 'title' || this.phase === 'boot') this.frameTitle(dt);
     else if (this.phase === 'home') this.frameHome(dt);
     else this.frameRun(dt);

@@ -315,6 +315,15 @@
   margin-right: 0;
 }
 
+/* Round 8, G11 (the share lane): the clip sits beside the lens, a pill with its words; the gap opens after the clip. */
+.gs-sq-foot > .gs-sq-photo:has(+ .gs-sq-clip) {
+  margin-right: 0;
+}
+
+.gs-sq-foot > .gs-sq-clip {
+  margin-right: auto;
+}
+
 /* A phone held upright: the bar is the width of the screen, in three rows. */
 @media (max-aspect-ratio: 1/1) {
   .gs-ph-bar {
