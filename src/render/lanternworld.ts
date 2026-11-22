@@ -139,8 +139,20 @@ const LIGHT_FRAG = /* glsl */ `
       // (Every halo reaches nothing inside the point's circle: cut off at the square's edge, a near light
       // was a glowing card.)
       float halo = exp(-dot(q, q) * 2.4) * 0.4 * (1.0 - smoothstep(0.45, 1.0, dot(q, q)));
-      return col * (body * (0.5 + 0.3 * (0.5 - q.y)) + halo) + vec3(1.0, 0.93, 0.72) * flame * body * 0.9;
+      // (Round 8, the review loop: paper with ribs, ART.md 14, palest at its waist and rounding away at its sides:
+      // a body of one glow read as an orange disc or a bokeh blob, never a paper lantern.)
+      float waist = 1.0 - 0.5 * b.y * b.y;
+      float roundK = 1.0 - 0.42 * b.x * b.x;
+      float rib = 1.0 - 0.38 * (1.0 - smoothstep(0.0, 0.075, abs(fract(b.y * 2.0 + 0.5) - 0.5)));
+      return col * (body * (0.42 + 0.42 * waist) * roundK * rib + halo) + vec3(1.0, 0.93, 0.72) * flame * body * 0.7;
     #endif
+  }
+  // A paper lantern's dark cap over it and its foot under it (round 8, the review loop): 1 on them, 0 elsewhere.
+  float lanternCap(vec2 q) {
+    float cap = (1.0 - smoothstep(0.24, 0.28, abs(q.x))) * smoothstep(0.5, 0.52, q.y) * (1.0 - smoothstep(0.64, 0.66, q.y));
+    float foot = (1.0 - smoothstep(0.16, 0.2, abs(q.x))) * smoothstep(-0.65, -0.63, q.y) * (1.0 - smoothstep(-0.53, -0.51, q.y));
+    float tassel = (1.0 - smoothstep(0.02, 0.04, abs(q.x))) * smoothstep(-0.9, -0.86, q.y) * (1.0 - smoothstep(-0.65, -0.63, q.y));
+    return max(max(cap, foot), tassel * 0.8);
   }
   vec3 flameShape(vec2 q, vec3 col, float seed, float t) {
     // A teardrop that leans and licks: wide at its foot, a point at its head.
@@ -248,6 +260,12 @@ function valleyMaterial(low: boolean): ShaderMaterial {
         // (A paper lantern near the lens covers what is behind it; a far mote covers little: thousands of them
         // each taking 85% of the air behind them made the lit valley under the break a dark hole full of dots.)
         float cover = mix(min(dotK, 1.0) * 0.28, bodyK * 0.92, vBig) * vA;
+        #ifndef POSTER
+          // Its cap and foot in ink, where it is big enough to read as a lantern.
+          float capK = lanternCap(q) * smoothstep(0.7, 1.0, vBig);
+          col *= 1.0 - capK;
+          cover = max(cover, capK * 0.95 * vA);
+        #endif
         gl_FragColor = vec4(col * vA * uGain, cover);
       }
     `,
@@ -369,7 +387,9 @@ function sheetMaterial(low: boolean): ShaderMaterial {
         return n;
       }
       void main() {
-        vec2 q = vW.xz * 0.0032 + vec2(uTime * 0.004, uTime * 0.0015);
+        // (Round 8, the review loop: billows a third of a kilometre across read from the Crown as one mottled sheet;
+        // two thirds of that size, they read as heaped cloud, each with its moonlit rim.)
+        vec2 q = vW.xz * 0.0048 + vec2(uTime * 0.004, uTime * 0.0015);
         float n = billow(q);
         // The top sheet is the billows' crests alone; each one under it is fuller, and the floor is whole.
         float cover = smoothstep(0.42 - vL * 0.9, 0.62 - vL * 0.8, n * 0.5 + 0.5);
@@ -379,12 +399,17 @@ function sheetMaterial(low: boolean): ShaderMaterial {
         #ifdef POSTER
           // (Low draws the floor alone: at the floor's own value, under the crests High lays over it, the sea read as
           // dark water or a lava field from the Crown, the review loop. It takes the crests' light instead.)
-          l += 0.24;
+          l += 0.5;
         #endif
         l = clamp(l, 0.0, 0.999) * 3.0;
         float st = (floor(l) + smoothstep(0.35, 0.65, fract(l))) / 3.0;
-        vec3 col = mix(uShade, uLit, st);
-        col = mix(col, uRim, pow(facing, 3.0) * 0.4 * (1.0 - vL));
+        #ifdef POSTER
+          // (Its shade a step lighter too: Low's floor in the night's navy read as water under the moon.)
+          vec3 col = mix(mix(uShade, uLit, 0.3), uLit, st);
+        #else
+          vec3 col = mix(uShade, uLit, st);
+        #endif
+        col = mix(col, uRim, pow(facing, 3.0) * 0.6 * (1.0 - vL));
         // Lit from beneath in pools that hold their place (massif.ts paints the same pools on the far sea).
         vec2 wq = vW.xz * 0.00042;
         float pool = snoise(wq + vec2(1.7, -4.2)) * 0.6 + snoise(wq * 2.3 + vec2(-3.1, 2.6)) * 0.4;
@@ -853,9 +878,11 @@ export class LanternWorld {
       if (near) {
         // Beside the run: lanterns a rider passes among, each a paper lantern at the lens. They drift up
         // slowly through the first few tens of metres, so a frame always holds some at the rider's height.
-        off = hw + 11 + Math.pow(rnd(), 1.4) * 70;
+        // (Round 8, the review loop: from 11 m out and at 2.2 m they were orange discs at frame size; nearer and a
+        // little larger, a rider passes paper lanterns with ribs and caps.)
+        off = hw + 8 + Math.pow(rnd(), 1.4) * 60;
         y0 = c.ground(cx + side * off, zc) + 1.5 + rnd() * 12;
-        size = 2.2 + rnd() * 1.8;
+        size = 2.6 + rnd() * 1.8;
       } else if (r < 0.22) {
         // Over the road, well above any flight.
         off = rnd() * (hw + 13);

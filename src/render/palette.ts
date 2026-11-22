@@ -1119,7 +1119,8 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.massif.glow = c('#FFC49C');
       p.massif.heroAz = -18;
       p.massif.sea = 1;
-      p.massif.seaWarm = 0.75;
+      // (Round 8, the review loop: at 0.75 the warm pools read from the Crown as salmon smears over the sea.)
+      p.massif.seaWarm = 0.55;
       p.deck = { k: 0, lit: c('#8E82CE'), shade: c('#3C3284'), glow: c('#FFB24E') };
       p.grade = { lift: c('#08062A'), gain: c('#F4F2FF'), saturation: 1.1, contrast: 1.08, grain: 0.6, foot: 0.3, shafts: 0, lens: 0.1, focal: 0.9, gust: 0, glitter: 0.5 };
       // (Low's poster: the indigo night in six printed steps, a silver rim.)
@@ -3119,7 +3120,9 @@ export const PLACES: Record<BiomeId, Place[]> = {
       edit: (p) => {
         // (A value under the white it was: in a cloud as bright as its snow the lamps' halos had nothing to
         // loom out of, and the frame was one lilac wash.)
-        p.fog = c('#9A92D8');
+        // (Round 8, the review loop: a step deeper again, with the near walls kept out of it: every frame of the cloud
+        // was read as one milky value.)
+        p.fog = c('#8E86D2');
         p.air.far = c('#8A80CE');
         p.air.cool = c('#F2F0FF');
         p.air.low = 0.2;
@@ -3163,9 +3166,9 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.sparkle = 0.5;
         // (Less bloom and more contrast than a white-out would have: at 0.85 and 1.02 the cloud was a milky
         // veil of one lilac value over everything, the rider bleached in it as it came out.)
-        p.bloom = 0.62;
+        p.bloom = 0.5;
         p.grade.exposure = 1.0;
-        p.grade.contrast = 1.1;
+        p.grade.contrast = 1.16;
         p.grade.saturation = 1.04;
         p.grade.hi = c('#F8F6FF');
         p.grade.lo = c('#E4DCFF');
