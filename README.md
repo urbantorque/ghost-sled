@@ -962,7 +962,7 @@ low-end phone rather than a throttled laptop, and the reconstruction tuned for t
 
 ## Round 8: beauty and the hook
 
-Round 8 (DECISIONS 367 to 383) changed the sim once (SIM_VERSION 10: the air's language, charms, showdowns and the
+Round 8 (DECISIONS 367 to 384) changed the sim once (SIM_VERSION 10: the air's language, charms, showdowns and the
 spirit steal, Spirit Flow, the first run's layout, the Long Night's carry) and then only what is drawn, heard and
 kept. Its lanes' notes are `notes/r8-*.md`; `notes/r8-report.md` is the short version for the owner, with a
 fifteen-minute route through what changed. Nobody has played this build with hands.
@@ -1023,7 +1023,48 @@ landing, Sakura's paper-screen townhouses and soft shadows, Lanternfall's break 
 the great lantern over the results. What is left is shared: the camera through a leap's lip, a flip read as a fall,
 ghosts in the sky (the pool riders' own lines), walls that want geometry rather than paint.
 
-<!-- r8-fill: the performance table against round 7 (the quiet sitting), sizes, where the captures are, what this does not show -->
+**Performance against round 7** (DECISIONS 384; headless Chrome on the laptop's GPU, on mains, one browser on the
+machine, both builds interleaved where a plan allows; `perf-vl.sh`, `workcal.js`, `systime.js`, `firstframe.js`).
+Three sittings on 22 and 23 November; the first shared the machine with other work, the later two were quieter, and a
+row the later ones contradict is theirs:
+
+| Check | Round 7 | Round 8 |
+| --- | --- | --- |
+| High at 1x, a whole descent, all five mountains | 60 fps | 60 fps |
+| Medium at 1x, all five; Ultra on Pinecrest and Lanternfall; a lantern night on Sakura | 60 fps | 60 fps |
+| The phone: Medium, Low, an avalanche chase (Pinecrest and Lanternfall) | 60 fps | 60 fps |
+| High through an avalanche chase at 4x, two passes | 26, 22 fps | 31, 28 fps |
+| Low at 6x, a very first run, Pinecrest/Ember/Sakura, median of 5 interleaved | 37 / 41 / 35 fps | 30 / 31 / 31 fps |
+| Low at 6x, Frostfang/Lanternfall, one adjacent pass | 35 / 36 fps | 27 / 32 fps |
+| A Low frame's work at 6x against a ruler (`workcal.js`), Pinecrest/Ember/Sakura | 1 | 1.12 / 1.25 / 1.27 |
+| First rendered frame at 6x, fresh save, median of 8 interleaved | 2,964 ms | 2,962 ms |
+| Draw calls settled: High (four mountains) / Ultra / Low | 95 to 104 / 95 to 106 / 43 to 51 | 105 to 114 / 102 to 111 / 41 to 52 |
+| Triangles settled on High | 727k to 1,000k | 745k to 1,008k |
+
+High, Medium, Ultra and the phone hold their bar and the first frame is level. **Low at 6x is 4 to 10 fps under
+round 7 on every mountain**, which the brief's bar does not allow. The cost is the field: round 8's riders race beside
+you, so a Low frame draws about two more ghosts than round 7's did, and the frame's own work is spread thin over a
+dozen systems (DECISIONS 382). Two lowperf passes took back what did not change the picture, and the critic loop added
+nothing measurable (Pinecrest's frame timed system by system, before and after, within 1%). Going further means
+showing less of the field on Low: the owner's call.
+
+**Size.** The whole build is 60.30 MB in 32 files (56.75 MB zipped); the initial download is 11.25 MB, inside the
+package's budget (80 MB, 1,500 files, 20 MB initial) and CrazyGames' (250 MB, 1,500 files, 50 MB). The main script is
+3,205 KB (1,073 KB gzipped), 469 KB more than round 7's; the first frame does not pay for it.
+
+**The smoke.** The release build ridden on every mountain at two places on Low, Medium, High and Ultra and on the
+phone's Medium and Low, mirrored, and at the other hours (35 runs), and the title's hour pick on a desk and a phone:
+every console clean. It found one fault, fixed: the title's ghost tag could sit on the title's own panels.
+
+**Where the captures are** (all git-ignored, under `shots/r8/`): the sittings in `final/sit2/` to `final/sit4/`
+(the first, during the lanes, in `final/perf/`); the release's test, build and package logs in `final/release/`; the
+smoke's frames and consoles in `final/smoke/`; the lab in `final/lab/`; the critic loop's frames by mountain and pass
+in `review/m0` to `m4`; each lane's own folder beside them.
+
+What this does not show: whether any of it feels better under a person's hands (nobody has played this build);
+whether the trick language is found by a person; how the new sounds and the score sit together (`LISTENING.md`); Low
+on a real low-end phone rather than this laptop throttled six times; and a quiet machine, which none of the three
+sittings was.
 
 ## Layout
 

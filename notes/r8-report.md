@@ -1,6 +1,6 @@
 # Round 8: the report
 
-Branch `round-8`. It is not merged, pushed or deployed. Everything below is told at length in DECISIONS 367 to 383,
+Branch `round-8`. It is not merged, pushed or deployed. Everything below is told at length in DECISIONS 367 to 384,
 the README's "Round 8: beauty and the hook", ART.md and the lanes' notes (`notes/r8-*.md`); this is the short
 version for the owner. **Nobody has played this build with hands.** A test going green is permission to ask you to
 play, nothing more.
@@ -46,7 +46,46 @@ play, nothing more.
 
 ## What was measured
 
-<!-- fill: bars table (from the README), the critic loop's score table, the performance table against round 7, sizes -->
+**The bars, in the lab** (careers of 100 runs on the real sim, six seeds, every mountain; the README has the method):
+
+| Bar | Measured |
+| --- | --- |
+| No dead runs (nothing gained at all) in a mid pilot's first 30 | 0 of 30 (strict: 3 of 100 over all 100 runs) |
+| Always one run away: a near goal exists, and the one button names it | 100 of 100 runs, mid and novice |
+| Choices a run that change the rest (charm, showdown, dash, fork) | median 17, least 10 |
+| Named tricks; distinct ones in the expert's best combo | 18; 6 (median best combo 5) |
+| First minute on a fresh save: a pass by 20 s, a perfect by 45 s, a dash by 60 s | 6 of 6 seeds, prompted clumsy and novice pilots |
+| The clumsy pilot finishes | 28 of 30 (round 7: 26 of 30) |
+| Still new at run 50, reachable next run, on every mountain | 2 to 12 things a mountain |
+| Set pieces won, mid / expert / novice | 78 / 82 / 29 of 90 (round 7: 80 / 82 / 18) |
+| A race live (a riding ghost within 40 m), runs 2 to 6, mid / expert / stunt | 0.79 / 0.67 / 0.71 (round 7: 0.73 / 0.70 / 0.65) |
+| Passes a minute, the same | 4.2 / 4.0 / 3.6 (round 7: 2.4 to 3.6) |
+| Showdowns a run, started / won, mid | 1.61 / 0.52 |
+
+**The critic loop** (a fresh critic each pass told only ART.md; High's mean pass 1 to pass 5, its lowest frame in brackets):
+
+| Mountain | High (lowest frame) | Low | Phone | Best frames |
+| --- | --- | --- | --- | --- |
+| Pinecrest | 7.28 (6) to 7.20 (5) | 6.27 to 6.42 | 6.28 to 6.35 | 8.5 |
+| Frostfang | 6.60 (4.5) to 6.94 (5.5) | 6.20 to 6.27 | 6.50 to 6.37 | 8 |
+| Ember | 7.00 (5) to 6.96 (6) | 6.56 to 6.21 | 6.65 to 6.49 | 8 |
+| Sakura | 6.76 (5.5) to 6.67 (5) | 6.15 to 5.96 | 6.26 to 6.42 | 8 |
+| Lanternfall | 6.72 (5.5) to 6.56 (5.8) | 6.32 to 5.98 | 6.49 to 6.18 | 8 |
+
+**Performance against round 7** (three sittings on a laptop shared with other work, both builds interleaved; DECISIONS
+384):
+
+| Check | Round 7 | Round 8 |
+| --- | --- | --- |
+| High, Medium (every mountain), Ultra, the phone | 60 fps | 60 fps |
+| First rendered frame at 6x, fresh save (median of 8) | 2,964 ms | 2,962 ms |
+| Low at 6x, Pinecrest / Ember / Sakura (median of 5) | 37 / 41 / 35 fps | 30 / 31 / 31 fps |
+| Low at 6x, Frostfang / Lanternfall (one pass) | 35 / 36 fps | 27 / 32 fps |
+
+**Size and the release.** `npm run release` is green: 1,863 tests, tsc, the build and the package. The build is 60.30
+MB in 32 files (56.75 MB zipped), the first download 11.25 MB: inside CrazyGames' limits and our own. The smoke rode the
+release build on every mountain and tier, mirrored and at the other hours, with every console clean; it found one fault
+(the title's ghost tag on the title's own panels), fixed.
 
 ## What only scripts have judged
 
@@ -73,10 +112,11 @@ play, nothing more.
 
 ## Open questions for the owner
 
-1. **Low at 6x against round 7** (DECISIONS 382, 384). <!-- fill: the sitting's verdict --> Round 8's field rides
-   beside you, so a Low frame on Ember draws about two more ghosts than round 7's did; two lanes cut everything that
-   did not change the picture. Going further on Low means showing less of the field (fewer ghosts in glass, say). The
-   call is yours: restate Low's bar as round 7's plus the field, or carry it into round 9.
+1. **Low at 6x against round 7** (DECISIONS 382, 384). Not met: round 8 is 4 to 10 fps under round 7 on every
+   mountain (above). Round 8's field rides beside you, so a Low frame on Ember draws about two more ghosts than round
+   7's did; two lanes cut everything that did not change the picture, and the critic loop added nothing measurable.
+   Going further on Low means showing less of the field (fewer ghosts in glass, say). The call is yours: restate Low's
+   bar as round 7's plus the field, or carry it into round 9.
 2. **The expert's race** is live 0.67 of a run (round 7 0.70): a fast rider pulls away from the field on Ember and
    Sakura. The mid and stunt pilots' races are more live than round 7's. Leave it, or let the field's pacer reach
    further for an expert (a sim change, SIM_VERSION 11).
@@ -125,8 +165,10 @@ window is a fresh save.
   the five review lanes in `r8-rev0.md` to `r8-rev4.md` with their per-frame scores, Low's cost in `r8-lowperf.md`).
 - **Captures** (git-ignored) under `shots/r8/`: each lane's own folder; the review loop's frames by mountain and pass
   in `shots/r8/review/m0` to `m4`; the lab in `shots/r8/final/lab/`; the performance sittings in
-  `shots/r8/final/perf/` (the first, during the lanes) and `shots/r8/final/sit2/` (the last); Low's bisect and profiles
-  in `shots/r8/final/bisect/` and `prof/`; the merged build's smoke frames in `shots/r8/main/m4smoke/`.
+  `shots/r8/final/perf/` (the first, during the lanes) and `shots/r8/final/sit2/` to `sit4/` (the last three, with the
+  load probes and the per-system timings); Low's bisect and profiles in `shots/r8/final/bisect/` and `prof/`; the
+  release's logs in `shots/r8/final/release/`; the release build's smoke (every tier and mountain, the title's hour
+  pick) in `shots/r8/final/smoke/`, and the merged build's shader checks in `shots/r8/main/m4smoke/`.
 - **New tools** in `scripts/playtest/`: `r8-bars.ts` and `r8career.ts` (careers of 100 runs on the real sim),
   `stills.js` and `stills-at.sh` (a run held still on a virtual clock, with each frame's draw calls), `blind-pairs.mjs`,
   `workcal.js` (a frame's work against a ruler, for a shared machine), `browser-slot.sh` (one browser on the machine),

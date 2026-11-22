@@ -3947,3 +3947,51 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
       and crevasse, Lanternfall's Cloud Sea, Ember's slots, Sakura's terraces); props that still read as boxes. No
       fixed frame shows Frostfang's cavern mouth or Lanternfall's canal of lights, and The Great Rising cannot be told
       from a plain run.
+
+384. **Milestone 4's performance sittings and smoke: High, Medium, Ultra and the phone at 60, the first frame level,
+    the release in budget, every tier and mountain clean; Low at 6x under round 7 on every mountain**
+    (`shots/r8/final/sit2/` to `sit4/`, `smoke/`, `release/`).
+    - *How it was run.* Round 7's build (`dist/r7-main`) and round 8's merged head (`dist/r8-m4`, 23ac1b2's source) in
+      headless Chrome on the laptop's GPU, on mains, one browser on the machine, both builds interleaved where a plan
+      allows (`perf-vl.sh`; `workcal.js`; `systime.js`; `firstframe.js`). Three sittings, 22 November 20:40 to 23
+      November 00:42. The first was not quiet (the owner's Chrome, another project's tests and a second agent; about
+      22% CPU before it began); the later two were quieter. Chrome's speed swung by half within minutes (Pinecrest's Low
+      frame 27 to 52 fps on one build), so only interleaved pairs are read as comparisons, and a row from the first
+      sitting that the later ones contradict is taken from the later.
+    - *60 fps (median over a whole descent), both builds:* High on all five mountains, Medium on all five, Ultra on
+      Pinecrest and Lanternfall, a lantern night on Sakura, and the phone's Medium, Low and avalanche chase (Lanternfall's
+      too). In the first sitting both builds dipped on Ultra (52 to 58) and round 8's phone Medium read 41 once; the next
+      pass read 60 on every row for both. The avalanche chase at 4x, one pass a build: 22 and 26 for round 7, 28 and 31
+      for round 8 (round 7's own sitting read 48: the machine is slower than it was then, for both).
+    - *Low at 6x, a very first run, median of five interleaved:* Pinecrest / Ember / Sakura 37 / 41 / 35 fps for round 7,
+      30 / 31 / 31 for round 8; Frostfang / Lanternfall, one adjacent pass each, 35 / 36 against 27 / 32. A frame's work
+      against the ruler, five rounds interleaved: round 8 12%, 25% and 27% over round 7 (uncapped, so a slower frame also
+      steps the sim more often in one frame; at a common 45 fps the lowperf lane read 6 to 15%, 382).
+    - *Did the critic loop add to it?* The Low pass's head (17780dd) against the merged head, four rounds interleaved on
+      the ruler: Ember and Sakura level, Pinecrest 10% over in every pair. Timed system by system (`systime.js`, four
+      pairs A B B A at 6x), Pinecrest's frame is level: 20.14 ms a frame before the loop, 20.02 after, every system
+      within 0.15 ms. Nothing the loop changed costs a Low frame anything found; 383's "Low's GL calls level" holds.
+    - *The first frame at 6x on a fresh save, eight rounds interleaved:* round 7 2,964 ms, round 8 2,962 (medians;
+      means 2,910 and 2,917). Level.
+    - *The load that stalled.* Two runs were lost to a page that had not reached its load event in 30 s, and a load
+      probe saw one take 15.6 s waiting on the ghost worker's script, all on round 8's server. Probed in fresh headless
+      browsers with the origins in turn: the first loads in a new browser wait 9 to 13 s whichever build they are (round
+      7's 8.6, 8.9 and 9.9 s), and after them 35 of 36 cold loads, the HTTP cache cleared before each, were under 0.7 s.
+      It is the machine's browser warming up, not the game, and most likely the "phone stall" the screens lane noted.
+    - *Draw calls settled:* High on four mountains 95 to 104 for round 7, 105 to 114 for round 8 (the field, the
+      charm gates, the framing); Ultra 95 to 106 and 102 to 111; Low 43 to 51 and 41 to 52. Triangles on High 727k to
+      1,000k and 745k to 1,008k.
+    - *The release* (`npm run release`): 102 test files and 1,863 tests, tsc and the build green; the whole build 60.30
+      MB in 32 files (56.75 MB zipped), the initial download 11.25 MB (with Sakura's desktop pack, the largest), inside
+      the package's budget (80 MB, 1,500 files, 20 MB) and CrazyGames' (250 MB, 1,500, 50 MB). The main script is 3,205
+      KB (1,073 KB gzipped), 469 KB more than round 7's; the first frame does not pay for it.
+    - *The smoke* on the release build (`stills.js`, a pool rider held on a virtual clock): all five mountains at 700 and
+      2,300 m on Low, Medium, High and Ultra on a desk and Medium and Low on the phone, a mirrored Pinecrest and Sakura,
+      and Frostfang, Ember and Lanternfall at their other hours: 35 runs, every console clean. The title's hour pick on
+      desk and phone, all five mountains, keys, pad and reduced motion (`hours-ui.js`): clean. One fault, fixed
+      (13d3990): on Lanternfall the title's one ghost tag sat under the mountain's name on a phone and over the strip's
+      arrow on a desk; the title now gives its panels to the tags as occluders, as the run's HUD does.
+    - *Not met: Low at 6x is under round 7 on every mountain*, by 4 to 10 fps (11 to 24%). The cost is the field on
+      screen and a frame callback spread thin over a dozen systems (382); none of it is the critic loop's. Going further
+      means showing less of the field on Low: the owner's call (the report's first open question), with the bar
+      restated as round 7's plus the field or carried into round 9.
