@@ -115,6 +115,9 @@ export interface Palette {
   /** Low's painted pools (lights.ts): 0 adds the light in two flat values; 1 lays it over the snow in the
    *  light's own hue without clipping (Ember: added to a coloured snow, they clipped to mustard). */
   poolSoft: number;
+  /** Round 8's review: how much of what a glaze (the fork's strip, an ice patch) mirrors is the cold of the deep
+   *  upper sky rather than the horizon (0 for every mountain but Ember, whose red horizon laid a vermillion band). */
+  glazeCool: number;
   /** Round 8, the hours lane: a lamp's pool as a lift of the snow's own colour toward this silver (materials.ts
    *  silverPool), the lamp's hue only at its heart; k how far (0: the light is added in its hue, as every mountain
    *  but Lanternfall has it). ART.md 15: lilac snow with a silver lit side, never a gold floor. */
@@ -320,6 +323,7 @@ function base(): Palette {
     lamps: 0.25,
     lampAir: 0,
     poolSoft: 0,
+    glazeCool: 0,
     poolSilver: { color: c('#E4E2FA'), k: 0 },
     leaf: 0,
     lift: { bounce: 0, sun: 0.7, tint: c('#FFFFFF'), sky: 0, through: 0, sheen: 0 },
@@ -1211,6 +1215,9 @@ function round7(p: Palette, biome: BiomeId): void {
       p.under = { color: c('#FF6A28'), k: 0.3 };
       p.lamps = 0.9;
       p.poolSoft = 1;
+      // (Ice under the fire holds the cold of the deep sky: mirroring the red horizon, the fork's strip lay across
+      // the snow as a band of the rider's vermillion, and hazards are never warm.)
+      p.glazeCool = 0.8;
       // The smoke deck's own shadows drift over the slopes: the firelit snow lies in pools between
       // cold plum-teal shade, so a wide slope is never one even peach (which read as sand).
       p.clouds.shadow = 0.6;
@@ -2953,6 +2960,9 @@ export const PLACES: Record<BiomeId, Place[]> = {
         // (The visual lift: the floor's own shade, with the lava's light lying on it, comes back up orange.)
         p.lift.sun = 0.35;
         p.lift.tint = c('#FFDCA4');
+        // (Round 8's review: Low's light in flat steps cut the slot's steep banks into long pink streaks that read
+        // as smeared geometry; in a slot the snow's light is one smooth ramp.)
+        p.poster.steps = 0;
       },
     },
     {
@@ -3021,7 +3031,12 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.snowLit = c('#FFE8D8');
         p.atmo.valleyColor = c('#E0541C');
         p.atmo.valley = 1;
-        p.massif.seaWarm = 2.2;
+        // (Round 8's review: the basin past the lip still read as a pale grey cloud sea, not lava: its pools, lit from
+        // beneath at 2.2, went past the curve to cream. Its smoke is near black over the fire, and the pools glow
+        // the fire's own orange-red, the only light in it.)
+        p.clouds.lit = c('#3A1610');
+        p.clouds.shade = c('#160808');
+        p.massif.seaWarm = 1.1;
         p.embers = 1.7;
         p.grade.hi = c('#FFDCB4');
         p.grade.exposure! *= 1.04;
@@ -3306,9 +3321,11 @@ interface LaidPlace {
   pal: Palette;
   /** How finely its weight steps the stamp (a span changes the whole picture, so it steps finer). */
   steps?: number;
+  /** A roof's place (a tunnel): it holds only a sled under the roof (journeyPalette's `over`). */
+  roof?: boolean;
 }
 
-const LAID = { day: new WeakMap<Course, LaidPlace[]>(), alt: new WeakMap<Course, LaidPlace[]>() };
+const LAID ={ day: new WeakMap<Course, LaidPlace[]>(), alt: new WeakMap<Course, LaidPlace[]>() };
 
 /** A course's places, in order down the run, laid on first use (a walk of its sections, once). */
 function laidPlaces(course: Course): LaidPlace[] {
@@ -3338,7 +3355,7 @@ function laidPlaces(course: Course): LaidPlace[] {
       // A roof closes over quickly and lets go quickly (the burst out of a cavern is under two seconds);
       // an open place comes in over its section's own blend.
       const roof = sec.kind === 'tunnel';
-      laid.push({ z0: sec.z0 + (roof ? sec.blend * 0.5 : 0), z1: sec.z1 - (pl.ends ?? 0), rise: roof ? Math.max(30, sec.blend * 0.5) : Math.max(40, sec.blend), fall: pl.fall ?? (roof ? 75 : 90), pal });
+      laid.push({ z0: sec.z0 + (roof ? sec.blend * 0.5 : 0), z1: sec.z1 - (pl.ends ?? 0), rise: roof ? Math.max(30, sec.blend * 0.5) : Math.max(40, sec.blend), fall: pl.fall ?? (roof ? 75 : 90), pal, roof });
       break;
     }
     if (sec.kind === 'finish') break;
@@ -3355,6 +3372,12 @@ const smooth01 = (x: number): number => {
   return t * t * (3 - 2 * t);
 };
 
+/** How far a sled `height` metres over the snow stands over any roof, 0..1: no roof stands lower than the
+ *  air under it needs (landmarks.ts ENC_MAX, 44 m), so a sled higher than that is in the open. */
+export function overRoof(height: number): number {
+  return smooth01((height - 46) / 20);
+}
+
 /** How fully a laid place holds the frame at `metres` (0..1). */
 function placeWeight(l: LaidPlace, metres: number): number {
   if (metres <= l.z0 || metres >= l.z1 + l.fall) return 0;
@@ -3363,12 +3386,15 @@ function placeWeight(l: LaidPlace, metres: number): number {
 
 /** Clear Skies' palette `metres` into a run, written into out (which must not be one of the cached
  *  stops): the hour's light, and over it the place the course is in there, when the course is given.
- *  Chaos moods keep their own palette: the caller only calls this for Mood.None. */
-export function journeyPalette(biome: BiomeId, metres: number, out: Palette, course?: Course): Palette {
+ *  Chaos moods keep their own palette: the caller only calls this for Mood.None. `over` (0..1) is how far
+ *  the sled stands over any roof (overRoof): a tunnel's place holds a sled under its roof, not one a vent
+ *  has thrown high over the stretch where the roof gave way to its flight. (Round 8's review: Ember's Cinder
+ *  Gate seen from a hundred metres up was one red wash of the hall's own air.) */
+export function journeyPalette(biome: BiomeId, metres: number, out: Palette, course?: Course, over = 0): Palette {
   hourPalette(biome, metres, out);
   if (course && course.biome === biome) {
     for (const l of laidPlaces(course)) {
-      const w = placeWeight(l, metres);
+      const w = placeWeight(l, metres) * (l.roof ? 1 - over : 1);
       if (w > 0) lerpPalette(out, l.pal, w, out);
     }
   }
@@ -3377,12 +3403,12 @@ export function journeyPalette(biome: BiomeId, metres: number, out: Palette, cou
 
 /** A number that changes whenever journeyPalette's answer would, in steps fine enough to blend smoothly
  *  and coarse enough that the world re-blends only while the light moves. */
-export function journeyStamp(biome: BiomeId, metres: number, course?: Course): number {
+export function journeyStamp(biome: BiomeId, metres: number, course?: Course, over = 0): number {
   let key = Math.round(journeyProgress(biome, metres) * 400) + (hourOf(biome) === 'alt' ? 7e8 : 0);
   if (course && course.biome === biome) {
     const laid = laidPlaces(course);
     for (let i = 0; i < laid.length; i++) {
-      const w = placeWeight(laid[i], metres);
+      const w = placeWeight(laid[i], metres) * (laid[i].roof ? 1 - over : 1);
       if (w > 0) key += (i + 1) * 4001 * Math.round(w * (laid[i].steps ?? 64));
     }
   }

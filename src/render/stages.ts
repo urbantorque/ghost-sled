@@ -659,6 +659,8 @@ export class Stages {
     // of the face's end, the flight's last second was over a tongue of snow, and ended at it, its ragged
     // last plates lay round a rider landed there like a hole.)
     const zF1 = l.land1 + CALDERA_RUNOUT - 2;
+    /** Where the floor gives the corridor back to the landing's snow (the banks' crust runs on to zF1). */
+    const zLand = l.land0 + 6;
     /** Where a field starts and ends across the bank at z: outside the crowd's shoulder at the lip, from
      *  just past the limit below it, swelling to its widest under the middle of the flight. */
     const inner = (z: number, side: number): number => {
@@ -724,6 +726,10 @@ export class Stages {
         const xl = cx - (hw + inner(z, -1));
         const xr = cx + (hw + inner(z, 1));
         const cv = smooth(zF0, zF0 + 8, z) * (1 - smooth(zF1 - 22, zF1, z));
+        // (Round 8's review: the crust lies under the gap and the foot of the landing, and the landing face itself is
+        // snow, groomed as every leap's is, with the lava in its fields either side. Crust down the whole face put a
+        // rider who had landed on black crust with live cracks for two hundred metres: the line read as a hazard.)
+        const cm = cv * (1 - smooth(zLand, zLand + 12, z));
         const el = cx - (hw + 1);
         const er = cx + (hw + 1);
         for (let k = 0; k < n; k++) {
@@ -738,7 +744,7 @@ export class Stages {
           } else x = el + ((er - el) * (k - wing)) / (mid - 1);
           pos.push(x, snowY(c, x, z) + (low ? 0.3 : 0.16) + (out > 0 ? 0.3 + 0.25 * out : 0), -z);
           heat.push(0.2 + 0.14 * out);
-          cover.push(cv);
+          cover.push(out > 0 ? cv : cm);
         }
       }
       for (let r = 0; r + 1 < frows.length; r++) {
@@ -810,7 +816,7 @@ export class Stages {
         const cx = c.centerX(z);
         const hw = c.halfWidth(z);
         // (Nearly half rise through the flight itself, off the floor: embers in depth, before and behind the rider.)
-        const onRun = rnd() < 0.45 && z > zF0 && z < zF1;
+        const onRun = rnd() < 0.45 && z > zF0 && z < zLand + 20;
         const e = onRun ? -hw * rnd() : inner(z, side) + rnd() * Math.max(1, outer(z, side) - inner(z, side));
         const x = cx + side * (hw + e);
         const y = snowY(c, x, z) + 0.5 + (onRun ? 0 : lift((e - inner(z, side)) / Math.max(1, outer(z, side) - inner(z, side)), z));
@@ -876,8 +882,8 @@ export class Stages {
         pushLocalLight(x, snowY(c, x, zl) + 2.2 + lift(0.5, zl), -zl, 1, 0.33, 0.07, 46, 1.25 * br);
       }
       // The floor lights whoever is over it from underneath.
-      if (!low && z > zF0 - 30 && z < zF1 + 10) {
-        const zf = Math.max(zF0, Math.min(zF1, z + 3));
+      if (!low && z > zF0 - 30 && z < zLand + 14) {
+        const zf = Math.max(zF0, Math.min(zLand + 6, z + 3));
         const cx = c.centerX(zf);
         pushLocalLight(cx, snowY(c, cx, zf) + 0.8, -zf, 1, 0.36, 0.08, 30, 1.1 + 0.12 * Math.sin(time * 1.7));
       }
@@ -953,7 +959,9 @@ export class Stages {
     const lava = new Mesh(lg, this.lavaMat);
     root.add(lava);
     if (!low) {
-      const haze = new Mesh(b.build(), this.beamMat);
+      // (Round 8's review: a sheet beside the lens stood on the wall as a flat orange rectangle. The air's
+      // material fades it out over the last 30 m, so its light is in the air down the slot, never a slab by you.)
+      const haze = new Mesh(b.build(), this.airMat);
       haze.renderOrder = 3;
       root.add(haze);
     }

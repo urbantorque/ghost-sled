@@ -35,6 +35,8 @@ export const shared = {
   uSnowDeep: { value: new Color(0.4, 0.45, 0.8) },
   uSparkle: { value: 1 },
   uIceMood: { value: 0 },
+  /** How much of the sky a glaze mirrors is the cold of the deep upper sky (palette.glazeCool). */
+  uGlazeCool: { value: 0 },
   uShadeTint: { value: new Color('#5868B8') },
   /** The rider's position: props between it and the camera dissolve. */
   uFocus: { value: new Vector3() },
@@ -308,6 +310,7 @@ export function applyPalette(full: Palette): void {
   shared.uSnowDeep.value.copy(p.snowDeep);
   shared.uSparkle.value = p.sparkle;
   shared.uIceMood.value = p.ice;
+  shared.uGlazeCool.value = p.glazeCool;
   shared.uShadeTint.value.copy(p.snowShade).lerp(p.snowDeep, 0.5);
   shared.uSkyZenith.value.copy(p.skyMid ?? p.skyZenith).lerp(p.skyZenith, 0.5);
   shared.uSkyHorizon.value.copy(p.skyHorizon);
@@ -932,6 +935,7 @@ export function makeSnowMaterial(): ShaderMaterial {
       uniform vec3 uSnowDeep;
       uniform float uSparkle;
       uniform float uIceMood;
+      uniform float uGlazeCool;
       uniform float uHazardDim;
       uniform vec3 uFocus;
       uniform vec3 uSkyZenith;
@@ -1641,6 +1645,9 @@ export function makeSnowMaterial(): ShaderMaterial {
           // hour's peach horizon it lay across the snow as a salmon smear and never read as ice (the
           // review loop). It takes half its mirror from the deep upper sky, so it stays a blue lane.
           sky = mix(sky, mix(uSkyZenith, uSnowDeep, 0.3), 0.5 * vPaint.y * (1.0 - lakeK));
+          // (Round 8's review: under Ember's fire-red horizon the fork's strip still mirrored a vermillion band across
+          // the snow, the rider's colour on a hazard. Where the palette asks, a glaze holds the cold of the deep sky.)
+          sky = mix(sky, mix(uSkyZenith, uSnowDeep, 0.6), uGlazeCool * (1.0 - lakeK));
           col = mix(col, sky * (0.72 + 0.28 * shadow), clamp(fr * 1.15, 0.0, 0.95) * ice * (1.0 - 0.8 * vPaint.y));
           if (lakeK > 0.0) {
             vec2 lp = vWorldPos.xz;
@@ -1931,12 +1938,16 @@ export function makeSnowMaterial(): ShaderMaterial {
           else {
           if (uSnowFx <= 0.0) {
             float li = max(L.r, max(L.g, L.b));
+            vec3 L0 = L;
             L *= (smoothstep(0.03, 0.06, li) * 0.22 + smoothstep(0.22, 0.27, li) * 0.4) / max(li, 0.001);
             // (Where the palette asks, the pool is a paler, warmer step of the snow it lies on, kept under
             // white: the light's full hue added to a warm or a violet snow clipped to mustard.)
             if (uPoolSoft > 0.0) {
               float lv = dot(col, vec3(0.2126, 0.7152, 0.0722));
-              vec3 ls = mix(vec3(max(L.r, max(L.g, L.b))), L, 0.65) * max(1.0 - lv, 0.0) * 0.75;
+              // (Round 8's review: on Ember's night snow the outer step's edge read as a hard pale ellipse, a stain or a
+              // spotlight. Its two steps are wider ramps here, and the pool keeps more of the lamp's warmth.)
+              vec3 Lw = L0 * (smoothstep(0.012, 0.1, li) * 0.22 + smoothstep(0.17, 0.32, li) * 0.4) / max(li, 0.001);
+              vec3 ls = mix(vec3(max(Lw.r, max(Lw.g, Lw.b))), Lw, 0.8) * max(1.0 - lv, 0.0) * 0.75;
               L = mix(L, ls, uPoolSoft);
             }
           }
