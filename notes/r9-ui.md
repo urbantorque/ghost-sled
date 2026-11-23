@@ -133,3 +133,33 @@ told in about five seconds ..." and "The title's corner is one stack ..." with:
 - In the photo item ("From pause (Photo, beside Home) or the results (a camera beside Home)"): "or the results (Photo,
   beside Home)". In the clip item ("Save Clip (a soft pill with its words, beside the camera in the results' foot)"):
   "Save Clip (in the results' Details, beside Watch Your Run)".
+
+## Every hunk in a shared file (against round-9 at 6255b8d)
+
+All additive or inside the results' and the title's own functions; nothing reformatted or reordered.
+
+- **`src/game/app.ts`** (11 hunks):
+  - the import of `TitleIntro` from the contract (one name added to the existing type import);
+  - `beatStampsShown()` deleted (the results card's Beat stamps it counted for the mallet are gone);
+  - two fields after `results`: `intros` and `introsSeen` (what is new since the title was up, said once);
+  - the UI handler `onIntroSeen` (after `onOpenAlbum`);
+  - `twelveModel()`: `rides` (whether the next run on the next rider's ground is the duel, `duelOn`), and its return
+    field;
+  - two methods after `twelveModel()`: `titleIntro(news)` and `keepIntros(opened)`;
+  - `refreshTitle()`: the week's Trial news says "Choose it in Daily and Cup" (was "Pick it on the Cup"), an `intro`
+    closure, and the spine getter sets `spine.intro`;
+  - `showResults()`: `this.keepIntros(spineOut.view.opened)` after the shots settle; and before `hideHud`, a mountain
+    the run opened becomes `againTo` when the spine's choice is a plain Run Again (so Run Again rides it);
+  - `resultsSounds()`: its comment, and `show` = no count-up, the new best's chord on `finish.newBest`, no Beat stamps.
+- **`src/ui/ui.ts`** (8 hunks): `kit9` imported; `hd` typed with `UIMenuHandlers`; a window keydown for Escape and
+  Backspace (`back()`); the click-blur keeps focus inside a round-9 sheet; the title's `openSleds` and the results'
+  `openGarage` through one `openGarage()`; `back()`; `Results` constructed with its hook; `title.onLayout = dirty`;
+  `modal` includes `sheetOpen()`; `padMenu`: a round-9 sheet is the scope and modal, and B goes `back()`.
+- **`src/ui/contract.ts`** (3 hunks, all additions): `TitleTwelve.rides?`; `UIHandlers.onIntroSeen?`;
+  `TitleSpine.intro?`, `TitleDoor`, `TitleIntro`.
+- **`src/ui/menus.ts`** (the shop lane rebuilds the garage behind it; 2 hunks): the header comment at line 14 (Escape is
+  now bound, and why), and `closeTop()` before `closeSheet()`.
+- **Not shared but outside the brief's list:** `src/game/contracts.ts` one line ("Land a trick" for a target of one,
+  not "Land 1 different tricks", now that the contracts are drawn); `scripts/playtest/r9-truth.js` (the rooms, the
+  Choose, the round-9 sheets' surface, the crawl's second level, the duel's mountain from the title's model) and
+  `scripts/playtest/r9-screenbars.ts` (the Cup's system words take "Cup"). `save.ts` and `spineview.ts` untouched.

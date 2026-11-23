@@ -333,46 +333,12 @@ export class Title {
     return b;
   }
 
-  /** Ride's words: the verb, and its reason (what this run is for), in this order: a friend's challenge; The Twelve's
-   *  next duel here; the Daily, the Cup or the Trial picked; your grudge waiting here; the rung above you on this
-   *  mountain's ladder; the mountain itself. A duel's reason says the duel, never the rider's time: their slower time
-   *  beside your faster best read as already beaten (DECISIONS 391). */
-  private rideWords(m: TitleModel): { verb: string; why: string; aria: string; who: string | null } {
-    const sel = m.mountains.find((x) => x.id === m.selected) ?? null;
-    const name = sel ? (SHORT[sel.id] ?? sel.name) : '';
-    if (m.firstVisit && !m.challenge) return { verb: 'Ride', why: sel?.name ?? 'Pinecrest', aria: `Ride ${sel?.name ?? 'Pinecrest'}`, who: null };
-    const raced = m.challenge && (m.challenge.old || m.challenge.mountain) ? m.challenge : null;
-    if (raced) return { verb: 'Accept', why: raced.mountain, aria: `Accept: ${raced.mountain}`, who: null };
-    if (m.selected === 'trial' && m.trial) return { verb: 'Ride', why: 'This week’s Trial', aria: `Ride this week's Trial: ${m.trial.name}. ${m.trial.rule}`, who: null };
-    if (m.selected === 'daily') {
-      const t = m.daily.time ?? 0;
-      return { verb: 'Ride', why: t > 0 ? `Today’s Daily. Best ${clock(t)}` : 'Today’s Daily. Keeps your flame lit', aria: "Ride today's Daily", who: null };
-    }
-    if (m.selected === 'cup') {
-      const b = m.cup?.best ?? 0;
-      return { verb: 'Ride', why: b > 0 ? `This week’s Cup. Best ${clock(b)}` : 'This week’s Cup', aria: "Ride this week's Cup", who: null };
-    }
-    const mirrored = !!m.mirror?.on;
-    const hour = m.hour?.on ? m.hour : null;
-    const where = `${name}${hour ? ` ${hour.phrase}` : ''}${mirrored ? ', mirrored' : ''}`;
-    const tw = m.twelve ?? null;
-    if (tw?.next?.here && tw.rides !== false && !mirrored) return { verb: 'Duel', why: `${tw.next.name}, head to head`, aria: `Duel ${tw.next.name} on ${tw.next.mountain}, head to head`, who: tw.next.name };
-    if (tw?.final?.here && tw.rides !== false && !mirrored) return { verb: 'Ride', why: 'The last race, all twelve', aria: `Ride the last race: all twelve of The Twelve on ${tw.final.mountain}`, who: null };
-    const grudge = m.greet ? /^(?:Your nemesis )?(.+) is waiting on /.exec(m.greet) : null;
-    if (grudge && !mirrored) return { verb: 'Ride', why: `${grudge[1]} is waiting`, aria: `Ride ${where}. ${grudge[1]} is waiting here`, who: grudge[1] };
-    const rung = /^Next: (.+), [\d:.]+, ([\d.]+ s) up$/.exec(m.nextRung ?? '');
-    if (rung && !mirrored && !hour) return { verb: 'Ride', why: `${rung[1]} is ${nb(rung[2])} ahead`, aria: `Ride ${where}. ${rung[1]} is ${rung[2]} ahead of you on its ladder`, who: rung[1] };
-    // (The picked chip names the place: Ride says how it rides, or what it is like, never its name a second time.)
-    const how = [hour ? hour.phrase.charAt(0).toUpperCase() + hour.phrase.slice(1) : '', mirrored ? (hour ? 'mirrored' : 'Mirrored') : ''].filter(Boolean).join(', ');
-    return { verb: 'Ride', why: how || (sel?.tagline ?? where), aria: `Ride ${where}`, who: null };
-  }
-
   /** Ride, and over it a friend's challenge or the Trial's rule and targets when either is what it rides. */
   private rideBlock(m: TitleModel): HTMLElement {
     const box = h('div', 'gs9-t-ride');
     if (m.challenge) box.append(challengeBanner(m.challenge));
     else if (m.selected === 'trial' && m.trial) box.append(trialPanel(m.trial));
-    const w = this.rideWords(m);
+    const w = titleRide(m);
     // A link's Daily or Cup is still finding its rivals: Ride waits (aria-disabled, so it keeps its focus and its
     // name) and says nothing about it: nothing loading is shown.
     const waiting = !!m.challenge?.waiting;
@@ -422,32 +388,8 @@ export class Title {
     return out.childElementCount > 0 ? out : null;
   }
 
-  /** The one quiet line: the nearest thing you are working toward, in words, and never what Ride already says. A
-   *  locked chip just pressed (what opens it); the next mountain by ghosts; Lanternfall by The Twelve; the next page of
-   *  the Almanac, named as a prize. */
-  private aimWords(m: TitleModel): { icon: IconName; text: string; tone: 'ghost' | 'plain' } {
-    if (m.firstVisit) return { icon: 'ghost', text: 'Pass ghosts to unlock new mountains', tone: 'ghost' };
-    const c = this.locked;
-    if (c) {
-      const what = c.unlockText.replace(/ to unlock$/, '').replace(/^Pass/, 'pass').replace(/^Beat/, 'beat');
-      return { icon: 'lock', text: `${c.name}: ${what} to open it`, tone: 'plain' };
-    }
-    const byGhosts = m.mountains
-      .filter((x) => x.locked && /ghost/.test(x.unlockText))
-      .map((x) => ({ c: x, n: Number(/(\d+)/.exec(x.unlockText)?.[1] ?? 999) }))
-      .sort((a, b) => a.n - b.n)[0];
-    if (byGhosts) return { icon: 'ghost', text: `${fmt(byGhosts.n)} more ${byGhosts.n === 1 ? 'ghost opens' : 'ghosts open'} ${byGhosts.c.name}`, tone: 'ghost' };
-    const lf = m.mountains.find((x) => x.locked && /Twelve/.test(x.unlockText));
-    if (lf) return { icon: 'trophy', text: `Beat ${/(\d+)/.exec(lf.unlockText)?.[1] ?? 'more'} more of The Twelve to open ${lf.name}`, tone: 'plain' };
-    const bar = m.spine?.bar;
-    const next = bar?.next?.[0];
-    // (The XP and the rank first, the prize after: "900 XP to Rider Rank 26: the Crane's Memory charm".)
-    if (bar && next) return { icon: 'book', text: `${fmt(bar.need)}${NBSP}XP to Rider Rank ${bar.page + 1}: ${prizeLower(next)}`, tone: 'plain' };
-    return { icon: 'book', text: 'Every page of the Almanac turned', tone: 'plain' };
-  }
-
   private aim(m: TitleModel): HTMLElement {
-    const a = this.aimWords(m);
+    const a = titleAim(m, this.locked);
     const el = h('p', `gs9-t-aim is-${a.tone}`, ico9(a.icon), h('span', '', curly(a.text)));
     el.setAttribute('aria-live', 'polite');
     return el;
@@ -565,6 +507,64 @@ export class Title {
     paint();
     return b;
   }
+}
+
+/** Ride's words: the verb, and its reason (what this run is for), in this order: a friend's challenge; The Twelve's
+ *  next duel here; the Daily, the Cup or the Trial picked; your grudge waiting here; the rung above you on this
+ *  mountain's ladder; the mountain itself. A duel's reason says the duel, never the rider's time: their slower time
+ *  beside your faster best read as already beaten (DECISIONS 391). */
+export function titleRide(m: TitleModel): { verb: string; why: string; aria: string; who: string | null } {
+  const sel = m.mountains.find((x) => x.id === m.selected) ?? null;
+  const name = sel ? (SHORT[sel.id] ?? sel.name) : '';
+  if (m.firstVisit && !m.challenge) return { verb: 'Ride', why: sel?.name ?? 'Pinecrest', aria: `Ride ${sel?.name ?? 'Pinecrest'}`, who: null };
+  const raced = m.challenge && (m.challenge.old || m.challenge.mountain) ? m.challenge : null;
+  if (raced) return { verb: 'Accept', why: raced.mountain, aria: `Accept: ${raced.mountain}`, who: null };
+  if (m.selected === 'trial' && m.trial) return { verb: 'Ride', why: 'This week’s Trial', aria: `Ride this week's Trial: ${m.trial.name}. ${m.trial.rule}`, who: null };
+  if (m.selected === 'daily') {
+    const t = m.daily.time ?? 0;
+    return { verb: 'Ride', why: t > 0 ? `Today’s Daily. Best ${clock(t)}` : 'Today’s Daily. Keeps your flame lit', aria: "Ride today's Daily", who: null };
+  }
+  if (m.selected === 'cup') {
+    const b = m.cup?.best ?? 0;
+    return { verb: 'Ride', why: b > 0 ? `This week’s Cup. Best ${clock(b)}` : 'This week’s Cup', aria: "Ride this week's Cup", who: null };
+  }
+  const mirrored = !!m.mirror?.on;
+  const hour = m.hour?.on ? m.hour : null;
+  const where = `${name}${hour ? ` ${hour.phrase}` : ''}${mirrored ? ', mirrored' : ''}`;
+  const tw = m.twelve ?? null;
+  if (tw?.next?.here && tw.rides !== false && !mirrored) return { verb: 'Duel', why: `${tw.next.name}, head to head`, aria: `Duel ${tw.next.name} on ${tw.next.mountain}, head to head`, who: tw.next.name };
+  if (tw?.final?.here && tw.rides !== false && !mirrored) return { verb: 'Ride', why: 'The last race, all twelve', aria: `Ride the last race: all twelve of The Twelve on ${tw.final.mountain}`, who: null };
+  const grudge = m.greet ? /^(?:Your nemesis )?(.+) is waiting on /.exec(m.greet) : null;
+  if (grudge && !mirrored) return { verb: 'Ride', why: `${grudge[1]} is waiting`, aria: `Ride ${where}. ${grudge[1]} is waiting here`, who: grudge[1] };
+  const rung = /^Next: (.+), [\d:.]+, ([\d.]+ s) up$/.exec(m.nextRung ?? '');
+  if (rung && !mirrored && !hour) return { verb: 'Ride', why: `${rung[1]} is ${nb(rung[2])} ahead`, aria: `Ride ${where}. ${rung[1]} is ${rung[2]} ahead of you on its ladder`, who: rung[1] };
+  // (The picked chip names the place: Ride says how it rides, or what it is like, never its name a second time.)
+  const how = [hour ? hour.phrase.charAt(0).toUpperCase() + hour.phrase.slice(1) : '', mirrored ? (hour ? 'mirrored' : 'Mirrored') : ''].filter(Boolean).join(', ');
+  return { verb: 'Ride', why: how || (sel?.tagline ?? where), aria: `Ride ${where}`, who: null };
+}
+
+/** The one quiet line: the nearest thing you are working toward, in words, and never what Ride already says. A
+ *  locked chip just pressed (what opens it); the next mountain by ghosts; Lanternfall by The Twelve; the next page of
+ *  the Almanac, named as a prize. */
+export function titleAim(m: TitleModel, locked: MountainCard | null = null): { icon: IconName; text: string; tone: 'ghost' | 'plain' } {
+  if (m.firstVisit) return { icon: 'ghost', text: 'Pass ghosts to unlock new mountains', tone: 'ghost' };
+  const c = locked;
+  if (c) {
+    const what = c.unlockText.replace(/ to unlock$/, '').replace(/^Pass/, 'pass').replace(/^Beat/, 'beat');
+    return { icon: 'lock', text: `${c.name}: ${what} to open it`, tone: 'plain' };
+  }
+  const byGhosts = m.mountains
+    .filter((x) => x.locked && /ghost/.test(x.unlockText))
+    .map((x) => ({ c: x, n: Number(/(\d+)/.exec(x.unlockText)?.[1] ?? 999) }))
+    .sort((a, b) => a.n - b.n)[0];
+  if (byGhosts) return { icon: 'ghost', text: `${fmt(byGhosts.n)} more ${byGhosts.n === 1 ? 'ghost opens' : 'ghosts open'} ${byGhosts.c.name}`, tone: 'ghost' };
+  const lf = m.mountains.find((x) => x.locked && /Twelve/.test(x.unlockText));
+  if (lf) return { icon: 'trophy', text: `Beat ${/(\d+)/.exec(lf.unlockText)?.[1] ?? 'more'} more of The Twelve to open ${lf.name}`, tone: 'plain' };
+  const bar = m.spine?.bar;
+  const next = bar?.next?.[0];
+  // (The XP and the rank first, the prize after: "900 XP to Rider Rank 26: the Crane's Memory charm".)
+  if (bar && next) return { icon: 'book', text: `${fmt(bar.need)}${NBSP}XP to Rider Rank ${bar.page + 1}: ${prizeLower(next)}`, tone: 'plain' };
+  return { icon: 'book', text: 'Every page of the Almanac turned', tone: 'plain' };
 }
 
 const MEDAL = ['', 'Bronze', 'Silver', 'Gold'] as const;
