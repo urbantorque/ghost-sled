@@ -158,14 +158,19 @@ describe('the one button', () => {
 
   it('a mountain this run opened is the button when the choice was a plain run again', () => {
     const b = storyButton(model({ unlockedMountains: [{ id: 'frostfang', name: 'Frostfang Glacier', biome: 'glacier', tagline: 'Blue hour, aurora, dawn' }], runAgainLabel: { text: 'Run Again', aria: 'Run again' }, spine: spineStub() }));
-    expect(b.label).toBe('Ride Frostfang Glacier');
+    // (The card above it names the mountain; the button rides "it", and a reader hears the name.)
+    expect(b.label).toBe('Ride It');
+    expect(b.aria).toMatch(/Frostfang Glacier/);
     const duel = storyButton(model({ unlockedMountains: [{ id: 'frostfang', name: 'Frostfang Glacier', biome: 'glacier', tagline: '' }], runAgainLabel: { text: 'Next Duel: Old Wren', aria: 'Duel Old Wren' }, spine: { ...spineStub(), primary: { kind: 'duel', text: 'Next Duel: Old Wren', sub: 'On Pinecrest, head to head', aria: 'Duel Old Wren' } } }));
     expect(duel.label).toBe('Next Duel: Old Wren');
   });
 
   it("a rematch's reason is the rival's own time to beat", () => {
-    const b = storyButton(model({ ghosts: [ghost('Pip Thistle', 166.1)], runAgainLabel: { text: 'Rematch Pip Thistle', aria: 'Rematch' }, spine: { ...spineStub(), primary: { kind: 'rematch', text: 'Rematch Pip Thistle', sub: '5.3 s behind', aria: 'Rematch' } } }));
+    const b = storyButton(model({ ghosts: [ghost('Pip Thistle', 166.1)], runAgainLabel: { text: 'Rematch Pip Thistle', aria: 'Rematch Pip Thistle, 5.3 s behind, run again' }, spine: { ...spineStub(), primary: { kind: 'rematch', text: 'Rematch Pip Thistle', sub: '5.3 s behind', aria: 'Rematch Pip Thistle, 5.3 s behind, run again' } } }));
     expect(b.why).toBe('2:46.1 to beat');
+    // (Beat one names the rider just ahead, so the button does not say the name again.)
+    expect(b.label).toBe('Rematch');
+    expect(b.aria).toMatch(/Pip Thistle/);
   });
 
   it("a Daily's reason is the next medal's mark and how far off it was", () => {

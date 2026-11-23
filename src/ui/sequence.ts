@@ -255,6 +255,19 @@ export interface StoryButton {
 }
 
 export function storyButton(m: ResultsModel): StoryButton {
+  const b = buttonWords(m);
+  // Said once: the rider the moment's fact names is not named again on the button ("Pip Thistle held you off" over
+  // "Rematch"), and the mountain the card turns over is "it" ("New mountain / Sakura Ridge" over "Ride It"). A reader
+  // hears the whole name in the button's own.
+  const fact = resultsMoment(m).fact;
+  const named = /^(Rematch|Next Duel:) (.+)$/.exec(b.label);
+  if (named && fact?.name && named[2] === fact.name) return { ...b, label: named[1] === 'Rematch' ? 'Rematch' : 'Next Duel' };
+  const mt = m.unlockedMountains?.[0];
+  if (mt && b.label === `Ride ${mt.name}`) return { ...b, label: 'Ride It' };
+  return b;
+}
+
+function buttonWords(m: ResultsModel): StoryButton {
   const p = m.spine?.primary ?? null;
   const label = m.runAgainLabel?.text ?? p?.text ?? 'Run Again';
   // The spine's line, when the label is the spine's (a friend's challenge names its own label and has no line).

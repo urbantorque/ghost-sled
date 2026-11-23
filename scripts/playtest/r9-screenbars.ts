@@ -255,7 +255,7 @@ export const SYSTEMS: Record<string, RegExp> = {
   bests: /\bbest\b/i,
   'The Twelve': /The Twelve/i,
   // (Round 9: the title's door and its room say "Daily and Cup" and "This Week's Cup".)
-  'the Cup': /Weekly Cup|Cup/i,
+  'the Cup': /Weekly Cup|\bCup\b/i,
   'the league': /league|division/i,
   Trials: /\bTrial/i,
   'the Daily': /Daily Mountain|today's Daily|\bDaily\b/i,
