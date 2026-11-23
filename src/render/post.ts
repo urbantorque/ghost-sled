@@ -1204,6 +1204,57 @@ export class PostFX {
     pipe.end(lens);
   }
 
+  /**
+   * Round 9 (the shop lane): a scene of its own (the garage's place, render/garagescene.ts) through the frame's own
+   * scene target and composite: drawn at the tier's size and samples, bloomed where the tier blooms, graded by the
+   * grade set, and edge-smoothed by the composite's walk; none of the run's passes (no rebuild, occlusion, shafts, lens
+   * or speed) and nothing of the run's state (the streaks, the punch, the danger) reaches it. Low (no post) draws it
+   * straight to the canvas with its own anti-aliasing, as a run does.
+   */
+  renderPlain(scene: Scene, camera: Camera, time: number): void {
+    const r = this.renderer;
+    if (!this.enabled) {
+      r.setRenderTarget(null);
+      r.render(scene, camera);
+      return;
+    }
+    const target = this.sceneRT;
+    r.setRenderTarget(target);
+    r.render(scene, camera);
+    const src = target.texture;
+    const sw = this.sceneW;
+    const sh = this.sceneH;
+    if (this.bloomEnabled) {
+      this.prefilter.uniforms.tSrc.value = src;
+      this.prefilter.uniforms.uTexel.value.set(1 / sw, 1 / sh);
+      this.pass(this.prefilter, this.mips[0]);
+      for (let i = 1; i < this.mips.length; i++) {
+        this.down.uniforms.tSrc.value = this.mips[i - 1].texture;
+        this.down.uniforms.uTexel.value.set(1 / this.mips[i - 1].width, 1 / this.mips[i - 1].height);
+        this.pass(this.down, this.mips[i]);
+      }
+      for (let i = this.mips.length - 1; i > 0; i--) {
+        const from = i === this.mips.length - 1 ? this.mips[i] : this.ups[i];
+        this.up.uniforms.tSrc.value = from.texture;
+        this.up.uniforms.tBase.value = this.mips[i - 1].texture;
+        this.up.uniforms.uTexel.value.set(1 / from.width, 1 / from.height);
+        this.pass(this.up, this.ups[i - 1]);
+      }
+    }
+    const u = this.composite.uniforms;
+    u.tScene.value = src;
+    u.tBloom.value = (this.ups[0] ?? this.mips[0]).texture;
+    u.uUseBloom.value = this.bloomEnabled ? 1 : 0;
+    u.uBloom.value = this.moodBloom * 0.6;
+    u.uTexel.value.set(1 / sw, 1 / sh);
+    u.uFxaa.value = this.multisampled ? 0 : 1;
+    for (const k of ['uFoot', 'uSpeed', 'uPunch', 'uFringe', 'uFlash', 'uGrain', 'uDanger', 'uCool', 'uShaft', 'uLens', 'uFocal', 'uGust', 'uGlitter', 'uStreakFoot']) if (u[k]) u[k].value = 0;
+    u.uVignette.value = 1;
+    u.uTime.value = time;
+    u.uFlowLook.value.set(0, 0, 0, 0);
+    this.pass(this.composite, null);
+  }
+
   /** Renders the scene from a second camera into a framed inset. x, y, w, h are CSS pixels with the
    *  origin at the bottom left, like WebGLRenderer.setViewport. */
   /** `refresh` false re-composites the last inset image without rendering the scene again. */

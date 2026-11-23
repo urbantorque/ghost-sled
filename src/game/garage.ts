@@ -79,7 +79,7 @@ export interface ScarfDef {
 }
 
 /** A hat's silhouette (meshes.ts playerHat builds each). */
-export type HatId = 'beanie' | 'watch' | 'twinpom' | 'trapper' | 'bobbles' | 'chullo' | 'longcap' | 'crest' | 'muffs' | 'downcap' | 'twintails' | 'floppeak';
+export type HatId = 'beanie' | 'watch' | 'twinpom' | 'trapper' | 'bobbles' | 'chullo' | 'longcap' | 'muffs' | 'downcap' | 'twintails' | 'floppeak';
 
 export interface HatDef {
   id: HatId;
@@ -186,15 +186,15 @@ const sc = (id: string, name: string, blurb: string, price: number, look: Partia
 /** The classic knit comes first: every rider has it, and it is what the rider wore before round 6. */
 export const SCARVES: readonly ScarfDef[] = [
   sc('classic', 'Classic Knit', 'Two tails, two deeper stripes near the tips', 0, { pattern: 'tipStripes' }, FREE),
-  sc('creambar', 'Cream Bar', 'Two cream bars across each tail', 80, { pattern: 'bars', accent: 'cream' }),
+  sc('creambar', 'Cream Bar', 'Two cream bars across each tail, one mid-tail and one by the tip', 80, { pattern: 'bars', accent: 'cream' }),
   sc('chunky', 'Chunky Rib', 'Short and twice as broad, ribbed in ink', 110, { pattern: 'rib', accent: 'ink', length: 0.72, width: 1.75 }),
-  sc('tassel', 'Fringe Knit', 'A long fringe at each tip that splays as it streams', 150, { pattern: 'tipStripes', length: 0.9, ends: 'fringe' }),
+  sc('tassel', 'Fringe Knit', 'A long ink fringe at each tip that splays as it streams', 150, { pattern: 'plain', accent: 'ink', length: 0.85, ends: 'fringe' }),
   sc('inkband', 'Ink Bands', 'Broad ink bands all down its length', 190, { pattern: 'bands', accent: 'ink', length: 1.12 }),
   sc('snowtip', 'Snow Tip', 'The last third of each tail dipped in cream, a cream tassel', 240, { pattern: 'tip', accent: 'cream', length: 1.1, ends: 'tassel' }),
-  sc('streamer', 'Long Streamer', 'One tail half as long again, the other short', 300, { pattern: 'plain', width: 0.82, form: 'long' }),
-  sc('double', 'Double Wrap', 'Four tails in two pairs, the deeper stripes on each', 380, { pattern: 'tipStripes', length: 1.02, form: 'four' }),
-  sc('pomtails', 'Pom Tails', 'Each tail swung low by a big knit pom', 480, { pattern: 'tipStripes', length: 0.92, ends: 'pom' }),
-  sc('rope', 'Rope Braid', 'Both tails braided into one thick rope, a cream strand through it', 640, { pattern: 'braid', accent: 'cream', length: 1.25, width: 1.3, form: 'one', ends: 'tassel' }),
+  sc('streamer', 'Long Streamer', 'One slim tail twice as long as any other, ink-tipped', 300, { pattern: 'tip', accent: 'ink', width: 0.62, length: 1.45, form: 'long' }),
+  sc('double', 'Double Wrap', 'Four tails, a pair streaming to each side', 380, { pattern: 'tipStripes', length: 1.0, form: 'four' }),
+  sc('pomtails', 'Pom Tails', 'Each tail swung low by a big cream pom', 480, { pattern: 'tipStripes', accent: 'cream', length: 0.92, ends: 'pom' }),
+  sc('rope', 'Rope Braid', 'Both tails braided into one thick rope with a cream tassel', 640, { pattern: 'braid', length: 1.2, width: 1.6, form: 'one', ends: 'tassel' }),
   // The Almanac's, never sold.
   sc('almanacknot', 'Almanac Knot', 'A big bow at the throat, two short ink-tipped tails', 0, { pattern: 'tip', accent: 'ink', length: 0.62, width: 1.05, bow: true }, { kind: 'almanac', page: 17 }),
   sc('almanacveil', 'Night Veil', 'Long fine tails, each weighted by a little paper lamp', 0, { pattern: 'plain', length: 1.35, width: 0.62, ends: 'lamp' }, { kind: 'almanac', page: 42 }),
@@ -229,10 +229,9 @@ export const HATS: readonly HatDef[] = [
   { id: 'bobbles', name: 'Bobble Hem', blurb: 'A hem of cream bobbles hanging round the back of the cuff', price: 200, source: SHOP },
   { id: 'chullo', name: 'Braided Chullo', blurb: 'A point on top and two braids hanging past the jaw', price: 260, source: SHOP },
   { id: 'longcap', name: 'Long Knit Cap', blurb: 'A tail streaming back off one side, a pom at its end', price: 320, source: SHOP },
-  { id: 'crest', name: 'Crest Knit', blurb: 'A tall cream fin standing from brow to nape', price: 400, source: SHOP },
-  { id: 'muffs', name: 'Pom Muffs', blurb: 'No crown: a knit band and two big fur muffs', price: 480, source: SHOP },
+  { id: 'muffs', name: 'Pom Muffs', blurb: 'A broad knit band over the crown and two big fur muffs', price: 440, source: SHOP },
   { id: 'downcap', name: 'Down Cap', blurb: 'A big puffed dome in fat quilted rings, a real brim', price: 580, source: SHOP },
-  { id: 'twintails', name: 'Twin Tails', blurb: 'Two soft knit tails hanging and streaming off the back', price: 700, source: SHOP },
+  { id: 'twintails', name: 'Twin Tails', blurb: 'Two long knit tails streaming back off the crown, poms at their ends', price: 700, source: SHOP },
   { id: 'floppeak', name: 'Flop Peak', blurb: 'A tall felt cone flopped forward over the brow, a pom swinging', price: 850, source: SHOP },
 ];
 
@@ -267,7 +266,7 @@ export const TRAILS: readonly TrailDef[] = [
   tr('powder', 'Fresh Powder', 'Snow, and only snow', 0, {}, FREE),
   tr('honey', 'Honey Plume', 'A rooster tail of big honey billows, twice as tall', 80, { tint: '#FFE2A8', tintK: 0.7, plume: 2 }),
   tr('sparks', 'Lantern Sparks', 'Marigold sparks flicked off the runners', 130, { tint: '#FFF1D6', tintK: 0.2, mote: MARIGOLD, motes: 70, moteStyle: 'flick' }),
-  tr('glints', 'Gold Leaf', 'Flakes of gold leaf that spiral up behind and flash', 180, { form: flakes('leaf', 'rise', 34, 0.13, GOLD, '#FFF0B8', true) }),
+  tr('glints', 'Gold Leaf', 'Flakes of gold leaf that spiral up behind and flash', 180, { form: flakes('leaf', 'rise', 34, 0.2, GOLD, '#FFF0B8', true) }),
   tr('stardust', 'Paper Snow', 'Cut-paper snowflakes that flutter and turn as they fall', 250, { form: flakes('snowflake', 'flutter', 40, 0.24, PAPER, CREAMY) }),
   tr('comet', 'Comet Tail', 'Two ribbons of light that rise off the runners and bend with the carve', 340, { form: { kind: 'ribbons', head: AMBER, tail: MARIGOLD } }),
   tr('petals', 'Petal Drift', 'Cream and gold petals that spin flat and sail out sideways', 450, { form: flakes('petal', 'sail', 42, 0.2, PAPER, GOLD) }),
@@ -275,7 +274,7 @@ export const TRAILS: readonly TrailDef[] = [
   tr('kitetails', 'Kite Tails', 'Two strings of paper bows flying high off the stern', 750, { form: { kind: 'kites', shape: 'bow', body: PAPER, alt: MARIGOLD } }),
   // The Almanac's, never sold.
   tr('almanacmoth', 'Lamp Moths', 'Three soft lights that loop round you and follow', 0, { form: { kind: 'moths', body: '#FFE6A8' } }, { kind: 'almanac', page: 28 }),
-  tr('almanacember', 'Banked Embers', 'Embers that lift off the runners in a glowing column', 0, { form: flakes('ember', 'rise', 30, 0.1, AMBER, MARIGOLD, true) }, { kind: 'almanac', page: 46 }),
+  tr('almanacember', 'Banked Embers', 'Embers that lift off the runners in a glowing column', 0, { form: flakes('ember', 'rise', 46, 0.14, AMBER, MARIGOLD, true) }, { kind: 'almanac', page: 46 }),
   tr('almanackeeper', "Keeper's Lantern", 'A paper lantern riding behind on a line', 0, { form: { kind: 'keeper', body: PAPER } }, { kind: 'almanac', page: 50 }),
   // The mountains' sets (in the air: DECISIONS 392 keeps marks off the snow).
   tr('staglights', 'Stag Lights', 'Little lights that bound alongside in arcs, the White Stag\'s', 0, { form: flakes('spark', 'hop', 9, 0.16, '#FFF0C8', MARIGOLD, true) }, { kind: 'set', mountain: 'pinecrest', piece: 1 }),

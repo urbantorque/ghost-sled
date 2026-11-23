@@ -8,6 +8,8 @@ import { icon } from './icons';
 import { SettingsPanel } from './settings';
 import { missionList } from './title';
 import { hatArt, paintArt, scarfArt, soundArt, trailArt } from './garageart';
+import type { GarageAct, GarageView } from './garageview';
+import type { GarageUI } from './garage';
 
 // Pause overlay (Resume, the run's missions, inline settings, Home) and the two sheets: the Garage and
 // Settings.
@@ -216,6 +218,12 @@ export class Menus {
   readonly settings: Layer;
   /** Round 8: the Almanac and the Spirit Album, one sheet with a tab each (almanac.ts draws them). */
   readonly books: Layer;
+  /** Round 9 (the shop lane): the garage as a place: its UI (garage.ts, loaded on demand) over the scene the app
+   *  draws in the canvas. The round 6 sheet (`sleds`) stays for the dev harness. */
+  readonly garage: Layer;
+  private garageUi: GarageUI | null = null;
+  private garageAct: ((a: GarageAct) => void) | null = null;
+  private garageLoad: Promise<void> | null = null;
   private readonly booksSheet: HTMLElement;
   private readonly booksBody: HTMLElement;
   private booksTab: 'almanac' | 'album' = 'almanac';
@@ -329,6 +337,46 @@ export class Menus {
     const booksWrap = this.wrap(this.booksSheet, () => this.closeSheet(this.books));
     this.books = new Layer(booksWrap, 200);
     parent.append(booksWrap);
+
+    // The garage's place (round 9): no scrim, the scene is the picture.
+    const garageWrap = h('div', 'gs-gar-layer');
+    this.garage = new Layer(garageWrap, 200);
+    parent.append(garageWrap);
+  }
+
+  /** Round 9: opens the garage over its place, or shows it its new state (a purchase, a tier fitted). Its module loads
+   *  on the first open. `act` hears every request the garage makes, its close included. */
+  async showGarage(v: GarageView, act: (a: GarageAct) => void): Promise<void> {
+    this.garageAct = act;
+    if (!this.garageUi) {
+      this.garageLoad ??= import('./garage').then((m) => {
+        this.garageUi = new m.GarageUI(this.ctx, (a) => (a.kind === 'close' ? this.closeGarage() : this.garageAct?.(a)));
+        this.garage.el.append(this.garageUi.el);
+      });
+      await this.garageLoad;
+    }
+    const ui = this.garageUi;
+    if (!ui) return;
+    if (this.garage.show()) this.rememberFocus();
+    this.garage.el.parentElement?.classList.add('gs-garage-on');
+    ui.show(v);
+    this.onChange();
+  }
+
+  /** Round 9: the purchase's line over the place ("Yours: the Pom Muffs"), for a couple of seconds. */
+  garageMoment(text: string | null): void {
+    this.garageUi?.moment(text);
+  }
+
+  /** Closes the garage (its Back, Escape, the pad's B) and tells the app, which puts the world back. */
+  closeGarage(): void {
+    if (!this.garage.open) return;
+    this.garage.hide();
+    this.garage.el.parentElement?.classList.remove('gs-garage-on');
+    this.garageUi?.reset();
+    this.onChange();
+    this.garageAct?.({ kind: 'close' });
+    if (!this.anyOpen) this.restore();
   }
 
   private sheetHead(title: string, id: string, onClose: () => void, extra: HTMLElement | null): HTMLElement {
@@ -359,17 +407,18 @@ export class Menus {
 
   /** True when the node is part of the pause overlay or one of the sheets. */
   contains(n: Node): boolean {
-    return this.pause.el.contains(n) || this.sleds.el.contains(n) || this.settings.el.contains(n) || this.books.el.contains(n);
+    return this.pause.el.contains(n) || this.sleds.el.contains(n) || this.settings.el.contains(n) || this.books.el.contains(n) || this.garage.el.contains(n);
   }
 
   get anyOpen(): boolean {
-    return this.pause.open || this.sleds.open || this.settings.open || this.books.open;
+    return this.pause.open || this.sleds.open || this.settings.open || this.books.open || this.garage.open;
   }
 
   /** The open menu surface on top (settings over sleds over pause), or null. */
   get topEl(): HTMLElement | null {
     if (this.settings.open) return this.settings.el;
     if (this.books.open) return this.books.el;
+    if (this.garage.open) return this.garage.el;
     if (this.sleds.open) return this.sleds.el;
     if (this.pause.open) return this.pause.el;
     return null;
@@ -872,6 +921,7 @@ export class Menus {
   /** Closes the sheets (Sleds, Settings). Pause and results are closed by their own calls. */
   closeMenus(): void {
     const was = this.sleds.open || this.settings.open || this.books.open;
+    if (this.garage.open) this.closeGarage();
     this.sleds.hide();
     this.settings.hide();
     this.books.hide();

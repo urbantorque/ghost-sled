@@ -1,0 +1,484 @@
+/*
+  Round 9, the shop lane: the garage over its place (src/ui/garage.ts), on the round's tokens (tokens.css). The place
+  is the picture: the UI keeps to a column at the reading edge on a desk and a sheet over the thumbs on a phone held
+  upright, and everything else is the workshop. Ink panels at 86% with the hairline, full pills and 18 px cards, the
+  vermillion only on the one primary (a purchase or a tier fitted), the gifts' marigold only on the wallet.
+*/
+
+.gs-gar-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-screen);
+  pointer-events: none;
+}
+
+/* While the garage is open the title (or the results) under it steps out: the place is the picture. */
+.gs-garage-on > :not(.gs-gar-layer) {
+  visibility: hidden;
+}
+
+.gs-gar {
+  position: absolute;
+  inset: 0;
+  font-family: var(--font);
+  font-size: var(--u);
+  color: var(--c-text);
+  pointer-events: none;
+}
+
+.gs-gar-head,
+.gs-gar-side {
+  pointer-events: auto;
+}
+
+.gs-gar-head {
+  position: absolute;
+  top: var(--st);
+  left: var(--sl);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  max-width: calc(100vw - var(--sl) - var(--sr) - clamp(320px, 31vw, 430px) - var(--sp-4));
+}
+
+.gs-gar-title {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-display);
+  font-style: italic;
+  line-height: var(--lh-tight);
+  text-shadow: var(--halo);
+}
+
+.gs-gar-wallet {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  min-height: var(--hit);
+  padding: 0 1em;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  font-weight: var(--fw-label);
+  font-variant-numeric: tabular-nums;
+}
+
+.gs-gar-wallet .gs-i {
+  color: var(--c-gift);
+}
+
+.gs-gar-wallet-w {
+  color: var(--text-dim);
+  font-weight: var(--fw-text);
+}
+
+.gs-gar-side {
+  position: absolute;
+  top: var(--st);
+  right: var(--sr);
+  bottom: var(--sb);
+  width: clamp(320px, 31vw, 430px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-height: 0;
+}
+
+.gs-gar-tabs {
+  display: flex;
+  gap: var(--sp-1);
+  padding: var(--sp-1);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: none;
+}
+
+.gs-gar-tab,
+.gs-gar-tile,
+.gs-gar-chip {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gs-gar-tab {
+  flex: 1 0 auto;
+  min-height: 38px;
+  padding: 0 0.8em;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--fs-s);
+}
+
+.gs-gar-tab.is-on {
+  background: var(--c-text);
+  color: var(--c-ink);
+}
+
+.gs-gar-card {
+  flex: 0 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  overscroll-behavior: contain;
+}
+
+.gs-gar-name {
+  margin: 0;
+  text-wrap: balance;
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-display);
+  font-style: italic;
+  line-height: var(--lh-tight);
+  padding-bottom: 2px;
+}
+
+.gs-gar-blurb,
+.gs-gar-from,
+.gs-gar-note,
+.gs-gar-sig-line {
+  margin: 0;
+  line-height: var(--lh-text);
+}
+
+.gs-gar-blurb {
+  font-weight: var(--fw-text);
+}
+
+.gs-gar-from,
+.gs-gar-note,
+.gs-gar-dim {
+  color: var(--text-dim);
+  font-size: var(--fs-s);
+  font-weight: var(--fw-text);
+}
+
+.gs-gar-note {
+  margin-top: var(--sp-1);
+}
+
+.gs-gar-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+
+.gs-gar-act {
+  min-width: 12em;
+}
+
+.gs-gar-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  margin: 0;
+  min-height: var(--hit);
+  font-weight: var(--fw-label);
+}
+
+.gs-gar-sig {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-card);
+  background: rgba(245, 243, 255, 0.05);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.gs-gar-sig-line {
+  flex: 1;
+  font-size: var(--fs-s);
+}
+
+.gs-gar-sub {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-s);
+  font-weight: var(--fw-label);
+  color: var(--text-dim);
+}
+
+.gs-gar-tiers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.gs-gar-tier {
+  display: grid;
+  grid-template-columns: 6.5em 1fr;
+  gap: 2px var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-card);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.gs-gar-tier.is-fitted {
+  background: rgba(245, 243, 255, 0.06);
+}
+
+.gs-gar-tier.is-next {
+  box-shadow: inset 0 0 0 1px var(--hair-strong);
+}
+
+.gs-gar-tier-name {
+  font-weight: var(--fw-label);
+}
+
+.gs-gar-tier-what {
+  font-size: var(--fs-s);
+  color: var(--text-dim);
+  line-height: var(--lh-text);
+}
+
+.gs-gar-tier-state,
+.gs-gar-fit {
+  grid-column: 2;
+  justify-self: start;
+}
+
+.gs-gar-tier-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  font-size: var(--fs-s);
+  font-weight: var(--fw-label);
+}
+
+.gs-gar-tier-state.is-fitted .gs-i,
+.gs-gar-state .gs-i {
+  color: var(--c-text);
+}
+
+.gs-gar-orn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+}
+
+.gs-gar-chip {
+  min-height: 36px;
+  padding: 0 0.85em;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--c-text);
+  box-shadow: inset 0 0 0 1px var(--hair-strong);
+  font-size: var(--fs-s);
+  font-weight: var(--fw-label);
+}
+
+.gs-gar-chip.is-on {
+  background: var(--c-text);
+  color: var(--c-ink);
+}
+
+.gs-gar-chip:disabled {
+  opacity: 0.55;
+}
+
+.gs-gar-strip {
+  flex: 1 1 auto;
+  min-height: 7em;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: var(--sp-2);
+  padding: var(--sp-1);
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.gs-gar-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  min-height: 3.6em;
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-radius: var(--r-card);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  color: var(--c-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--dur-tap) var(--ease-out), background var(--dur-tap) var(--ease-out);
+}
+
+.gs-gar-tile:hover {
+  background: var(--surface-raised);
+}
+
+.gs-gar-tile:active {
+  transform: scale(0.98);
+}
+
+.gs-gar-tile.is-on {
+  box-shadow: inset 0 0 0 2px var(--c-text);
+}
+
+.gs-gar-tile:focus-visible,
+.gs-gar-tab:focus-visible,
+.gs-gar-chip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.gs-gar-tile-name {
+  font-weight: var(--fw-label);
+  line-height: var(--lh-tight);
+}
+
+.gs-gar-tile-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.gs-gar-tile.is-buy .gs-gar-tile-state .gs-i {
+  color: var(--c-gift);
+}
+
+.gs-gar-tile.is-found .gs-gar-tile-name,
+.gs-gar-tile.is-later .gs-gar-tile-name {
+  color: var(--text-dim);
+}
+
+.gs-gar-new {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+}
+
+.gs-gar-towns {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.gs-gar-town {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px var(--sp-2);
+  align-items: center;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-card);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.gs-gar-town-name {
+  font-weight: var(--fw-label);
+}
+
+.gs-gar-town-lit {
+  font-size: var(--fs-s);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.gs-gar-town > :last-child {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+/* The moment of a purchase: the scene has the floor; a line names the piece. */
+.gs-gar-moment {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--sb) + var(--sp-6));
+  transform: translateX(-50%);
+  padding: var(--sp-2) var(--sp-5);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hair), var(--shadow);
+  font-weight: var(--fw-label);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.gs-gar-moment b {
+  font-style: italic;
+  font-weight: var(--fw-display);
+}
+
+/* A phone held upright: the place in the top half, the shelf a sheet over the thumbs. */
+@media (max-aspect-ratio: 4/5) {
+  .gs-gar-head {
+    max-width: none;
+    right: var(--sr);
+  }
+
+  .gs-gar-rafters .gs-btn-label {
+    font-size: var(--fs-s);
+  }
+
+  .gs-gar-side {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 54dvh;
+    padding: var(--sp-2) var(--sl) var(--sb) var(--sl);
+    border-radius: var(--r-card) var(--r-card) 0 0;
+    background: var(--surface-solid);
+    box-shadow: inset 0 1px 0 var(--hair), var(--shadow);
+    gap: var(--sp-2);
+  }
+
+  .gs-gar-tabs {
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  .gs-gar-card {
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  .gs-gar-strip {
+    flex: none;
+    min-height: 0;
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: var(--sp-1);
+  }
+
+  .gs-gar-tile {
+    flex: 0 0 auto;
+    min-width: 9.5em;
+  }
+
+  .gs-gar-moment {
+    bottom: calc(54dvh + var(--sp-3));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-gar-tile {
+    transition: none;
+  }
+}

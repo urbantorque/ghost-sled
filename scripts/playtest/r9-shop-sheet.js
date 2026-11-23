@@ -22,7 +22,7 @@ async (page) => {
 
   // Every look a sheet shoots, by shelf (the key's names are the game's own, garage.ts and paints.ts).
   const SHEETS = {
-    hats: ['beanie', 'watch', 'twinpom', 'trapper', 'bobbles', 'chullo', 'longcap', 'crest', 'muffs', 'downcap', 'twintails', 'floppeak'].map((id) => ({ key: id, look: { hat: id } })),
+    hats: ['beanie', 'watch', 'twinpom', 'trapper', 'bobbles', 'chullo', 'longcap', 'muffs', 'downcap', 'twintails', 'floppeak'].map((id) => ({ key: id, look: { hat: id } })),
     scarves: ['classic', 'creambar', 'chunky', 'tassel', 'inkband', 'snowtip', 'streamer', 'double', 'pomtails', 'rope', 'almanacknot', 'almanacveil'].map((id) => ({ key: id, look: { scarf: id } })),
     scarvesFound: ['firchevron', 'fangedge', 'ashmarket', 'petalhem', 'lamproad', ...Array.from({ length: 12 }, (_, i) => `ch${i + 1}scarf`)].map((id) => ({ key: id, look: { scarf: id } })),
     burn: ['classic', 'creambar', 'inkband', 'double'].map((id) => ({ key: `${id}-flow`, look: { scarf: id, flow: 4 } })),
@@ -94,6 +94,16 @@ async (page) => {
         }
         return zNow();
       };
+      // (A calm moment: on the snow, not carving hard, not drifting, so no spray stands between the lens and the rider.)
+      window.__shCalm = (n) => {
+        for (let i = 0; i < n; i++) {
+          const r = window.__gs.run;
+          const st = r && r.sim.s;
+          if (!st || (st.grounded && Math.abs(st.carve) < 0.3 && !st.drifting && st.speed > 15)) break;
+          vc.step(1000 / 60);
+        }
+        return zNow();
+      };
       window.__shSteps = (n) => {
         for (let i = 0; i < n; i++) vc.step(1000 / 60);
         return zNow();
@@ -146,7 +156,12 @@ async (page) => {
     // place for every one. The rest are put on one after another at z, a few frames apart.)
     const each = (c.reloadEach || []).includes(shelf);
     const items = await boot(shelf);
-    if (!each) await to(c.z);
+    // (The ornaments are eighteen in a row: a shorter settle from a little earlier, so the last is shot before the leap.)
+    const settle = shelf === 'ornaments' ? 6 : c.settle;
+    if (!each) {
+      await to(shelf === 'ornaments' ? Math.min(c.z, 400) : c.z);
+      await page.evaluate(() => window.__shCalm(240));
+    }
     const shots = [];
     const wide = shelf.startsWith('trails') || shelf === 'outfits';
     for (const it of items) {
@@ -155,9 +170,10 @@ async (page) => {
         await to(c.z0);
         await page.evaluate((l) => window.__shApply(l), it.look);
         await to(c.z);
+        await page.evaluate(() => window.__shCalm(240));
       } else {
         await page.evaluate((l) => window.__shApply(l), it.look);
-        await page.evaluate((n) => window.__shSteps(n), c.settle);
+        await page.evaluate((n) => window.__shSteps(n), settle);
       }
       const box = await page.evaluate(() => window.__shBox());
       const h = Math.max(40, box.y - box.top);

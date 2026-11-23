@@ -38,9 +38,10 @@ import { type Graveyard, bundledGraveyards, graveyards } from './graveyards';
 import { planMarquee } from './marquee';
 import { ROSTER, riderByName } from '../bot/roster';
 import { STAR_GIFTS, masteryBoard, readMastery, settleMastery } from './mastery';
-import { PAINTS, paintById } from './paints';
-import { SLED_SHOP, creditLines, tiersOn } from './tracks';
-import { SETS, SHELVES, type ShelfId, freeItem, hatById, ornamentById, scarfById, setPiecesFor, soundById, trailById } from './garage';
+import { KEPT_PAINTS, PAINTS, paintById } from './paints';
+import { SLED_SHOP, TIER_NAMES, creditLines, fitTier, linesToGo, sledShop, tierState, tiersOn, trackOf, trackPrice } from './tracks';
+import { HATS, ORNAMENTS, SCARVES, SETS, SHELVES, SOUNDS, type ShelfId, type Source, TRAILS, freeItem, hatById, onSale, ornamentById, scarfById, setPiecesFor, soundById, sourceLine, trailById } from './garage';
+import type { GarageItemView, GaragePieceShelf, GarageShelfKey, GarageSledView, GarageView, GarageAct } from '../ui/garageview';
 import { WARD_CURVE } from './timescale';
 import { courseFor } from '../sim/course';
 import { rollForVariant } from '../sim/moments';
@@ -57,13 +58,13 @@ import { charmGatesOf, charmPoolOf, firstRunOf } from './charmpool';
 import { lanternSignals } from './charmsignals';
 import { ALL_CHARMS, CHARMS } from '../sim/charms';
 import { TRICKS } from '../sim/tricks';
-import { CHAPTER_EXTRAS, GARAGE_EXTRAS, type GarageExtra, almanacOpens, featureOpen, hourOpen, legsOpen, mirrorOpen, shelfExtras } from './almanac';
+import { CHAPTER_EXTRAS, GARAGE_EXTRAS, type GarageExtra, almanacOpens, featureOpen, hourOpen, legsOpen, mirrorOpen, monthsOpen, shelfExtras } from './almanac';
 import { type Trial, type TrialOutcome, type TrialTally, type TrialTargets, daysLeftWords, figureShort, figureText, newTally, startWords, settleTrial, stageWords, tallyStep, trialConfig, trialFor, trialKey, trialMedalNow, trialMountain, trialTargets, trialValue } from './trial';
 import { type Night, depthWords, mirrorKey, nightBeat, nightDepth, nightLeg, nightOn, settleLongNight, startNight } from './modes';
 import { showNightBeat } from '../ui/nightbeat';
 import { SYNERGY_KEYS } from './album';
 import { type LostTo, type PrimaryButton, primaryButton } from './goals';
-import { litByTown, lightLantern } from './lanterns';
+import { LANTERNS, litByTown, lightLantern } from './lanterns';
 import { setLanternRow } from '../render/lanternrow';
 import { ALT_HOURS, type Hour, hourOf, hourSwatches, setHour } from '../render/palette';
 import { type SpineOutcome, type SpineRun, type SpineSettlement, settleSpine } from './rank';
@@ -412,7 +413,8 @@ export class App {
       onSelectSled: (id) => this.selectSled(id),
       onBuySled: (id) => this.buySled(id),
       onSettings: (s) => this.applySettings(s),
-      onOpenSleds: () => this.ui.showSleds(this.sledCards(), this.save.data.gifts, this.paintCards(), this.garageShelves(), this.lanternRows()),
+      // (Round 9: the garage is a place, opened at a piece when the results' "Ready in the shop" names one.)
+      onOpenSleds: (piece?: string) => void this.openGarage(piece),
       onLightLantern: (id) => this.lightLantern(id),
       onSwapMission: (id) => this.swapMission(id),
       // Round 8: the books (the title's Rider Rank card and the album's count, and their tabs) and the results' beats.
@@ -1127,6 +1129,390 @@ export class App {
     this.ui.toast(`${def.name} unlocked`, 'gift', def.trait);
     this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards(), this.garageShelves(), this.lanternRows());
     this.refreshTitle();
+  }
+
+  // ------------------------------------------------------------------ round 9: the garage as a place
+
+  /** The garage's place while it is open (render/garagescene.ts, loaded on demand), and when it was asked for. */
+  private garagePlace: { scene: import('../render/garagescene').GarageScene; asked: number; first: boolean; w: number; h: number; hatBack: boolean; hatTried: string; moment: boolean; frames: number } | null = null;
+  private garageOpening = false;
+  /** What the place cost to open, the last time (window.__gs for the probes). */
+  garageCost: { importMs: number; buildMs: number; firstFrameMs: number; openMs: number; calls: number; triangles: number; geometries: number; textures: number; programs: number; settled?: { calls: number; triangles: number; geometries: number; textures: number; programs: number } } | null = null;
+
+  /**
+   * Opens the garage: its place (a workshop at dusk, your rider on your sled on a stand) imported now, drawn by the
+   * world's renderer while the world's own frame waits, and its UI over it. `piece` opens it at a piece ('sled:3',
+   * 'hat:muffs'), as the results' "Ready in the shop" does. Only from the title or the results.
+   */
+  private async openGarage(piece?: string): Promise<void> {
+    if (this.garagePlace || this.garageOpening || (this.phase !== 'title' && this.phase !== 'results' && this.phase !== 'boot')) return;
+    this.garageOpening = true;
+    const asked = performance.now();
+    try {
+      const mod = await import('../render/garagescene');
+      const importMs = performance.now() - asked;
+      setHour('alt');
+      const d = this.save.data;
+      const lit = Object.values(litByTown(d)).reduce((a, n) => a + n, 0);
+      const scene = new mod.GarageScene(this.tiers.tier === 'low', lit, this.placeLook(), () => reduced());
+      const c = this.world.renderer.domElement;
+      scene.resize(c.clientWidth || innerWidth, c.clientHeight || innerHeight);
+      this.garagePlace = { scene, asked, first: true, w: c.clientWidth, h: c.clientHeight, hatBack: false, hatTried: '', moment: false, frames: 0 };
+      this.garageCost = { importMs, buildMs: scene.cost.buildMs, firstFrameMs: 0, openMs: 0, calls: 0, triangles: 0, geometries: 0, textures: 0, programs: 0 };
+      await this.ui.showGarage(this.garageView(piece), (a) => this.garageAct(a));
+      // (The mountains' sets are checked once the place is up: a mastery board builds its mountain's course.)
+      setTimeout(() => {
+        if (this.syncSets() && this.garagePlace) void this.ui.showGarage(this.garageView(), (a) => this.garageAct(a));
+      }, 400);
+    } finally {
+      this.garageOpening = false;
+    }
+  }
+
+  /** The save's look as the place wears it. */
+  private placeLook(): import('../render/garagescene').PlaceLook {
+    const d = this.save.data;
+    const tiers: Record<number, number> = {};
+    for (const s of SLED_SHOP) tiers[s.index] = tiersOn(d, s.index);
+    return { sled: d.sled, hat: hatById(shelfState(d, 'hat').on).id, scarf: scarfById(shelfState(d, 'scarf').on), finish: paintById(d.paint), tiers, ornament: ornamentState(d).on, trail: trailById(shelfState(d, 'trail').on) };
+  }
+
+  /** One frame of the garage: the place, drawn in the world's stead. */
+  private frameGarage(dt: number): void {
+    const g = this.garagePlace;
+    if (!g) return;
+    const c = this.world.renderer.domElement;
+    if (c.clientWidth !== g.w || c.clientHeight !== g.h) {
+      g.w = c.clientWidth;
+      g.h = c.clientHeight;
+      g.scene.resize(g.w, g.h);
+    }
+    g.scene.frame(dt);
+    const r0 = performance.now();
+    const info = this.world.renderer.info;
+    const count = g.first || g.frames === 40;
+    if (count) {
+      info.autoReset = false;
+      info.reset();
+    }
+    this.world.drawPlace(g.scene.scene, g.scene.camera, this.time, g.scene.palette);
+    g.frames++;
+    if (count && this.garageCost) {
+      info.autoReset = true;
+      const drawn = { calls: info.render.calls, triangles: info.render.triangles, geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? 0 };
+      if (g.first) Object.assign(this.garageCost, { firstFrameMs: performance.now() - r0, openMs: performance.now() - g.asked, ...drawn });
+      else this.garageCost.settled = drawn;
+      g.first = false;
+    }
+    if (g.moment && !g.scene.inMoment) {
+      g.moment = false;
+      this.skipHook(false);
+    }
+  }
+
+  /** Any key or tap skips a purchase's moment to its end. */
+  private readonly skipMoment = (): void => {
+    this.garagePlace?.scene.skipMoment();
+  };
+
+  private skipHook(on: boolean): void {
+    if (on) {
+      window.addEventListener('pointerdown', this.skipMoment, true);
+      window.addEventListener('keydown', this.skipMoment, true);
+    } else {
+      window.removeEventListener('pointerdown', this.skipMoment, true);
+      window.removeEventListener('keydown', this.skipMoment, true);
+    }
+  }
+
+  /** Puts the world back once the garage closes: its light and hour, the look the save says is worn, the title. */
+  private closeGarage(): void {
+    const g = this.garagePlace;
+    if (!g) return;
+    this.skipHook(false);
+    g.scene.dispose();
+    this.garagePlace = null;
+    setHour(this.hourPicked() ? 'alt' : 'day');
+    this.world.restoreLight();
+    this.applyLook();
+    this.refreshTitle();
+  }
+
+  /** The garage's requests (garageview.ts GarageAct). */
+  private garageAct(a: GarageAct): void {
+    const g = this.garagePlace;
+    if (a.kind === 'close') {
+      this.closeGarage();
+      return;
+    }
+    if (!g) return;
+    const d = this.save.data;
+    const scene = g.scene;
+    const look = { ...scene.worn };
+    switch (a.kind) {
+      case 'skip':
+        scene.skipMoment();
+        return;
+      case 'try': {
+        // Everything is tried on before it is bought: the piece on the rider in the place, the camera on it.
+        const shot = this.tryOn(look, a.shelf, a.id);
+        scene.wear(look);
+        if (a.shelf === 'hat') {
+          // A hat from behind, as the run sees it; the same hat again, from the front.
+          g.hatBack = a.id === g.hatTried ? !g.hatBack : true;
+          g.hatTried = a.id;
+          scene.show(g.hatBack ? 'hatBack' : 'hatFront');
+        } else scene.show(shot);
+        if (a.shelf === 'sound') this.audio.previewSledSound(soundById(a.id).id);
+        return;
+      }
+      case 'listen':
+        this.audio.previewSledSound(soundById(a.id).id);
+        return;
+      case 'watch':
+        scene.watchTrick(a.sled);
+        return;
+      case 'rafters':
+        scene.show(a.on ? 'lanterns' : 'home');
+        return;
+      case 'wear':
+        this.wearPiece(a.shelf, a.id);
+        this.tryOn(look, a.shelf, a.id);
+        scene.wear(look);
+        this.save.flush();
+        this.applyLook();
+        void this.ui.showGarage(this.garageView(), (x) => this.garageAct(x));
+        return;
+      case 'ride':
+        if (!d.ownedSleds.includes(a.sled)) return;
+        d.sled = a.sled;
+        this.save.flush();
+        this.tryOn(look, 'sled', String(a.sled));
+        scene.wear(look);
+        void this.ui.showGarage(this.garageView(), (x) => this.garageAct(x));
+        return;
+      case 'buy': {
+        const name = this.buyPiece(a.shelf, a.id);
+        if (!name) return;
+        this.save.flush();
+        const shot = this.tryOn(look, a.shelf, a.id);
+        this.garageMoment(() => scene.wear(look), shot, `Yours: |${name}`, false);
+        return;
+      }
+      case 'fit': {
+        const t = fitTier(d, a.sled);
+        if (t < 0) return;
+        this.save.flush();
+        look.tiers = { ...look.tiers, [a.sled]: t + 1 };
+        look.sled = a.sled;
+        const s = sledShop(a.sled);
+        this.garageMoment(() => scene.wear(look), t >= 3 ? 'post' : 'sled', `Your ${s.name}: |${TIER_NAMES[t].toLowerCase()} fitted`, true);
+        return;
+      }
+      case 'light': {
+        const open = (m: string): boolean => MOUNTAINS.some((x) => x.id === m && this.isOpen(x));
+        if (!lightLantern(d, a.town, open)) return;
+        this.save.flush();
+        this.audio.ui('unlock');
+        scene.setLanterns(Object.values(litByTown(d)).reduce((x, n) => x + n, 0));
+        this.ui.garageMoment('A lantern lit in |' + (LANTERNS.find((l) => l.id === a.town)?.town ?? 'the town'));
+        void this.ui.showGarage(this.garageView(), (x) => this.garageAct(x));
+        return;
+      }
+    }
+  }
+
+  /** A purchase or a tier is a gift opened in the place: the piece goes on, the rider cheers, its own sound, a line;
+   *  skippable by any key or tap, and still under reduced motion (garagescene.ts buyMoment). The gifts left the
+   *  wallet already: the UI shows the new state at once. */
+  private garageMoment(put: () => void, shot: import('../render/garagescene').PlaceShot, line: string, tier: boolean): void {
+    const g = this.garagePlace;
+    if (!g) return;
+    g.moment = true;
+    this.skipHook(true);
+    this.audio.ui(tier ? 'tier-fit' : 'gift-open');
+    g.scene.buyMoment(
+      () => {
+        put();
+      },
+      () => undefined,
+      shot,
+      tier,
+    );
+    this.applyLook();
+    this.ui.garageMoment(line);
+    void this.ui.showGarage(this.garageView(), (x) => this.garageAct(x));
+  }
+
+  /** Puts a piece on a place's look (without touching the save) and says where the camera goes for it. */
+  private tryOn(look: import('../render/garagescene').PlaceLook, shelf: GaragePieceShelf, id: string): import('../render/garagescene').PlaceShot {
+    switch (shelf) {
+      case 'sled':
+        look.sled = Number(id);
+        return 'sled';
+      case 'hat':
+        look.hat = hatById(id).id;
+        return 'hatBack';
+      case 'scarf':
+        look.scarf = scarfById(id);
+        return 'scarf';
+      case 'trail':
+        look.trail = trailById(id);
+        return 'trail';
+      case 'finish':
+        look.finish = paintById(id);
+        return 'finish';
+      case 'ornament':
+        look.ornament = ornamentById(id).id;
+        return 'post';
+      default:
+        return 'sound';
+    }
+  }
+
+  /** Wears an owned piece (the save's worn field). */
+  private wearPiece(shelf: GaragePieceShelf, id: string): void {
+    const d = this.save.data;
+    if (shelf === 'finish') {
+      if (!(paintById(id) === PAINTS[0] || (d.paints ?? []).includes(id))) return;
+      if (paintById(id) === PAINTS[0]) delete d.paint;
+      else d.paint = id;
+    } else if (shelf === 'ornament') {
+      const st = ornamentState(d);
+      if (!st.owned.includes(id)) return;
+      if (id === 'lamp') delete d.ornament;
+      else d.ornament = id;
+    } else if (shelf !== 'sled') {
+      const k = SHELF_KEYS[shelf];
+      if (!shelfState(d, shelf).owned.includes(id)) return;
+      if (id === freeItem(shelf)) delete d[k.on];
+      else d[k.on] = id;
+    }
+  }
+
+  /** Buys a piece for gifts (a shop piece, a chapter's from its month, a sled), wears it, and returns its name, or null
+   *  when it cannot be bought (found pieces never are). */
+  private buyPiece(shelf: GaragePieceShelf, id: string): string | null {
+    const d = this.save.data;
+    const months = monthsOpen(this.daily.tagline);
+    if (shelf === 'sled') {
+      const s = sledShop(Number(id));
+      if (s.from !== 'shop' || d.ownedSleds.includes(s.index) || d.gifts < s.price) return null;
+      d.gifts -= s.price;
+      d.ownedSleds = [...d.ownedSleds, s.index];
+      d.sled = s.index;
+      return s.name;
+    }
+    if (shelf === 'finish') {
+      const p = paintById(id);
+      if (p.id !== id || (d.paints ?? []).includes(id) || !onSale(p.source, months) || d.gifts < p.price) return null;
+      d.gifts -= p.price;
+      d.paints = [...(d.paints ?? []), id];
+      d.paint = id;
+      return p.name;
+    }
+    if (shelf === 'ornament') {
+      const o = ornamentById(id);
+      if (o.id !== id || (d.ornaments ?? []).includes(id) || !onSale(o.source, months) || d.gifts < o.price) return null;
+      d.gifts -= o.price;
+      d.ornaments = [...(d.ornaments ?? []), id];
+      d.ornament = id;
+      return o.name;
+    }
+    const item = SHELVES[shelf].find((i) => i.id === id);
+    if (!item || shelfState(d, shelf).owned.includes(id) || !onSale(item.source, months) || d.gifts < item.price) return null;
+    const k = SHELF_KEYS[shelf];
+    d.gifts -= item.price;
+    d[k.owned] = [...(d[k.owned] ?? []), id];
+    d[k.on] = id;
+    return item.name;
+  }
+
+  /** The mountains' sets: each mastery board past a third, two thirds and all of its stars holds that set's pieces
+   *  (a save from before round 9, or a board filled on a mirror). Returns whether anything was added. */
+  private syncSets(): boolean {
+    const d = this.save.data;
+    let added = false;
+    for (const m of MOUNTAINS) {
+      const set = SETS[m.id];
+      if (!set || !d.mastery?.[m.id] || (d.sets?.[m.id] ?? 0) >= 3) continue;
+      const board = masteryBoard(courseFor(m.seed), m.id, readMastery(d.mastery[m.id]), d.climb?.[m.id]?.medal ?? 0);
+      const now = setPiecesFor(board.filter((s) => s.done).length, board.length);
+      const held = d.sets?.[m.id] ?? 0;
+      for (let i = held; i < now; i++) {
+        const list = i === 0 ? 'scarves' : i === 1 ? 'trails' : 'ornaments';
+        if (!(d[list] ?? []).includes(set[i])) d[list] = [...(d[list] ?? []), set[i]];
+        added = true;
+      }
+      if (now > held) d.sets = { ...(d.sets ?? {}), [m.id]: now };
+    }
+    if (added) this.save.flush();
+    return added;
+  }
+
+  /** The garage's model (garageview.ts) from the save. */
+  private garageView(piece?: string): GarageView {
+    const d = this.save.data;
+    const months = monthsOpen(this.daily.tagline);
+    const state = (owned: boolean, on: boolean, src: Source, price: number): GarageItemView['state'] => {
+      if (on) return 'on';
+      if (owned) return 'owned';
+      if (onSale(src, months)) return d.gifts >= price ? 'buy' : 'short';
+      return src.kind === 'chapter' ? 'later' : 'found';
+    };
+    // A shelf lists what is sold and what is held, then the found pieces still to find (where they come from said on
+    // each), never a chapter's piece before its month.
+    const list = <T extends { id: string; name: string; blurb: string; price: number; source: Source }>(items: readonly T[], owned: readonly string[], on: string): GarageItemView[] =>
+      items
+        .filter((i) => owned.includes(i.id) || i.source.kind !== 'chapter' || months.has(i.source.month))
+        .map((i) => ({ id: i.id, name: i.name, blurb: i.blurb, from: sourceLine(i.source), price: i.price, state: state(owned.includes(i.id), i.id === on, i.source, i.price) }))
+        .sort((x, y) => ORDER[x.state] - ORDER[y.state]);
+    const ORDER: Record<GarageItemView['state'], number> = { on: 0, owned: 1, buy: 2, short: 2, later: 3, found: 4 };
+    const sh = (k: ShelfId) => shelfState(d, k);
+    const finishes = [...PAINTS, ...KEPT_PAINTS.filter((p) => (d.paints ?? []).includes(p.id))];
+    const paintOn = paintById(d.paint).id;
+    const ownedPaints = ['natural', ...(d.paints ?? [])];
+    const orn = ornamentState(d);
+    const sleds: GarageSledView[] = SLED_SHOP.map((s) => {
+      const owned = d.ownedSleds.includes(s.index);
+      const t = trackOf(d, s.index);
+      return {
+        id: s.index,
+        name: s.name,
+        trait: sledById(s.index).trait,
+        signature: s.signature,
+        signatureHow: s.signatureHow,
+        price: s.price,
+        state: d.sled === s.index && owned ? 'on' : owned ? 'owned' : s.from === 'shop' ? (d.gifts >= s.price ? 'buy' : 'short') : 'found',
+        from: s.from === 'almanac' && !owned ? `Found on Almanac page ${s.page}` : '',
+        lines: t.lines,
+        tiers: TIER_NAMES.map((name, i) => {
+          const st = tierState(d, s.index, i);
+          const price = trackPrice(s.index, i);
+          return { name, what: s.tiers[i], price, state: st === 'open' && d.gifts < price ? 'short' : st, linesToGo: linesToGo(d, s.index, i) };
+        }),
+      };
+    });
+    let focus: GarageView['focus'] = null;
+    if (piece) {
+      const [k, id] = piece.split(':');
+      const shelfKey = (k === 'paint' ? 'finish' : k) as GarageShelfKey;
+      if (['sled', 'hat', 'scarf', 'trail', 'finish', 'sound'].includes(shelfKey) && id !== undefined) focus = { shelf: shelfKey, id };
+    }
+    return {
+      wallet: d.gifts,
+      shelves: {
+        hat: list(HATS, sh('hat').owned, sh('hat').on),
+        scarf: list(SCARVES, sh('scarf').owned, sh('scarf').on),
+        trail: list(TRAILS, sh('trail').owned, sh('trail').on),
+        finish: list(finishes, ownedPaints, paintOn),
+        sound: list(SOUNDS, sh('sound').owned, sh('sound').on),
+      },
+      sleds,
+      ornaments: list(ORNAMENTS, orn.owned, orn.on),
+      lanterns: this.lanternRows(),
+      focus,
+    };
   }
 
   sledCards() {
@@ -3350,7 +3736,8 @@ export class App {
       this.linkReel = null;
       this.startReel(rec, false);
     }
-    if (this.phase === 'reel') {
+    if (this.garagePlace) this.frameGarage(dt);
+    else if (this.phase === 'reel') {
       this.clip?.hold(this.paused || this.adPlaying || document.hidden);
       this.runReel?.frame(this.paused || this.adPlaying ? 0 : dt);
     }

@@ -180,7 +180,7 @@ const BURN_MID = new Color('#FF6A1A').multiplyScalar(1.15);
 const BURN_TIP = new Color('#FFC23A').multiplyScalar(1.1);
 const INK_KNIT = new Color('#1A2140');
 /** A cream stitch burning: a pale gold (the burn keeps the knit's value, round 9). */
-const BURN_CREAM = new Color('#FFF0C8');
+const BURN_CREAM = new Color('#FFF6E2').multiplyScalar(1.1);
 /** Round 9: the ribbon is three vertices across (its edges and its middle), so a pattern can run across it as well as
  *  along it (piping, chevrons, dots), and what weights a tail's end (a pom, a lamp, a drop) and a bow at the knot are
  *  shapes in the same mesh, written each frame round the tip's own frame: one draw, whatever the scarf. */
@@ -234,14 +234,14 @@ function endShape(ends: ScarfEnds, accent: Color, width: number): ScarfShape | n
   const w = TAIL_W * width;
   switch (ends) {
     case 'pom':
-      return shapeOf([{ geo: new IcosahedronGeometry(0.11 * RIDER_SCALE, 1), color: V.clone().multiplyScalar(0.94), m: mAt(0, 0.085 * RIDER_SCALE, 0) }], END_V);
+      return shapeOf([{ geo: new IcosahedronGeometry(0.13 * RIDER_SCALE, 1), color: accent, m: mAt(0, 0.1 * RIDER_SCALE, 0) }], END_V);
     case 'ball':
       return shapeOf([{ geo: new IcosahedronGeometry(0.075 * RIDER_SCALE, 1), color: CREAM_KNIT, m: mAt(0, 0.065 * RIDER_SCALE, 0) }], END_V);
     case 'lamp': {
       const S = RIDER_SCALE;
       return shapeOf(
         [
-          { geo: new CylinderGeometry(0.05 * S, 0.056 * S, 0.12 * S, 8, 1, true), color: new Color('#FFE7B0').multiplyScalar(1.45), m: mAt(0, 0.12 * S, 0) },
+          { geo: new IcosahedronGeometry(0.07 * S, 1), color: new Color('#FFF4E0').multiplyScalar(1.5), m: mAt(0, 0.12 * S, 0, 0, 0, 0, 1, 0.85, 1) },
           { geo: new CylinderGeometry(0.024 * S, 0.05 * S, 0.035 * S, 6), color: INK_KNIT, m: mAt(0, 0.045 * S, 0) },
           { geo: new CylinderGeometry(0.056 * S, 0.03 * S, 0.03 * S, 6), color: INK_KNIT, m: mAt(0, 0.195 * S, 0) },
         ],
@@ -300,7 +300,7 @@ function knitAt(def: ScarfDef, r: number, c: number, out: Color): Color {
       if (r === R - 6 || r === R - 3) k = 0.68;
       break;
     case 'bars':
-      accent = r === R - 7 || r === R - 6 || r === R - 4 || r === R - 3;
+      accent = r === R - 10 || r === R - 9 || r === R - 4 || r === R - 3;
       break;
     case 'tip':
       accent = r >= R - 5;
@@ -319,8 +319,7 @@ function knitAt(def: ScarfDef, r: number, c: number, out: Color): Color {
       accent = r >= 3 && (edge ? r % 4 === 0 : r % 4 === 1);
       break;
     case 'braid':
-      accent = r >= 2 && c === r % 3;
-      if (!accent && r >= 2) k = (r + c) % 2 ? 0.86 : 1;
+      if (r >= 2) k = c === r % 3 ? 0.62 : (r + c) % 2 ? 0.9 : 1.04;
       break;
     case 'graded':
       accent = r >= 3 && (r % 3 === 0 || (r > 10 && r % 3 === 1));
@@ -1117,7 +1116,7 @@ export class Rider {
     this.sledGlow = new Mesh(new BufferGeometry(), new MeshBasicMaterial({ vertexColors: true }));
     riderStencil(this.sledGlow.material as Material);
     this.sledGlow.visible = false;
-    this.sledInlay = new Mesh(new BufferGeometry(), new MeshBasicMaterial({ color: INK_KNIT.clone() }));
+    this.sledInlay = new Mesh(new BufferGeometry(), new MeshBasicMaterial({ color: CREAM_KNIT.clone() }));
     riderStencil(this.sledInlay.material as Material);
     this.sledInlay.visible = false;
     this.sled.add(this.sledGlow, this.sledInlay);
@@ -1223,9 +1222,9 @@ export class Rider {
     // How many tails and of what lengths (round 9): two, one long and one short, four (the second pair is the twin
     // mesh), or one thick rope (the second tail tucked away at the knot).
     const L = def.length;
-    const segs = def.form === 'long' ? [TAIL_SEG[0] * 1.75, TAIL_SEG[1] * 0.55] : def.form === 'one' ? [TAIL_SEG[0] * 1.1, TAIL_SEG[1] * 0.08] : [TAIL_SEG[0], TAIL_SEG[1]];
+    const segs = def.form === 'long' ? [TAIL_SEG[0] * 2.0, TAIL_SEG[1] * 0.5] : def.form === 'one' ? [TAIL_SEG[0] * 1.1, TAIL_SEG[1] * 0.08] : [TAIL_SEG[0], TAIL_SEG[1]];
     for (let k = 0; k < this.tails.length; k++) this.tails[k].seg = segs[k] * L;
-    this.endS = endShape(def.ends, def.accent === 'ink' ? INK_KNIT : CREAM_KNIT, def.width);
+    this.endS = endShape(def.ends, def.accent === 'ink' ? INK_KNIT : def.accent === 'cream' ? CREAM_KNIT : def.ends === 'pom' ? RIDER_COLORS.accent.clone().multiplyScalar(0.94) : CREAM_KNIT, def.width);
     this.bowS = def.bow ? bowShape() : null;
     this.scarfTwin.visible = def.form === 'four' && this.scarf.visible;
     this.paintScarf();
@@ -1245,8 +1244,8 @@ export class Rider {
       knitAt(def, r, i % COLS, c);
       col.setXYZ(i, c.r, c.g, c.b);
     }
-    // Tassels in the accent if it is cream, else a deeper vermillion.
-    const t = def.accent === 'cream' ? CREAM_KNIT : c.copy(V).multiplyScalar(0.82);
+    // Tassels and fringe in the accent (cream or ink), else a deeper vermillion.
+    const t = def.accent === 'cream' ? CREAM_KNIT : def.accent === 'ink' ? INK_KNIT : c.copy(V).multiplyScalar(0.82);
     for (let i = RIBBON_V; i < END_AT; i++) col.setXYZ(i, t.r, t.g, t.b);
     for (let k = 0; k < 2; k++) {
       for (let i = 0; i < END_V; i++) {
@@ -1307,7 +1306,7 @@ export class Rider {
       hot.copy(BURN_MID).lerp(BURN_TIP, Math.min(1, Math.max(0, (along - 0.55) / 0.45)));
       if (along < 0.6) hot.multiplyScalar(0.86);
       const v = (0.2126 * base[i * 3] + 0.7152 * base[i * 3 + 1] + 0.0722 * base[i * 3 + 2]) / vl;
-      if (v > 1.25) hot.lerp(BURN_CREAM, 0.6);
+      if (v > 1.25) hot.lerp(BURN_CREAM, 0.88);
       else hot.multiplyScalar(Math.max(0.28, Math.min(1, v)));
       a[i * 3] = base[i * 3] + (hot.r - base[i * 3]) * e;
       a[i * 3 + 1] = base[i * 3 + 1] + (hot.g - base[i * 3 + 1]) * e;
@@ -1315,12 +1314,12 @@ export class Rider {
     }
     col.needsUpdate = true;
     this.burnShown = k;
-    // The fifth tier's inlay burns with the scarf: ink while it is cold. (The constructor paints the scarf before
+    // The fifth tier's inlay burns with the scarf: cream while it is cold. (The constructor paints the scarf before
     // the sled's inlay is made.)
     const im = this.sledInlay?.material as MeshBasicMaterial | undefined;
     if (!im) return;
-    if (k <= 0.01) im.color.copy(INK_KNIT);
-    else im.color.copy(INK_KNIT).lerp(this.burnHot.copy(BURN_MID).lerp(BURN_TIP, k).multiplyScalar(1.35), Math.min(1, k * 1.4));
+    if (k <= 0.01) im.color.copy(CREAM_KNIT);
+    else im.color.copy(CREAM_KNIT).lerp(this.burnHot.copy(BURN_MID).lerp(BURN_TIP, k).multiplyScalar(1.35), Math.min(1, k * 1.4));
   }
 
   private readonly burnHot = new Color();
@@ -2964,10 +2963,10 @@ export class Rider {
           continue;
         }
         const f0 = j / TASSELS;
-        const f1 = (j + 0.72) / TASSELS;
+        const f1 = (j + 0.95) / TASSELS;
         const fm = (f0 + f1) / 2;
-        const spread = (fm - 0.5) * 1.6;
-        const len = TASSEL_L * 2.4 * (0.85 + 0.3 * ((j * 37 + k * 11) % 5) / 4) * look.length;
+        const spread = (fm - 0.5) * 2.4;
+        const len = TASSEL_L * 3.2 * (0.85 + 0.3 * ((j * 37 + k * 11) % 5) / 4) * look.length;
         const wave = Math.sin(time * 14 + j * 1.7 + k) * 0.02;
         const bx = lx + (rx - lx) * fm;
         const by = ly + (ry - ly) * fm;
@@ -3027,13 +3026,16 @@ export class Rider {
     }
     pos.needsUpdate = true;
     nrm.needsUpdate = true;
-    // A four-tailed scarf's second pair: the same tails a hand lower, shorter, and turned out from the knot.
+    // A four-tailed scarf's second pair: the same tails mirrored to the other side of the travel, a little shorter.
     if (this.scarfTwin.visible) {
       const m = this.scarfTwin.matrixWorld;
+      // A reflection across the vertical plane along the travel (I - 2 s s^T, s the level side), about the knot.
+      const sx = this.side.x;
+      const sz = this.side.z;
       m.makeTranslation(-knot.x, -knot.y, -knot.z);
-      m.premultiply(this.twinM.makeRotationY(0.42 * this.flareSide));
-      m.premultiply(this.twinM.makeScale(0.8, 0.82, 0.8));
-      m.premultiply(this.twinM.makeTranslation(knot.x, knot.y - 0.1, knot.z));
+      m.premultiply(this.twinM.set(1 - 2 * sx * sx, 0, -2 * sx * sz, 0, 0, 1, 0, 0, -2 * sx * sz, 0, 1 - 2 * sz * sz, 0, 0, 0, 0, 1));
+      m.premultiply(this.twinM.makeScale(0.86, 0.9, 0.86));
+      m.premultiply(this.twinM.makeTranslation(knot.x, knot.y - 0.06, knot.z));
     }
   }
 

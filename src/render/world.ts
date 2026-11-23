@@ -999,6 +999,28 @@ export class World {
     this.rider.setFlow(0, 0);
   }
 
+  /** Round 9 (the shop lane): the garage's place (render/garagescene.ts) drawn in the world's stead while it is open,
+   *  by this renderer through the pipeline's plain path (post.ts renderPlain); the world's own frame waits. */
+  drawPlace(scene: Scene, camera: PerspectiveCamera, time: number, grade: Palette | null): void {
+    if (grade && grade !== this.placeGrade) {
+      this.placeGrade = grade;
+      this.post.setGrade({ ...grade.grade, bloom: grade.bloom });
+    }
+    this.post.renderPlain(scene, camera, time);
+  }
+
+  private placeGrade: Palette | null = null;
+
+  /** Takes the world's own light back after the place had the shared uniforms: the next frame applies the journey's
+   *  palette and grade afresh. */
+  restoreLight(): void {
+    this.placeGrade = null;
+    this.journeyKey = -1;
+    this.journeyAt0 = -Infinity;
+    applyPalette(this.palette);
+    this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
+  }
+
   /** The sled shop's previews (src/render/portrait.ts): the real sled mesh, with the rider seated
    *  for the large preview, drawn once by this renderer through a small offscreen scene in the toon
    *  lighting, as an image URL. Null when it cannot draw (a lost context). Loaded on first use. */

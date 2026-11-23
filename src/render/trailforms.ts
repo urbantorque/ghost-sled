@@ -255,7 +255,7 @@ export class TrailForms {
     this.form = form;
     if (!form) return;
     if (form.kind === 'flakes') {
-      const n = this.low ? 60 : 150;
+      const n = this.low ? 80 : 220;
       const geo = shapeGeometry(form.shape, hex(form.body, !!form.glow), hex(form.edge, !!form.glow));
       const mat = new MeshBasicMaterial({ vertexColors: true, side: DoubleSide });
       this.inst = new InstancedMesh(geo, mat, n);
@@ -300,13 +300,13 @@ export class TrailForms {
       this.root.add(this.moths);
     } else if (form.kind === 'keeper') {
       const g = new Group();
-      const paper = new Mesh(new CylinderGeometry(0.15, 0.17, 0.34, this.low ? 8 : 12, 4), new MeshBasicMaterial({ color: new Color('#FFE7B0').multiplyScalar(1.55) }));
+      const paper = new Mesh(new CylinderGeometry(0.21, 0.24, 0.46, this.low ? 8 : 12, 4), new MeshBasicMaterial({ color: new Color('#FFE7B0').multiplyScalar(1.55) }));
       // Ribs: the paper's bands a little darker, a dark cap and foot (ART.md 14).
       const ink = new MeshBasicMaterial({ color: new Color('#24202C') });
-      const cap = new Mesh(new CylinderGeometry(0.08, 0.17, 0.07, 10), ink);
-      cap.position.y = 0.2;
-      const foot = new Mesh(new CylinderGeometry(0.15, 0.09, 0.05, 10), ink);
-      foot.position.y = -0.19;
+      const cap = new Mesh(new CylinderGeometry(0.1, 0.24, 0.09, 10), ink);
+      cap.position.y = 0.27;
+      const foot = new Mesh(new CylinderGeometry(0.2, 0.12, 0.06, 10), ink);
+      foot.position.y = -0.26;
       g.add(paper, cap, foot);
       for (const o of g.children) o.frustumCulled = false;
       const lg = new BufferGeometry();
@@ -371,14 +371,14 @@ export class TrailForms {
     if (!inst) return;
     const M = MOTION[form.motion];
     // More with speed (none below a walk), fewer on Low.
-    if (s.active && s.speed > 5) this.acc += form.rate * dt * Math.min(1.4, s.speed / 28) * (this.low ? 0.5 : 1);
+    if (s.active && s.speed > 5) this.acc += form.rate * 1.8 * dt * Math.min(1.4, s.speed / 28) * (this.low ? 0.5 : 1);
     while (this.acc >= 1) {
       this.acc -= 1;
       const f = this.flakes[this.next];
       this.next = (this.next + 1) % this.flakes.length;
       this.launch(f, form.motion, s, fwd, side);
       f.life = M.life * (0.8 + 0.4 * rnd());
-      f.size = form.size * (0.8 + 0.4 * rnd());
+      f.size = form.size * 1.5 * (0.8 + 0.4 * rnd());
     }
     let n = 0;
     for (const f of this.flakes) {
@@ -421,20 +421,20 @@ export class TrailForms {
     switch (motion) {
       case 'flutter':
         f.p.set(p.x - fwd.x * back + side.x * sd * 0.35, p.y + 0.45, p.z - fwd.z * back + side.z * sd * 0.35);
-        f.v.set(vx * 0.9 + side.x * sd * (1.5 + rnd() * 1.8), vy * 0.9 + 1.6 + rnd() * 1.6, vz * 0.9 + side.z * sd * (1.5 + rnd() * 1.8));
+        f.v.set(vx * 0.97 + side.x * sd * (2.2 + rnd() * 2.2), vy * 0.97 + 2.2 + rnd() * 1.6, vz * 0.97 + side.z * sd * (2.2 + rnd() * 2.2));
         break;
       case 'sail':
         f.p.set(p.x + side.x * sd * 0.4, p.y + 0.35, p.z + side.z * sd * 0.4);
-        f.v.set(vx * 0.92 + side.x * sd * (3 + rnd() * 2.2), vy * 0.92 + 0.6 + rnd(), vz * 0.92 + side.z * sd * (3 + rnd() * 2.2));
+        f.v.set(vx * 0.97 + side.x * sd * (3.4 + rnd() * 2.2), vy * 0.97 + 1.4 + rnd(), vz * 0.97 + side.z * sd * (3.4 + rnd() * 2.2));
         f.w.set(0, (rnd() < 0.5 ? -1 : 1) * (6 + rnd() * 6), 0);
         break;
       case 'rise':
         f.p.set(p.x - fwd.x * back + side.x * sd * 0.25 * rnd(), p.y + 0.3 + rnd() * 0.3, p.z - fwd.z * back + side.z * sd * 0.25 * rnd());
-        f.v.set(vx * 0.84 + side.x * sd * rnd() * 0.9, vy * 0.84 + 1.4 + rnd(), vz * 0.84 + side.z * sd * rnd() * 0.9);
+        f.v.set(vx * 0.96 + side.x * sd * (0.8 + rnd() * 1.4), vy * 0.96 + 1.8 + rnd(), vz * 0.96 + side.z * sd * (0.8 + rnd() * 1.4));
         break;
       case 'flick':
         f.p.set(p.x + side.x * sd * 0.3 - fwd.x * 0.5, p.y + 0.08, p.z + side.z * sd * 0.3 - fwd.z * 0.5);
-        f.v.set(vx * 0.95 + side.x * sd * (1.6 + rnd() * 1.6) - fwd.x, vy * 0.95 + 2.2 + rnd() * 1.6, vz * 0.95 + side.z * sd * (1.6 + rnd() * 1.6) - fwd.z);
+        f.v.set(vx * 0.97 + side.x * sd * (2.2 + rnd() * 1.8), vy * 0.97 + 2.8 + rnd() * 1.6, vz * 0.97 + side.z * sd * (2.2 + rnd() * 1.8));
         break;
       case 'drop':
         f.p.set(p.x - fwd.x * 0.7 + side.x * sd * 0.25, p.y + 0.5, p.z - fwd.z * 0.7 + side.z * sd * 0.25);
@@ -443,21 +443,21 @@ export class TrailForms {
         break;
       case 'pop':
         f.p.set(p.x + side.x * sd * 0.5, p.y + 0.35, p.z + side.z * sd * 0.5);
-        f.v.set(vx * 0.93 + side.x * sd * (2.5 + rnd() * 1.6), vy * 0.93 + 1 + rnd(), vz * 0.93 + side.z * sd * (2.5 + rnd() * 1.6));
+        f.v.set(vx * 0.97 + side.x * sd * (2.8 + rnd() * 1.6), vy * 0.97 + 1.6 + rnd(), vz * 0.97 + side.z * sd * (2.8 + rnd() * 1.6));
         break;
       case 'roll':
         f.p.set(p.x + side.x * sd * (0.45 + rnd() * 0.3), p.y + 0.12, p.z + side.z * sd * (0.45 + rnd() * 0.3));
-        f.v.set(vx * 0.9 + side.x * sd * (0.6 + rnd() * 0.6), vy * 0.9, vz * 0.9 + side.z * sd * (0.6 + rnd() * 0.6));
+        f.v.set(vx * 0.97 + side.x * sd * (0.9 + rnd() * 0.8), vy * 0.97, vz * 0.97 + side.z * sd * (0.9 + rnd() * 0.8));
         f.w.copy(side).multiplyScalar(-(4 + rnd() * 4));
         break;
       case 'bob':
         f.p.set(p.x - fwd.x * (1 + rnd() * 0.5) + side.x * sd * (0.6 + rnd() * 0.4), p.y + 0.8 + rnd() * 0.4, p.z - fwd.z * (1 + rnd() * 0.5) + side.z * sd * (0.6 + rnd() * 0.4));
-        f.v.set(vx * 0.96, vy * 0.96, vz * 0.96);
+        f.v.set(vx * 0.985, vy * 0.985, vz * 0.985);
         f.r.set(0, -Math.atan2(fwd.x, -fwd.z) + Math.PI, 0);
         break;
       case 'tumble':
         f.p.set(p.x - fwd.x * back, p.y + 0.6, p.z - fwd.z * back);
-        f.v.set(vx * 0.9 + side.x * sd * (1 + rnd() * 1.4), vy * 0.9 + 1 + rnd(), vz * 0.9 + side.z * sd * (1 + rnd() * 1.4));
+        f.v.set(vx * 0.97 + side.x * sd * (1.6 + rnd() * 1.6), vy * 0.97 + 1.8 + rnd(), vz * 0.97 + side.z * sd * (1.6 + rnd() * 1.6));
         f.w.copy(side).multiplyScalar(8 + rnd() * 4).setY((rnd() - 0.5) * 3);
         break;
       case 'hop':
@@ -470,58 +470,58 @@ export class TrailForms {
   private tickRibbons(s: TrailFeed, form: Extract<TrailForm, { kind: 'ribbons' }>, fwd: Vector3, side: Vector3): void {
     const head = hex(form.head, true);
     const tail = hex(form.tail, true);
-    const keep = this.low ? 1.0 : 1.5;
     const c = new Color();
+    // (They stream with speed: folded down to nothing at a stop, at full length from a cruise.)
+    const k0 = Math.min(1, Math.max(0, (s.speed - 4) / 14)) * (s.active ? 1 : 0);
+    this.ribbonK += (k0 - this.ribbonK) * 0.08;
+    const K = this.ribbonK;
     for (let k = 0; k < this.ribbons.length; k++) {
       const r = this.ribbons[k];
       const sx = k === 0 ? -1 : 1;
-      if (s.active && s.speed > 4) r.hist.unshift({ p: new Vector3(s.pos.x - fwd.x * 0.75 + side.x * sx * 0.3, s.pos.y + 0.14, s.pos.z - fwd.z * 0.75 + side.z * sx * 0.3), t: s.time });
       const N = r.pos.length / 6;
-      while (r.hist.length > N || (r.hist.length && s.time - r.hist[r.hist.length - 1].t > keep)) r.hist.pop();
       for (let i = 0; i < N; i++) {
-        const e = r.hist[Math.min(i, r.hist.length - 1)];
-        if (!e) {
-          r.pos.fill(0);
-          break;
-        }
-        const age = Math.min(1, (s.time - e.t) / keep);
-        // The light rises off the runners as it ages and drifts out to its side, so the two ribbons lift into the air
-        // and curve with the carve that laid them, never two lines down the fall line.
-        const lift = 1.1 * age * age + 0.25 * age;
-        const out = 0.5 * age;
-        const px = e.p.x + side.x * sx * out;
-        const py = e.p.y + lift + Math.sin(e.t * 7 + k * 2) * 0.06 * age;
-        const pz = e.p.z + side.z * sx * out;
-        // Its face to the lens.
-        const tx = (r.hist[Math.min(i + 1, r.hist.length - 1)]?.p.x ?? px) - e.p.x;
-        const tz = (r.hist[Math.min(i + 1, r.hist.length - 1)]?.p.z ?? pz) - e.p.z;
-        let wx = s.eye.x - px;
-        let wy = s.eye.y - py;
-        let wz = s.eye.z - pz;
-        // across = tangent x toEye
-        const ax = 0 * wz - tz * wy;
-        const ay = tz * wx - tx * wz;
-        const az = tx * wy - 0 * wx;
+        const u = i / (N - 1);
+        // Back off the runner's tail, up in an arc and out beside the rider, waving harder toward the tip.
+        // (From the chase lens anything laid back down the run lies toward the lens's foot as a stripe: these climb.)
+        const back = (u * 0.5 + u * u * 1.1) * K;
+        const out = (0.3 + u * 0.55 + u * u * 0.6 + Math.sin(s.time * 5 + u * 5 + k) * 0.22 * u) * K + 0.3 * (1 - K);
+        const up = 0.14 + (Math.sin(u * Math.PI * 0.62) * 1.9 + Math.sin(s.time * 6.3 + u * 4 + k * 2) * 0.16 * u) * K;
+        const px = s.pos.x - fwd.x * (0.7 + back) + side.x * sx * out;
+        const py = s.pos.y + up;
+        const pz = s.pos.z - fwd.z * (0.7 + back) + side.z * sx * out;
+        // Its face to the lens: across = the run of the streamer crossed with the way to the eye.
+        const tx = -fwd.x * 0.35 + side.x * sx * 0.3;
+        const ty = 1;
+        const tz = -fwd.z * 0.35 + side.z * sx * 0.3;
+        const ex = s.eye.x - px;
+        const ey = s.eye.y - py;
+        const ez = s.eye.z - pz;
+        let ax = ty * ez - tz * ey;
+        let ay = tz * ex - tx * ez;
+        let az = tx * ey - ty * ex;
         const al = Math.hypot(ax, ay, az) || 1;
-        const w = 0.055 * (1 - age) + 0.006;
-        wx = (ax / al) * w;
-        wy = (ay / al) * w;
-        wz = (az / al) * w;
-        r.pos[i * 6] = px - wx;
-        r.pos[i * 6 + 1] = py - wy;
-        r.pos[i * 6 + 2] = pz - wz;
-        r.pos[i * 6 + 3] = px + wx;
-        r.pos[i * 6 + 4] = py + wy;
-        r.pos[i * 6 + 5] = pz + wz;
-        c.copy(head).lerp(tail, Math.min(1, age * 1.6));
+        const w = 0.07 * (1 - 0.8 * u) + 0.008;
+        ax = (ax / al) * w;
+        ay = (ay / al) * w;
+        az = (az / al) * w;
+        r.pos[i * 6] = px - ax;
+        r.pos[i * 6 + 1] = py - ay;
+        r.pos[i * 6 + 2] = pz - az;
+        r.pos[i * 6 + 3] = px + ax;
+        r.pos[i * 6 + 4] = py + ay;
+        r.pos[i * 6 + 5] = pz + az;
+        c.copy(head).lerp(tail, Math.min(1, u * 1.4)).lerp(this.cream, Math.max(0, u - 0.6) * 1.5);
         r.col.set([c.r, c.g, c.b, c.r, c.g, c.b], i * 6);
       }
       const g = r.mesh.geometry;
       (g.getAttribute('position') as BufferAttribute).needsUpdate = true;
       (g.getAttribute('color') as BufferAttribute).needsUpdate = true;
-      g.setDrawRange(0, Math.max(0, Math.min(r.hist.length, N) - 1) * 6);
+      r.mesh.visible = K > 0.03;
     }
   }
+
+  private ribbonK = 0;
+  private readonly cream = new Color('#FFF4DE').multiplyScalar(1.3);
 
   private tickKites(dt: number, s: TrailFeed, fwd: Vector3, side: Vector3): void {
     const bows = this.kiteBows;
@@ -537,15 +537,15 @@ export class TrailForms {
       // From the stern's post height, flying up and back, each bow chasing the one before it and swinging out to its
       // side: high enough to read beside the rider from the chase lens, never along the ruts.
       const ax = s.pos.x - fwd.x * 0.8 + side.x * sx * 0.25;
-      const ay = s.pos.y + 1.0;
+      const ay = s.pos.y + 1.1;
       const az = s.pos.z - fwd.z * 0.8 + side.z * sx * 0.25;
       if (!this.kiteInit) for (let i = 0; i < pts.length; i++) pts[i].set(ax - fwd.x * seg * i, ay + 0.1 * i, az - fwd.z * seg * i);
       pts[0].set(ax, ay, az);
       for (let i = 1; i < pts.length; i++) {
         const swing = Math.sin(s.time * 3.2 + i * 0.55 + k * 1.7) * (0.12 + 0.05 * i);
-        const wx = pts[i - 1].x - fwd.x * seg + side.x * (sx * 0.09 + swing);
-        const wy = pts[i - 1].y + 0.11 + Math.sin(s.time * 4.1 + i) * 0.04;
-        const wz = pts[i - 1].z - fwd.z * seg + side.z * (sx * 0.09 + swing);
+        const wx = pts[i - 1].x - fwd.x * seg * 0.25 + side.x * (sx * 0.13 + swing);
+        const wy = pts[i - 1].y + 0.24 + Math.sin(s.time * 4.1 + i) * 0.05;
+        const wz = pts[i - 1].z - fwd.z * seg * 0.25 + side.z * (sx * 0.13 + swing);
         pts[i].lerp(v1.set(wx, wy, wz), Math.min(1, dt * 12));
         const d = v1.subVectors(pts[i], pts[i - 1]);
         const dl = d.length() || 1;
@@ -556,7 +556,7 @@ export class TrailForms {
         q1.setFromUnitVectors(UP, d);
         e1.set(0, 0, Math.sin(s.time * 9 + i) * 0.6);
         q1.multiply(new Quaternion().setFromEuler(e1));
-        s1.setScalar(0.26 - i * 0.008);
+        s1.setScalar(0.34 - i * 0.01);
         bows.setMatrixAt(n++, m1.compose(pts[i], q1, s1));
         lp.setXYZ(l++, pts[i - 1].x, pts[i - 1].y, pts[i - 1].z);
         lp.setXYZ(l++, pts[i].x, pts[i].y, pts[i].z);
@@ -584,15 +584,15 @@ export class TrailForms {
     const g = this.keeper;
     const line = this.keeperLine;
     if (!g || !line) return;
-    const want = v1.set(s.pos.x - fwd.x * 1.7 + side.x * 1.0, s.pos.y + 1.35, s.pos.z - fwd.z * 1.7 + side.z * 1.0);
-    if (!this.keeperInit) this.keeperAt.copy(want);
+    // Where it rides, in the sled's frame (back, out, up), on a soft spring there, and swaying on its line.
+    if (!this.keeperInit) this.keeperAt.set(0.4, 1.25, 1.5);
     this.keeperInit = true;
-    // It rides a little behind where it wants to be on a soft spring, and sways on its line.
-    this.keeperAt.lerp(want, Math.min(1, dt * 7));
-    g.position.copy(this.keeperAt).add(v1.set(Math.sin(s.time * 2.3) * 0.08, Math.sin(s.time * 3.1) * 0.05, 0));
+    this.keeperAt.lerp(v1.set(0.4 + Math.min(0.5, s.speed * 0.012), 1.25, 1.5), Math.min(1, dt * 4));
+    const o = this.keeperAt;
+    g.position.set(s.pos.x - fwd.x * o.x + side.x * o.y, s.pos.y + o.z, s.pos.z - fwd.z * o.x + side.z * o.y).add(v1.set(Math.sin(s.time * 2.3) * 0.08, Math.sin(s.time * 3.1) * 0.05, 0));
     g.rotation.z = Math.sin(s.time * 2.3) * 0.12;
     const lp = line.geometry.getAttribute('position') as BufferAttribute;
-    lp.setXYZ(0, s.pos.x - fwd.x * 0.7, s.pos.y + 0.75, s.pos.z - fwd.z * 0.7);
+    lp.setXYZ(0, s.pos.x - fwd.x * 0.75 + side.x * 0.3, s.pos.y + 0.9, s.pos.z - fwd.z * 0.75 + side.z * 0.3);
     lp.setXYZ(1, g.position.x, g.position.y + 0.22, g.position.z);
     lp.needsUpdate = true;
     this.light.copy(g.position);

@@ -1211,9 +1211,15 @@ export function finishSled(geo: BufferGeometry, f: FinishLook, round: boolean): 
       case 'pinstripe':
         mark = round ? top && r > 0.8 && r < 0.9 : top && ((w > 0.84 && w < 0.98) || (u > 0.9 && u < 0.97 && w < 0.9));
         break;
-      case 'stars':
-        mark = (top || back) && (round || u > 0.3) && hash2(Math.floor(cx / 0.1), Math.floor((cz + cy) / 0.1)) < 0.2;
+      case 'stars': {
+        // One small star at most in each cell, only where the face sits near the cell's middle.
+        const cs = 0.17;
+        const gx = Math.floor(cx / cs);
+        const gz = Math.floor((cz + cy) / cs);
+        const near = Math.abs(cx - (gx + 0.5) * cs) < 0.045 && Math.abs(cz + cy - (gz + 0.5) * cs) < 0.06;
+        mark = (top || back) && (round || u > 0.2) && near && hash2(gx, gz) < 0.6;
         break;
+      }
       case 'twotone':
         mark = round ? r > 0.74 || !top : !top || w > 0.7 || u < 0.08 || u > 0.9;
         break;
@@ -1221,24 +1227,24 @@ export function finishSled(geo: BufferGeometry, f: FinishLook, round: boolean): 
         burn = (round ? r > 0.62 : u < 0.16 || u > 0.8 || w > 0.82) && Math.sin(cx * 42 + Math.sin(cz * 31) * 2.4 + cy * 20) > 0.15;
         break;
       case 'chequer':
-        mark = (round ? (top && r > 0.55) || back : u > 0.7 || back) && (Math.floor(cx / 0.1) + Math.floor(cz / 0.1) + Math.floor(cy / 0.1)) % 2 === 0;
+        mark = (round ? (top && r > 0.55) || back : u > 0.7 || back) && (Math.floor(cx / 0.15) + Math.floor(cz / 0.15) + Math.floor(cy / 0.15)) % 2 === 0;
         break;
       case 'hex': {
         const s = 0.17;
         const d1 = Math.abs(fract(cx / s + cz / (s * 1.73)) - 0.5);
         const d2 = Math.abs(fract(cx / s - cz / (s * 1.73)) - 0.5);
         const d3 = Math.abs(fract((cz + cy) / (s * 0.87)) - 0.5);
-        mark = (top || back) && (d1 > 0.4 || d2 > 0.4 || d3 > 0.42);
+        mark = (top || back) && (d1 > 0.45 || d2 > 0.45 || d3 > 0.46);
         break;
       }
       case 'stripes':
-        mark = round ? top && Math.abs(Math.abs(cx) - 0.2) < 0.09 : (top || back) && w > 0.22 && w < 0.6;
+        mark = round ? (top || back) && Math.abs(cx) < 0.13 : (top || back) && w < 0.21;
         break;
       case 'gilt':
         mark = (round ? r > 0.7 : w > 0.78 || u > 0.86 || u < 0.1 || back) && Math.sin(cz * 36 + cx * 22 + cy * 30) > 0.25;
         break;
       case 'ruled':
-        mark = top && (round ? fract(cz / 0.09) < 0.3 : fract(cz / 0.09) < 0.3 || Math.abs(w - 0.72) < 0.05);
+        mark = top && fract(cz / 0.16) < 0.2;
         break;
       default:
         break;
@@ -1254,12 +1260,12 @@ export function finishSled(geo: BufferGeometry, f: FinishLook, round: boolean): 
 /** Where a sled's stern post stands (sled space): the ornament on it, and the light a lit one throws. Off to the right
  *  of the tail on every sled, so from behind it stands beside the rider's back, never over it. */
 export const POST_TOP: Readonly<Record<number, [number, number, number]>> = {
-  0: [0.26, 1.0, 0.8],
-  1: [0.34, 0.92, 0.46],
-  2: [0.27, 0.94, 0.96],
-  3: [0.23, 0.98, 0.86],
-  4: [0.26, 1.04, 0.84],
-  5: [0.38, 0.9, 0.72],
+  0: [0.34, 0.78, 0.84],
+  1: [0.42, 0.72, 0.5],
+  2: [0.34, 0.72, 0.98],
+  3: [0.3, 0.78, 0.88],
+  4: [0.34, 0.8, 0.86],
+  5: [0.46, 0.7, 0.74],
 };
 
 /** A sled's fitted tiers as parts: `body` drawn with the sled (and painted by its finish), `glow` lit from inside
@@ -1314,7 +1320,7 @@ function crestBoard(half: number, y0: number, rise: number, z: number, lite: boo
     const p0 = top[i];
     const p1 = top[i + 1];
     const h = (p0.y + p1.y) / 2 - y0;
-    out.push(part(new BoxGeometry(p1.x - p0.x + 0.004, h, 0.04), i % 2 ? C.woodDark : C.wood, { pos: [(p0.x + p1.x) / 2, y0 + h / 2, z] }));
+    out.push(part(new BoxGeometry(p1.x - p0.x + 0.004, h, 0.04), C.wood, { pos: [(p0.x + p1.x) / 2, y0 + h / 2, z] }));
   }
   out.push(...tube(top.map((p) => p.clone().setZ(z + 0.005)), 0.018, 0.018, C.accent, lite ? 4 : 6));
   if (!lite) for (const sx of [-1, 1]) out.push(part(new TorusGeometry(0.05, 0.016, 4, 10, Math.PI * 1.5), C.accent, { pos: [sx * (half + 0.02), y0 + 0.1, z], rot: [0, Math.PI / 2, sx * 0.6] }));
@@ -1331,9 +1337,10 @@ function quilt(w: number, d: number, y: number, z: number, cols: number, rows: n
   return out;
 }
 
-/** Ink lines laid along a path (the inlay): thin capsules. */
+/** The inlay's lines laid along a path: capsules, coloured by its material (rider.ts: cream while cold, burning
+ *  with the scarf in the flow). */
 function inkLine(path: Vector3[], r: number): BufferGeometry[] {
-  return tube(path, r, r, FIN_INK, 4);
+  return tube(path, r * 2.4, r * 2.4, FIN_CREAM, 4);
 }
 
 export function sledTrackParts(id: number, tiers: number, lite = false): TrackParts {
@@ -1362,14 +1369,14 @@ export function sledTrackParts(id: number, tiers: number, lite = false): TrackPa
       if (t >= 3) {
         const pts: Vector3[] = [];
         for (let i = 0; i <= steps; i++) {
-          const a = -1.0 + (i / steps) * 2.0;
-          pts.push(new Vector3(Math.sin(a) * 0.5, 0.15 + 0.42 * Math.cos(a * 0.8), 0.05 + Math.cos(a) * 0.5));
+          const a = -0.6 + (i / steps) * 1.2;
+          pts.push(new Vector3(Math.sin(a) * 0.52, 0.15 + 0.3 * Math.cos(a * 1.2), 0.05 + Math.cos(a) * 0.52));
         }
         for (let i = 0; i < pts.length - 1; i++) {
           const p0 = pts[i];
           const p1 = pts[i + 1];
           const h = (p0.y + p1.y) / 2 - 0.12;
-          body.push(part(new BoxGeometry(Math.hypot(p1.x - p0.x, p1.z - p0.z) + 0.01, h, 0.035), i % 2 ? C.woodDark : C.wood, { pos: [(p0.x + p1.x) / 2, 0.12 + h / 2, (p0.z + p1.z) / 2], rot: [0, Math.atan2(-(p1.z - p0.z), p1.x - p0.x), 0] }));
+          body.push(part(new BoxGeometry(Math.hypot(p1.x - p0.x, p1.z - p0.z) + 0.01, h, 0.035), C.wood, { pos: [(p0.x + p1.x) / 2, 0.12 + h / 2, (p0.z + p1.z) / 2], rot: [0, Math.atan2(-(p1.z - p0.z), p1.x - p0.x), 0] }));
         }
         body.push(...tube(pts.map((p) => p.clone().setY(p.y + 0.01)), 0.018, 0.018, C.accent, sides));
       }
@@ -1403,8 +1410,9 @@ export function sledTrackParts(id: number, tiers: number, lite = false): TrackPa
         body.push(ring(0.24, 0.097, 0.01, shade(FIN_CREAM, 0.82), lite ? 12 : 22));
       }
       if (t >= 3) {
-        for (const [z, h, s] of [[0.86, 0.38, 1], [-0.76, 0.2, 0.7]] as const) {
-          body.push(...crestBoard(0.3 * s, 0.08, h, z, lite));
+        for (const [z, r, s] of [[0.84, 0.2, 1], [-0.74, 0.12, -1]] as const) {
+          body.push(part(new TorusGeometry(r, 0.035, lite ? 4 : 6, lite ? 10 : 14, Math.PI * 1.3), new Color('#B9C1CF'), { pos: [0, 0.09 + r, z], rot: [0, Math.PI / 2, s > 0 ? -0.6 : Math.PI + 0.6] }));
+          body.push(...tube([new Vector3(-0.22, 0.1, z - 0.02 * s), new Vector3(0, 0.12 + r * 1.5, z), new Vector3(0.22, 0.1, z - 0.02 * s)], 0.02, 0.02, C.accent, sides));
         }
       }
       if (t >= 4) postFrom(0.1, post[2]);
@@ -1423,7 +1431,10 @@ export function sledTrackParts(id: number, tiers: number, lite = false): TrackPa
         body.push(part(new CylinderGeometry(0.1, 0.1, 0.62, lite ? 8 : 14), FIN_CREAM, { pos: [0, 0.2, 0.78], rot: [0, 0, Math.PI / 2] }));
         for (const sx of [-0.18, 0.18]) body.push(part(new TorusGeometry(0.104, 0.014, 4, lite ? 8 : 12), C.woodDark, { pos: [sx, 0.2, 0.78], rot: [0, Math.PI / 2, 0] }));
       }
-      if (t >= 3) body.push(...crestBoard(0.32, 0.1, 0.42, 1.0, lite));
+      if (t >= 3) {
+        body.push(part(new TorusGeometry(0.24, 0.05, lite ? 5 : 6, lite ? 10 : 14, Math.PI * 1.25), C.wood, { pos: [0, 0.32, 1.02], rot: [0, Math.PI / 2, Math.PI * 0.5], scale: [1, 1, 3.6] }));
+        body.push(...tube(arch(0.31, 0.5, 0.06, 1.12, lite ? 5 : 8), 0.02, 0.02, C.accent, sides));
+      }
       if (t >= 4) postFrom(0.1, post[2]);
       if (t >= 5) for (const sx of [-0.1, 0.1]) inlay.push(...inkLine([new Vector3(sx, 0.11, -0.55), new Vector3(sx, 0.11, 0.95)], 0.01));
       break;
@@ -1432,19 +1443,20 @@ export function sledTrackParts(id: number, tiers: number, lite = false): TrackPa
       // Comet Bob: second shoes curling off the tails, cream backrest panels, a tail fin, a lamp post, the comet inlaid.
       if (t >= 1) for (const sx of [-0.27, 0.27]) body.push(...tube(scroll(sx, 0.11, 0.87, 0.11, 0.85, steps), 0.02, 0.012, STEEL, sides));
       if (t >= 2) {
-        for (const sx of [-1, 1]) for (let j = 0; j < 3; j++) body.push(part(new BoxGeometry(0.04, 0.12, 0.14), shade(FIN_CREAM, j % 2 ? 0.9 : 1), { pos: [sx * 0.29, 0.3, 0.32 + j * 0.15] }));
-        body.push(...quilt(0.5, 0.12, 0.25, 0.66, 4, 1));
+        body.push(...quilt(0.44, 0.1, 0.25, 0.7, 3, 1));
+        for (let j = 0; j < 3; j++) body.push(part(new BoxGeometry(0.13, 0.16, 0.05), shade(FIN_CREAM, j % 2 ? 0.9 : 1), { pos: [-0.14 + j * 0.14, 0.36, 0.74] }));
       }
       if (t >= 3) {
         const { lacquer, comet } = COMET_BOB;
-        for (let i = 0; i < 6; i++) {
-          const k = i / 5;
-          const z = 0.55 + k * 0.3;
-          const h = 0.08 + k * 0.5;
-          body.push(part(new BoxGeometry(0.035, h, 0.065), i % 2 ? COMET_BOB.lacquerDark : lacquer, { pos: [0, 0.26 + h / 2, z] }));
-          body.push(part(new BoxGeometry(0.04, 0.03, 0.06), comet, { pos: [0, 0.26 + h * 0.62, z] }));
+        for (const sx of [-1, 1]) {
+          for (let i = 0; i < 5; i++) {
+            const k = i / 4;
+            const z = 0.5 + k * 0.32;
+            const h = 0.06 + k * 0.32;
+            body.push(part(new BoxGeometry(0.035, h, 0.08), lacquer, { pos: [sx * 0.34, 0.3 + h / 2, z] }));
+          }
+          body.push(...tube([new Vector3(sx * 0.345, 0.34, 0.5), new Vector3(sx * 0.345, 0.66, 0.84)], 0.02, 0.02, comet, sides));
         }
-        body.push(...tube([new Vector3(0, 0.34, 0.52), new Vector3(0, 0.84, 0.86)], 0.016, 0.016, C.accent, sides));
       }
       if (t >= 4) body.push(...tube([new Vector3(post[0], 0.41, 0.84), new Vector3(post[0], post[1] - 0.02, post[2])], 0.02, 0.018, STEEL, sides));
       if (t >= 5) for (const sx of [-0.33, 0.33]) inlay.push(...inkLine([new Vector3(sx, 0.33, -0.25), new Vector3(sx, 0.33, 0.68)], 0.01));
@@ -1460,11 +1472,10 @@ export function sledTrackParts(id: number, tiers: number, lite = false): TrackPa
       }
       if (t >= 3) {
         for (const sx of [-1, 1]) {
-          const n = lite ? 3 : 5;
-          for (let i = 0; i < n; i++) {
-            const k = i / (n - 1);
-            body.push(part(new BoxGeometry(0.36 - k * 0.12, 0.02, 0.11), deck, { pos: [sx * (0.38 + k * 0.12), 0.22 + k * 0.16, 0.3 + k * 0.32], rot: [0, -sx * 0.5, sx * (0.25 + k * 0.2)] }));
-          }
+          const g = new BufferGeometry();
+          const p = [sx * 0.29, 0.22, 0.12, sx * 0.29, 0.22, 0.62, sx * 0.7, 0.44, 0.82, sx * 0.29, 0.22, 0.12, sx * 0.7, 0.44, 0.82, sx * 0.58, 0.36, 0.3];
+          g.setAttribute('position', new BufferAttribute(new Float32Array([...p, ...[0, 1, 2, 3, 4, 5].reverse().flatMap((i) => [p[i * 3], p[i * 3 + 1] - 0.012, p[i * 3 + 2]])]), 3));
+          body.push(part(g, deck));
         }
       }
       if (t >= 4) {
@@ -1480,7 +1491,17 @@ export function sledTrackParts(id: number, tiers: number, lite = false): TrackPa
     }
     default: {
       // The Pine Flyer: runner tails scrolled into curls, a quilted pad, a carved crest, a stern post, the inlay.
-      if (t >= 1) for (const sx of [-0.3, 0.3]) body.push(...tube(scroll(sx, 0.1, 0.86, 0.17, 0.85, steps), 0.03, 0.016, C.accent, sides));
+      if (t >= 1) {
+        for (const sx of [-0.3, 0.3]) {
+          const sweep: Vector3[] = [];
+          for (let i = 0; i <= steps; i++) {
+            const k = i / steps;
+            sweep.push(new Vector3(sx * (1 + 0.25 * k), 0.1 + 0.48 * Math.sin(k * Math.PI * 0.5), 0.86 + 0.26 * k - 0.1 * k * k * k));
+          }
+          body.push(...tube(sweep, 0.036, 0.016, C.accent, sides));
+          body.push(part(new SphereGeometry(0.035, sides, 4), C.accent, { pos: [sx * 1.25, 0.6, 1.02] }));
+        }
+      }
       if (t >= 2) body.push(...quilt(0.66, 0.5, 0.23, 0.28, lite ? 2 : 4, lite ? 2 : 3));
       if (t >= 3) body.push(...crestBoard(0.32, 0.2, 0.32, 0.7, lite));
       if (t >= 4) postFrom(0.2, post[2]);
@@ -1502,7 +1523,7 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
   const body: BufferGeometry[] = [];
   const glow: BufferGeometry[] = [];
   const s = lite ? 6 : 10;
-  const warm = (k: number) => new Color('#FFE7B0').multiplyScalar(k);
+  const warm = (k: number) => new Color('#FFF4E0').multiplyScalar(k);
   // A paper lantern hung from a short arm, centred `drop` below the post's top.
   const lantern = (r: number, h: number, drop: number, bands = 4): void => {
     body.push(...tube([new Vector3(0, 0, 0), new Vector3(0, 0.02, 0.1), new Vector3(0, -0.02, 0.14)], 0.012, 0.01, C.woodDark, 4));
@@ -1521,19 +1542,21 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
   switch (id) {
     case 'cowbell': {
       body.push(...tube([new Vector3(0, 0, 0), new Vector3(0, 0.02, 0.12)], 0.012, 0.01, C.woodDark, 4));
-      const bell = lathe([[0.025, 0], [0.05, -0.02], [0.07, -0.1], [0.1, -0.2], [0.11, -0.22], [0, -0.22]], s, FIN_CREAM, { pos: [0, -0.02, 0.12] });
-      body.push(bell, part(new TorusGeometry(0.105, 0.016, 4, s + 4), FIN_INK, { pos: [0, -0.24, 0.12], rot: [Math.PI / 2, 0, 0] }), part(new SphereGeometry(0.03, 6, 4), FIN_INK, { pos: [0, -0.26, 0.12] }));
+      const bell = lathe([[0.03, 0], [0.065, -0.03], [0.09, -0.13], [0.13, -0.25], [0.14, -0.28], [0, -0.28]], s, FIN_CREAM, { pos: [0, -0.02, 0.12] });
+      body.push(bell, part(new TorusGeometry(0.095, 0.02, 4, s + 4), FIN_INK, { pos: [0, -0.15, 0.12], rot: [Math.PI / 2, 0, 0] }));
       break;
     }
     case 'icefang': {
-      const fang = part(new ConeGeometry(0.07, 0.34, lite ? 4 : 6), new Color('#EAF6FF'), { pos: [0.02, 0.17, 0], rot: [0, 0, -0.35] });
-      glow.push(part(new ConeGeometry(0.035, 0.22, 4), new Color('#F4FBFF').multiplyScalar(1.5), { pos: [0.02, 0.13, 0], rot: [0, 0, -0.35] }));
-      body.push(fang);
+      for (let i = 0; i < 4; i++) body.push(part(new ConeGeometry(0.1 - i * 0.02, 0.16, lite ? 4 : 6), new Color('#EAF6FF'), { pos: [0.04 * i, 0.08 + i * 0.14, 0], rot: [0, 0, -0.18 * i] }));
+      glow.push(part(new ConeGeometry(0.04, 0.4, 4), new Color('#F4FBFF').multiplyScalar(1.5), { pos: [0.06, 0.22, 0], rot: [0, 0, -0.3] }));
       break;
     }
     case 'basaltcrown': {
-      for (const [x, z, h] of [[-0.05, 0, 0.24], [0.05, 0.02, 0.18], [0, -0.06, 0.3]] as const) body.push(part(new CylinderGeometry(0.045, 0.045, h, 6), new Color('#2E2A30'), { pos: [x, h / 2, z] }));
-      glow.push(part(new BoxGeometry(0.012, 0.2, 0.012), new Color('#FFB050').multiplyScalar(1.6), { pos: [0.0, 0.12, -0.012] }));
+      for (const [x, z, h] of [[-0.06, 0, 0.3], [0.06, 0.02, 0.22], [0, -0.07, 0.38]] as const) {
+        body.push(part(new CylinderGeometry(0.055, 0.055, h, 6), new Color('#5A5560'), { pos: [x, h / 2, z] }));
+        body.push(part(new CylinderGeometry(0.056, 0.056, 0.02, 6), new Color('#B8B2B0'), { pos: [x, h + 0.01, z] }));
+      }
+      glow.push(part(new BoxGeometry(0.016, 0.26, 0.016), new Color('#FF9A4A').multiplyScalar(1.6), { pos: [0.0, 0.15, -0.015] }));
       break;
     }
     case 'papercrane': {
@@ -1551,28 +1574,28 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       break;
     }
     case 'ch1orn': {
-      body.push(part(new CylinderGeometry(0.1, 0.1, 0.02, s + 6), FIN_CREAM, { pos: [0, 0.15, 0], rot: [Math.PI / 2, 0, 0] }));
-      for (let i = 0; i < 10; i++) {
-        const a = (i / 10) * Math.PI * 2;
-        body.push(part(new BoxGeometry(0.02, 0.07, 0.012), shade(FIN_CREAM, 0.92), { pos: [Math.sin(a) * 0.14, 0.15 + Math.cos(a) * 0.14, 0], rot: [0, 0, -a] }));
+      body.push(part(new CylinderGeometry(0.13, 0.13, 0.025, s + 6, 1, false, -Math.PI / 2, Math.PI), FIN_CREAM, { pos: [0, 0.04, 0], rot: [Math.PI / 2, 0, 0] }));
+      for (let i = 0; i < 5; i++) {
+        const a = -Math.PI / 2 + ((i + 0.5) / 5) * Math.PI;
+        body.push(part(new SphereGeometry(0.035, 6, 4), shade(FIN_CREAM, 0.94), { pos: [Math.sin(a) * 0.2, 0.04 + Math.cos(a) * 0.2, 0], scale: [1, 1.6, 0.5], rot: [0, 0, -a] }));
       }
       break;
     }
     case 'ch2orn': {
-      body.push(part(new TorusGeometry(0.1, 0.014, 4, s + 2), FIN_CREAM, { pos: [0, 0.03, 0], rot: [Math.PI / 2, 0, 0] }));
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2;
-        body.push(part(new ConeGeometry(0.02, 0.09 + (i % 2) * 0.05, 4), new Color('#F2FAFF'), { pos: [Math.sin(a) * 0.1, -0.03, Math.cos(a) * 0.1], rot: [Math.PI, 0, 0] }));
+      body.push(part(new TorusGeometry(0.15, 0.02, 4, s + 2), FIN_CREAM, { pos: [0, 0.03, 0], rot: [Math.PI / 2, 0, 0] }));
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        body.push(part(new ConeGeometry(0.03, 0.14 + (i % 2) * 0.1, 4), new Color('#F2FAFF'), { pos: [Math.sin(a) * 0.15, -0.06 - (i % 2) * 0.05, Math.cos(a) * 0.15], rot: [Math.PI, 0, 0] }));
       }
       break;
     }
     case 'ch3orn':
-      lantern(0.05, 0.26, 0.2, 5);
-      body.push(part(new SphereGeometry(0.02, 5, 4), FIN_CREAM, { pos: [0, -0.4, 0.14], scale: [1, 1.6, 1] }));
+      lantern(0.06, 0.36, 0.26, 5);
+      for (const dx of [-0.03, 0.02]) body.push(part(new SphereGeometry(0.022, 5, 4), FIN_CREAM, { pos: [dx, -0.5 - Math.abs(dx), 0.14], scale: [1, 1.8, 1] }));
       break;
     case 'ch4orn': {
-      body.push(...tube([new Vector3(0, 0, 0), new Vector3(0.04, 0.12, 0), new Vector3(0, 0.24, 0)], 0.01, 0.008, C.woodDark, 4));
-      for (const [x, y] of [[0.06, 0.1], [-0.05, 0.17], [0.02, 0.26]] as const) {
+      body.push(...tube([new Vector3(0, 0, 0), new Vector3(0.08, 0.14, 0), new Vector3(0.02, 0.3, 0), new Vector3(0.1, 0.42, 0)], 0.014, 0.008, new Color('#4A3428'), 4));
+      for (const [x, y] of [[0.14, 0.14], [-0.04, 0.27], [0.14, 0.42]] as const) {
         for (let k = 0; k < 5; k++) {
           const a = (k / 5) * Math.PI * 2;
           body.push(part(new SphereGeometry(0.026, 5, 4), FIN_CREAM, { pos: [x + Math.sin(a) * 0.03, y + Math.cos(a) * 0.03, 0], scale: [1, 1, 0.4] }));
@@ -1581,12 +1604,16 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       break;
     }
     case 'ch5orn':
-      body.push(lathe([[0.04, 0], [0.09, 0.03], [0.11, 0.1], [0.115, 0.11]], s, new Color('#3A3438')));
-      glow.push(part(new SphereGeometry(0.09, s, 4, 0, Math.PI * 2, 0, Math.PI / 2), new Color('#FFB050').multiplyScalar(1.7), { pos: [0, 0.09, 0], scale: [1, 0.5, 1] }));
+      body.push(lathe([[0.04, 0], [0.1, 0.03], [0.13, 0.12], [0.135, 0.13]], s, new Color('#4A4448')));
+      for (const sx of [-1, 1]) body.push(part(new BoxGeometry(0.016, 0.1, 0.016), new Color('#4A4448'), { pos: [sx * 0.07, -0.04, 0] }));
+      glow.push(part(new SphereGeometry(0.11, s, 4, 0, Math.PI * 2, 0, Math.PI / 2), new Color('#FF9A4A').multiplyScalar(1.6), { pos: [0, 0.11, 0], scale: [1, 0.55, 1] }));
       break;
     case 'ch6orn': {
-      body.push(part(new TorusGeometry(0.13, 0.014, 4, s + 6), FIN_CREAM, { pos: [0, 0.17, 0] }));
-      for (let i = 0; i < 8; i++) body.push(part(new BoxGeometry(0.012, 0.26, 0.012), shade(FIN_CREAM, 0.9), { pos: [0, 0.17, 0], rot: [0, 0, (i / 8) * Math.PI] }));
+      body.push(part(new CylinderGeometry(0.11, 0.11, 0.03, s + 6), FIN_CREAM, { pos: [0, 0.2, 0], rot: [Math.PI / 2, 0, 0] }));
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        body.push(part(new SphereGeometry(0.03, 6, 4), shade(FIN_CREAM, 0.92), { pos: [Math.sin(a) * 0.16, 0.2 + Math.cos(a) * 0.16, 0], scale: [1, 1.5, 0.5], rot: [0, 0, -a] }));
+      }
       break;
     }
     case 'ch7orn':
@@ -1602,11 +1629,13 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       break;
     case 'ch10orn':
       body.push(...tube([new Vector3(0, 0, 0), new Vector3(0, 0.02, 0.12)], 0.012, 0.01, C.woodDark, 4));
-      glow.push(part(new SphereGeometry(0.1, s, s - 2), warm(1.5), { pos: [0, -0.12, 0.12] }));
-      for (const sx of [-1, 1]) body.push(part(new SphereGeometry(0.022, 5, 4), FIN_INK, { pos: [sx * 0.035, -0.1, 0.12 + 0.096], scale: [1, 1.4, 0.4] }));
+      glow.push(part(new SphereGeometry(0.13, s, s - 2), warm(1.5), { pos: [0, -0.16, 0.12], scale: [1, 0.9, 1] }));
+      body.push(part(new CylinderGeometry(0.05, 0.08, 0.04, s), FIN_INK, { pos: [0, -0.03, 0.12] }));
+      for (const sx of [-1, 1]) body.push(part(new SphereGeometry(0.026, 5, 4), FIN_INK, { pos: [sx * 0.045, -0.13, 0.12 + 0.122], scale: [1, 1.4, 0.4] }));
       break;
     case 'ch11orn':
-      body.push(part(new IcosahedronGeometry(0.09, lite ? 0 : 1), new Color('#FFFDF6'), { pos: [0, 0.09, 0] }), part(new IcosahedronGeometry(0.065, lite ? 0 : 1), new Color('#FFFDF6'), { pos: [0, 0.22, 0] }));
+      body.push(part(new IcosahedronGeometry(0.11, lite ? 0 : 1), new Color('#FFFDF6'), { pos: [0, 0.11, 0] }), part(new IcosahedronGeometry(0.08, lite ? 0 : 1), new Color('#FFFDF6'), { pos: [0, 0.27, 0] }));
+      body.push(part(new CylinderGeometry(0.05, 0.05, 0.07, 6), FIN_INK, { pos: [0, 0.38, 0] }), part(new CylinderGeometry(0.075, 0.075, 0.012, 8), FIN_INK, { pos: [0, 0.345, 0] }));
       body.push(...tube([new Vector3(0.05, 0.12, 0), new Vector3(0.18, 0.2, 0)], 0.008, 0.006, C.woodDark, 3));
       break;
     case 'ch12orn': {
@@ -2046,16 +2075,16 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
     case 'chullo': {
       // A pointed crown with a little pom-pom at the tip, a cream band, and pointed ear flaps that end in
       // braided ties hanging past the jaw (a braid: beads of vermillion and cream).
-      out.push(lathe([[0.262, 0.86], [0.27, 0.95], [0.25, 1.04], [0.2, 1.13], [0.12, 1.22], [0.05, 1.29], [0, 1.31]], 14, C.accent, { pos: [0, 0, 0.01] }));
+      out.push(lathe([[0.262, 0.86], [0.27, 0.95], [0.25, 1.05], [0.19, 1.17], [0.11, 1.3], [0.04, 1.42], [0, 1.46]], 14, C.accent, { pos: [0, 0, 0.01] }));
       out.push(part(new CylinderGeometry(0.259, 0.27, 0.035, 18, 1, true), C.pom, { pos: [0, 0.99, 0.01] }));
-      out.push(pom(0, 1.335, 0.01, 0.05, 1));
+      out.push(pom(0, 1.48, 0.01, 0.06, 1));
       for (const sx of [-1, 1]) {
         out.push(part(new ConeGeometry(0.11, 0.26, 8), cuff, { pos: [sx * 0.245, 0.71, 0.03], rot: [Math.PI, 0, -sx * 0.08], scale: [0.55, 1, 1.05] }));
-        for (let k = 0; k < 5; k++) {
-          const y = 0.57 - k * 0.045;
-          out.push(sway(part(new SphereGeometry(0.024, 6, 5), k % 2 ? C.pom : C.accent, { pos: [sx * (0.255 + 0.004 * k), y, 0.03 + 0.008 * k] }), [0.15 + 0.15 * k, 0]));
+        for (let k = 0; k < 7; k++) {
+          const y = 0.58 - k * 0.05;
+          out.push(sway(part(new SphereGeometry(0.034, 6, 5), k % 2 ? C.pom : C.accent, { pos: [sx * (0.26 + 0.005 * k), y, 0.03 + 0.01 * k] }), [0.15 + 0.12 * k, 0]));
         }
-        out.push(sway(part(new ConeGeometry(0.03, 0.07, 6), C.pom, { pos: [sx * 0.277, 0.33, 0.07] }), [0.9, 0]));
+        out.push(sway(part(new ConeGeometry(0.045, 0.1, 6), C.pom, { pos: [sx * 0.295, 0.2, 0.1] }), [0.9, 0]));
       }
       goggles(1.0, -0.236);
       break;
@@ -2088,8 +2117,8 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
       out.push(dome(), ribbed(0.268, 0.274, 0.095, 0.905), stripe(), seam());
       out.push(part(new TorusGeometry(0.27, 0.018, 4, 18), shade(C.accent, 0.9), { pos: [0, 0.952, 0.01], rot: [Math.PI / 2, 0, 0] }));
       for (const sx of [-1, 1]) {
-        out.push(sway(capsule(new Vector3(sx * 0.262, 0.87, 0.03), new Vector3(sx * 0.32, 0.72, 0.05), 0.016, 0.014, cuff, lite ? 4 : 5), [0.25, 0]));
-        out.push(pom(sx * 0.33, 0.64, 0.06, 0.115, 0.6));
+        out.push(sway(capsule(new Vector3(sx * 0.262, 0.87, 0.03), new Vector3(sx * 0.37, 0.64, 0.05), 0.018, 0.016, cuff, lite ? 4 : 5), [0.25, 0]));
+        out.push(pom(sx * 0.38, 0.55, 0.06, 0.13, 0.7));
       }
       goggles();
       out.push(strap());
@@ -2100,32 +2129,14 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
       // strands over the hair: from behind, a scalloped cream fringe across the nape.
       out.push(dome(), ribbed(0.268, 0.274, 0.095, 0.905), seam());
       out.push(part(new TorusGeometry(0.27, 0.018, 4, 18), shade(C.accent, 0.9), { pos: [0, 0.952, 0.01], rot: [Math.PI / 2, 0, 0] }));
-      const n = lite ? 5 : 7;
+      const n = lite ? 7 : 9;
       for (let i = 0; i < n; i++) {
-        const a = -1.75 + (i / (n - 1)) * 3.5;
-        const x = Math.sin(a) * 0.29;
-        const z = 0.01 + Math.cos(a) * 0.29;
-        const y = 0.79 - 0.03 * Math.cos(i * 1.7);
+        const a = -1.05 + (i / (n - 1)) * 2.1;
+        const x = Math.sin(a) * 0.27;
+        const z = 0.03 + Math.cos(a) * 0.27;
+        const y = 0.74 - 0.025 * (i % 2);
         out.push(sway(capsule(new Vector3(Math.sin(a) * 0.27, 0.87, 0.01 + Math.cos(a) * 0.27), new Vector3(x, y + 0.04, z), 0.01, 0.01, cuff, 4), [0.3, 0]));
         out.push(pom(x, y, z, 0.058, 0.55));
-      }
-      flaps();
-      goggles();
-      out.push(strap());
-      break;
-    }
-    case 'crest': {
-      // Crest Knit (round 9): a tall cream fin from brow to nape, three times the old line of bobbles. From behind
-      // it stands over the crown as a tall pale blade; from the side a ribbed crescent.
-      out.push(dome(), ribbed(0.268, 0.274, 0.095, 0.905), seam());
-      out.push(part(new TorusGeometry(0.27, 0.018, 4, 18), shade(C.accent, 0.9), { pos: [0, 0.952, 0.01], rot: [Math.PI / 2, 0, 0] }));
-      const n = lite ? 6 : 9;
-      for (let i = 0; i < n; i++) {
-        const t = i / (n - 1);
-        const a = -1.05 + t * 2.25;
-        const h = 0.085 + 0.13 * Math.sin(t * Math.PI);
-        const r = 0.255 * 1.1;
-        out.push(sway(part(new SphereGeometry(1, lite ? 6 : 8, lite ? 4 : 6), i % 2 ? shade(C.pom, 0.9) : C.pom, { pos: [0, 0.915 + Math.cos(a) * r + h * 0.6, 0.01 + Math.sin(a) * r * 0.98], rot: [a, 0, 0], scale: [0.075, h * 1.2, 0.08] }), [0.2 + 0.2 * t, 0]));
       }
       flaps();
       goggles();
@@ -2136,7 +2147,7 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
       // Pom Muffs (round 9): no crown, the hair shows on top; a ribbed knit band over the head from ear to ear and
       // two big fur muffs, so from behind the head is wide at the ears and dark above.
       out.push(smoothPart(new SphereGeometry(0.252, lite ? 10 : 18, lite ? 5 : 8, 0, Math.PI * 2, 0, 1.35), C.hair, { pos: [0, 0.86, 0.004], scale: [1.04, 1.06, 1.06] }));
-      out.push(ribs(part(new TorusGeometry(0.262, 0.04, lite ? 4 : 6, lite ? 12 : 20, Math.PI), C.accent, { pos: [0, 0.86, 0.06], scale: [1.07, 1.1, 1] }), lite ? 12 : 20, 0.8));
+      out.push(ribs(part(new SphereGeometry(0.262, lite ? 12 : 20, lite ? 5 : 8, 0, Math.PI * 2, 0, 1.05), C.accent, { pos: [0, 0.88, 0.0], scale: [1.07, 1.1, 1.05] }), lite ? 12 : 20, 0.84));
       for (const sx of [-1, 1]) {
         out.push(sway(part(new IcosahedronGeometry(0.135, lite ? 0 : 1), C.accent, { pos: [sx * 0.29, 0.83, 0.03], scale: [0.7, 1, 1], jitter: 0.03 }), [0.25, 0]));
         out.push(part(new TorusGeometry(0.115, 0.03, lite ? 4 : 5, lite ? 10 : 14), C.pom, { pos: [sx * 0.27, 0.83, 0.03], rot: [0, Math.PI / 2, 0], jitter: 0.01 }));
@@ -2153,7 +2164,7 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
         const t = i / steps;
         const a = t * (Math.PI / 2);
         const puff = 1 + 0.12 * Math.abs(Math.sin(t * Math.PI * 3));
-        prof.push([Math.max(0.001, 0.33 * Math.cos(a) * puff), 0.85 + 0.33 * Math.sin(a) * puff]);
+        prof.push([Math.max(0.001, 0.34 * Math.cos(a) * puff), 0.85 + 0.36 * Math.sin(a) * puff]);
       }
       const g = lathe(prof, lite ? 10 : 18, C.accent, { pos: [0, 0, 0.012] });
       // The quilting's seams a step deeper.
@@ -2161,13 +2172,13 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
       const col = g.getAttribute('color') as BufferAttribute;
       for (let i = 0; i < pos.count; i += 3) {
         const y = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3;
-        const t = Math.asin(Math.max(-1, Math.min(1, (y - 0.85) / 0.36))) / (Math.PI / 2);
+        const t = Math.asin(Math.max(-1, Math.min(1, (y - 0.85) / 0.4))) / (Math.PI / 2);
         const k = Math.abs(Math.sin(t * Math.PI * 3)) < 0.3 ? 0.66 : 1;
         for (let j = i; j < i + 3; j++) col.setXYZ(j, col.getX(j) * k, col.getY(j) * k, col.getZ(j) * k);
       }
       out.push(g);
       out.push(part(new CylinderGeometry(0.27, 0.27, 0.03, lite ? 10 : 18, 1, false, -Math.PI / 2 - 1.0, 2.0), shade(C.accent, 0.82), { pos: [0, 0.885, -0.16], scale: [1, 1, 1.25] }));
-      out.push(part(new TorusGeometry(0.335, 0.035, lite ? 4 : 5, lite ? 14 : 24), cuff, { pos: [0, 0.86, 0.012], rot: [Math.PI / 2, 0, 0] }));
+      out.push(part(new TorusGeometry(0.34, 0.04, lite ? 4 : 5, lite ? 14 : 24), C.pom, { pos: [0, 0.86, 0.012], rot: [Math.PI / 2, 0, 0] }));
       goggles(1.06, -0.29);
       break;
     }
@@ -2178,19 +2189,19 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
       out.push(dome(), ribbed(0.268, 0.274, 0.095, 0.905), stripe(), seam());
       out.push(part(new TorusGeometry(0.27, 0.018, 4, 18), shade(C.accent, 0.9), { pos: [0, 0.952, 0.01], rot: [Math.PI / 2, 0, 0] }));
       for (const sx of [-1, 1]) {
-        const path = [new Vector3(sx * 0.1, 1.06, 0.14), new Vector3(sx * 0.17, 1.0, 0.3), new Vector3(sx * 0.24, 0.88, 0.42), new Vector3(sx * 0.29, 0.73, 0.5), new Vector3(sx * 0.32, 0.58, 0.55)];
+        const path = [new Vector3(sx * 0.1, 1.08, 0.12), new Vector3(sx * 0.17, 1.06, 0.3), new Vector3(sx * 0.25, 1.0, 0.46), new Vector3(sx * 0.31, 0.93, 0.6), new Vector3(sx * 0.35, 0.88, 0.7)];
         const rad = [0.08, 0.07, 0.058, 0.048, 0.04];
         for (let i = 0; i < path.length - 1; i++) {
           const w0 = (i / (path.length - 1)) * 0.95;
           const w1 = ((i + 1) / (path.length - 1)) * 0.95;
           const a = path[i];
           const b = path[i + 1];
-          out.push(sway(capsule(a, b, rad[i], rad[i + 1], i === 2 ? C.pom : i % 2 ? shade(C.accent, 0.9) : C.accent, lite ? 6 : 9), (x, y, z) => {
+          out.push(sway(capsule(a, b, rad[i], rad[i + 1], i % 2 ? shade(C.accent, 0.9) : C.accent, lite ? 6 : 9), (x, y, z) => {
             const t = Math.max(0, Math.min(1, ((x - a.x) * (b.x - a.x) + (y - a.y) * (b.y - a.y) + (z - a.z) * (b.z - a.z)) / a.distanceToSquared(b)));
             return [0, 0, w0 + (w1 - w0) * t];
           }));
         }
-        out.push(sway(part(new IcosahedronGeometry(0.06, lite ? 0 : 1), C.pom, { pos: [sx * 0.33, 0.52, 0.56], jitter: 0.02 }), [0, 0, 1]));
+        out.push(sway(part(new IcosahedronGeometry(0.07, lite ? 0 : 1), C.pom, { pos: [sx * 0.36, 0.86, 0.72], jitter: 0.02 }), [0, 0, 1]));
       }
       flaps();
       goggles();

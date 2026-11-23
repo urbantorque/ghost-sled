@@ -35,15 +35,15 @@ const SHOP: Source = { kind: 'shop' };
 /** No mint (ghosts), no rose (a grudge), no gold-white (your best), no vermillion (you), no ink navy (the coat). */
 export const PAINTS: readonly Paint[] = [
   { id: 'natural', name: 'Natural', blurb: 'Oiled wood: two browns and the grain', hex: '', price: 0, motif: 'none', accent: 'cream', source: { kind: 'free' } },
-  { id: 'pine', name: 'Pine Lacquer', blurb: 'Deep green lacquer, a cream pinstripe round the edge', hex: '#2F6A4E', price: 80, motif: 'pinstripe', accent: 'cream', source: SHOP },
-  { id: 'glacier', name: 'Glacier Enamel', blurb: 'Pale ice enamel under a dark rider, an ink pinstripe', hex: '#BFD8EC', price: 110, motif: 'pinstripe', accent: 'ink', source: SHOP },
+  { id: 'pine', name: 'Pine Lacquer', blurb: 'Forest green lacquer, a cream pinstripe round the edge', hex: '#3C6A34', price: 80, motif: 'pinstripe', accent: 'cream', source: SHOP },
+  { id: 'glacier', name: 'Glacier Enamel', blurb: 'Steel-blue enamel, an ink pinstripe round the edge', hex: '#6F8FB2', price: 110, motif: 'pinstripe', accent: 'ink', source: SHOP },
   { id: 'midnight', name: 'Midnight Stars', blurb: 'A warm night-black, cream stars across the tail', hex: '#3A2C2A', price: 150, motif: 'stars', accent: 'cream', source: SHOP },
   { id: 'plum', name: 'Plum Two-Tone', blurb: 'Plum slats in a cream frame', hex: '#6E3F82', price: 200, motif: 'twotone', accent: 'cream', source: SHOP },
-  { id: 'cocoa', name: 'Burnt Scroll', blurb: 'Dark stain with scrolls burnt into the slats\' ends', hex: '#6A4636', price: 250, motif: 'scroll', accent: 'ink', source: SHOP },
+  { id: 'cocoa', name: 'Burnt Scroll', blurb: 'Walnut stain with scrolls burnt into the slats\' ends', hex: '#8A5534', price: 250, motif: 'scroll', accent: 'ink', source: SHOP },
   { id: 'snow', name: 'Finish Chequer', blurb: 'White, an ink chequer band across the tail', hex: '#EEF0F6', price: 310, motif: 'chequer', accent: 'ink', source: SHOP },
   { id: 'ash', name: 'Basalt Hex', blurb: 'Dark slate under a cream hex lattice', hex: '#57535F', price: 380, motif: 'hex', accent: 'cream', source: SHOP },
-  { id: 'stripes', name: 'Twin Stripe', blurb: 'Ochre with two broad cream racing stripes', hex: '#9A6A2E', price: 480, motif: 'stripes', accent: 'cream', source: SHOP },
-  { id: 'gilt', name: 'Gilt Scroll', blurb: 'Oxblood lacquer, cream scrollwork along the rails', hex: '#5E2430', price: 650, motif: 'gilt', accent: 'cream', source: SHOP },
+  { id: 'stripes', name: 'Racing Stripe', blurb: 'Oxblood with one broad cream stripe down the middle', hex: '#5E2430', price: 480, motif: 'stripes', accent: 'cream', source: SHOP },
+  { id: 'gilt', name: 'Gilt Scroll', blurb: 'Black-green lacquer, cream scrollwork along the rails', hex: '#22362C', price: 650, motif: 'gilt', accent: 'cream', source: SHOP },
   { id: 'almanacdusk', name: 'Almanac Pages', blurb: 'A cream deck ruled in ink like a page of the Almanac', hex: '#EADBC0', price: 0, motif: 'ruled', accent: 'ink', source: { kind: 'almanac', page: 38 } },
 ];
 

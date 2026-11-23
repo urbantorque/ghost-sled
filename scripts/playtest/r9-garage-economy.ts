@@ -113,7 +113,7 @@ async function ride(): Promise<void> {
 
 async function tables(): Promise<void> {
   const careers = JSON.parse(readFileSync(OUT, 'utf8')) as EconCareer[];
-  const { economyReport } = await import('../../prototypes/r9/garage/economy');
+  const { economyReport } = await import(opt('econ', '') === 'shop' ? './r9-shop-econ' : '../../prototypes/r9/garage/economy');
   const rep = economyReport(careers);
   console.log(rep.text);
   const json = opt('json', '');
