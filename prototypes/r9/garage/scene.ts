@@ -68,9 +68,10 @@ const SHOTS: Record<Preset, Shot> = {
   chase: { pos: new Vector3(0, 2.0, 4.6), look: new Vector3(0, 1.05, -2), fov: 62 },
 };
 
-/** A phone held upright: the rider in the top half (the shelf's sheet covers the bottom), the camera stood back. */
+/** A phone held upright: the rider in the top half (the shelf's sheet covers the bottom), the camera stood back as far
+ *  as the room allows (the front wall is at z = -5) with a wider lens, looking low so the rider rides high. */
 const TALL: Record<Preset, Shot> = {
-  home: { pos: new Vector3(-2.6, 2.7, -7.8), look: new Vector3(0, 0.25, 0), fov: 50 },
+  home: { pos: new Vector3(-1.0, 2.2, -4.6), look: new Vector3(0, 0.1, 0.3), fov: 66 },
   hatFront: { pos: new Vector3(-0.4, 2.4, -3.4), look: new Vector3(0, 1.35, 0), fov: 44 },
   hatBack: { pos: new Vector3(0.45, 2.5, 3.4), look: new Vector3(0, 1.35, 0), fov: 44 },
   paint: { pos: new Vector3(2.4, 1.6, 2.6), look: new Vector3(0, 0.2, 0.1), fov: 48 },
