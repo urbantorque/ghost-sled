@@ -1,0 +1,679 @@
+[
+ {
+  "name": "fresh"
+ },
+ {
+  "name": "mid-1",
+  "pilot": "mid",
+  "run": 1,
+  "day": "2026-12-01",
+  "made": "scripts/playtest/r9-fixtures.ts on scripts/playtest/r8career.ts",
+  "perDay": 4,
+  "filled": [
+   "hints (from the runs)",
+   "worn (the last piece bought on each shelf)",
+   "mountain (the last ridden)",
+   "name"
+  ],
+  "notSettled": [
+   "album frames (IndexedDB)",
+   "trials",
+   "longNight",
+   "hours picked",
+   "mirrors ridden",
+   "title worn",
+   "photos and clips"
+  ],
+  "summary": {
+   "runs": 1,
+   "page": 2,
+   "pagesOpened": 1,
+   "xp": 736,
+   "gifts": 20,
+   "lifetimeGifts": 140,
+   "ghostsPassed": 3,
+   "open": [
+    "pinecrest"
+   ],
+   "twelveBeaten": 0,
+   "crowned": false,
+   "features": [],
+   "mirrors": [],
+   "hours": [],
+   "legs": 0,
+   "stickers": 10,
+   "missionsDone": 1,
+   "flame": {
+    "streak": 1,
+    "best": 1,
+    "days": 1
+   },
+   "bests": 1,
+   "bought": 2,
+   "wanted": {
+    "pieces": 35,
+    "gifts": 7260
+   },
+   "chapterPages": 0,
+   "lit": 0
+  }
+ },
+ {
+  "name": "mid-5",
+  "pilot": "mid",
+  "run": 5,
+  "day": "2026-12-02",
+  "made": "scripts/playtest/r9-fixtures.ts on scripts/playtest/r8career.ts",
+  "perDay": 4,
+  "filled": [
+   "hints (from the runs)",
+   "worn (the last piece bought on each shelf)",
+   "mountain (the last ridden)",
+   "name"
+  ],
+  "notSettled": [
+   "album frames (IndexedDB)",
+   "trials",
+   "longNight",
+   "hours picked",
+   "mirrors ridden",
+   "title worn",
+   "photos and clips"
+  ],
+  "summary": {
+   "runs": 5,
+   "page": 6,
+   "pagesOpened": 5,
+   "xp": 2997,
+   "gifts": 85,
+   "lifetimeGifts": 805,
+   "ghostsPassed": 21,
+   "open": [
+    "pinecrest",
+    "frostfang",
+    "ember"
+   ],
+   "twelveBeaten": 0,
+   "crowned": false,
+   "features": [
+    "contracts",
+    "album"
+   ],
+   "mirrors": [],
+   "hours": [],
+   "legs": 0,
+   "stickers": 30,
+   "missionsDone": 7,
+   "flame": {
+    "streak": 2,
+    "best": 2,
+    "days": 2
+   },
+   "bests": 4,
+   "bought": 9,
+   "wanted": {
+    "pieces": 29,
+    "gifts": 6840
+   },
+   "chapterPages": 1,
+   "lit": 0
+  }
+ },
+ {
+  "name": "mid-20",
+  "pilot": "mid",
+  "run": 20,
+  "day": "2026-12-05",
+  "made": "scripts/playtest/r9-fixtures.ts on scripts/playtest/r8career.ts",
+  "perDay": 4,
+  "filled": [
+   "hints (from the runs)",
+   "worn (the last piece bought on each shelf)",
+   "mountain (the last ridden)",
+   "name"
+  ],
+  "notSettled": [
+   "album frames (IndexedDB)",
+   "trials",
+   "longNight",
+   "hours picked",
+   "mirrors ridden",
+   "title worn",
+   "photos and clips"
+  ],
+  "summary": {
+   "runs": 20,
+   "page": 16,
+   "pagesOpened": 16,
+   "xp": 14133,
+   "gifts": 140,
+   "lifetimeGifts": 4655,
+   "ghostsPassed": 102,
+   "open": [
+    "pinecrest",
+    "frostfang",
+    "ember",
+    "sakura"
+   ],
+   "twelveBeaten": 5,
+   "crowned": false,
+   "features": [
+    "contracts",
+    "album",
+    "rival",
+    "longNight"
+   ],
+   "mirrors": [
+    "pinecrest",
+    "frostfang"
+   ],
+   "hours": [
+    "pinecrest",
+    "frostfang"
+   ],
+   "legs": 3,
+   "stickers": 84,
+   "missionsDone": 25,
+   "flame": {
+    "streak": 5,
+    "best": 5,
+    "days": 5
+   },
+   "bests": 5,
+   "bought": 32,
+   "wanted": {
+    "pieces": 9,
+    "gifts": 3435
+   },
+   "chapterPages": 8,
+   "lit": 5
+  }
+ },
+ {
+  "name": "mid-50",
+  "pilot": "mid",
+  "run": 50,
+  "day": "2026-12-13",
+  "made": "scripts/playtest/r9-fixtures.ts on scripts/playtest/r8career.ts",
+  "perDay": 4,
+  "filled": [
+   "hints (from the runs)",
+   "worn (the last piece bought on each shelf)",
+   "mountain (the last ridden)",
+   "name"
+  ],
+  "notSettled": [
+   "album frames (IndexedDB)",
+   "trials",
+   "longNight",
+   "hours picked",
+   "mirrors ridden",
+   "title worn",
+   "photos and clips"
+  ],
+  "summary": {
+   "runs": 50,
+   "page": 25,
+   "pagesOpened": 25,
+   "xp": 31299,
+   "gifts": 90,
+   "lifetimeGifts": 9530,
+   "ghostsPassed": 265,
+   "open": [
+    "pinecrest",
+    "frostfang",
+    "ember",
+    "sakura",
+    "lanternfall"
+   ],
+   "twelveBeaten": 10,
+   "crowned": false,
+   "features": [
+    "contracts",
+    "album",
+    "rival",
+    "longNight"
+   ],
+   "mirrors": [
+    "pinecrest",
+    "frostfang",
+    "ember",
+    "sakura"
+   ],
+   "hours": [
+    "pinecrest",
+    "frostfang",
+    "ember",
+    "sakura"
+   ],
+   "legs": 6,
+   "stickers": 115,
+   "missionsDone": 53,
+   "flame": {
+    "streak": 13,
+    "best": 13,
+    "days": 13
+   },
+   "bests": 6,
+   "bought": 49,
+   "wanted": {
+    "pieces": 8,
+    "gifts": 4210
+   },
+   "chapterPages": 10,
+   "lit": 20
+  }
+ },
+ {
+  "name": "mid-100",
+  "pilot": "mid",
+  "run": 100,
+  "day": "2026-12-25",
+  "made": "scripts/playtest/r9-fixtures.ts on scripts/playtest/r8career.ts",
+  "perDay": 4,
+  "filled": [
+   "hints (from the runs)",
+   "worn (the last piece bought on each shelf)",
+   "mountain (the last ridden)",
+   "name"
+  ],
+  "notSettled": [
+   "album frames (IndexedDB)",
+   "trials",
+   "longNight",
+   "hours picked",
+   "mirrors ridden",
+   "title worn",
+   "photos and clips"
+  ],
+  "summary": {
+   "runs": 100,
+   "page": 35,
+   "pagesOpened": 35,
+   "xp": 57854,
+   "gifts": 60,
+   "lifetimeGifts": 16595,
+   "ghostsPassed": 524,
+   "open": [
+    "pinecrest",
+    "frostfang",
+    "ember",
+    "sakura",
+    "lanternfall"
+   ],
+   "twelveBeaten": 12,
+   "crowned": true,
+   "features": [
+    "contracts",
+    "album",
+    "rival",
+    "longNight",
+    "trials"
+   ],
+   "mirrors": [
+    "pinecrest",
+    "frostfang",
+    "ember",
+    "sakura",
+    "lanternfall"
+   ],
+   "hours": [
+    "pinecrest",
+    "frostfang",
+    "ember",
+    "sakura",
+    "lanternfall"
+   ],
+   "legs": 10,
+   "stickers": 149,
+   "missionsDone": 86,
+   "flame": {
+    "streak": 25,
+    "best": 25,
+    "days": 25
+   },
+   "bests": 7,
+   "bought": 63,
+   "wanted": {
+    "pieces": 7,
+    "gifts": 4765
+   },
+   "chapterPages": 10,
+   "lit": 33
+  }
+ },
+ {
+  "name": "novice-1",
+  "pilot": "novice",
+  "run": 1,
+  "day": "2026-12-01",
+  "made": "scripts/playtest/r9-fixtures.ts on scripts/playtest/r8career.ts",
+  "perDay": 3,
+  "filled": [
+   "hints (from the runs)",
+   "worn (the last piece bought on each shelf)",
+   "mountain (the last ridden)",
+   "name"
+  ],
+  "notSettled": [
+   "album frames (IndexedDB)",
+   "trials",
+   "longNight",
+   "hours picked",
+   "mirrors ridden",
+   "title worn",
+   "photos and clips"
+  ],
+  "summary": {
+   "runs": 1,
+   "page": 1,
+   "pagesOpened": 1,
+   "xp": 433,
+   "gifts": 20,
+   "lifetimeGifts": 80,
+   "ghostsPassed": 5,
+   "open": [
+    "pinecrest",
+    "frostfang"
+   ],
+   "twelveBeaten": 0,
+   "crowned": false,
+   "features": [],
+   "mirrors": [],
+   "hours": [],
+   "legs": 0,
+   "stickers": 1,
+   "missionsDone": 1,
+   "flame": {
+    "streak": 1,
+    "best": 1,
+    "days": 1
+   },
+   "bests": 1,
+   "bought": 1,
+   "wanted": {
+    "pieces": 37,
+    "gifts": 7470
+   },
+   "chapterPages": 0,
+   "lit": 0
+  }
+ },
+ {
+  "name": "novice-5",
+  "pilot": "novice",
+  "run": 5,
+  "day": "2026-12-02",
+  "made": "scripts/playtest/r9-fixtures.ts on scripts/playtest/r8career.ts",
+  "perDay": 3,
+  "filled": [
+   "hints (from the runs)",
+   "worn (the last piece bought on each shelf)",
+   "mountain (the last ridden)",
+   "name"
+  ],
+  "notSettled": [
+   "album frames (IndexedDB)",
+   "trials",
+   "longNight",
+   "hours picked",
+   "mirrors ridden",
+   "title worn",
+   "photos and clips"
+  ],
+  "summary": {
+   "runs": 5,
+   "page": 5,
+   "pagesOpened": 5,
+   "xp": 2138,
+   "gifts": 60,
+   "lifetimeGifts": 670,
+   "ghostsPassed": 15,
+   "open": [
+    "pinecrest",
+    "frostfang",
+    "ember"
+   ],
+   "twelveBeaten": 0,
+   "crowned": false,
+   "features": [
+    "contracts",
+    "album"
+   ],
+   "mirrors": [],
+   "hours": [],
+   "legs": 0,
+   "stickers": 10,
+   "missionsDone": 9,
+   "flame": {
+    "streak": 2,
+    "best": 2,
+    "days": 2
+   },
+   "bests": 3,
+   "bought": 8,
+   "wanted": {
+    "pieces": 30,
+    "gifts": 6950
+   },
+   "chapterPages": 1,
+   "lit": 0
+  }
+ },
+ {
+  "name": "novice-20",
+  "pilot": "novice",
+  "run": 20,
+  "day": "2026-12-07",
+  "made": "scripts/playtest/r9-fixtures.ts on scripts/playtest/r8career.ts",
+  "perDay": 3,
+  "filled": [
+   "hints (from the runs)",
+   "worn (the last piece bought on each shelf)",
+   "mountain (the last ridden)",
+   "name"
+  ],
+  "notSettled": [
+   "album frames (IndexedDB)",
+   "trials",
+   "longNight",
+   "hours picked",
+   "mirrors ridden",
+   "title worn",
+   "photos and clips"
+  ],
+  "summary": {
+   "runs": 20,
+   "page": 13,
+   "pagesOpened": 13,
+   "xp": 9536,
+   "gifts": 25,
+   "lifetimeGifts": 2895,
+   "ghostsPassed": 67,
+   "open": [
+    "pinecrest",
+    "frostfang",
+    "ember",
+    "sakura"
+   ],
+   "twelveBeaten": 2,
+   "crowned": false,
+   "features": [
+    "contracts",
+    "album",
+    "rival",
+    "longNight"
+   ],
+   "mirrors": [
+    "pinecrest"
+   ],
+   "hours": [
+    "pinecrest",
+    "frostfang"
+   ],
+   "legs": 3,
+   "stickers": 27,
+   "missionsDone": 21,
+   "flame": {
+    "streak": 7,
+    "best": 7,
+    "days": 7
+   },
+   "bests": 4,
+   "bought": 24,
+   "wanted": {
+    "pieces": 17,
+    "gifts": 5100
+   },
+   "chapterPages": 6,
+   "lit": 4
+  }
+ },
+ {
+  "name": "novice-50",
+  "pilot": "novice",
+  "run": 50,
+  "day": "2026-12-17",
+  "made": "scripts/playtest/r9-fixtures.ts on scripts/playtest/r8career.ts",
+  "perDay": 3,
+  "filled": [
+   "hints (from the runs)",
+   "worn (the last piece bought on each shelf)",
+   "mountain (the last ridden)",
+   "name"
+  ],
+  "notSettled": [
+   "album frames (IndexedDB)",
+   "trials",
+   "longNight",
+   "hours picked",
+   "mirrors ridden",
+   "title worn",
+   "photos and clips"
+  ],
+  "summary": {
+   "runs": 50,
+   "page": 20,
+   "pagesOpened": 20,
+   "xp": 21666,
+   "gifts": 90,
+   "lifetimeGifts": 5520,
+   "ghostsPassed": 157,
+   "open": [
+    "pinecrest",
+    "frostfang",
+    "ember",
+    "sakura"
+   ],
+   "twelveBeaten": 2,
+   "crowned": false,
+   "features": [
+    "contracts",
+    "album",
+    "rival",
+    "longNight"
+   ],
+   "mirrors": [
+    "pinecrest",
+    "frostfang",
+    "ember"
+   ],
+   "hours": [
+    "pinecrest",
+    "frostfang",
+    "ember"
+   ],
+   "legs": 3,
+   "stickers": 37,
+   "missionsDone": 38,
+   "flame": {
+    "streak": 17,
+    "best": 17,
+    "days": 17
+   },
+   "bests": 5,
+   "bought": 36,
+   "wanted": {
+    "pieces": 8,
+    "gifts": 3420
+   },
+   "chapterPages": 10,
+   "lit": 8
+  }
+ },
+ {
+  "name": "novice-100",
+  "pilot": "novice",
+  "run": 100,
+  "day": "2027-01-03",
+  "made": "scripts/playtest/r9-fixtures.ts on scripts/playtest/r8career.ts",
+  "perDay": 3,
+  "filled": [
+   "hints (from the runs)",
+   "worn (the last piece bought on each shelf)",
+   "mountain (the last ridden)",
+   "name"
+  ],
+  "notSettled": [
+   "album frames (IndexedDB)",
+   "trials",
+   "longNight",
+   "hours picked",
+   "mirrors ridden",
+   "title worn",
+   "photos and clips"
+  ],
+  "summary": {
+   "runs": 100,
+   "page": 29,
+   "pagesOpened": 29,
+   "xp": 42186,
+   "gifts": 365,
+   "lifetimeGifts": 10805,
+   "ghostsPassed": 368,
+   "open": [
+    "pinecrest",
+    "frostfang",
+    "ember",
+    "sakura",
+    "lanternfall"
+   ],
+   "twelveBeaten": 2,
+   "crowned": false,
+   "features": [
+    "contracts",
+    "album",
+    "rival",
+    "longNight"
+   ],
+   "mirrors": [
+    "pinecrest",
+    "frostfang",
+    "ember",
+    "sakura"
+   ],
+   "hours": [
+    "pinecrest",
+    "frostfang",
+    "ember",
+    "sakura"
+   ],
+   "legs": 6,
+   "stickers": 52,
+   "missionsDone": 64,
+   "flame": {
+    "streak": 34,
+    "best": 34,
+    "days": 34
+   },
+   "bests": 6,
+   "bought": 52,
+   "wanted": {
+    "pieces": 8,
+    "gifts": 4170
+   },
+   "chapterPages": 11,
+   "lit": 20
+  }
+ }
+]
