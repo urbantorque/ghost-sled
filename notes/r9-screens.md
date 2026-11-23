@@ -427,6 +427,32 @@ What round two found wrong with the prototype, and what was done:
 Not judged by a third critic: the round-two fixes are copy, fixture data and a few pixels; the frames after them are
 `shots/r9/screens/frames3/`, seen by me, not by a critic.
 
+### Round three (the main lane, after the merge: a fresh critic at extra-high effort on `frames3/`)
+
+The owner set lanes and critics to extra-high; rounds one and two ran at high, so the main lane ran a third on the final
+frames: `pairs3-title` (desk runs 1, 5, 20, 50; phone runs 5, 50) and `pairs3-results` (desk, the eight cases; phone, a
+podium and a wreck), seed 23, key in `keys/pairs3-*.json`, the same questions, ART.md and the pictures only. Today's side
+is `frames2/`'s today frames (made before round two's fixture fixes, so two figures differ between the sides: the duel
+won's Rider Rank 5 against 6, the first finish's Rank 2 against 1; the truth table holds the prototype's).
+
+| | Title (6 pairs) | Results (10 pairs) |
+| --- | --- | --- |
+| Picked as clearer | **the prototype, 6 of 6** | **the prototype, 10 of 10** |
+| Answers right, today | 14 of 18: the run-1 button read as a duel with Bram Oakhollow; the goal a list every time | 22 of 30: the Cup's and the Daily's medals missed ("silver of what?"), the wreck's "Finish the mission" read as resuming the run, Ride It beside Rematch |
+| Answers right, prototype | 18 of 18 | 30 of 30 |
+
+Its verdict: ship the prototype, and port back the mountain's name and feeling under the logo and the rival's gap in
+their colour. Its three worst faults left in the prototype, worst first, for milestone 1:
+1. A Twelve rider's time to beat printed over the player's faster best ("2:23.6 to beat" over "Best 2:04.8", on five
+   titles and the duel won's "2:09.6 to beat" after a 2:02.9). True to the game, a duel being beaten head to head, but it
+   reads as already beaten: the reason must name the duel, not set a slower time against the best.
+2. The moment's chip on the rider's pom-pom (results duel won, Cup, duel lost; the phone's podium time): keep it inside
+   the headline's rule.
+3. A place and a medal that read as disagreeing: "3rd" with "A silver time on today's Daily", "5th" with "A bronze time".
+Smaller, on a phone: "Lantern…" cut on every picker; a ghost's name pill baked into the backdrop floats over the chips;
+Progress's book icon apart from its two lines. Of today's results it found that no XP total equals its visible chips
+(eight of eight on a desk: +436 against 366, +443 against 360).
+
 ## web-design-guidelines
 
 Run over `prototypes/r9/` (`tokens.css`, `screens.css`, `title.ts`, `results.ts`, `proto.ts`, `screens.html`,

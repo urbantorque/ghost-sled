@@ -130,10 +130,16 @@ Dev switches (on in `npm run dev`, or anywhere with `?debug`):
 | `?demo=N` | Replay the Nth-best pool ghost as the player, with its chaos roll (it dashes and wards as it did) |
 | `?riders=N` | Dress the field as the signature riders from roster index N (render only) |
 | `?jukebox` | The music jukebox over the title: the main theme, each of the five mountains' produced score by section, the live band, the drops, the lift, the breath, the finale, the results reprise, a stinger for every set-piece verb, the twelve riders' motifs and every cue, on demand (`LISTENING.md` is the route for listening to the game) |
+| `?save=<name>` | Dev server only: play on a save fixture instead of your save (`fresh`, `mid-1`, `mid-5`, `mid-20`, `mid-50`, `mid-100`, `novice-1` to `novice-100`), its days moved to today, held in memory so your own save is never read or written (`src/game/devsave.ts`; `npx tsx scripts/playtest/r9-fixtures.ts` makes them from the career harness) |
 
 The UI harness (`ui-harness.html` on the dev server) shows screens with fake models; round 7 added `title-twelve`,
 `title-twelve-wait`, `title-twelve-king`, `title-twelve-final`, `title-twelve-crowned`, `results-win`,
 `results-duel`, `results-duel-lost`, `results-duel-opens` and `results-crowned`.
+
+Round 9's milestone 0 pages, on the dev server (prototypes; the game never loads them, and the release never builds
+them): `prototypes/r9/screens.html` (the title and results redesign beside today's, desk and phone),
+`prototypes/r9/garage.html` (the garage as a place, its item sheets and economy) and `prototypes/r9/concepts.html` (the
+seven new-mountain concepts in greybox beside the five).
 
 ## Controls
 

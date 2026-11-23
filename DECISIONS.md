@@ -4086,3 +4086,323 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
       ridden to its results with Save Clip beside its one button (`shots/r8/final/live2/`).
     - *Left for the owner:* the report's open questions (`notes/r8-report.md`), the fifteen-minute route, and Save
       Photo and Save Clip on the CrazyGames portal. Nobody has played round 8 by hand.
+
+## Round 9: clear screens, a garage worth it, and three new mountains
+
+The brief is `prompts/round-9-clear-screens-a-garage-worth-it.md`. The round has one stop, the end of milestone 0: the
+owner picks the three new mountains and approves the direction for the screens and the garage, then the round runs
+straight through.
+
+388. **Milestone 0 ran as five lanes, then one merge** (`notes/r9-lanes.md`, `notes/r9-briefs/`).
+    - *The lanes.* truth (save fixtures, every screen at every stage counted, the screen bars), measure (the five on
+      the lab, their profiles, the mountain bars), concepts (seven new-mountain concepts on a greybox), screens (the
+      information map and plan, the title and results as working HTML, blind critics), garage (the model, every item,
+      the economy, a first frame of the garage as a place). Each in its own worktree from `round-9`, no two writing the
+      same file, one browser on the machine through the slot and one heavy job at a time. On the owner's word of 23
+      November every lane and critic ran on Opus 5.5 at extra-high effort; the screens lane ran its two critic rounds
+      at high by mistake, so a third ran at extra-high (DECISIONS 391).
+    - *What reached `round-9`.* All five merged (c81d3c9, 00a505a, d14abe9, dc5b5d1, 4895bc8); the one conflict was
+      `prototypes/r9/tsconfig.json`, which three lanes wrote, merged to take every lane's files. Nothing a player sees
+      changed: the only game files touched are the truth lane's dev-only save switch (`src/game/devsave.ts`, one gated
+      line in `app.ts`, a serve-only plugin in `vite.config.ts`), and the release built from its branch is byte for byte
+      the round's base (35 files, 63,260,913 bytes, every md5 equal). `tsc` is clean on the game and the prototypes; the
+      full suite is green (106 files, 1,912 passed, and the two bars written as expected failures).
+    - *The garage's phone frame.* The lane's last change stood the phone's home camera back to z = -7.8, outside the
+      workshop's front wall (z = -5), and was never shot: the frame showed planks. Moved inside the room with a wider
+      lens and re-shot (ecf6426, `shots/r9/garage/scene/phone-home.png`), console clean.
+    - *The new dev tools.* `?debug&save=<name>` on the dev server loads a fixture (`fresh`, `mid-1` to `mid-100`,
+      `novice-1` to `novice-100`, from `scripts/playtest/r9-fixtures.ts` in the heavy slot) as the save, its days moved
+      to today, in a store of its own: the real save is never read or written. The fixtures hold no Trials, Long Night,
+      hours picked, mirrors ridden or album frames (the career harness settles none of them).
+
+389. **Section 1 checked line by line: what is right, what is wrong, what it missed** (the lanes' notes hold every line
+    with its frame or code line: `notes/r9-truth.md` 5, `notes/r9-garage.md` 6, `notes/r9-measure.md`).
+    - *The screens.*
+      - *Strong:* the fresh title's 18 words and one Ride, right (`shots/r9/truth/desk-fresh-title.png`; Mute beside it
+        is a lone icon). The results' hero with one primary, right on every finish; on the Trial's results on a desk the
+        rider stands behind the right column (`desk-mid-100-results-trial.png`, a pinned run: for a person to check on a
+        ridden one). The vermillion primary, right: no other control has its fill.
+      - *1, a seat for every system:* right and understated. The returning desk title is 105 to 124 words from run 1 on
+        (117 at the mid pilot's run 50, 122 at the novice's) with 16 to 20 controls; the phone 57 to 74, all of it over
+        the rider. "Hours, mirrors, Trials, contracts, the league and the Long Night add more" is half wrong: hours and
+        mirrors add a row, Trials a switch while the Cup is picked, the league only a news line in a week the division
+        moved, and contracts and the Long Night never reach the title.
+      - *2, said twice:* right, all three. Missed: the picked mountain named three times at run 50 (five times on the
+        novice's run 1), and Details repeating the first view's lines.
+      - *3, figures without words:* right and wider. Ten on the run-50 title ("13" by the flame, "90", "Page 26",
+        "1,281 to go", "115 /212", "Rank 5 of 87" on each card, the missions badge); 19 of the 50 Almanac pages are named
+        with a bare "+1" (`fmt.ts` `rewardsLine`); every results first view has 3 to 9 ("+110", "+68" by an icon).
+      - *4, loading as content:* right on every returning title, desk and phone. Missed: until the rivals come the
+        Cup's and the Daily's cards take no tap, and then they read "Fresh rivals", which is status too.
+      - *5, the results' column a form:* right in kind (57 to 79 words on a desk, 44 to 64 on a phone, 5 controls).
+        "Two calls to action compete" is overstated: Ride It is a soft button, only on a run that opens a mountain, but
+        on that run it is the action a player most wants, beside a primary that offers something else.
+      - *6, copy that does not parse:* right, and not a one-off. "done before, so again" comes from `goals.ts:128` for
+        every mission whose best already meets its target, all 33 of them; it shows on a fresh save's first finish, both
+        run-20 duels, the crash and run 2. The screens lane's career count: the mission button is the results' button on
+        48% of the mid pilot's runs and 69% of the novice's. Missed: after a lost duel the one button is "Finish the
+        mission" while the chip says "Pip Thistle held you off by 32.1 s" (`desk-mid-20-results-duel-lost.png`); and
+        after run 1 Ride says "Duel Bram Oakhollow" when run 2 is not a duel (`twelveModel` against `duelHere`).
+      - *7, no one design language:* right on the numbers (15,105 lines in 11 sheets, `style.css` 9,658; `results.ts`
+        render() 28 conditionals, 10 for the phone). Wrong on the cure: only 3 classes are dead (59 lines). The weight is
+        158 font sizes, 355 colour literals and 56 durations; tokens, not deletion, make the sheets smaller.
+      - *8, Escape:* it closes no sheet and no popover, on purpose (`menus.ts:14`: on CrazyGames Escape leaves
+        fullscreen). The pad's B closes every sheet and the pause card and gives focus back, but none of the title's four
+        popovers (missions, medals, the flame's calendar, The Twelve), which take no focus at all.
+      - *Missed, biggest first:* **the day's contracts and the Cup's league are never drawn.** `spineview.ts` builds
+        `TitleSpine.contracts`, `form` and the league's nineteen rows; no file in `src/ui` renders them, and a player
+        sees only "Contracts met: ..." and "Cup league: 1st in division 5" in Details' notes (`results.ts:1263-1266`)
+        and a news line. They need screens built, not moved. The Long Night is reachable only from Almanac page 10.
+        Trials open at the mid pilot's run 98 and not by run 100 for the novice (page 35). Lone icons on every screen.
+        The garage, the books and settings have no primary. The dev server's mock platform offers rewarded ads (Double
+        Gifts, Revive, a midgame break of about 5 s) the published build never shows; every count leaves them out.
+    - *The garage.*
+      - *Strong:* six sleds with their own silhouettes and a real-mesh preview, right, but the preview never shows your
+        paint (`portrait.ts` 106 to 108). A signature trick each, right in the sim (`sim/tricks.ts`) and named nowhere in
+        the garage. Seven hats with distinct shapes, half right: at race distance a critic could not tell the Pom Beanie
+        from the Watch Cap, and read the Bobble Crown as The Twelve's crown and the Twin Pom as fox ears. Buy then
+        Confirm, right. Nothing bought wins a race, right (`tests/garage.test.ts`).
+      - *1, nothing to aim for:* right. The base garage costs 6,270. Today's build earns the mid pilot 805, 4,655,
+        9,530 and 16,595 by runs 5, 20, 50 and 100 (DECISIONS 371's 875, 4,495, 10,145 and 17,260 were round 8's build
+        before its stretch); lifetime gifts cover the garage at run 28, a garage-first player owns it all at run 31 and
+        the novice at run 59, and the harness's cheapest-first spender never does (it lights lanterns and leaves the Wisp
+        and Tea Tray unbought at run 100). "The dearest cosmetic, 240 gifts" is wrong: the month's trail is 380 and a
+        lantern up to 675.
+      - *2, the items look alike:* right and understated. Eight of the twelve chapter paints are within 11 (CIE76) of a
+        shop paint (Night Market against Cocoa, 2.1). Every chapter trail is Gold Glints or Comet Tail in another tint;
+        Banked Embers is Gold Glints, Lamp Moths is Stardust, and Keeper's Lantern is Comet Tail (64 motes a second to
+        60). Chapter scarves repeat the shop's knits. The burn paints over every pattern past 85% of the tail
+        (`rider.ts` 1090 to 1095), and its glow spreads over the coat's back, which ART.md 8 rules out.
+      - *3, you cannot see what you buy:* right. *4, little reads in a run:* right and measured: the rider is 116 to 166
+        px of a 720 px frame and the head with its hat 35 to 45 px; a critic took four of today's six trails for one, two
+        of seven hats for one, and Plum paint for another sled. *5, buying is a toast:* right (`audio.ui('unlock')` and a
+        toast). *6, a dialog, not a place:* right; missed, the Lanterns tab puts a vermillion primary on every town, up to
+        five at once.
+      - *7, the Almanac and the shop overlap:* right that page 5's sled gives nothing if you bought it; wrong that it is
+        silent: `rank.ts` 207 skips the sled and 313 to 315 still show "A new sled". The same holds for a chapter piece
+        bought before its page. "Ready in the shop" is a span with no action (`results.ts:1353`).
+      - *Missed:* the hats shelf is the one the Almanac and the chapters never add to, though a hat is the piece most
+        seen; a sound cannot be heard before it is bought; paint goes on every sled the same way.
+    - *The mountains.*
+      - *Right:* one set of parts; 4.5 km in stages of 1,450, 1,500 and 1,550 m; the same opening, the first leap at 605
+        to 653 m; three leaps; a set piece a stage; two legends; a mid rider home in 121.3 to 129.4 s; one corridor whose
+        plain bank rises 9.5 m at the 10 m turn-back. The verdict holds: a blind critic put all six of the five's greybox
+        frames in one mountain and called their openings "literally one opening", and the five's finish stills are one
+        picture five times (`shots/r9/measure/stills/gray-sheet.png`).
+      - *Wrong:* "the same 18 section kinds": the five use 16 between them, 11 to 13 each, and only 9 appear on all
+        five. "A sky gate a stage": 3, 3, 1, 2 and 2. "Snow and ice everywhere": Ember has no ice. "A tree and a rock
+        differ only in the crash's cause": low colliders (0.75 to 1.4 m) can be jumped and tall ones (3 to 6.5 m) cannot.
+        "The last leap over the town": not on Sakura, where 200 m of street lies between. "A slope of 0.28 to 0.31": that
+        is the parameter, and it governs only 21 to 31% of the run; the plain grade is 0.302 to 0.344. "Then a town
+        square": the square is the last 300 m of stage 3.
+      - *Missed:* the 190 m threshold at every stage line and the charm gates at 110, 1,550 and 3,050 m on all five; an
+        identical first minute (the kicker at 286 m, nothing on the line before 800 m, falls free before 700 m); one
+        difficulty ramp; a profile that eases toward the finish. Where the five do differ: colliders per km (43 to 126)
+        and air (24 to 35% of the run). And `FINISH_Z` (4,500 m) is read across the game layer (`app.ts`,
+        `challenge.ts`, `field.ts`, `ghosts.ts`, `graveyards.ts`, `missions.ts`, `settle.ts`, `standing.ts`): a
+        mountain of another length would never count a record as finished. M1 did not list it.
+
+390. **Section 2's bars, as tests and scripts, with today's figures** (`scripts/playtest/r9-screenbars.ts`,
+    `tests/r9screens.test.ts`, `scripts/playtest/r9-garage-economy.ts`, `scripts/playtest/r9-courses.ts`).
+    - *The screens* (desk, then phone; the truth lane's live captures on the fixtures):
+
+      | Bar | Today |
+      | --- | --- |
+      | Title at run 50, at most 40 words | 117 (mid), 122 (novice); phone 57 and 64 |
+      | Results' first view, at most 35 words | 57 (the Cup) to 79 (a first finish); phone 44 to 64 |
+      | A fresh title as clean as today | 18 words, 2 controls; phone 17 |
+      | One primary, nothing styled like it | 1 on every title, results and pause; 0 on the garage, books, settings |
+      | No lone icons | fails on every screen (Mute, the strip's arrow, the results' camera, Close, photo mode) |
+      | Plain figures | 6 to 10 bare figures on a returning title, 6 to 9 on results; 19 of 50 Almanac names; 33 of 33 missions |
+      | Said once | 2 to 4 repeats on a returning title; Details 2 to 8 |
+      | Never loading | "Finding rivals…" on every returning title |
+      | Nothing lost (two taps, mid-50) | 16 of 20 systems; contracts and the league never shown; photo and clips only from a run |
+      | Run Again to riding, under 2 s | 101 to 395 ms; phone 78 to 253 ms (round 8 measured about 550) |
+      | Five seconds (blind critics) | today's screens read right 78 of 96 times over two rounds, 36 of 48 in a third |
+
+    - *The garage* (from the career harness, a written player's rule spending): seen before it is bought, only the
+      sleds, without your paint; different at race distance, no (four of six trails one trail, two of seven hats one
+      hat, Midnight one with Basalt); something within one to three runs, after 30 of the mid pilot's 100 runs and 62 of
+      the novice's, and after the base garage only lanterns; a moment, a toast; upgrades, none; no edge, holds.
+    - *The mountains* (the mid pilot, six seeds a mountain, all 30 runs home):
+
+      | | Pinecrest | Frostfang | Ember | Sakura | Lanternfall | the five's range |
+      | --- | --- | --- | --- | --- | --- | --- |
+      | finish, s | 129.4 | 121.3 | 122.8 | 128.6 | 127.0 | 121.3 to 129.4 |
+      | mean speed, m/s | 35.2 | 37.4 | 36.8 | 35.1 | 35.7 | 35.1 to 37.4 |
+      | airtime | 35.3% | 31.5% | 27.5% | 29.4% | 24.2% | 24.2 to 35.3% |
+      | bends per km (the safe line) | 2.67 | 2.67 | 2.44 | 2.44 | 1.78 | 1.78 to 2.67 |
+      | mean width, m | 31.1 | 27.1 | 24.6 | 29.3 | 27.9 | 24.6 to 31.1 |
+      | colliders per km | 125.6 | 49.3 | 43.3 | 80.4 | 84.9 | 43.3 to 125.6 |
+
+      The clumsy pilot (30 seeds) finishes Pinecrest and Sakura 27 of 30, the five's hardest and the fair bar's floor.
+    - *Bars changed, and why.*
+      - **New rides, stricter.** As written ("outside the five's range on two of six"), four of the five pass it
+        against the other four: a sixth course in the five's grammar would pass. The bar becomes outside the range by
+        15% on at least two, which none of the five meets; `r9-courses.ts` prints both.
+      - **Fair, on 30 seeds**, with runs capped at 900 s: on six seeds the clumsy pilot's hardest two came out the
+        other way round, and a 420 s cap cut off five runs still riding.
+      - **The word bars hold on the desk and the phone both.** **No lone icons stays strict**: the screens' prototype
+        puts a visible word on every control (Sound On for Mute), so it can be met. **One primary means at most one**:
+        a sheet with nothing to do (a garage with everything owned, the books, settings) has none. **Photo and clips**
+        are judged from pause and the results, the only places they mean anything.
+      - **U3's "smaller sheets"** come from tokens replacing literals, not from deleting dead CSS, of which there is
+        almost none.
+
+391. **The three designs for the owner** (each lane's page runs on the dev server, `npm run dev`).
+    - *The screens* (`notes/r9-screens.md`; `prototypes/r9/screens.html`; frames `shots/r9/screens/`).
+      - *The title has one job at a time:* the logo; the mountains as a picker of chips with short names, the picked
+        one larger with "Best 2:06.3" (its hour and mirror under Ride once open); Ride with its reason on it ("Duel: Pip
+        Thistle. 2:08.9 to beat"); one quiet line of what you are working toward ("Beat 6 more of The Twelve to open
+        Lanternfall"); four labelled doors: **Daily and Cup** (wearing the flame; the flame, the Daily, the contracts,
+        the Cup and its league, the Trial), **Progress** (Rider Rank and the Almanac, The Twelve, the Long Night, the
+        album, medals, missions), **Garage** (wearing the gifts) and **Settings**. Something new is introduced once, by a
+        "New" on its door and one line in its room. Nothing loading is shown.
+      - *The results in three beats over the scene:* how you did (the place, the word, the time and one fact); the one
+        reward, turned over, with Rider Rank's bar and the gifts at its foot; the one button with its reason, then Home,
+        Photo and Details. About 2.5 s instead of about 4.5, landed by a tap or a key. The button is always the run
+        (Run Again, Rematch, Next Duel, Today's Daily, Ride Frostfang); a mission is only ever its reason. Everything
+        else is in Details.
+      - *One system* (`prototypes/r9/tokens.css`): eight type sizes on one unit, two radii, three weights, three
+        button ranks with words on every one, four durations and two easings; vermillion only on the one primary.
+      - *Counts* (the same models, today then the prototype, desk): the title after runs 1, 5, 20 and 50 is 114, 108,
+        114 and 123 words, then 33, 33, 38 and 40; controls 17 to 21, then 10 to 13. The results' first view is 48 to 75
+        words, then 21 to 35, with 4 controls. Both bars are met at run 50 and on a won duel with nothing to spare.
+      - *Blind critics:* over two rounds at high effort the prototype was picked as clearer in 32 of 32 pairs and read
+        right 96 of 96 times (today's 78 of 96: the goal read as a list every time, the run-1 "duel" believed, the Cup's
+        and the Daily's medals unseen). Their findings were fixed, worst first. A third fresh critic at extra-high effort
+        on the final frames (`shots/r9/screens/pairs3-*`, seed 23, key in `keys/`) picked the prototype in 16 of 16 pairs
+        and read it right 48 of 48 times against today's 36 of 48 (titles 14 of 18, results 22 of 30: the run-1 "duel"
+        believed again, the goal a list every time, the Cup's and the Daily's medals missed, "Finish the mission" read as
+        resuming the wreck). It would ship the prototype, and port back the mountain's name and feeling under the logo
+        and the rival's gap in their colour. Its three worst faults left in the prototype go to milestone 1: **a
+        Twelve rider's "2:23.6 to beat" printed over the player's faster "Best 2:04.8"** (true to the game, since a duel
+        is beaten head to head, but it reads as already beaten: the reason must say the duel, not a slower time); **the
+        moment's chip on the rider's pom-pom** on four results (keep it inside the headline's rule); and **the place
+        and the medal read as disagreeing** ("3rd" over "A silver time on today's Daily"). Smaller: the phone's chips cut
+        "Lantern…", and a ghost's name pill baked into the backdrop floats over the picker. Its "Rider Rank 5 against 6"
+        is this round's pairing, not the design: today's frames came from before round two's fixture fixes. Of today's
+        screens it also found that no results' XP total equals its visible chips (eight of eight on a desk).
+      - *Only scripts have driven it:* keys, the pad's cursor (through the game's own `PadNav`), touch and reduced
+        motion pass 24 of 24 scripted checks; no real pad, no person.
+    - *The garage* (`notes/r9-garage.md`; `prototypes/r9/garage.html`; frames `shots/r9/garage/`).
+      - *The model:* each sled has a track of five visible tiers (runners, deck, crest, a stern lamp that opens an
+        ornament post, a spirit inlay that burns with the scarf at Spirit Flow), each opened by riding that sled (after
+        1, 3, 6, 10 and 15 finishes on it) and then fitted for gifts (the Pine Flyer's 80, 150, 240, 360 and 520; the
+        dearer sleds up to 1.6 times; 9,930 for all six). Tiers are a look keyed on the save and never touch handling.
+        Six shelves (Sled, Hats, Scarves, Trails, Finishes, Sounds) and one new slot, the ornament, never sold. Each
+        mountain has a set of three (a scarf, a trail, an ornament), earned at a third, two thirds and all of its mastery
+        board, never sold. The month's chapter keeps three pieces that look like their month, the third an ornament. The
+        Almanac gives only what the shop never sells, and no page is ever empty (an owned sled gives its first two tiers;
+        a chapter piece bought before its page pays its price back, and the card says so). The Lantern Row hangs from the
+        workshop's rafters and its tab goes. Each sled's signature trick is named on its card with a Watch button. Gifts
+        stay the one currency; nothing waits on a clock.
+      - *The economy* (the player's rule; the mid pilot, then the novice):
+
+        | Run | Mid, today: goals left that are not lanterns | Mid, proposed | Novice, today | Novice, proposed |
+        | --- | --- | --- | --- | --- |
+        | 1 | 35 | 67 (18,370 gifts) | 36 | 67 |
+        | 5 | 33 | 66 | 34 | 66 |
+        | 20 | 11 | 43 | 24 | 60 |
+        | 50 | 0 | 32 (12,980) | 6 | 48 |
+        | 100 | 0 | 24 (9,560) | 1 | 45 |
+
+        Something worth having is within one to three runs after all 100 runs for both pilots (today 30 and 62). The
+        dearest goal, the Tea Tray's whole track, is the mid pilot's 100th run, its 25th day at four runs a day. The base
+        garage goes from 6,270 to 16,140 plus the tracks. The rule is a script's, not a person's.
+      - *Every item:* 12 hats, 32 scarves, 32 trails, 11 finishes, 21 ornaments, 5 sounds and 6 sleds with 30 tiers,
+        each with what tells it apart at race distance. Two fresh critics on the race-distance sheets (the live rider,
+        High, chase size) told apart 7 of 13 hats, 4 of 12 scarves, 3 of 9 trails, 6 of 10 finishes and all 5 sleds, and
+        a stock sled from an upgraded one from the fourth tier on. Today's burning scarves showed no pattern; the
+        proposed burn that keeps each stitch's value shows one. So the model and the economy stand and the pieces need a
+        second pass before they are built (no navy finishes, which take the coat's ink; tiers that take the finish;
+        trails in the air; lights that glow; five hats reworked or cut; scarf forms big enough to read).
+      - *The place:* a sled-maker's workshop in the finish town at dusk, built from the game's own rider, sleds, toon
+        material and light; your rider on your sled on a stand, the hats on head blocks, the bench with the finishes,
+        the Lantern Row in the rafters, and the big door open on a yard with a loop of snow where the rider rides out to
+        show a trail (`shots/r9/garage/scene/desk-home.png`, `phone-home.png`). On High 0.8 to 1.2 s from opening to
+        the first frame on the dev server, 23 to 34 draw calls and up to 99k triangles; Low and the phone 14 to 20 calls
+        and 17k to 26k. Loaded only when the garage opens (`import()` from the garage button), the title's world paused
+        while it is open, disposed on close. It answers DECISIONS 262 by having one rider and one camera that moves: a
+        piece goes on with the rider's own setter, so nothing is rendered per item.
+      - *The buy moment:* a purchase is a gift opened in the scene; the piece goes on, the rider shows it off, a sound
+        of its own; skippable and still under reduced motion; a tier landing gets the same.
+    - *The mountains* (`notes/r9-concepts.md`; `prototypes/r9/concepts.html`; frames `shots/r9/concepts/`).
+      - *Seven concepts,* each with one mechanic on steer and one button, three stages, and a greybox of its opening and
+        one place drawn by the same kit as Pinecrest, Frostfang and Sakura from their real sim courses: **the Old Run**
+        (an old banked ice track through a forest; 3.0 km at a steady 0.17, a 15 m channel, no air; the fast glaze rides
+        high on the wall, slush lies in the floor), **Gullhaven** (a clifftop run from a beacon to a harbour, 4.8 km;
+        fixed updrafts over ten gullies lift a rider who pops at the edge 3 to 5 s across), **Gablefall** (a snowed-in
+        hill town ridden on its roofs, 2.8 km; alley gaps every 35 to 60 m, a missed one drops you to the slower street),
+        Windfall (a storm-felled forest; duck the hung trunks, hop the lying ones), Longswell (5 km of ice-cap swells to
+        pump), Whitemantle (an open face 400 m wide crossed by cliff bands with passages) and Rimewater Gorge (a frozen
+        river under ice bridges; turn on the snow bars, glide on the glare ice). A descent by your own light was weighed
+        and not made a concept: its difference is light, which Lanternfall owns, and as a mechanic it is empty under
+        the fairness rule or a third lantern use (DECISIONS 277).
+      - *The proposed three:* the Old Run, Gullhaven and Gablefall: carve the wall, fly the wind, hop the roofs. Each
+        pair differs on all eight axes, none is a high mountain above cloud, and on section 2's six figures no pair is
+        within 10% on any. Unlocking between the five, none behind the finale: Pinecrest (0), Frostfang (4), Gablefall
+        (8), Ember (12), the Old Run (18), Sakura (24), Gullhaven (32), Lanternfall (The Twelve or page 21). The cheaper
+        swap for Gablefall is Rimewater Gorge (or Longswell).
+      - *The blind sort* (twenty greyscale frames, shuffled, a fresh critic at extra-high effort told nothing): all six
+        of the five's frames in one mountain; every concept's two frames together; five concepts set apart with
+        differences that are not colour (Rimewater, Longswell, Gullhaven, Gablefall, Whitemantle). The Old Run half
+        passed (its channel read as "a luge or wall ride", its pines and far peak as the five's: its world must be its
+        own), and Windfall failed, so it is ranked last.
+      - *Every figure is a design estimate* from the sim's physics, not a lab run: no concept exists in the sim yet. The
+        size: about 30 MB of new scores, the build from 60.33 MB to about 91 MB.
+
+392. **The plan: the brief's items confirmed, reordered and added to, and nothing cut.**
+    - *Milestone 1, the screens, built in this order:* U3's tokens first (`src/ui/tokens.css` from the prototype, the
+      old sheets aliased to it for a step), then U2 the results, then U1 the title, then U4 and Escape, then the bars as
+      passing tests. The brief had U1 first; tokens go first because both screens stand on them, and the results before
+      the title because the title needs two new model fields (`TitleSpine.intro`, what opened since the last title, and
+      `TitleTwelve.rides`, whether the next run is the duel) and rooms that do not exist yet. Added to U1: **the day's
+      contracts and the Cup's league table are built** in the Daily and Cup room (they have models and no screen), and
+      Ride never promises a duel the run is not. Added to U2: `goals.ts` stops offering a mission whose target was met
+      before it was drawn (a game-layer fix, not copy), and the button is always the run. From the third critic: a duel's
+      reason never sets a rival's slower time against the player's best, the moment's chip stays clear of the rider,
+      and a place and a medal are said so they cannot read as disagreeing. The fixtures, the save switch
+      and the bar scripts are the milestone's yardstick at runs 1, 5, 20 and 50, desk and phone.
+    - *Milestone 2, the garage, built in this order:* the pieces' second pass first (design and a fresh critic on the
+      same race-distance sheets, before anything is built); then the model in the game layer (`garage.ts`, a
+      `tracks.ts`, `almanac.ts`, `rank.ts` with no silent grant, `save.ts`'s optional fields; a run's stage lines
+      credited to the ridden sled after the sim settles, so `tests/garage.test.ts` still finds no garage code in
+      `src/sim` or `src/bot`); then the looks in render (the hats, the tiers and the ornament post in `meshes.ts`, the
+      scarf forms and the burn that keeps the knit in `rider.ts`, shaped trails in a new `render/trails.ts`); then the
+      place (`src/render/garagescene.ts`, loaded on demand) with the shelves over it in the round's tokens; then the buy
+      and upgrade moment; then "Ready in the shop" as a way in. G6's sets follow milestone 3, so the new mountains get
+      theirs. If the round runs short the section 5 order stands: the place, the looks and the moment before the
+      tracks' depth.
+    - *Milestone 3, the mountains:* M1 grows by four items the lanes found: a per-mountain course table (stage lengths,
+      the opening, the first kicker, the finish) whose five rows hold today's values exactly; `FINISH_Z` read from the
+      course in all eight game-layer files; the fairness suite's shared promises (the first minute, the leaps, the
+      kickers) made the five's, with each new mountain bringing its own; new set-piece verbs appended to `VERBS` (the
+      music's stingers key on its order). The first job is a lab prototype of the first mountain's mechanic. The order:
+      the Old Run first (the least sim, the physics mostly there, cheap on Low), then Gullhaven, then Gablefall, whose
+      Low cost is measured before its world is built.
+    - *Cut:* nothing from the brief's musts or shoulds. What changed instead: the five bars of DECISIONS 390, U3's
+      "delete the dead CSS" (there is almost none; the cut comes from tokens), and the Trial's place (in Daily and Cup,
+      beside the Cup, not under Ride).
+    - *What only scripts and model critics have seen:* all of it. No person has opened a prototype, browsed the
+      garage's place or ridden a concept.
+    - *For the owner at the stop* (defaults in bold; the round goes on with the defaults unless the owner says
+      otherwise):
+      - From the brief's section 8: **1** one stop, this one; **2** colour roles stay locked (the garage proposal holds
+        to it); **3** upgrades never touch handling; **4** the three are additive under `SIM_VERSION` 10 (all three
+        concepts are, on the per-mountain course table); **5** three stages each (all three keep three); **6** the
+        three stay out of the Daily and Cup mix and join Trials and the Long Night; **7** The Twelve stays twelve, the
+        new mountains get home riders; **8** the unlock places above (8, 18 and 32 ghosts); **9** the package's cap
+        rises to 110 MB (about 91 MB expected); **10** no ads.
+      - Which three: **the Old Run, Gullhaven and Gablefall**, or Rimewater Gorge (or Longswell) for Gablefall. If the
+        Old Run is picked, **its world has no pines and no hero peak**, and the sorting test runs on its first frames.
+      - The screens: **the four labelled doors**; **ART.md 10 changes** (no mountain name under the logo, short names
+        on the chips; most of the gap between 40 and 45 words at run 50); **Escape and Backspace close the top sheet**
+        (in fullscreen the browser takes Escape first), checked on CrazyGames; **the button is always the run**;
+        **contracts and the league get their screens**; **Photo on the results' front, Save Clip in Details**.
+      - The garage: **tracks opened by riding and fitted for gifts**; **the Whirl Saucer becomes the Almanac's only**
+        (a save that bought it gets its first two tiers); **a chapter's third piece is an ornament**; **the Wanderer's
+        Cape is cut** (it covers the hood's cream horseshoe that ART.md 5 relies on, and did not read in a whole look);
+        **trails stay in the air** (no marks on the snow, ART.md 4's one painted line kept); **the economy as proposed**
+        (prices are one table); **the Lantern Row moves into the place**; **the second pass on the pieces before
+        milestone 2 builds them**.
