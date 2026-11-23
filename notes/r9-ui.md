@@ -101,7 +101,7 @@ the right of the frame; on a phone the logo at the top, the rest in the thumbs' 
 | Where | Before | Now |
 | --- | --- | --- |
 | Results' button, a mission (about half of all results) | FINISH THE MISSION / "Pass a ghost: done before, so again" | RUN AGAIN / "Mission: pass a ghost. 1 more to go"; a mission met before it was drawn is never offered (`goals.ts`) |
-| Results' button, a duel | NEXT DUEL: OLD WREN / "Time to beat 2:09.6" | NEXT DUEL: OLD WREN / "On Pinecrest, head to head" |
+| Results' button, a duel | NEXT DUEL: OLD WREN / "Time to beat 2:09.6" | NEXT DUEL: OLD WREN / "On Pinecrest" (never the rider's time, which beside a faster best read as beaten); a duel just lost is REMATCH |
 | Results' button, a page | RUN AGAIN / "Page 8: A new sled: 300 to go" | RUN AGAIN / "300 XP to Rider Rank 8" |
 | Results' button, a rung | "Rank 7: SparkleCedar: 1.2 s" | "SparkleCedar is 1.2 s ahead" |
 | Results' button, a stage gold | "Gold in Stage 2: 0.4 s" | "Gold in stage 2: 0.4 s to find" |
@@ -176,6 +176,7 @@ All additive or inside the results' and the title's own functions; nothing refor
 
 - **`src/game/app.ts`** (11 hunks):
   - the import of `TitleIntro` from the contract (one name added to the existing type import);
+  - `refreshTitle()`'s mountain cards: `unlockGhosts` and `finale` from each `MountainDef` (the picker's order);
   - `beatStampsShown()` deleted (the results card's Beat stamps it counted for the mallet are gone);
   - two fields after `results`: `intros` and `introsSeen` (what is new since the title was up, said once);
   - the UI handler `onIntroSeen` (after `onOpenAlbum`);
@@ -191,14 +192,15 @@ All additive or inside the results' and the title's own functions; nothing refor
   Backspace (`back()`); the click-blur keeps focus inside a round-9 sheet; the title's `openSleds` and the results'
   `openGarage` through one `openGarage()`; `back()`; `Results` constructed with its hook; `title.onLayout = dirty`;
   `modal` includes `sheetOpen()`; `padMenu`: a round-9 sheet is the scope and modal, and B goes `back()`.
-- **`src/ui/contract.ts`** (3 hunks, all additions): `TitleTwelve.rides?`; `UIHandlers.onIntroSeen?`;
-  `TitleSpine.intro?`, `TitleDoor`, `TitleIntro`.
+- **`src/ui/contract.ts`** (4 hunks, all additions): `MountainCard.unlockGhosts?` and `finale?` (the picker's order);
+  `TitleTwelve.rides?`; `UIHandlers.onIntroSeen?`; `TitleSpine.intro?`, `TitleDoor`, `TitleIntro`.
 - **`src/ui/menus.ts`** (the shop lane rebuilds the garage behind it; 2 hunks): the header comment at line 14 (Escape is
   now bound, and why), and `closeTop()` before `closeSheet()`.
 - **Not shared but outside the brief's list:** `src/game/contracts.ts` one line ("Land a trick" for a target of one,
   not "Land 1 different tricks", now that the contracts are drawn); `scripts/playtest/r9-truth.js` (the rooms, the
   Choose, the round-9 sheets' surface, the crawl's second level, the duel's mountain from the title's model) and
-  `scripts/playtest/r9-screenbars.ts` (the Cup's system words take "Cup"). `save.ts` and `spineview.ts` untouched.
+  `scripts/playtest/r9-screenbars.ts` (the Cup's system words take "Cup"; the ad offer's "Watch Ad:" chunk is left out
+  with the offer, as the detector meant); `src/ui/harness.ts` (the UI harness's `title-eight` scenario). `save.ts` and `spineview.ts` untouched.
 
 ## web-design-guidelines (the Vercel Web Interface Guidelines, fetched fresh on 23 November)
 

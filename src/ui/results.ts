@@ -218,6 +218,9 @@ export class Results {
     story.el.setAttribute('aria-label', 'Run results');
     if (!intro) story.finish();
     this.el.replaceChildren(story.el);
+    // A mirrored run's picture is turned over (the canvas at scaleX(-1), world.ts), so its results shot stands the rider
+    // on the other side: the moment and the column change sides with it, and the rider stays the picture.
+    this.el.classList.toggle('is-flipped', (document.querySelector('canvas')?.style.transform ?? '').includes('scaleX(-1)'));
     this.el.dataset.view = 'story';
   }
 

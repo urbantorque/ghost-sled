@@ -364,6 +364,25 @@
   }
 }
 
+/* A mirrored run: the picture is turned over and the rider stands on the far side, so the words change sides. */
+@media (min-aspect-ratio: 1/1) {
+  .gs9-results.is-flipped .gs9-mo {
+    left: auto;
+    right: var(--sr);
+  }
+
+  .gs9-results.is-flipped .gs9-col {
+    right: auto;
+    left: var(--sl);
+  }
+
+  .gs9-results.is-flipped .gs9-det {
+    right: auto;
+    left: var(--sl);
+    --from-x: -24px;
+  }
+}
+
 /* With Details up, the column steps out of view: the sheet carries the one button. */
 .gs9-results[data-view='details'] .gs9-col {
   visibility: hidden;
