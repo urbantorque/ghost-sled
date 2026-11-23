@@ -385,6 +385,7 @@ export class Title {
       seg.append(b);
       out.append(seg);
     }
+    if (out.childElementCount === 1 && named.bestTime) out.classList.add('is-best-only');
     return out.childElementCount > 0 ? out : null;
   }
 

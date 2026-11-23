@@ -592,6 +592,10 @@
 }
 
 /* (On a desk the picked chip carries your best; the phone's chip is small, so it stands here.) */
+.gs9-how.is-best-only {
+  display: none;
+}
+
 .gs9-how-best {
   display: none;
   font-size: var(--fs-s);
@@ -775,6 +779,10 @@
 
   .gs9-chip-best {
     display: none;
+  }
+
+  .gs9-how.is-best-only {
+    display: flex;
   }
 
   .gs9-how-best {

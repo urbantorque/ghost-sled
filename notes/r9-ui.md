@@ -58,7 +58,43 @@ Back, Ride Home as a Spirit); and the same one button at its foot.
 
 ### The title (U1)
 
-(Frames and counts below.)
+The main screen holds five things (`src/ui/title.ts`): the logo; the picker; Ride with its reason; one quiet line; four
+labelled doors. On a desk they keep the logo's column (the logo at the top, the rest at its foot), so the scene keeps
+the right of the frame; on a phone the logo at the top, the rest in the thumbs' band, the rider between.
+
+- **The picker:** a chip a mountain, its sky and its short name (Pinecrest, Frostfang, Ember, Sakura, Lanternfall); the
+  picked one larger with "Best 1:52.2" on it (on a phone under Ride: its chip is small). A locked chip is its sky dimmed
+  under a lock; pressing it shakes it and the quiet line says what opens it for three seconds ("Sakura Ridge: pass 3
+  more ghosts to open it"). No ladder rank and no medal dots on the chips (they are in Progress, behind Medals). On a
+  phone the five chips fit a 390 px screen with every name whole, Lanternfall included (the third critic's cut
+  "Lantern..."); a narrower screen scrolls them.
+- **Ride's reason:** a friend's challenge (Accept); the duel, said as the duel ("DUEL / Suki Ember, head to head"), only
+  when the next run is one (`TitleTwelve.rides`: never at run 1, where today said "Duel Bram Oakhollow"); the Daily, the
+  Cup or the Trial chosen ("RIDE / Today's Daily. Keeps your flame lit"); your grudge waiting there; the rung above you
+  ("valo_rides is 0.1 s ahead"); else how it rides ("At Dusk, mirrored") or what it is like ("Pine forest, soft powder,
+  snowmen"), never the name the chip already says. Under Ride, once open: the day or the other hour (each with a swatch
+  of its sky) and Mirrored.
+- **The quiet line:** one goal in words: "1 more ghost opens Frostfang Glacier", "Beat 6 more of The Twelve to open
+  Lanternfall", "1,281 XP to Rider Rank 26: the Crane's Memory charm".
+- **The doors:** Daily and Cup ("13-day flame" in marigold), Progress, Garage ("90 gifts"), Settings. Each names to a
+  screen reader what is behind it. Garage opens the garage; Settings the settings sheet; the other two open rooms
+  (`src/ui/rooms.ts`, a dynamic import: its own 11 KB chunk and 2 KB of CSS, not in the first download).
+- **Daily and Cup's room:** the flame and its seven days (lit, today, the ember); today's Daily (Choose, once its field
+  is in; its medal and best when held); today's contracts and the form contract, each with its XP and a check (**drawn for
+  the first time**); this week's Cup (its mood and event, Choose, your medal) and your place in its league in words
+  ("Division 5 of 5: you are 1st of 20. The top 4 go up when the week turns."), with **the league's table one press
+  away (drawn for the first time)**; the week's Trial once open (its rule, its targets, Choose). Choose closes the room
+  and puts focus on Ride, which now says it.
+- **Progress's room:** Rider Rank and the next page's prizes in words, its bar, the month's chapter (the Almanac one
+  press away); The Twelve: how many beaten, who rides next and their line, their twelve busts (all twelve, gentlest
+  first, with each one's home, time and state, one press away; Go travels to the next one's ground); the Long Night once
+  open (Ride It); the Spirit Album (Album); the medals (each mountain's ladder place, medals and mastery stars, the Cup's
+  and the Trial's, one press away); the missions with their progress in words.
+- **Something new** since the title was last up (`TitleSpine.intro`): a marigold "New" on its door and one line at the
+  top of its room ("New: daily contracts. Three small goals a day, each worth XP."), until the door is opened.
+- **Nothing loading is shown:** "Finding rivals..." is gone; a block whose field is not in yet offers no Choose until it
+  is. A friend's link still waiting keeps Ride's words and waits.
+- **A first visit** stays as it was, but for "Sound On" in words where the lone speaker was.
 
 ## The copy pass
 
