@@ -268,8 +268,13 @@ Each line of the review, against the captures (desk; phone to follow) and the co
    sheet and the pause card but **none of the title's four popovers**. Section 3 has the table.
 
 **What the review missed**
-- Contracts and the Cup's league have no place on the title or in any sheet: they appear only on the results (a reward
-  card, a line in Details). "Nothing lost" fails for them today.
+- **The day's contracts and the Cup's league are never shown.** The models are built (`spineview.ts` puts
+  `contracts`, `form` and `league` with its nineteen rows in `TitleSpine`, and `today` and `formNext` in the results'
+  spine), but no UI file renders them (`grep` of `src/ui`: only `results.ts:1263-1266` writes "Contracts met: ...",
+  "Your form: ..." and "Cup league: 1st in division 5." into Details' notes). A player never sees what today's three
+  contracts ask, nor the league's table; they meet "Daily contracts" as an Almanac page's name and "Up to division 3 of
+  the Cup." as the title's news line in a week the division moved (`desk-mid-100-title.png`). "Nothing lost" fails for
+  both today, and not only for want of a door.
 - Lone icons on every screen: Mute, the strip's arrows, the camera on the results, Close on every sheet, Close the
   ladder, and photo mode's grid, focus and back.
 - The garage, the books and settings have no primary at all (nothing to buy at mid-50: every shelf owned); the bar
