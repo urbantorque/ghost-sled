@@ -200,6 +200,7 @@ async (page) => {
       window.dispatchEvent(Object.assign(new Event('gamepadconnected'), { gamepad: window.__pad }));
     });
   const padPress = async (i, ms = 120) => {
+    await padOn();
     await page.evaluate((i) => {
       window.__pad.buttons[i] = { pressed: true, touched: true, value: 1 };
       window.__pad.timestamp = performance.now();
@@ -288,9 +289,10 @@ async (page) => {
         await shoot(`${st}-title-ready`, { stage: st, screen: 'title', at: 'rivals in' });
       }
       if (st === 'fresh') continue;
-      // The Cup picked, then the Trial (where Trials are open), then the Daily.
-      const cupSel = await byLabel('Weekly Cup');
-      if (cupSel && (await ready('Weekly Cup'))) {
+      // The Cup picked, then the Trial (where Trials are open), then the Daily. (Each looked up once its rivals are
+      // in: the title is drawn again when they arrive.)
+      const cupSel = (await ready('Weekly Cup')) ? await byLabel('Weekly Cup') : null;
+      if (cupSel) {
         await page.evaluate((s) => document.querySelector(s).click(), cupSel);
         await page.waitForTimeout(1500);
         await shoot(`${st}-title-cup`, { stage: st, screen: 'title-cup' });
@@ -299,8 +301,8 @@ async (page) => {
           await shoot(`${st}-title-trial`, { stage: st, screen: 'title-trial' });
         }
       }
-      const daySel = await byLabel('Daily Mountain');
-      if (daySel && (await ready('Daily Mountain'))) {
+      const daySel = (await ready('Daily Mountain')) ? await byLabel('Daily Mountain') : null;
+      if (daySel) {
         await page.evaluate((s) => document.querySelector(s).click(), daySel);
         await page.waitForTimeout(1500);
         await shoot(`${st}-title-daily`, { stage: st, screen: 'title-daily' });
@@ -320,7 +322,6 @@ async (page) => {
     const st = c.stages[0];
     await go(st);
     await page.waitForTimeout(3000);
-    await padOn();
     const openers = [
       ['garage', '[data-fk="sleds"]'],
       ['almanac', 'Almanac'],
@@ -361,6 +362,9 @@ async (page) => {
         await page.waitForTimeout(700);
       }
     };
+    // Three passes, so the pad never puts its glyphs into a shot: every sheet and popover shot (the garage's every
+    // shelf), then each closed with Escape, then (a scripted pad plugged in) each closed with B.
+    const found = [];
     for (const [name, sel] of openers) {
       await closeAny();
       if (!(await open(sel))) {
@@ -368,13 +372,10 @@ async (page) => {
         continue;
       }
       const sf = await surface();
-      const isPop = sf.startsWith('popover');
-      const pSel = isPop ? '.gs-ui [role=dialog][aria-label], .gs-t-pop' : null;
-      await shoot(`${st}-${name}`, { stage: st, screen: name, surface: sf, ...(isPop ? { sel: null } : {}) });
-      const focusOpen = await focusNow();
-      // The garage's shelves, each.
+      await shoot(`${st}-${name}`, { stage: st, screen: name, surface: sf });
+      found.push({ name, sel, sf, focusOpen: await focusNow() });
       if (name === 'garage') {
-        const tabs = await page.evaluate(() => Array.from(document.querySelectorAll('[role=tab]')).filter((b) => b.checkVisibility()).map((b) => (b.textContent || '').trim()));
+        const tabs = await page.evaluate(() => Array.from(document.querySelectorAll('[role=tab]')).filter((b) => b.checkVisibility() && !b.closest('[inert]')).map((b) => (b.textContent || '').trim()));
         for (const t of tabs) {
           await page.evaluate((t) => Array.from(document.querySelectorAll('[role=tab]')).find((b) => (b.textContent || '').trim() === t).click(), t);
           await page.waitForTimeout(900);
@@ -382,24 +383,29 @@ async (page) => {
         }
       }
       if (name === 'almanac' || name === 'album') {
-        const tabs = await page.evaluate(() => Array.from(document.querySelectorAll('.gs-sheet [role=tab]')).filter((b) => b.checkVisibility()).map((b) => (b.textContent || '').trim()));
-        report.notes.push(`${name} tabs: ${tabs.join(', ') || 'none'}`);
+        const tabs = await page.evaluate(() => Array.from(document.querySelectorAll('[role=tab]')).filter((b) => b.checkVisibility() && !b.closest('[inert]')).map((b) => (b.textContent || '').trim()));
+        report.notes.push(`${st} ${name} tabs: ${tabs.join(', ') || 'none'}`);
       }
-      // Escape.
+    }
+    const esc = {};
+    for (const x of found) {
+      await closeAny();
+      await open(x.sel);
+      const was = await surface();
       await page.keyboard.press('Escape');
       await page.waitForTimeout(700);
-      const afterEsc = await surface();
-      const focusEsc = await focusNow();
+      esc[x.name] = { open: was, closed: (await surface()) !== was, now: await surface(), focus: await focusNow() };
+    }
+    await closeAny();
+    await padOn();
+    for (const x of found) {
       await closeAny();
-      // The pad's B.
-      await open(sel);
-      const reopened = await surface();
+      await open(x.sel);
+      const was = await surface();
       await padPress(1);
       await page.waitForTimeout(600);
-      const afterB = await surface();
-      const focusB = await focusNow();
-      report.sheets.push({ name, stage: st, opened: true, surface: sf, popover: isPop, focusOnOpen: focusOpen, escape: { closed: afterEsc !== sf, now: afterEsc, focus: focusEsc }, padB: { reopened: reopened === sf, closed: afterB !== reopened, now: afterB, focus: focusB } });
-      void pSel;
+      const now = await surface();
+      report.sheets.push({ name: x.name, stage: st, opened: true, surface: x.sf, popover: x.sf.startsWith('popover'), focusOnOpen: x.focusOpen, escape: esc[x.name], padB: { reopened: was === x.sf, closed: now !== was, now, focus: await focusNow() } });
     }
     await closeAny();
     // Pause and photo mode, in a run.
@@ -451,8 +457,10 @@ async (page) => {
     const tag = `${st}-results-${sc}`;
     const pickThenRide = async (label, trial) => {
       await go(st);
+      if (!(await ready(label))) return false;
+      await page.waitForTimeout(600);
       const s = await byLabel(label);
-      if (!s || !(await ready(label))) return false;
+      if (!s) return false;
       await page.evaluate((s) => document.querySelector(s).click(), s);
       await page.waitForTimeout(1200);
       if (trial && !(await click('[data-fk="week-trial"]', 30000))) return false;
@@ -508,6 +516,8 @@ async (page) => {
       if (beat) {
         await page.waitForTimeout(700);
         await shoot(`${st}-night-between`, { stage: st, screen: 'night-between' });
+        await page.waitForSelector('.gs-nb-where', { state: 'detached', timeout: 15000 }).catch(() => {});
+        await page.waitForTimeout(300);
       } else report.notes.push('night: no beat between legs seen');
       ok = await finishRun();
     }
@@ -576,8 +586,10 @@ async (page) => {
       await page.waitForTimeout(1300);
       const sf = await surface();
       const m = await page.evaluate(MEASURE, {});
-      const inSurface = m.top !== 'title' ? m.chunks.filter((x) => x.top) : m.chunks.filter((x) => x.pop);
-      const doors = (m.top !== 'title' ? m.controls.filter((x) => x.top) : m.controls.filter((x) => x.pop)).map((x) => x.name).filter(Boolean);
+      // What it showed: a sheet's text, a popover's, or (a pick on the title itself, the Cup's card say) the title as
+      // it is now.
+      const inSurface = m.top !== 'title' ? m.chunks.filter((x) => x.top) : m.pop ? m.chunks.filter((x) => x.pop) : m.chunks.filter((x) => !x.inert);
+      const doors = (m.top !== 'title' ? m.controls.filter((x) => x.top) : m.pop ? m.controls.filter((x) => x.pop) : m.controls.filter((x) => !x.inert)).map((x) => x.name).filter(Boolean);
       // A second tap: each tab of what opened (its own shelf or page), text read.
       const second = [];
       const tabs = await page.evaluate(() => Array.from(document.querySelectorAll('[role=tab]')).filter((b) => b.checkVisibility() && !b.closest('[inert]')).map((b) => (b.textContent || '').trim()));
