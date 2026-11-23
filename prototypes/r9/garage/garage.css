@@ -80,7 +80,7 @@ body {
   inset: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto 1fr auto;
   gap: var(--sp-3) var(--sp-5);
   padding: calc(env(safe-area-inset-top, 0px) + var(--gut)) calc(env(safe-area-inset-right, 0px) + var(--gut)) calc(env(safe-area-inset-bottom, 0px) + var(--gut)) calc(env(safe-area-inset-left, 0px) + var(--gut));
   pointer-events: none;
@@ -92,6 +92,7 @@ body {
 
 .g9-top {
   grid-column: 1 / -1;
+  grid-row: 1;
   display: flex;
   align-items: center;
   gap: var(--sp-3);
@@ -121,6 +122,12 @@ body {
   flex-wrap: wrap;
   gap: var(--sp-2);
   max-width: 640px;
+}
+
+.g9-tab,
+.g9-tile,
+.g9-b {
+  -webkit-tap-highlight-color: transparent;
 }
 
 .g9-tab {
@@ -157,7 +164,7 @@ body {
 /* The card: what you are looking at, and its one action. */
 .g9-card {
   grid-column: 2;
-  grid-row: 1 / 3;
+  grid-row: 2 / 4;
   align-self: center;
   border-radius: var(--r-card);
   background: var(--surface);
@@ -270,9 +277,15 @@ body {
 }
 
 .g9-i {
+  display: inline-grid;
   width: 1.15em;
   height: 1.15em;
   flex: none;
+}
+
+.g9-i svg {
+  width: 100%;
+  height: 100%;
 }
 
 /* The sled's track: five tiers, each a row (its name, and fitted, open with its price, or the runs to go). */
@@ -338,7 +351,7 @@ body {
 /* The strip: every piece on the shelf, by name, its state under it. */
 .g9-strip {
   grid-column: 1 / -1;
-  grid-row: 3;
+  grid-row: 4;
   display: flex;
   gap: var(--sp-2);
   overflow-x: auto;
@@ -432,6 +445,7 @@ body {
   }
   .g9-ui {
     grid-template-columns: minmax(0, 1fr);
+    overflow: hidden;
     grid-template-rows: auto auto 1fr auto auto;
     gap: var(--sp-2);
   }
@@ -440,8 +454,7 @@ body {
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
-    margin: 0 calc(var(--gut) * -1);
-    padding: 0 var(--gut);
+    min-width: 0;
   }
   .g9-tabs::-webkit-scrollbar {
     display: none;
@@ -481,6 +494,10 @@ body {
   padding: var(--sp-7) var(--gut) 96px;
   display: grid;
   gap: var(--sp-7);
+}
+
+.g9-doc > section {
+  min-width: 0;
 }
 
 .g9-doc h2 {
@@ -591,6 +608,21 @@ body {
   font-size: var(--fs-s);
   font-weight: 700;
   color: var(--text-dim);
+}
+
+/* Hover: a step brighter, never the primary's colour. */
+@media (hover: hover) {
+  .g9-tab:not([aria-selected='true']):hover,
+  .g9-tile:hover,
+  .g9-b-secondary:hover {
+    background: rgba(30, 40, 80, 0.94);
+  }
+  .g9-b-quiet:hover {
+    color: var(--c-text);
+  }
+  .g9-b-primary:hover {
+    background: #ff6143;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

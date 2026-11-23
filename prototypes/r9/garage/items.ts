@@ -653,12 +653,12 @@ class TrailSketch {
       for (let k = 0; k < 6; k++) {
         const a = (k / 6) * Math.PI * 2;
         const b = a + Math.PI / 6;
-        shape.push(0, 0, 0, Math.cos(a) * 0.13, Math.sin(a) * 0.13, 0, Math.cos(b) * 0.06, Math.sin(b) * 0.06, 0);
-        shape.push(0, 0, 0, Math.cos(b) * 0.06, Math.sin(b) * 0.06, 0, Math.cos(a + Math.PI / 3) * 0.13, Math.sin(a + Math.PI / 3) * 0.13, 0);
+        shape.push(0, 0, 0, Math.cos(a) * 0.2, Math.sin(a) * 0.2, 0, Math.cos(b) * 0.09, Math.sin(b) * 0.09, 0);
+        shape.push(0, 0, 0, Math.cos(b) * 0.09, Math.sin(b) * 0.09, 0, Math.cos(a + Math.PI / 3) * 0.2, Math.sin(a + Math.PI / 3) * 0.2, 0);
       }
       const g = new BufferGeometry();
       g.setAttribute('position', new BufferAttribute(new Float32Array(shape), 3));
-      const N = 70;
+      const N = 110;
       const inst = new InstancedMesh(g, new MeshBasicMaterial({ color: new Color('#FFF4DE'), side: DoubleSide }), N);
       inst.frustumCulled = false;
       this.root.add(inst);
@@ -669,16 +669,16 @@ class TrailSketch {
       const q = new Quaternion();
       const e = new Euler();
       this.tick = (dt, pos, vel, h) => {
-        acc += dt * 26;
+        acc += dt * 48;
         while (acc >= 1) {
           acc--;
           const p = ps[at++ % N];
           const side = rnd() < 0.5 ? -1 : 1;
           p.p.set(pos.x - h.z * side * 0.3 + h.x * 0.5, pos.y + 0.25, pos.z + h.x * side * 0.3 + h.z * 0.5);
-          p.v.copy(vel).multiplyScalar(0.82).add(new Vector3(-h.z * side * (1 + rnd() * 1.6), 1.2 + rnd() * 1.4, h.x * side * (1 + rnd() * 1.6)));
+          p.v.copy(vel).multiplyScalar(0.93).add(new Vector3(-h.z * side * (2 + rnd() * 2.2), 1.8 + rnd() * 1.6, h.x * side * (2 + rnd() * 2.2)));
           p.r.set(rnd() * 6, rnd() * 6, rnd() * 6);
           p.w.set((rnd() - 0.5) * 9, (rnd() - 0.5) * 9, (rnd() - 0.5) * 9);
-          p.life = 1.5;
+          p.life = 1.8;
         }
         for (let i = 0; i < N; i++) {
           const p = ps[i];
@@ -687,8 +687,8 @@ class TrailSketch {
             inst.setMatrixAt(i, m.makeScale(0, 0, 0));
             continue;
           }
-          p.v.y -= 2.2 * dt;
-          p.v.multiplyScalar(1 - 0.9 * dt);
+          p.v.y -= 1.6 * dt;
+          p.v.multiplyScalar(1 - 0.5 * dt);
           p.p.addScaledVector(p.v, dt);
           p.r.addScaledVector(p.w, dt);
           const s = Math.min(1, p.life * 2);
@@ -753,25 +753,26 @@ class TrailSketch {
         g.setAttribute('position', new BufferAttribute(pos, 3).setUsage(DynamicDrawUsage));
         g.setAttribute('color', new BufferAttribute(col, 3).setUsage(DynamicDrawUsage));
         g.setIndex(idx);
-        const m = new Mesh(g, new MeshBasicMaterial({ vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, side: DoubleSide }));
+        const m = new Mesh(g, new MeshBasicMaterial({ vertexColors: true, side: DoubleSide }));
         m.frustumCulled = false;
         this.root.add(m);
         return { sx, g, pos, col, hist: [] as { p: Vector3; t: number }[] };
       });
-      const head = new Color('#FFD34D');
-      const tail = new Color('#FFF1D6');
+      const head = new Color('#FF9E1A');
+      const tail = new Color('#FFD34D');
       this.tick = (_dt, p, _v, h) => {
         const t = performance.now() / 1000;
         for (const r of ribbons) {
-          r.hist.unshift({ p: new Vector3(p.x - h.z * r.sx * 0.36 - h.x * 0.9, p.y + 0.12, p.z + h.x * r.sx * 0.36 - h.z * 0.9), t });
-          while (r.hist.length > N || (r.hist.length && t - r.hist[r.hist.length - 1].t > 1.5)) r.hist.pop();
+          // (Where the runner itself was: on a slope a point set back from the sled is under the snow.)
+          r.hist.unshift({ p: new Vector3(p.x - h.z * r.sx * 0.3, p.y + 0.22, p.z + h.x * r.sx * 0.3), t });
+          while (r.hist.length > N || (r.hist.length && t - r.hist[r.hist.length - 1].t > 0.8)) r.hist.pop();
           for (let i = 0; i < N; i++) {
             const e = r.hist[Math.min(i, r.hist.length - 1)];
-            const age = e ? Math.min(1, (t - e.t) / 1.5) : 1;
-            const w = 0.07 * (1 - age * 0.6);
+            const age = e ? Math.min(1, (t - e.t) / 0.8) : 1;
+            const w = 0.035 * (1 - age * 0.7);
             const q = e ? e.p : p;
-            r.pos.set([q.x - h.z * w, q.y + 0.01, q.z + h.x * w, q.x + h.z * w, q.y - 0.01, q.z - h.x * w], i * 6);
-            const c = head.clone().lerp(tail, age).multiplyScalar((1 - age) * 1.4);
+            r.pos.set([q.x - h.z * w, q.y + w, q.z + h.x * w, q.x + h.z * w, q.y - w, q.z - h.x * w], i * 6);
+            const c = head.clone().lerp(tail, age).lerp(new Color('#F4F7FF'), age * age);
             r.col.set([c.r, c.g, c.b, c.r, c.g, c.b], i * 6);
           }
           r.g.attributes.position.needsUpdate = true;
@@ -789,11 +790,13 @@ class TrailSketch {
         ]),
         new MeshBasicMaterial({ vertexColors: true }),
       );
-      const heart = new Mesh(new SphereGeometry(0.08, 10, 8), new MeshBasicMaterial({ color: warm.clone().multiplyScalar(1.6), transparent: true, opacity: 0.9 }));
+      const heart = new Mesh(new SphereGeometry(0.1, 10, 8), new MeshBasicMaterial({ color: warm.clone().multiplyScalar(1.3) }));
+      heart.position.y = -0.05;
       lamp.add(heart);
       const pool = new Mesh(new PlaneGeometry(2.4, 2.4), new MeshBasicMaterial({ color: new Color('#FFC873'), transparent: true, opacity: 0.35, blending: AdditiveBlending, depthWrite: false }));
       pool.rotation.x = -Math.PI / 2;
       const line = new Mesh(new CylinderGeometry(0.006, 0.006, 1, 4), new MeshBasicMaterial({ color: new Color('#5A4A36') }));
+      pool.visible = false;
       for (const o of [lamp, pool, line]) {
         o.frustumCulled = false;
         this.root.add(o);
@@ -801,15 +804,17 @@ class TrailSketch {
       const at = new Vector3();
       let init = false;
       this.tick = (dt, p, _v, h) => {
-        const want = new Vector3(p.x - h.x * 2.1, p.y + 1.15, p.z - h.z * 2.1);
-        if (!init) at.copy(want);
+        const want = new Vector3(p.x - h.x * 1.1 - h.z * 1.15, p.y + 1.35, p.z - h.z * 1.1 + h.x * 1.15);
+        if (!init) at.set(0, 0, 0);
         init = true;
-        at.lerp(want, Math.min(1, dt * 6));
+        // (Its offset from where it wants to be springs a little; it never falls metres behind at 25 m/s.)
+        at.multiplyScalar(Math.max(0, 1 - dt * 5));
+        const sway = want.clone().add(at);
         const t = performance.now() / 1000;
-        lamp.position.copy(at).add(new Vector3(Math.sin(t * 2.3) * 0.08, Math.sin(t * 3.1) * 0.05, 0));
+        lamp.position.copy(sway).add(new Vector3(Math.sin(t * 2.3) * 0.08, Math.sin(t * 3.1) * 0.05, 0));
         lamp.rotation.z = Math.sin(t * 2.3) * 0.12;
         pool.position.set(lamp.position.x, p.y + 0.03, lamp.position.z);
-        const stern = new Vector3(p.x - h.x * 0.8, p.y + 0.75, p.z - h.z * 0.8);
+        const stern = new Vector3(p.x - h.x * 0.75, p.y + 0.7, p.z - h.z * 0.75);
         line.position.copy(stern).add(lamp.position).multiplyScalar(0.5);
         const d = lamp.position.clone().sub(stern);
         line.scale.set(1, d.length(), 1);
@@ -839,6 +844,8 @@ export interface Look {
   /** The burn that keeps the knit's pattern (the proposal) rather than today's. */
   burnKeeps?: boolean;
   sled?: number;
+  /** Hold the rider's own glows still for a shot: no dash shimmer, and the flow at `flow` (0 if not given). */
+  still?: boolean;
 }
 
 let trail: TrailSketch | null = null;
@@ -857,7 +864,10 @@ export function applyLook(riderObj: object, scene: Object3D, look: Look, setTrai
   }
   // The sled and its paint first (setSled rebuilds the geometry, so the finish goes on after).
   rp.setPaint(look.paint ?? '');
-  if (look.sled !== undefined) rp.setSled(look.sled);
+  // (Always a clean build of the sled: a finish is painted on a copy of the stock geometry, never over the last one.)
+  const sledNow = look.sled ?? rp.sledId;
+  rp.sledId = -1;
+  rp.setSled(sledNow);
   if (look.protoFinish) {
     const g = paintFinish(rp.sled.geometry.clone(), look.protoFinish);
     ownGeo.set(rp.sled, g);
@@ -908,9 +918,14 @@ export function applyLook(riderObj: object, scene: Object3D, look: Look, setTrai
   const inst = rp as unknown as Record<string, unknown>;
   delete inst.setBurn;
   delete inst.setFlow;
-  if (look.flow !== undefined) {
-    const burn = look.flow >= 2 ? Math.min(1, (look.flow - 1) / 3) : 0;
-    const flow = look.flow;
+  delete inst.setSpirit;
+  if (look.still) {
+    const S = proto as unknown as { setSpirit: (k: number, e: boolean, c: boolean) => void };
+    inst.setSpirit = () => S.setSpirit.call(rp, 0, false, false);
+  }
+  if (look.flow !== undefined || look.still) {
+    const flow = look.flow ?? 0;
+    const burn = flow >= 2 ? Math.min(1, (flow - 1) / 3) : 0;
     inst.setBurn = () => P.setBurn.call(rp, burn);
     inst.setFlow = () => P.setFlow.call(rp, flow, 0);
   }
@@ -978,6 +993,13 @@ export const SHEET: Record<string, Array<{ key: string; name: string; today: boo
     { key: 'tier4', name: 'Pine Flyer, to its stern lamp', today: false, look: { tiers: 4 } },
     { key: 'tier5', name: 'Pine Flyer, every tier', today: false, look: { tiers: 5 } },
     { key: 'tier5-flow', name: 'Pine Flyer, every tier, at Spirit Flow', today: false, look: { tiers: 5, flow: 4 } },
+  ],
+  /** Whole looks, for the second question: name what the rider wears from a chase still. */
+  outfits: [
+    { key: 'a', name: 'Today: Trapper, Ink Bands, Plum paint, Lantern Sparks', today: true, look: { hat: 'trapper', scarf: 'inkband', paint: '#7A4A8C', trail: 'sparks' } },
+    { key: 'b', name: 'Proposed: Flop Peak, Pom Tails, Finish Chequer, four tiers, Kite Tails', today: false, look: { protoHat: 'floppeak', protoScarf: 'pomtails', protoFinish: 'chequer', tiers: 4, protoTrail: 'kitetails' } },
+    { key: 'c', name: "Proposed: Pom Muffs, Wanderer's Cape, Twin Stripe, five tiers, Comet Tail", today: false, look: { protoHat: 'muffs', protoScarf: 'cape', protoFinish: 'twinstripe', tiers: 5, protoTrail: 'comet2' } },
+    { key: 'd', name: 'Proposed: Down Cap, Night Veil, Midnight Stars, two tiers, Paper Snow', today: false, look: { protoHat: 'downcap', protoScarf: 'veil', protoFinish: 'stars', tiers: 2, protoTrail: 'papersnow' } },
   ],
   trails: [
     { key: 'powder', name: 'Fresh Powder', today: true, look: { trail: 'powder' } },

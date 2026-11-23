@@ -139,8 +139,7 @@ function render(): void {
   // The top: back, the place's name, the wallet.
   const back = el('button', 'g9-b g9-b-quiet', glyph('back'), 'Title');
   back.type = 'button';
-  const wallet = el('span', 'g9-tag is-gift g9-wallet', glyph('gift'), el('span', 'g9-num', fmt(save.gifts)), el('span', 'g9-sr', ' gifts'));
-  wallet.setAttribute('aria-label', `${fmt(save.gifts)} gifts`);
+  const wallet = el('span', 'g9-tag is-gift g9-wallet', glyph('gift'), el('span', 'g9-num', fmt(save.gifts)), ' gifts');
   ui.append(el('div', 'g9-top', back, el('h1', 'g9-title', 'Garage'), wallet));
   // The shelves.
   const tabs = el('div', 'g9-tabs');
@@ -159,6 +158,18 @@ function render(): void {
     });
     tabs.append(b);
   }
+  // Arrow keys move between the shelves, as tabs do; the picked one is the one tab in the page's tab order.
+  const all = [...tabs.querySelectorAll<HTMLButtonElement>('[role=tab]')];
+  all.forEach((b) => (b.tabIndex = b.getAttribute('aria-selected') === 'true' ? 0 : -1));
+  tabs.addEventListener('keydown', (e) => {
+    const i = all.indexOf(document.activeElement as HTMLButtonElement);
+    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (i < 0 || !step) return;
+    e.preventDefault();
+    const next = all[(i + step + all.length) % all.length];
+    next.click();
+    (ui.querySelectorAll<HTMLButtonElement>('[role=tab]')[(i + step + all.length) % all.length])?.focus();
+  });
   ui.append(tabs);
   ui.append(shelf === 'sled' ? sledCard() : itemCard());
   ui.append(strip());
@@ -348,6 +359,9 @@ function section(title: string, ...kids: Node[]): HTMLElement {
   return el('section', '', el('h2', '', title), ...kids);
 }
 
+/** The sheets' own sizes (the copies in ./frames), so the page keeps their space before they load. */
+const SHEET_SIZE: Record<string, [number, number]> = { hats: [1932, 1932], scarves: [1932, 1451], burn: [1448, 368], finishes: [1932, 1451], sleds: [1456, 732], trails: [1292, 1292] };
+
 const SHEETS: Array<[string, string]> = [
   ['hats', 'Hats: today\'s seven and six proposals'],
   ['scarves', 'Scarves: six of today\'s and six proposals'],
@@ -359,6 +373,9 @@ const SHEETS: Array<[string, string]> = [
 const sheets = el('div', '', el('p', '', 'Each piece on the live rider, mid-run on Pinecrest at High, the chase lens\'s own frame cropped round the rider at its real size. Numbered and shuffled for the critic; the key is in notes/r9-garage.md.'));
 for (const [k, label] of SHEETS) {
   const img = el('img');
+  const [w, hh] = SHEET_SIZE[k];
+  img.width = w;
+  img.height = hh;
   img.src = `./frames/${k}.jpg`;
   img.alt = `${label}, at race distance`;
   img.loading = 'lazy';

@@ -26,7 +26,7 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
-  PCFSoftShadowMap,
+  PCFShadowMap,
   PerspectiveCamera,
   PlaneGeometry,
   Quaternion,
@@ -60,12 +60,22 @@ interface Shot {
 
 /** Where the camera stands for each thing browsed (the rider on the stand at the origin, facing -z). */
 const SHOTS: Record<Preset, Shot> = {
-  home: { pos: new Vector3(-2.35, 1.55, -3.1), look: new Vector3(0.25, 1.05, 0.3), fov: 42 },
-  hatFront: { pos: new Vector3(-0.35, 1.95, -1.25), look: new Vector3(0, 1.62, 0.05), fov: 34 },
-  hatBack: { pos: new Vector3(0.45, 2.05, 1.35), look: new Vector3(0, 1.6, 0.05), fov: 34 },
+  home: { pos: new Vector3(-3.2, 1.85, -4.3), look: new Vector3(1.05, 1.0, 0.9), fov: 42 },
+  hatFront: { pos: new Vector3(-0.7, 2.45, -3.3), look: new Vector3(-0.5, 1.9, 0), fov: 34 },
+  hatBack: { pos: new Vector3(0.75, 2.55, 3.3), look: new Vector3(0.5, 1.9, 0), fov: 34 },
   paint: { pos: new Vector3(1.9, 1.05, 1.5), look: new Vector3(0, 0.6, 0.1), fov: 38 },
   trail: { pos: new Vector3(0.6, 2.1, 3.4), look: new Vector3(0, 0.6, 12), fov: 50 },
   chase: { pos: new Vector3(0, 2.0, 4.6), look: new Vector3(0, 1.05, -2), fov: 62 },
+};
+
+/** A phone held upright: the rider in the top half (the shelf's sheet covers the bottom), the camera stood back. */
+const TALL: Record<Preset, Shot> = {
+  home: { pos: new Vector3(-2.6, 2.7, -7.8), look: new Vector3(0, 0.25, 0), fov: 50 },
+  hatFront: { pos: new Vector3(-0.4, 2.4, -3.4), look: new Vector3(0, 1.35, 0), fov: 44 },
+  hatBack: { pos: new Vector3(0.45, 2.5, 3.4), look: new Vector3(0, 1.35, 0), fov: 44 },
+  paint: { pos: new Vector3(2.4, 1.6, 2.6), look: new Vector3(0, 0.2, 0.1), fov: 48 },
+  trail: { pos: new Vector3(0.6, 2.6, 2.4), look: new Vector3(0, -0.6, 12), fov: 60 },
+  chase: { pos: new Vector3(0, 2.3, 5.2), look: new Vector3(0, 0.6, -2), fov: 66 },
 };
 
 const WOOD = RIDER_COLORS.wood;
@@ -169,7 +179,7 @@ export class GarageScene {
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.toneMapping = NoToneMapping;
     this.renderer.shadowMap.enabled = tier === 'high';
-    this.renderer.shadowMap.type = PCFSoftShadowMap;
+    this.renderer.shadowMap.type = PCFShadowMap;
     // The light: Pinecrest's dusk (the other hour), a low warm sun in through the door behind the stand.
     setHour('alt');
     applyPalette(getPalette('alpine', Mood.None));
@@ -392,7 +402,8 @@ export class GarageScene {
 
   /** Moves the camera to what is browsed; the trail's shot sends the rider out round the yard's loop. */
   show(p: Preset, instant = false): void {
-    this.from = { pos: this.camera.position.clone(), look: this.lookAt.clone(), fov: this.camera.fov };
+    const at = (this.camera.aspect < 0.8 ? TALL : SHOTS)[p];
+    this.from = instant ? { pos: at.pos.clone(), look: at.look.clone(), fov: at.fov } : { pos: this.camera.position.clone(), look: this.lookAt.clone(), fov: this.camera.fov };
     this.preset = p;
     this.camT = instant ? 1 : 0;
     this.riding = p === 'trail';
@@ -512,12 +523,10 @@ export class GarageScene {
     // The camera eases to its shot (reduced motion: the page passes instant).
     this.camT = Math.min(1, this.camT + dt / 0.9);
     const e = this.camT * this.camT * (3 - 2 * this.camT);
-    const to = SHOTS[this.preset];
-    const tall = this.camera.aspect < 0.8;
-    const toPos = tall ? to.pos.clone().sub(to.look).multiplyScalar(1.45).add(to.look) : to.pos;
-    this.camera.position.lerpVectors(this.from.pos, toPos, e);
+    const to = (this.camera.aspect < 0.8 ? TALL : SHOTS)[this.preset];
+    this.camera.position.lerpVectors(this.from.pos, to.pos, e);
     this.lookAt.lerpVectors(this.from.look, to.look, e);
-    this.camera.fov = this.from.fov + (to.fov + (tall ? 8 : 0) - this.from.fov) * e;
+    this.camera.fov = this.from.fov + (to.fov - this.from.fov) * e;
     this.camera.updateProjectionMatrix();
     this.camera.lookAt(this.lookAt);
     // The rider: seated on the stand with a breath of air through the door, or riding the loop.
