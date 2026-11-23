@@ -333,6 +333,19 @@ function main(): void {
   }
   for (const F of Object.values(forms)) writeFileSync(resolve(DIR, `${F.form}.json`), JSON.stringify(F, null, 1));
   if (argv.includes('--quiet')) return;
+  // --md: the capture table for the notes, a row a shot: words, controls, primaries, lone icons, bare figures, repeats.
+  if (argv.includes('--md')) {
+    for (const F of Object.values(forms)) {
+      console.log(`\n**${F.form}** (${Object.keys(F.shots).length} shots)\n`);
+      console.log('| shot | words | controls | primaries | look-alikes | lone icons | bare figures | repeats | loading |');
+      console.log('|---|---|---|---|---|---|---|---|---|');
+      for (const [k, s] of Object.entries<Any>(F.shots)) {
+        const f = s.figures;
+        console.log(`| ${k} | ${f.words}${f.popoverWords !== null ? ` (${f.popoverWords} in the popover)` : ''} | ${f.controls} | ${f.primaries.length} | ${f.lookalikes.length} | ${f.loneIcons.length} | ${f.bare.length} | ${f.repeats.length} | ${f.loading.length} |`);
+      }
+    }
+    return;
+  }
 
   const fmtList = (xs: string[], n = 6): string => (xs.length ? xs.slice(0, n).join('; ') + (xs.length > n ? ` (+${xs.length - n})` : '') : '-');
   for (const F of Object.values(forms)) {

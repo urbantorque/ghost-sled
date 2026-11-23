@@ -572,6 +572,12 @@ async (page) => {
     for (let i = 0; i <= c.n; i++) {
       await finishRun();
       await page.waitForTimeout(2500);
+      // What the button says it will do (a Daily waits for its rivals; a duel has its own start).
+      const button = await page.evaluate(() => {
+        const r = window.__gs.results;
+        const p = r && r.spine && r.spine.primary;
+        return p ? `${p.text}${p.sub ? `: ${p.sub}` : ''}` : r && r.runAgainLabel ? r.runAgainLabel.text : null;
+      }).catch(() => null);
       const tPress = await page.evaluate(() => performance.now());
       await page.keyboard.press('Space');
       const times = await page.evaluate(async (tPress) => {
@@ -591,7 +597,7 @@ async (page) => {
         return { runAt: runAt && Math.round(runAt), rideAt: rideAt && Math.round(rideAt) };
       }, tPress);
       // The first is the warm-up (a fresh browser's first run).
-      report.again.push({ i, warm: i > 0, ...times });
+      report.again.push({ i, warm: i > 0, button, ...times });
     }
   }
 
