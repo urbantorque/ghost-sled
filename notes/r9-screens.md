@@ -391,7 +391,38 @@ What they found wrong with the prototype, and what was done, worst first:
 | No mountain name or feeling line under the logo; no corner stack (both ART.md 10 today) | Kept, by design: section 6, decision 2. A critic given today's ART.md will always name it |
 | A ghost's name pill drawn over a chip of the picker (phone, run 50) | The backdrop's pill is baked into the frame; in the game `Title.measure()` gives the ghost tags the panels to keep off, and milestone 1 must give it the new picker and doors |
 
-(Round two below.)
+### Round two (`pairs2-title`, `pairs2-results`: a second fresh pair of critics on the fixed frames, `frames2/`, seed 11)
+
+Different pairs where they could be (the phone's title after runs 1 and 20, the phone's results for a duel won and the
+Daily), the same questions, the same rules.
+
+| | Title (6 pairs) | Results (10 pairs) |
+| --- | --- | --- |
+| Picked as clearer | **the prototype, 6 of 6** | **the prototype, 10 of 10** (the Trial "narrowly") |
+| Answers right, today | 13 of 18: the button 4 of 6 (both screens after run 1 read "a duel against Bram Oakhollow"), the goal 3 of 6 (every one a list; "the rose grudge line names a different rival from the button"), the garage 6 of 6 | 25 of 30: the Cup's and the Daily's medals missed again on desk and phone ("never mentions the Cup, so 'Silver at 2:28.4' comes from nowhere"), the first run's earnings half right |
+| Answers right, prototype | 18 of 18 | 30 of 30 |
+
+So, over both rounds: **the prototype was picked as clearer in 32 of 32 pairs**, and its screens were read right
+96 of 96 times against today's 78 of 96 (titles 27 of 36, results 51 of 60). Today's misses are the plan's targets:
+the goal (a list every time), the run-1 duel that is not one, and the Cup's and the Daily's medals that the story
+leaves out.
+
+What round two found wrong with the prototype, and what was done:
+
+| Found | Done |
+| --- | --- |
+| "2:02.7 to beat" did not fit "0.3 s behind" at 2:06.4; "Reached Rider Rank 2" disagreed with the other design's "Rider Rank 1" | Both fixture errors, not the design: the field had a second Juno Vale, and the first run's XP stopped short of the page it opened. Fixed in `fixtures.ts`; every case now opens what its XP reaches |
+| "Reached Rider Rank 5" beside a bar at page 6 | The kicker names the rank the bar reached, whichever page gave the prize (and the fixture's duel now stops at page 5) |
+| "Silver in the Trial 2:13.2" read as if the medal were for the time | A Trial's word stands without the clock |
+| The phone's doors were rounded tiles, not pills (ART.md 10) | Pills |
+| The picker's last chip ran into the rider's scarf on a 1280 desk | The chips a step narrower |
+| The phone's rule under "1st" read long and heavy | Shorter and thinner on a phone |
+| "XP" is jargon seen nowhere else on the title (run 50's quiet line) | Kept: it is the unit of Rider Rank in the Almanac and the results' Details. Said for the owner to judge |
+| No mountain name or feeling under the logo; no corner stack | By design (section 6, decision 2) |
+| The ghost in the frame is not the rival Ride names | The backdrop's, not the screen's |
+
+Not judged by a third critic: the round-two fixes are copy, fixture data and a few pixels; the frames after them are
+`shots/r9/screens/frames3/`, seen by me, not by a critic.
 
 ## web-design-guidelines
 
@@ -435,6 +466,39 @@ through `Intl` (`ui/fmt.ts`) and tabular; names `translate="no"`; no list over a
    economy's question.
 7. **Photo on the results' front, the clip in Details.** Photo is of this moment over this scene; the clip is the reel
    and lives with Watch your run. Or both on the front (one more control).
+8. **`prototypes/r9/tokens.css` meets the garage lane's copy.** The garage lane copied this lane's first commit of it
+   (6a439a0) into its own worktree; since then one rule changed here (`.gs9-b-quiet` got an ink wash so its words hold
+   over snow). Merging both lanes adds the same file twice: take this branch's.
+
+## What is still short, and what only a script has seen
+
+- **Drawn but not judged by a person:** everything here. The critics are models reading frames, not players; the
+  motion (the 2.5 s story, the rooms' entrance, the column's entrance) has been seen only in frames at 0.6 s and 1.4 s.
+- **Designed but not drawn:** the Trial's block in Daily and Cup (no stage before run 98 has Trials open), a friend's
+  challenge link on the title, the Long Night's results, the Cup and the Trial picked on the title, a phone on its
+  side. The Garage's and Settings' rooms are doors to the garage lane's page and to today's settings.
+- **Driven by a script, not a hand:** keys, the pad's cursor (the arrows drive the game's own `PadNav`; no real pad
+  was plugged in), touch (taps on the phone config) and reduced motion (`scripts/playtest/r9-protokeys.js`,
+  `shots/r9/screens/keys-check.txt`).
+- **The figures are a fixture's**, built on the mid pilot's career (runs 1, 5, 20, 50) and checked against the truth
+  lane's live captures of the same stages (`shots/r9/truth/desk-mid-*-title-ready.png`), not ridden.
+- **For a person:** whether the quiet line's "XP" reads; whether the doors' names say what is behind them (a player
+  looking for missions, the Twelve's ladder or the medals has to know they are in Progress); whether a title with no
+  mountain name under the logo still says where you are; whether 2.5 s is the right length for the story.
+
+## Frames
+
+Under `C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r9/screens/`:
+- `backdrops/`: the captured frames (desk, wide, phone) the prototypes stand over (copied, as JPEG, to
+  `prototypes/r9/frames/`).
+- `frames/`: round one, today's screens and the prototype's, every stage and case, desk, wide and phone, with
+  `desk.json`, `wide.json`, `phone.json` (the counts and the console) and `counts.md`.
+- `frames2/`: the prototype after round one's fixes (and today's, copied for the pairs). `frames3/`: after round
+  two's.
+- `pairs1-*`, `pairs2-*`: the blind pairs the critics saw; `keys/`: the sides and `truth.md`, the answers they were
+  scored against.
+- `look/`: the first look (before any fix). `firsts.{txt,json}`: when each system first reaches the pilots.
+  `css-audit.json`: what today's sheets define.
 
 ## Text to fold into ART.md 10, if the main lane takes the plan
 

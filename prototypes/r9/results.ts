@@ -86,7 +86,7 @@ function beat1(): Beat1 {
   }
   if (m.trial?.figure) {
     const md = m.trial.medal;
-    return { kind: md >= 3 ? 'win' : md > 0 ? 'podium' : 'finish', figure: m.trial.figure, of: m.trial.unit, word: m.trial.word ?? 'Across the line', time: clock(fin.seconds), fact, medal: md };
+    return { kind: md >= 3 ? 'win' : md > 0 ? 'podium' : 'finish', figure: m.trial.figure, of: m.trial.unit, word: m.trial.word ?? 'Across the line', time: null, fact, medal: md };
   }
   if (!p) return { kind: 'finish', figure: clock(fin.seconds), of: '', word: 'Across the line', time: null, fact };
   const kind = p.rank === 1 ? 'win' : p.rank <= 3 && p.of >= 4 ? 'podium' : 'finish';
@@ -125,7 +125,7 @@ function beat2(): Beat2 | null {
   }
   if (opened.length > 0) {
     const r = opened[0];
-    return { art: h('span', 'r9-got-art is-gift', ico(GLYPH[r.kind] ?? 'gift')), kicker: `Reached Rider Rank ${r.page}`, name: prize(r), line: SAYS[r.name] ?? null, rankInKicker: true };
+    return { art: h('span', 'r9-got-art is-gift', ico(GLYPH[r.kind] ?? 'gift')), kicker: `Reached Rider Rank ${Math.max(r.page, sp?.after.page ?? r.page)}`, name: prize(r), line: SAYS[r.name] ?? null, rankInKicker: true };
   }
   return null;
 }

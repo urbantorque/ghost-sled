@@ -285,7 +285,9 @@ function field(n: number, you: number, place: number, gap: number, named: Record
     const pos = i + 1 < place ? i + 1 : i + 2; // their place in the race
     const ahead = pos < place;
     const t = ahead ? you - gap - (place - 1 - pos) * 1.7 : you + gap + (pos - place - 1) * 2.1;
-    const nm = named[pos] ?? { name: NAMES[i % NAMES.length] };
+    const taken = new Set(Object.values(named).map((x) => x.name));
+    const pool = NAMES.filter((x) => !taken.has(x));
+    const nm = named[pos] ?? { name: pool[i % pool.length] };
     const finished = !(pos > n + 1 - dnf);
     out.push({ name: nm.name, kind: nm.kind ?? 'pool', score: 20000 + i * 900, time: finished ? Math.round(t * 10) / 10 : null, distance: finished ? 4520 : 2600 + i * 80, passed: !ahead });
   }
@@ -357,7 +359,7 @@ export function resultsModel(c: Case): ResultsModel {
         nextUnlock: { kind: 'mountain', name: 'Frostfang Glacier', biome: 'glacier', have: 3, need: 4 },
         spine: spineR({
           xpBefore: 0,
-          ticks: [tick('finish', 'Finished', 110), tick('place', '2 behind you', 16), tick('pass', '3 passed', 18), tick('mission', 'Mission', 40), tick('first', "The day's first run", 200), tick('ride', 'Riding', 50), tick('medal', 'A stage medal', 15), tick('star', 'A mastery star', 30), tick('stars', '2 stars', 60), tick('best', 'A best', 20), tick('trick', 'Tricks', 21)],
+          ticks: [tick('finish', 'Finished', 110), tick('place', '2 behind you', 16), tick('pass', '3 passed', 18), tick('mission', 'Mission', 40), tick('first', "The day's first run", 200), tick('ride', 'Riding', 50), tick('medal', 'A stage medal', 15), tick('star', 'A mastery star', 30), tick('stars', '2 stars', 60), tick('best', 'A best', 20), tick('trick', 'Tricks', 21), tick('ladder', 'The ladder', 50), tick('set', 'A set piece won', 90)],
           opened: [card('gate', 'A second charm gate', 1), card('charm', 'Charm: Slipstream Lantern', 1), card('feature', 'Daily contracts', 2), card('charm', 'Charm: Ember Step', 2)],
           stickers: 10,
           streak: 1,
@@ -425,7 +427,7 @@ export function resultsModel(c: Case): ResultsModel {
         twelve: { tone: 'fell', line: 'Bram Oakhollow falls. 1 of 12 beaten.', rider: { key: 'bram', name: 'Bram Oakhollow', hat: 'antlers', emblem: '', accent: '#CFE8B8' }, says: 'Slow and all of it. You took the fast half.', beaten: 1, of: 12, gifts: 120 },
         runAgainLabel: { text: 'Next Duel: Old Wren', aria: 'Duel Old Wren' },
         spine: spineR({
-          xpBefore: 2400,
+          xpBefore: 1900,
           ticks: [tick('duel', 'A duel won', 300), tick('finish', 'Finished', 110), tick('contract', 'Contracts', 90), tick('place', '10 behind you', 80), tick('ride', 'Riding', 50)],
           opened: [card('sled', 'A new sled', 5), card('flourish', 'A flourish for Spinning Top', 5)],
           stickers: 2,
@@ -467,7 +469,7 @@ export function resultsModel(c: Case): ResultsModel {
         runAgainLabel: { text: 'Run Again', aria: 'Run Again' },
         raceLine: { text: 'Cup: Bronze. Silver at 2:28.4.', tone: 'event' },
         spine: spineR({
-          xpBefore: 30200,
+          xpBefore: 30400,
           ticks: [tick('cup', 'A Cup medal', 20), tick('finish', 'Finished', 110), tick('place', '7 behind you', 56), tick('first', "The day's first run", 200), tick('ride', 'Riding', 50)],
           league: { place: 6, was: 9, division: 4 },
           streak: 13,
@@ -511,7 +513,7 @@ export function resultsModel(c: Case): ResultsModel {
         runAgainLabel: { text: 'Run Again', aria: 'Run Again' },
         raceLine: { text: 'Daily: Silver. Gold at 1:57.8.', tone: 'event' },
         spine: spineR({
-          xpBefore: 2600,
+          xpBefore: 2750,
           ticks: [tick('first', "The day's first run", 200), tick('finish', 'Finished', 110), tick('contract', 'A contract', 50), tick('daily', 'A Daily medal', 35), tick('place', '6 behind you', 48)],
           streak: 6,
           lit: true,
