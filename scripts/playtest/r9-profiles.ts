@@ -42,9 +42,10 @@ export const SCALE = {
   /** Pixels a unit of grade, and the most shown. */
   grade: 70,
   gradeMax: 0.9,
-  /** Pixels a metre across, and the half-width shown either side of x = 0. */
+  /** Pixels a metre across, and the half-width shown either side of x = 0 (the five reach 41 m at most, turn-back
+   *  included; a wider new mountain is clamped to the edge, so widen this and redraw all of them together). */
   x: 1.1,
-  xRange: 72,
+  xRange: 52,
   /** Pixels a metre of width, and the most shown. */
   w: 1.3,
   wMax: 56,
@@ -166,7 +167,7 @@ function panel(c: CourseFacts, s: Samples, top: number, zMax: number): { svg: st
   };
 
   // Sections and set pieces.
-  label('sections', y + 24, 'set pieces over');
+  label('sections', y + 24);
   for (const p of c.setPieces) {
     const a = X(p.z0);
     const b = X(p.z1);
@@ -186,7 +187,7 @@ function panel(c: CourseFacts, s: Samples, top: number, zMax: number): { svg: st
   // Height.
   const hTop = y;
   const hH = SCALE.yRange * SCALE.y;
-  label('height', y + 12, 'm below the gate');
+  label('height', y + 24, 'm below the gate');
   for (let m = 0; m <= SCALE.yRange; m += 300) {
     const yy = hTop + m * SCALE.y;
     out.push(`<line class="grid" x1="${LEFT}" x2="${n1(X(zMax))}" y1="${yy}" y2="${yy}"/>`);
@@ -236,7 +237,7 @@ function panel(c: CourseFacts, s: Samples, top: number, zMax: number): { svg: st
   const pH = 2 * SCALE.xRange * SCALE.x;
   label('plan', y + 12, 'world x, m');
   const px = (x: number): number => pTop + pH / 2 + Math.max(-SCALE.xRange, Math.min(SCALE.xRange, x)) * SCALE.x;
-  for (const m of [-60, -30, 0, 30, 60]) {
+  for (const m of [-50, -25, 0, 25, 50]) {
     out.push(`<line class="grid" x1="${LEFT}" x2="${n1(X(zMax))}" y1="${px(m)}" y2="${px(m)}"/>`);
     out.push(`<text class="t3" x="${LEFT - 6}" y="${px(m) + 3}" text-anchor="end">${m}</text>`);
   }
@@ -385,7 +386,7 @@ for (const a of all) {
   for (const p of c.setPieces) parts.push(`<rect x="${n1(X(p.z0))}" y="${top + 17}" width="${n1((p.z1 - p.z0) * SCALE.z)}" height="3" fill="var(--ink2)"><title>${esc(`${p.key}: ${p.verb}`)}</title></rect>`);
   top += 30;
 }
-for (const z of [1450, 2950]) parts.push(`<line class="stage" x1="${n1(X(z))}" x2="${n1(X(z))}" y1="${skelTop - 8}" y2="${top - 6}"/>`);
+for (const z of [1450, 2950]) parts.push(`<line class="stage" stroke-width="1.5" x1="${n1(X(z))}" x2="${n1(X(z))}" y1="${skelTop - 8}" y2="${top - 6}"/>`);
 parts.push(`<line class="fin" x1="${n1(X(4500))}" x2="${n1(X(4500))}" y1="${skelTop - 8}" y2="${top - 6}"/>`);
 parts.push(`<text class="t3" x="${LEFT}" y="${top + 4}">Each row: the sections, a triangle at each leap's lip, a bar under each set piece. Dashed: 1,450 and 2,950 m; solid: 4,500 m.</text>`);
 top += 20;

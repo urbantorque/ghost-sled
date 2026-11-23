@@ -232,6 +232,13 @@ flat lines, the corridor from above (floor, turn-back, safe line with its bends 
 group), the width with the 12 m and 30 m lines, the air (leaps, kickers on and off the line, steps and outlets, then
 the mid pilot's flights, a row a seed) and a tick per collider, a row a group. Every mark has a hover title.
 
+I looked at them rendered (`profiles/pinecrest-0.png`, and the sheet in three screens, `sheet-0.png`,
+`sheet-1250.png`, `sheet-2500.png`; a raw SVG document never finished a screenshot in the headless config, so they are
+shot wrapped in an HTML page). What they show at a glance: the five skeletons line up column for column through the
+first 600 m, at both thresholds and in the last 520 m; the height lines are five near-parallel ramps with three small
+steps each; the grade tracks spike at the same three places; the plan views are one corridor that pinches to 10 to
+12 m in the walled places and opens to 40 to 50 m in bowls and lakes, with the colliders massed in tree runs and forks.
+
 ## Section 1 "The mountains", line by line
 
 Checked against the sim (`src/sim`, read and not edited) and the tables above. What the sim cannot say (light, sky,
