@@ -92,7 +92,8 @@ async (page) => {
     check('Escape comes back from Details', !(await dialog()));
     check('focus returns to Details', (await active()) === 'details', String(await active()));
   } else {
-    await page.tap('.p9-scene');
+    // (A tap on the scene, away from every control.)
+    await page.touchscreen.tap(195, 520);
     await page.waitForTimeout(100);
     check('a tap lands the story', await page.evaluate(() => document.querySelector('.r9').classList.contains('is-done')), `was playing: ${playing}`);
     await page.tap('[data-fk="details"]');

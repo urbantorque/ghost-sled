@@ -317,8 +317,11 @@ which also counts the screen reader's spoken lines; this counter does not, so to
 review's and the two columns are like for like. Today's screens are the game's own UI on the same models over the same
 frames (`today.html`), shot once their story has landed (7 s); the prototype's once its story has (3.2 s).
 
-Words / controls, from `shots/r9/screens/frames/` (round one's frames; the prototype's figures after round one's fixes
-are in brackets where they moved, from `frames2/`):
+Words / controls, from `shots/r9/screens/frames/` (round one's frames). After both rounds' fixes (`frames3/`, the
+pages as they stand) the prototype reads: the title 20, 33, 33, 38 and **40** words at a first visit and runs 1, 5, 20
+and 50 on the desk (39 on a phone), 10 to 13 controls; the results 34, 31, 29, 35, 30, 32, 21 and 31 (a first finish, a
+podium, a wreck, a duel won and lost, the Cup, a Trial, the Daily), 4 controls each. Both bars are met with nothing to
+spare at run 50 and on a duel won: one more word on either fails them.
 
 | Screen | Desk today | Desk prototype | Wide today | Wide prototype | Phone today | Phone prototype |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -478,8 +481,12 @@ through `Intl` (`ui/fmt.ts`) and tabular; names `translate="no"`; no list over a
   challenge link on the title, the Long Night's results, the Cup and the Trial picked on the title, a phone on its
   side. The Garage's and Settings' rooms are doors to the garage lane's page and to today's settings.
 - **Driven by a script, not a hand:** keys, the pad's cursor (the arrows drive the game's own `PadNav`; no real pad
-  was plugged in), touch (taps on the phone config) and reduced motion (`scripts/playtest/r9-protokeys.js`,
-  `shots/r9/screens/keys-check.txt`).
+  was plugged in), touch (taps on the phone config) and reduced motion (`scripts/playtest/r9-protokeys.js`; 24 checks,
+  all pass, in `shots/r9/screens/keys-check.txt` and `keys-check-touch.txt`: Enter opens a door's room on its heading,
+  Tab stays in it, Escape and Backspace close it and focus returns to the door; the arrows move from Ride to the hour
+  below and the picker above; a chip picked by keys or a tap changes Ride's words; a locked chip says what opens it;
+  Choose picks the Daily; a key or a tap lands the results, the one button takes focus, Details opens and Escape or
+  Back returns to it; reduced motion opens the results landed).
 - **The figures are a fixture's**, built on the mid pilot's career (runs 1, 5, 20, 50) and checked against the truth
   lane's live captures of the same stages (`shots/r9/truth/desk-mid-*-title-ready.png`), not ridden.
 - **For a person:** whether the quiet line's "XP" reads; whether the doors' names say what is behind them (a player
