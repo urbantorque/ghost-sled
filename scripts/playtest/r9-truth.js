@@ -584,17 +584,20 @@ async (page) => {
         const g = window.__gs;
         let runAt = null;
         let rideAt = null;
+        // (The dev server's mock platform plays a midgame ad between some runs: the published build has none.)
+        let ad = false;
         const until = performance.now() + 15000;
         while (performance.now() < until) {
           await new Promise((r) => requestAnimationFrame(r));
           const now = performance.now();
+          ad = ad || !!(g.platform && (g.platform.adOn || g.platform.adBusy));
           if (runAt === null && g.phase === 'run') runAt = now - tPress;
           if (runAt !== null && g.run && g.run.sim.tick > 1 && g.run.sim.s.speed > 1) {
             rideAt = now - tPress;
             break;
           }
         }
-        return { runAt: runAt && Math.round(runAt), rideAt: rideAt && Math.round(rideAt) };
+        return { runAt: runAt && Math.round(runAt), rideAt: rideAt && Math.round(rideAt), ad };
       }, tPress);
       // The first is the warm-up (a fresh browser's first run).
       report.again.push({ i, warm: i > 0, button, ...times });

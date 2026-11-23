@@ -379,10 +379,15 @@ function main(): void {
       for (const [sys, r] of Object.entries<Any>(cr.reach)) console.log(`  ${sys.padEnd(18)} ${r.taps === null ? 'NOT FOUND in two taps' : `${r.taps} tap${r.taps === 1 ? '' : 's'}`.padEnd(22)} ${r.via ? `via "${r.via.slice(0, 60)}"` : ''}  ${r.keyboard === false ? 'keyboard NO ' : ''}${r.pad === false ? 'pad NO ' : ''}${r.named === false ? 'unnamed' : ''}`);
       console.log(`  Tab order: ${cr.tab.length} stops; pad reached ${cr.pad?.reached.length} of ${cr.title.length} title controls in ${cr.pad?.presses} presses`);
     }
+    // (A run behind the dev server's mock midgame ad is the mock's wait, not the game's: the published build has no
+    // ads. Older captures did not flag it; a press over 2 s with no flag is listed apart for a person to read.)
     const warm = (F.again as Any[]).filter((a) => a.warm && a.rideAt);
     if (warm.length) {
-      const xs: number[] = warm.map((a) => a.rideAt).sort((a: number, b: number) => a - b);
-      console.log(`\nAS FAST AS TODAY (bar: Run Again to riding under 2 s): warm runs ${xs.join(', ')} ms; median ${xs[xs.length >> 1]} ms, worst ${xs[xs.length - 1]} ms`);
+      const clean = warm.filter((a) => !a.ad);
+      const xs: number[] = clean.map((a) => a.rideAt).sort((a: number, b: number) => a - b);
+      const ads = warm.filter((a) => a.ad).map((a) => `${a.rideAt} ms`);
+      console.log(`\nAS FAST AS TODAY (bar: Run Again to riding under 2 s): warm presses ${xs.join(', ')} ms; median ${xs[xs.length >> 1]} ms, worst ${xs[xs.length - 1]} ms${ads.length ? `; behind a mock ad (left out): ${ads.join(', ')}` : ''}`);
+      for (const a of warm) if (a.button) console.log(`    press ${a.i}: ${a.rideAt} ms, the button said "${a.button}"${a.ad ? ' (a mock ad played)' : ''}`);
     }
     if (F.errors.length) console.log(`\nconsole errors: ${F.errors.length}\n  ${F.errors.slice(0, 8).join('\n  ')}`);
   }
