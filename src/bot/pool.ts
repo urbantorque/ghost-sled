@@ -3,6 +3,7 @@ import { clamp } from '../sim/dmath';
 import { Rng, hash32 } from '../sim/prng';
 import { RunRecord, recordToString, replayRecord } from '../sim/replay';
 import { Sim } from '../sim/sim';
+import { eventsFor } from '../sim/course';
 import { type Field, type Track, runBot } from './bot';
 import { ALL_CHARMS, STARTER_POOL } from '../sim/charms';
 import { uniqueGhostName } from './names';
@@ -74,7 +75,7 @@ function chaosFor(rng: Rng, seed: number, salt: number, i: number): ChaosRoll {
   const s = hash32(seed, salt, i, 0xc4a0);
   // About 60% plain; the rest are real chaos rolls (which can still come up plain).
   if (rng.chance(0.6)) return { mood: Mood.None, event: ChaosEvent.None, seed: s };
-  return rollChaos(s, 1 + rng.int(0, 5));
+  return rollChaos(s, 1 + rng.int(0, 5), Mood.None, eventsFor(seed));
 }
 
 /** Where a run went down, read off a replay of its record: the sim says so in its events, and a replay

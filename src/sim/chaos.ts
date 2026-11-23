@@ -154,7 +154,7 @@ export function eventInfo(e: ChaosEvent): EventInfo {
  * previous mood back to back. A run with no event may be a legend's (LEGEND_CHANCE), rolled on a stream of its
  * own so the mood and the event a seed gives are what they always were.
  */
-export function rollChaos(seed: number, runIndex: number, lastMood: Mood = Mood.None): ChaosRoll {
+export function rollChaos(seed: number, runIndex: number, lastMood: Mood = Mood.None, allowed = ALL_EVENTS): ChaosRoll {
   if (runIndex <= 0) return { mood: Mood.None, event: ChaosEvent.None, seed: seed >>> 0 };
   const rng = new Rng(seed);
   const r = rng.next();
@@ -176,8 +176,25 @@ export function rollChaos(seed: number, runIndex: number, lastMood: Mood = Mood.
   }
   let event = ChaosEvent.None;
   if (wantEvent) event = (1 + rng.int(0, EVENTS.length - 2)) as ChaosEvent;
+  // (Round 9: an event the mountain cannot meet is none, drawn as ever, so every other roll is what it was.)
+  if (!eventAllowed(event, allowed)) event = ChaosEvent.None;
   const legend = event === ChaosEvent.None && hash32(seed, 0x1e6e4d) / 4294967296 < LEGEND_CHANCE ? 1 + (hash32(seed, 0x1e6e51) & 1) : 0;
   return legend ? { mood, event, seed: seed >>> 0, legend } : { mood, event, seed: seed >>> 0 };
+}
+
+/** Every mid-run event, a bit each by ChaosEvent: what the five and every Daily and Cup may meet. */
+export const ALL_EVENTS = (1 << ChaosEvent.Avalanche) | (1 << ChaosEvent.Yeti) | (1 << ChaosEvent.GiftStorm) | (1 << ChaosEvent.GhostTrain);
+
+/** Whether a run on a mountain that may meet `allowed` (a bit each by ChaosEvent; course.ts eventsFor) can meet this
+ *  event (none always can). */
+export function eventAllowed(event: ChaosEvent, allowed: number): boolean {
+  return event === ChaosEvent.None || (allowed & (1 << event)) !== 0;
+}
+
+/** A roll with its event dropped where the mountain cannot meet it (round 9: the Trials' and the Long Night's own
+ *  rolls, which are drawn without the mountain). */
+export function withEvents(roll: ChaosRoll, allowed: number): ChaosRoll {
+  return eventAllowed(roll.event, allowed) ? roll : { ...roll, event: ChaosEvent.None };
 }
 
 /** Distance at which the mid-run event starts its warning. */

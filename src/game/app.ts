@@ -41,7 +41,7 @@ import { STAR_GIFTS, masteryBoard, readMastery, settleMastery } from './mastery'
 import { PAINTS, paintById } from './paints';
 import { SHELVES, type ShelfId, freeItem, hatById, scarfById, soundById, trailById } from './garage';
 import { WARD_CURVE } from './timescale';
-import { courseFor } from '../sim/course';
+import { courseFor, eventsFor } from '../sim/course';
 import { rollForVariant } from '../sim/moments';
 import { HintCoach } from './hints';
 import { intensity } from './intensity';
@@ -1521,7 +1521,7 @@ export class App {
     // Chaos: the first run of a session is always plain. A friend's challenge replays their
     // conditions from the second attempt on (the rematch).
     const seed = (Math.random() * 4294967296) >>> 0;
-    let chaos = rollChaos(seed, this.sessionRuns, this.lastMood);
+    let chaos = rollChaos(seed, this.sessionRuns, this.lastMood, eventsFor(this.mountain.seed));
     if (!leg && this.challenge && this.challenge.record.seed === this.mountain.seed) {
       chaos = this.challenge.attempts > 0 && this.sessionRuns > 0 ? this.challenge.record.chaos : { ...chaos, mood: Mood.None, event: ChaosEvent.None };
       this.challenge.attempts++;

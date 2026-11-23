@@ -1,3 +1,5 @@
+import { layoutFor } from '../sim/course';
+import { MOUNTAINS } from '../sim/mountains';
 import { hashString } from '../sim/prng';
 import { FINISH_Z } from './standing';
 
@@ -37,7 +39,9 @@ export const GRAVE_GIFTS = 3;
 const CAPPED_TICKS = 18000;
 
 /** Short place names (proper nouns, no pronouns, typographic apostrophes), at most 14 characters so
- *  'Name: 4 fell here' fits a phone tag. */
+ *  'Name: 4 fell here' fits a phone tag. (Round 9: frozen at these 22. The five and every Daily name their places over
+ *  them exactly as before, so never append here: a longer list renames every place on the five. A new mountain names
+ *  its own from these and GRAVE_MORE.) */
 export const GRAVE_NAMES = [
   'Widow’s Bend',
   'Lantern Rest',
@@ -65,6 +69,16 @@ export const GRAVE_NAMES = [
   // over the list's length gives every other place the name it had.)
   'Pale Rest',
 ] as const;
+
+/** Round 9: more names, for the new mountains alone (namesFor). Append freely: the five never read them. */
+export const GRAVE_MORE = ['Glaze Bend', 'Lip Turn', 'Hook Hollow', 'Gull Rest', 'Salt Mercy', 'Foam Gate', 'Eave Drop', 'Chimney Rest', 'Cold Lane', 'Bell Corner', 'Slate Fall', 'Tide Hush'] as const;
+
+/** The names a mountain's places are drawn from: the frozen 22 for the five and every Daily and Cup, those and
+ *  GRAVE_MORE for a mountain that lays its own ground (round 9). */
+export function namesFor(key: string): readonly string[] {
+  const m = MOUNTAINS.find((q) => q.id === key);
+  return m && layoutFor(m.seed).grammar !== 'acts' ? [...GRAVE_NAMES, ...GRAVE_MORE] : GRAVE_NAMES;
+}
 
 export interface Graveyard {
   /** Sim z (metres; sim.distance is max z), the mean of the cluster's crash distances. */
@@ -101,7 +115,7 @@ function fallsIn(pool: ReadonlyArray<GraveRider>, finishZ: number): Array<{ z: n
  * (bundledGraveyards): they are skipped while the list has others left, and this mountain's names are
  * added to it.
  */
-export function graveyards(pool: ReadonlyArray<GraveRider>, key: string, taken?: Set<string>, finishZ = FINISH_Z): Graveyard[] {
+export function graveyards(pool: ReadonlyArray<GraveRider>, key: string, taken?: Set<string>, finishZ = FINISH_Z, names: readonly string[] = namesFor(key)): Graveyard[] {
   const d = fallsIn(pool, finishZ);
   const spots: Array<{ z: number; fell: number }> = [];
   while (spots.length < GRAVE_MAX) {
@@ -124,19 +138,19 @@ export function graveyards(pool: ReadonlyArray<GraveRider>, key: string, taken?:
   spots.sort((a, b) => a.z - b.z);
   const out: Graveyard[] = [];
   const used = new Set<number>();
-  const N = GRAVE_NAMES.length;
+  const N = names.length;
   for (const { z, fell } of spots) {
     // A per-mountain offset into the list, then the place's own hash; skip what is used here, and what
     // another mountain took while any name is still free.
     let at = (hashString(key) + hashString(`${key}:${Math.round(z)}`)) % N;
-    const blocked = (j: number): boolean => used.has(j) || !!taken?.has(GRAVE_NAMES[j]);
+    const blocked = (j: number): boolean => used.has(j) || !!taken?.has(names[j]);
     let tries = 0;
     while (blocked(at) && tries++ < N) at = (at + 1) % N;
     // (Every name taken somewhere: only this mountain's own must differ.)
     while (used.has(at)) at = (at + 1) % N;
     used.add(at);
-    taken?.add(GRAVE_NAMES[at]);
-    out.push({ z, name: GRAVE_NAMES[at], fell });
+    taken?.add(names[at]);
+    out.push({ z, name: names[at], fell });
   }
   return out;
 }

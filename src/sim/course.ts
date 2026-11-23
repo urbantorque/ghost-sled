@@ -4,6 +4,7 @@ import { fbm1, noise1, noise2 } from './noise';
 import { Rng, hash32 } from './prng';
 import { momentPlays, setPieceKinds } from './moments';
 import { GATE_PAST_LINE, START_GATE_Z } from './charms';
+import { ALL_EVENTS } from './chaos';
 import { CHUNK_LEN, FOREST_LIMIT, SAFE_LANE, THRESHOLD_AFTER, THRESHOLD_AFTER_MIN, THRESHOLD_BEFORE, THRESHOLD_BEFORE_MAX, THRESHOLD_HW, bank } from './courseparts';
 
 export { CHUNK_LEN, FOREST_LIMIT, SAFE_LANE, THRESHOLD_AFTER, THRESHOLD_AFTER_MIN, THRESHOLD_BEFORE, THRESHOLD_BEFORE_MAX, THRESHOLD_HW, bank };
@@ -227,7 +228,7 @@ export const FIVE: Layout = {
   kickFrom: 800,
   picketsFrom: 900,
   lightRun: { z: 130, len: 160, step: 8, wave: 110 },
-  events: 0b11110,
+  events: ALL_EVENTS,
 };
 
 /** The descent's length: the stages' metres in order (the finish line is at their sum). The five's. */
