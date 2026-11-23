@@ -113,7 +113,12 @@ grows a seat for each, and two of the eight (the Long Night and the contracts) h
    and the Trial's pick under Ride are a late-game layout most players never see; the plan below does not build round
    it.
 5. **Escape is deliberately unbound** (`menus.ts`: "on CrazyGames it exits fullscreen"), so the review's "Escape did not
-   close the garage" is a decision, not a bug. The pad's B goes back on every sheet (`padnav.ts`). See section 8.
+   close the garage" is a decision, not a bug. The pad's B goes back on every sheet (`padnav.ts`). See section 6.
+6. **To check against the truth lane's run-1 capture: Ride may promise a duel that does not ride.** After one run,
+   `app.ts twelveModel()` names Bram Oakhollow as next and here (it calls `nextDuel`, which has no run gate), so
+   `title.ts` labels Ride "DUEL Bram Oakhollow"; but `duelHere()` holds the first duel back until the third run
+   (`FIRST_DUEL_RUN`), so run 2 is an ordinary race. Read from the code, not yet seen on screen. The prototype needs one
+   fact for it (`TitleTwelve.rides`), and says Ride.
 
 ## 2. The information plan
 
@@ -226,7 +231,7 @@ Every label I changed, before and after. The rule: a label is something a player
 | Results, the race line | "81.4 s clear of tove_runs" floating over the crowd | Beat one's fact: "81.4 s ahead of tove_runs" (when nothing outranks it) |
 | Results, foot | Home, an unlabelled camera, Save Clip, Details | Home, Photo, Details; Save a clip in Details beside Watch your run |
 | Results, a duel's fact | "Bram Oakhollow falls. 1 of 12 beaten." | "Bram Oakhollow beaten. 1 of 12 down." |
-| Results, a wreck | "2,340 m / WIPED OUT / Hit an ice spire" with the short-of note apart | "3,340 m / WIPED OUT / Hit an ice spire, 1,180 m short of the line" |
+| Results, a wreck | "3,340 m / WIPED OUT / Hit a tree" with "1,180 m short of the finish." a block away | "3,340 m / WIPED OUT / Hit a tree, 1,180 m short of the line" |
 | Title, Ride | DUEL / "Old Wren" | DUEL / "Old Wren. 2:09.6 to beat" |
 | Title, Ride on a plain mountain | RIDE / "Next: valo_rides, 2:06.3, 0.1 s up" | RIDE / "valo_rides is 0.1 s ahead" |
 | Title, the corner | a flame and "1"; a gift and "670"; "Best 0:20.9"; "Rider Rank 4 / Page 5 A new sled +1 / 496 to go"; "14 /212" | Doors: "Daily and Cup / 1-day flame", "Progress / Rider Rank 4", "Garage / 670 gifts"; in Progress "Spirit Album: 14 of 212 stickers found" |
@@ -238,3 +243,115 @@ Every label I changed, before and after. The rule: a label is something a player
 | Title, a first visit's mute | a lone speaker icon, "Mute" to a reader | "Sound on" / "Sound off" |
 | Almanac rewards in a line | "A new sled +1" | "A new sled and a flourish for Spinning Top" (the prize named; "+1" never) |
 | A charm as a prize | "Charm: Kite String" | "The Kite String charm" |
+
+## 3. The design system (U3's tokens), as a proposal
+
+`prototypes/r9/tokens.css`, about 290 lines: custom properties on `:root` and `.gs-ui` (so a prototype and the game's
+overlay read the same names), then the few pieces every screen is built from under `.gs9-` (so nothing collides with
+today's sheets while both exist). The garage lane's prototypes use it.
+
+**What today's 11 sheets define** (`scripts/playtest/r9-css-audit.mjs`, round 9's base):
+
+| Sheet | Lines | Rules | Classes | Custom properties set | Keyframes |
+| --- | --- | --- | --- | --- | --- |
+| style.css | 9,659 | 1,281 | 592 | 55 | 43 |
+| screens.css | 1,398 | 174 | 108 | 3 | 22 |
+| meta.css | 1,238 | 175 | 131 | 2 | 1 |
+| books.css | 928 | 138 | 94 | 0 | 0 |
+| story.css | 835 | 124 | 78 | 0 | 5 |
+| photo.css | 381 | 56 | 41 | 0 | 1 |
+| modes.css | 269 | 33 | 27 | 0 | 1 |
+| reel.css | 197 | 24 | 15 | 0 | 2 |
+| trials.css | 98 | 15 | 16 | 0 | 0 |
+| hours.css | 79 | 10 | 5 | 0 | 0 |
+| phone.css | 34 | 3 | 6 | 0 | 0 |
+| **All** | **15,116** | **2,033** | **1,113** | **60** | **75** |
+
+By what they dress (the first class each rule names): the results' card (Details) and the medals about 3,600 lines,
+the title and its popovers about 3,550, the HUD, callouts and hints about 3,000, the sheets (garage, settings, pause)
+about 1,700, the results' sequence about 800, toasts, the reveal and legends about 750, the books about 500, photo and
+the reel about 450, the shared primitives about 340.
+
+**Dead by name: almost none.** Only 3 classes (`gs-btn-gift`, `gs-gifts`, `gs-tile-lock`; 8 rules, 59 lines) are named
+by no source. The weight is not dead code; it is a design system written many times over: **158 distinct font sizes,
+7 weights (600 to 900, with 650, 750 and 850 between), 22 radius values, 355 colour literals, 267 shadows, 56
+durations and 13 easings.** U3's saving comes from the tokens, one card and one button replacing per-screen
+restatements, and from the rules the plan retires (the card's 3,600 lines become Details' one sheet; the title's
+popovers become two rooms), not from a dead-code sweep. Only building it will measure it; my estimate is that the title
+and results sheets halve and the whole drops by about a quarter.
+
+**The proposal:**
+
+| Token family | Today | Proposed |
+| --- | --- | --- |
+| Colour | 355 literals; the roles as 13 properties on `.gs-ui` | The roles of ART.md 1 (`--c-you`, `--c-gift`, `--c-ghost`, `--c-grudge`, `--c-best`, `--c-time`, `--c-ink`, `--c-text`), the three medal metals, five surfaces and hairlines, one dim text (72%: about 8:1 on the panel, 6:1 with snow under it) |
+| Type | 158 sizes, 7 weights | One base unit that grows with the screen (`--u`, today's: 14 px on a phone, about 18 on a wide desk) and eight steps of it (`--fs-xs` with an 11 px floor, up to `--fs-display` and `--fs-logo`); three weights (700 text, 800 labels, 900 display); italic 900 for speed words, with room for descenders |
+| Space | ad hoc | A 4 px step (`--sp-1` to `--sp-7`), the screen's gutter and safe-area insets, `--hit` 44 px |
+| Shape | 22 radius values | `--r-card` 18 px and `--r-pill`, nothing else (ART.md 10) |
+| Depth | 267 shadows | `--shadow`, `--shadow-primary`, the scene text's `--halo`, one `--focus` ring that holds on snow and on sky |
+| Motion | 56 durations, 13 easings | Four durations (tap 140 ms, enter 240, beat 380, turn 520) and two easings (out, spring), all zero under reduced motion; one entrance from the side a thing is built on (`--from-x`, `--from-y`), one turn |
+| Card | per screen | `.gs9-card`: the ink panel, the hairline, 18 px, 16 px padding |
+| Buttons | primary, soft, quiet, gift, round, lg, and per-screen variants | Three ranks: `.gs9-b-primary` (vermillion, ink words, italic 900 caps: one a screen, always the run), `.gs9-b-secondary` (an ink pill with a strong hairline: a door, a choice, Details), `.gs9-b-quiet` (no fill: Home, Back, Close). Every button has its words; an icon only stands beside them |
+| Icons | `ui/icons.ts`, sometimes alone | The same family, always with a label (`.gs9-i` inside a button or a tag) |
+| Tag | several | `.gs9-tag`, and `.is-gift` for "New" (marigold: a good thing you take) |
+
+## 4. The counts
+
+(Filled from `scripts/playtest/r9-protoshots.js` below.)
+
+## 5. The critics
+
+(Filled below.)
+
+## 6. What the main lane must decide
+
+1. **The doors.** Three doors and Settings (Daily and Cup, Progress, Garage, Settings), the flame on Daily and Cup's
+   door, Rider Rank on Progress's, the gifts on the Garage's. Or the brief's three with the figures in a corner pill.
+   I recommend the doors as built: each figure gets its word and its home.
+2. **The picker's names and the place line.** Short names on the chips ("Frostfang", "Ember") and no mountain name
+   under the logo (round 7's place line goes; its feeling stays on the veil). This changes ART.md 10 ("The mountain's
+   name and its feeling sit under the logo"). I recommend it: it is most of the difference between about 37 and about
+   45 words at run 50.
+3. **Escape.** Today it is deliberately unbound (CrazyGames uses it to leave fullscreen). The prototypes close on
+   Escape, Backspace and B. In fullscreen the browser takes Escape before the page sees it, so a player there leaves
+   fullscreen and the sheet stays open; everywhere else it closes the sheet. I recommend binding Escape and Backspace to
+   close the top sheet or room (B already does), and checking it on CrazyGames.
+4. **The mission button.** Today's "Finish the mission" is the run again under another name, and its "done before, so
+   again" line is about half of all results. I recommend the button always be the run (Run Again, Rematch, Next Duel,
+   Today's Daily, Ride a new mountain) with a mission only ever its reason, and that `goals.ts` stop offering a mission
+   whose target was met before it was drawn (or count that run), which is a game-layer fix, not copy.
+5. **Two new model fields.** `TitleSpine.intro: { door, line } | null`: what opened since the last title, introduced
+   once; and `TitleTwelve.rides: boolean`: whether the next run on the picked mountain is the duel (section 1, item 6).
+   Everything else the prototypes show is already in `TitleModel` and `ResultsModel` (they read the contract's own
+   types).
+6. **Trials' seat.** The plan puts the Trial in Daily and Cup beside the Cup (the week's second race), not under Ride.
+   It reaches the mid pilot at run 98 and the novice not by run 100 (page 35); whether it should open earlier is the
+   economy's question.
+7. **Photo on the results' front, the clip in Details.** Photo is of this moment over this scene; the clip is the reel
+   and lives with Watch your run. Or both on the front (one more control).
+
+## 7. What milestone 1 would build (files, order, risk)
+
+1. **Tokens first** (`src/ui/tokens.css`, from `prototypes/r9/tokens.css`), imported first by `ui.ts`; today's `.gs-ui`
+   properties alias to them for one step so nothing breaks. Risk: low.
+2. **U2, the results** (`src/ui/results.ts`, `sequence.ts`, `story.css`, `meta.css`): `Story` keeps its skeleton (beats,
+   skip, reduced motion, sounds through `onResultsBeat`); its steps become the three beats; `storyCards` becomes a
+   ranked pick of one reward with the rest counted; the card's head moves whole into a Details sheet; the copy rules
+   move into `results.ts`; `goals.ts` loses "done before, so again" (decision 4). Tests: `tests/sequence.test.ts` (the
+   timeline, now about 2.5 s), a new `tests/results-words.test.ts` (no "+1", no "Page N", no "done before"; every figure
+   with a word). Risk: medium (the card's phone rules and where the offers sit; Revive and Double are dormant with no
+   ads, which simplifies it).
+3. **U1, the title** (`src/ui/title.ts`, `screens.css`, `hours.css`, `trials.css`, `style.css`'s title rules; the model
+   in `app.ts`): the strip becomes the picker; the corner pill, the rank card, the news line, The Twelve's card and the
+   Cup's and Daily's cards leave the main screen for two rooms (a new `src/ui/rooms.ts`, built on demand); the menu row
+   becomes the doors; `app.ts` fills `intro`. The veil, the travel and the challenge banner stay. Risk: medium (the
+   occluder rects the ghost tags read, `measure()`, change shape; the toast dock moves).
+4. **Escape and B** (`ui.ts`): one key handler closes the top sheet or room (decision 3). Risk: low.
+5. **U4, the other sheets** in the same card and buttons (the Almanac, the album, medals, the ladder, settings, pause,
+   photo's bar). Risk: low each, many files.
+6. **The bars as tests**: the truth lane's counters on the built screens at runs 1, 5, 20, 50 (the title at most 40
+   words, the results at most 35, one primary, no lone icon, nothing said twice, nothing loading).
+
+Delete as it goes: the title's popovers (`openMedals`, `openMissions`, `openTwelve`, `openFlame` move into rooms), the
+corner (`bookCard`, `flameBtn`, the stats pill), `twelveCard`, `cupCard`, `dailyCard`, `greeting`; on the results,
+`nextUnlockCard`, `masteryRow`, `giftsRow` and the head's sub rows (into Details' sections).

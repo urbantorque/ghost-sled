@@ -14,6 +14,7 @@ import { clock } from '../../src/game/standing';
 import { fmt } from '../../src/ui/fmt';
 import { backdrop, titleBackdrop, titleModel, STAGES, type Stage } from './fixtures';
 import { button, closeTop, device, h, ico, openSheet, reduced } from './proto';
+import { prize } from './words';
 
 /** Short names, as a player says them: the picker's chips carry these. */
 const SHORT: Record<string, string> = { pinecrest: 'Pinecrest', frostfang: 'Frostfang', ember: 'Ember', sakura: 'Sakura', lanternfall: 'Lanternfall', daily: "Today's Daily", cup: "This week's Cup" };
@@ -60,11 +61,12 @@ function rideWords(): { verb: string; why: string; aria: string } {
   if (m.firstVisit) return { verb: 'Ride', why: 'Pinecrest', aria: 'Ride Pinecrest' };
   if (st.selected === 'daily') return { verb: 'Ride', why: m.daily.medal ? `Today's Daily. Best ${clock(m.daily.time ?? 0)}` : "Today's Daily. Keeps your flame lit", aria: "Ride today's Daily" };
   if (st.selected === 'cup') return { verb: 'Ride', why: m.cup?.best ? `This week's Cup. Best ${clock(m.cup.best)}` : "This week's Cup", aria: "Ride this week's Cup" };
-  const tw = m.twelve?.next;
+  // (A duel only when the next run is one: a save's first two runs hold it back, which today's model does not say.)
+  const tw = (m.twelve as { rides?: boolean } | null | undefined)?.rides === false ? null : m.twelve?.next;
   if (tw && tw.mountainId === st.selected && !st.mirrorOn) return { verb: 'Duel', why: `${tw.name}. ${tw.time} to beat`, aria: `Duel ${tw.name} on ${tw.mountain}, ${tw.time} to beat` };
   const rung = /^Next: (.+), [\d:.]+, ([\d.]+ s) up$/.exec(m.nextRung ?? '');
   const where = `${SHORT[st.selected]}${st.hourOn && m.hour ? ` ${m.hour.phrase}` : ''}${st.mirrorOn ? ', mirrored' : ''}`;
-  if (rung && st.selected === m.selected) return { verb: 'Ride', why: `${rung[1]} is ${rung[2]} ahead`, aria: `Ride ${where}. ${rung[1]} is ${rung[2]} ahead on the ladder` };
+  if (rung && st.selected === m.selected) return { verb: 'Ride', why: `${rung[1]} is ${rung[2].replace(' ', '\u00a0')} ahead`, aria: `Ride ${where}. ${rung[1]} is ${rung[2]} ahead on the ladder` };
   return { verb: 'Ride', why: where, aria: `Ride ${where}` };
 }
 
@@ -83,18 +85,12 @@ function aimWords(): { icon: IconName; text: string; cls: string; about: string 
   if (lf) return { icon: 'trophy', text: `Beat ${/(\d+)/.exec(lf.unlockText)?.[1]} more of The Twelve to open Lanternfall`, cls: 'is-rank', about: lf.id };
   const bar = m.spine?.bar;
   const next = bar?.next?.[0];
-  if (bar && next) return { icon: 'book', text: `${prize(next.name)} at Rider Rank ${bar.page + 1}: ${fmt(bar.need)} XP to go`, cls: 'is-rank', about: null };
+  // (The rank and the XP first, the prize after: "900 XP to Rider Rank 26: the Memory charm".)
+  if (bar && next) return { icon: 'book', text: `${fmt(bar.need)}\u00a0XP to Rider Rank ${bar.page + 1}: ${lower(prize(next))}`, cls: 'is-rank', about: null };
   return { icon: 'book', text: 'Every page of the Almanac turned', cls: 'is-rank', about: null };
 }
 
-/** An Almanac reward as a player would name the prize ("Charm: Kite String" reads "The Kite String charm"). */
-function prize(name: string): string {
-  const charm = /^Charm: (.+)$/.exec(name);
-  if (charm) return `The ${charm[1]} charm`;
-  const title = /^Title: (.+)$/.exec(name);
-  if (title) return `The title ${title[1]}`;
-  return name.charAt(0).toUpperCase() + name.slice(1);
-}
+const lower = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
 
 // ---------------------------------------------------------------- the screen
 
@@ -116,7 +112,7 @@ function chip(c: MountainCard, aboutId: string | null): HTMLElement {
   const sky = h('span', 't9-sky');
   sky.innerHTML = biomeArt(c.biome);
   if (c.locked) sky.append(h('span', 't9-lock', ico('lock')));
-  const best = sel && c.bestTime ? h('span', 't9-mtn-best', ico('trophy'), ' ', h('span', 'gs9-num', clock(c.bestTime))) : null;
+  const best = sel && c.bestTime ? h('span', 't9-mtn-best', ico('trophy'), h('span', 'gs9-num', clock(c.bestTime))) : null;
   if (best) sky.append(best);
   const name = h('span', 't9-mtn-name', SHORT[c.id] ?? c.name);
   name.setAttribute('translate', 'no');
@@ -158,7 +154,7 @@ function how(): HTMLElement | null {
   const here = st.selected === m.selected;
   const sel = m.mountains.find((c) => c.id === st.selected);
   const out = h('div', 't9-how');
-  if (dev === 'phone' && sel?.bestTime) out.append(h('span', 't9-how-best', ico('trophy'), ' Best ', h('span', 'gs9-num', clock(sel.bestTime))));
+  if (dev === 'phone' && sel?.bestTime) out.append(h('span', 't9-how-best', ico('trophy'), '\u00a0Best\u00a0', h('span', 'gs9-num', clock(sel.bestTime))));
   if (here && m.hour) {
     const hr = m.hour;
     const seg = h('div', 't9-seg');
@@ -177,7 +173,7 @@ function how(): HTMLElement | null {
   }
   if (here && m.mirror) {
     const seg = h('div', 't9-seg');
-    const b = button('secondary', [h('span', 't9-mirror-mark', 'R'), 'Mirrored'], { fk: 'mirror', onClick: () => ((st.mirrorOn = !st.mirrorOn), render('mirror')) });
+    const b = button('secondary', [ico('flag'), 'Mirrored'], { fk: 'mirror', onClick: () => ((st.mirrorOn = !st.mirrorOn), render('mirror')) });
     b.setAttribute('aria-pressed', String(st.mirrorOn));
     seg.append(b);
     out.append(seg);
@@ -215,7 +211,7 @@ function doorButton(d: Door): HTMLButtonElement {
     status = h('span', 't9-door-s', h('span', 'is-flame', `${sp.flame.streak}-day flame`));
     aria += `. Your flame: ${sp.flame.streak} ${sp.flame.streak === 1 ? 'day' : 'days'}${sp.flame.litToday ? ', lit today' : ', ride today to keep it'}`;
   } else if (d === 'progress' && sp) {
-    status = h('span', 't9-door-s', `Rider Rank ${sp.bar.page}`);
+    // (No figure on Progress's door: its room says Rider Rank whole; a bare "Rank 16" read as a race place.)
     aria += `. Rider Rank ${sp.bar.page} of ${sp.bar.of}`;
   } else if (d === 'garage') {
     status = h('span', 't9-door-s', `${fmt(m.wallet)} gifts`);
@@ -243,12 +239,12 @@ function render(focus?: string): void {
     main.append(ride);
     renderAim();
     main.append(aimEl!);
-    const snd = button('quiet', 'Sound on', { icon: 'speaker', fk: 'sound', cls: 't9-sound' });
+    const snd = button('quiet', 'Sound On', { icon: 'speaker', fk: 'sound', cls: 't9-sound' });
     snd.setAttribute('aria-pressed', 'true');
     snd.addEventListener('click', () => {
       const on = snd.getAttribute('aria-pressed') !== 'true';
       snd.setAttribute('aria-pressed', String(on));
-      snd.lastChild!.textContent = on ? 'Sound on' : 'Sound off';
+      snd.lastChild!.textContent = on ? 'Sound On' : 'Sound Off';
     });
     root.append(h('div', 't9-pool'), main, snd);
   } else {
@@ -278,10 +274,15 @@ function sheet(title: string, from: HTMLElement, fill: (body: HTMLElement, close
   const body = h('div', 'p9-sheet-body');
   let close = (): void => {};
   const x = button('quiet', 'Close', { icon: 'close', fk: 'close-sheet', onClick: () => close() });
-  el.append(h('header', 'p9-sheet-head', h('h2', 'p9-sheet-h', title), x));
+  const head = Object.assign(h('h2', 'p9-sheet-h', title), { tabIndex: -1 });
+  head.dataset.first = '';
+  el.append(h('header', 'p9-sheet-head', head, x));
   el.append(body);
   document.body.append(el);
-  close = openSheet(el, from, () => el.remove());
+  close = openSheet(el, from, () => {
+    el.remove();
+    setOpen(null);
+  });
   fill(body, close);
 }
 
@@ -295,6 +296,7 @@ function openDoor(d: Door, from: HTMLElement): void {
   const intro = INTRO[st.stage];
   const fresh = intro && intro.door === d && !st.opened.has(d) ? h('p', 'p9-intro', h('b', '', intro.line.split(':')[0] + ':'), intro.line.slice(intro.line.indexOf(':') + 1)) : null;
   st.opened.add(d);
+  setOpen(d);
   from.querySelector('.t9-new')?.remove();
   if (d === 'events') {
     sheet('Daily and Cup', from, (body, close) => {
@@ -309,7 +311,7 @@ function openDoor(d: Door, from: HTMLElement): void {
           days.append(li);
         }
         const n = sp.flame.streak;
-        body.append(block(`Your flame: ${n} ${n === 1 ? 'day' : 'days'}`, sp.flame.litToday ? 'Lit today. Any run tomorrow keeps it going.' : 'Ride today to keep it lit.', null, days));
+        body.append(block(`Your Flame: ${n} ${n === 1 ? 'day' : 'days'}`, sp.flame.litToday ? 'Lit today. Any run tomorrow keeps it going.' : 'Ride today to keep it lit.', null, days));
         body.append(h('div', 'p9-sep'));
       }
       const pick = (id: 'daily' | 'cup', label: string) =>
@@ -329,7 +331,7 @@ function openDoor(d: Door, from: HTMLElement): void {
       if (sp && sp.contracts.length > 0) {
         const list = h('ul', 'p9-list');
         for (const c of sp.contracts) list.append(h('li', `p9-row${c.done ? ' is-done' : ''}`, h('span', 'p9-check', c.done ? ico('check') : null), h('span', 'p9-row-t', c.text), h('span', 'p9-row-v', c.done ? 'Done' : `${c.xp} XP`)));
-        body.append(block("Today's contracts", `${sp.contracts.filter((c) => c.done).length} of 3 done`, null, list));
+        body.append(block("Today's Contracts", `${sp.contracts.filter((c) => c.done).length} of 3 done`, null, list));
       }
       body.append(h('div', 'p9-sep'));
       const cup = m.cup;
@@ -337,7 +339,7 @@ function openDoor(d: Door, from: HTMLElement): void {
         const lg = sp?.league;
         const line = h('span', '', `${cup.mood}${cup.event ? `, with a ${cup.event}` : ''}.`, cup.medal ? h('span', '', ' ', h('span', `p9-medal m-${cup.medal}`), ` ${['', 'Bronze', 'Silver', 'Gold'][cup.medal]}, best ${clock(cup.best)}`) : null);
         const league = lg && lg.place ? h('p', 'p9-block-p', `Division ${lg.division} of 5: you are ${ordinal(lg.place)} of 20. The top 4 go up when the week turns.`) : h('p', 'p9-block-p', 'Ride it once to join a league of the week’s records.');
-        body.append(block("This week's Cup", line, cup.ready ? pick('cup', "this week's Cup") : null, league));
+        body.append(block("This Week's Cup", line, cup.ready ? pick('cup', "this week's Cup") : null, league));
       }
     });
   } else if (d === 'progress') {
@@ -347,7 +349,7 @@ function openDoor(d: Door, from: HTMLElement): void {
         const b = sp.bar;
         const bar = h('div', 'p9-bar', h('span', ''));
         (bar.firstElementChild as HTMLElement).style.transform = `scaleX(${(b.into / Math.max(1, b.into + b.need)).toFixed(3)})`;
-        const next = b.next?.map((r) => prize(r.name)).join(' and ');
+        const next = b.next?.map((r, i) => (i === 0 ? prize(r) : prize(r).charAt(0).toLowerCase() + prize(r).slice(1))).join(' and ');
         body.append(block(`Rider Rank ${b.page} of ${b.of}`, next ? `Next page: ${next}. ${fmt(b.need)} XP to go.` : 'Every page turned.', button('secondary', 'Almanac', { icon: 'book', fk: 'almanac', onClick: () => toast('The Almanac would open') }), bar));
       }
       const tw = m.twelve;
@@ -363,7 +365,7 @@ function openDoor(d: Door, from: HTMLElement): void {
           busts.append(s);
         }
         const nx = tw.next;
-        body.append(block(`The Twelve: ${tw.beaten} of 12 beaten`, nx ? `${nx.name} rides next, on ${nx.mountain}. ${nx.bio}` : (tw.hook ?? ''), button('secondary', 'All twelve', { icon: 'trophy', fk: 'twelve', onClick: () => toast('The ladder of The Twelve would open') }), busts));
+        body.append(block(`The Twelve: ${tw.beaten} of 12 beaten`, nx ? `${nx.name} rides next, on ${nx.mountain}. ${nx.bio}` : (tw.hook ?? ''), button('secondary', 'All Twelve', { icon: 'trophy', fk: 'twelve', onClick: () => toast('The ladder of The Twelve would open') }), busts));
       }
       if (sp?.longNight) {
         const ln = sp.longNight;
@@ -387,6 +389,14 @@ function openDoor(d: Door, from: HTMLElement): void {
       body.append(block('Sound, quality and hints', "Today's settings sheet, in this system's card and buttons, is milestone 1's U4.", null));
     });
   }
+}
+
+/** The open room is in the URL (?open=events), so a state can be shared and reloaded. */
+function setOpen(v: string | null): void {
+  const u = new URL(location.href);
+  if (v) u.searchParams.set('open', v);
+  else u.searchParams.delete('open');
+  history.replaceState(null, '', u);
 }
 
 // ---------------------------------------------------------------- feedback

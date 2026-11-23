@@ -29,11 +29,12 @@ export const CASE_LABEL: Record<Case, string> = {
 export function backdrop(device: 'desk' | 'wide' | 'phone', what: string): string {
   const have: Record<string, string[]> = {
     desk: ['title-pinecrest', 'title-frostfang', 'title-ember', 'title-sakura', 'title-lanternfall', 'results-win', 'results-field', 'results-wreck'],
-    wide: ['title-pinecrest', 'title-ember', 'results-win', 'results-wreck'],
+    wide: ['title-pinecrest', 'title-ember', 'results-win'],
     phone: ['title-pinecrest', 'title-frostfang', 'title-ember', 'title-sakura', 'title-lanternfall', 'results-win', 'results-field', 'results-wreck'],
   };
-  const pick = have[device].includes(what) ? what : what.startsWith('title') ? 'title-pinecrest' : what === 'results-field' && device === 'wide' ? 'results-win' : 'results-win';
-  return new URL(`./frames/${device}-${pick}.jpg`, import.meta.url).href;
+  // (A frame the wide screen has no capture of is the desk's, scaled: the same scene, a little softer.)
+  const dev = have[device].includes(what) ? device : 'desk';
+  return new URL(`./frames/${dev}-${what}.jpg`, import.meta.url).href;
 }
 
 export function titleBackdrop(stage: Stage): string {
@@ -179,7 +180,10 @@ export function titleModel(stage: Stage): TitleModel {
       greet: '1 more ghost opens Frostfang Glacier',
       nextRung: 'Next: valo_rides, 2:06.3, 0.1 s up',
       cup: CUP(),
-      twelve: twelve(0, null, ['pinecrest'], 'pinecrest'),
+      // (As app.ts builds it after one run: twelveModel() names Bram as next, here, while duelHere() holds the first
+      // duel back until the third run (FIRST_DUEL_RUN). Today's Ride therefore says DUEL Bram Oakhollow on a run that
+      // is not a duel; `rides: false` is the one fact the prototype needs to say Ride instead.)
+      twelve: { ...twelve(0, 'bram', ['pinecrest'], 'pinecrest'), rides: false } as TitleTwelve,
       spine: spine({ xp: 820, streak: 1, contractsDone: 0, album: null, news: 'New this month: Lantern Night. Every lantern lit for the year.' }),
     };
   }
@@ -391,9 +395,9 @@ export function resultsModel(c: Case): ResultsModel {
         distance: 3340,
         finishZ: 4520,
         score: 18820,
-        mountain: 'Frostfang Glacier',
-        crashCause: 'Hit an ice spire',
-        crashKind: 'rock',
+        mountain: 'Pinecrest',
+        crashCause: 'Hit a tree',
+        crashKind: 'tree',
         lostCombo: 2085,
         giftsEarned: 24,
         wallet: 444,

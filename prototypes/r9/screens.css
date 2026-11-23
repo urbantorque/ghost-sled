@@ -5,6 +5,10 @@
   edge (the bottom on a phone).
 */
 
+html {
+  color-scheme: dark;
+}
+
 html,
 body {
   margin: 0;
@@ -51,6 +55,7 @@ body {
 /* A soft ink pool on the logo's side, so the white words never lean on the snow behind them. */
 .t9-pool {
   position: fixed;
+  z-index: -1;
   inset: 0;
   pointer-events: none;
   background: radial-gradient(120% 90% at 0% 60%, rgba(10, 14, 32, 0.5), rgba(10, 14, 32, 0) 55%);
@@ -145,6 +150,12 @@ body {
   transition: transform var(--dur-tap) var(--ease-spring);
 }
 
+@media (hover: hover) {
+  .t9-mtn:not(.is-sel):hover {
+    transform: translateY(-2px);
+  }
+}
+
 .t9-mtn:active {
   transform: scale(0.97);
 }
@@ -226,6 +237,9 @@ body {
 }
 
 .t9-mtn-best {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   position: absolute;
   right: 8px;
   bottom: 6px;
@@ -237,10 +251,9 @@ body {
 }
 
 .t9-mtn-best .gs9-i {
-  width: 1em;
-  height: 1em;
+  width: 1.1em;
+  height: 1.1em;
   color: var(--c-best);
-  vertical-align: -0.12em;
 }
 
 /* How you ride the picked mountain: its hour and its mirror, once they are open. */
@@ -278,12 +291,6 @@ body {
   border-radius: var(--r-pill);
   background: linear-gradient(180deg, var(--z), var(--hz));
   box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.35);
-}
-
-.t9-mirror-mark {
-  font-style: italic;
-  font-weight: var(--fw-display);
-  transform: scaleX(-1);
 }
 
 /* ---- Ride, with its reason on it ---- */
@@ -352,7 +359,7 @@ body {
   font-weight: var(--fw-label);
   font-size: var(--fs-m);
   text-shadow: var(--halo);
-  max-width: 34ch;
+  max-width: 46ch;
 }
 
 .t9-aim .gs9-i {
@@ -957,6 +964,27 @@ body {
 .r9-det-go {
   position: sticky;
   bottom: 0;
+  margin: 0 calc(-1 * var(--sp-5)) calc(-1 * var(--sp-5));
+  padding: var(--sp-3) var(--sp-5) var(--sp-5);
+  background: linear-gradient(180deg, rgba(18, 25, 51, 0), var(--surface-solid) 30%);
+}
+
+/* With a sheet up, the screen under it steps out of view: the sheet is the screen until it closes. */
+.has-sheet .r9-col,
+.has-sheet .t9 {
+  visibility: hidden;
+}
+
+/* A run that opened nothing turns over Rider Rank's bar alone. */
+.r9-got.is-bar {
+  grid-template-columns: 1fr;
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.r9-got.is-bar .r9-rank {
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 /* =============================================================== a phone held upright */
@@ -985,17 +1013,24 @@ body {
     grid-row: 3;
   }
 
+  /* Five chips are wider than a phone: the strip scrolls, the last one peeking at the edge. */
   .t9-strip {
-    justify-content: space-between;
     gap: 6px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    margin: 0 calc(-1 * var(--sr)) 0 0;
+    padding: 2px var(--sr) 2px 2px;
   }
 
   .t9-mtn,
   .t9-mtn.is-sel {
     width: auto;
-    flex: 1;
-    min-width: 0;
+    flex: 1 0 70px;
+    min-width: 70px;
     min-height: 74px;
+    scroll-snap-align: start;
   }
 
   .t9-mtn-name,

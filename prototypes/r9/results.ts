@@ -11,6 +11,7 @@ import { aheadOf, byStanding, clock, margin, type Standing } from '../../src/gam
 import { fmt } from '../../src/ui/fmt';
 import { backdrop, CASES, resultsBackdrop, resultsModel, type Case } from './fixtures';
 import { button, device, h, ico, openSheet, reduced } from './proto';
+import { prize, SAYS } from './words';
 
 const q = new URLSearchParams(location.search);
 const kase = (CASES as readonly string[]).includes(q.get('case') ?? '') ? (q.get('case') as Case) : 'podium';
@@ -20,11 +21,10 @@ if (dev === 'phone' || q.get('input') === 'touch') document.documentElement.clas
 document.querySelector<HTMLElement>('.p9-scene')!.style.backgroundImage = `url("${backdrop(dev, resultsBackdrop(kase))}")`;
 const root = document.getElementById('screen')!;
 
-const MEDAL = ['', 'Bronze', 'Silver', 'Gold'] as const;
 const you = (): Standing => ({ time: m.finish?.seconds ?? null, distance: m.distance });
 const at = (g: ResultsModel['ghosts'][number]): Standing => ({ time: g.time ?? null, distance: g.distance ?? 0 });
 const ordinal = (n: number): string => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`;
-const nb = (s: string): string => s.replace(/(\d) ([ms])\b/g, '$1 $2');
+const nb = (s: string): string => s.replace(/(\d) ([ms])\b/g, '$1\u00a0$2');
 
 // ---------------------------------------------------------------- beat one: how you did
 
@@ -71,15 +71,17 @@ function beat1(): Beat1 {
   let fact: Beat1['fact'] = null;
   const n = near();
   const em = eventMedal();
-  if (m.trial) fact = { text: m.trial.fact ?? '', tone: 'plain' };
+  // (A Trial's word is its medal, "Silver in the Trial", and the button names the next medal: nothing more to say here.)
+  if (m.trial) fact = null;
   else if (tw && (tw.tone === 'fell' || tw.tone === 'crowned')) fact = { text: ` beaten. ${tw.beaten} of ${tw.of} down.`, who: tw.rider?.name, whoCls: 'k-rider', tone: 'twelve', bust: tw.rider ?? undefined };
-  else if (tw && tw.tone === 'held' && n) fact = { text: ` held you off by ${nb(n.gap)}`, who: tw.rider?.name, whoCls: 'k-rider', tone: 'twelve', bust: tw.rider ?? undefined };
+  // (The gap is the rematch's reason on the button, so it is said there, once.)
+  else if (tw && tw.tone === 'held') fact = { text: ' held you off', who: tw.rider?.name, whoCls: 'k-rider', tone: 'twelve', bust: tw.rider ?? undefined };
   else if (em) fact = { text: `${em.medal} ${em.where}`, tone: 'plain' };
-  else if (fin?.newBest) fact = { text: fin.bestTime === null ? 'Your first finish here' : `A new best, ${(fin.bestTime - fin.seconds).toFixed(1)} s quicker`, tone: 'best' };
+  else if (fin?.newBest) fact = { text: fin.bestTime === null ? 'Your first finish here' : `A new best, ${(fin.bestTime - fin.seconds).toFixed(1)}\u00a0s quicker`, tone: 'best' };
   else if (n) fact = n.side === 'behind' ? { text: `${nb(n.gap)} behind `, who: n.name, whoCls: n.kind === 'grudge' ? 'k-grudge' : '', tone: 'plain' } : { text: `${nb(n.gap)} ahead of `, who: n.name, whoCls: n.kind === 'grudge' ? 'k-grudge' : '', tone: 'plain' };
   if (!fin) {
     const short = Math.round((m.finishZ ?? m.distance) - m.distance);
-    return { kind: 'wreck', figure: `${fmt(m.distance)} m`, of: '', word: 'Wiped out', time: null, fact: { text: `${m.crashCause}, ${fmt(short)} m short of the line`, tone: 'plain' } };
+    return { kind: 'wreck', figure: `${fmt(m.distance)} m`, of: '', word: 'Wiped out', time: null, fact: { text: `${m.crashCause}, ${fmt(short)}\u00a0m from the line`, tone: 'plain' } };
   }
   if (m.trial?.figure) {
     const md = m.trial.medal;
@@ -92,47 +94,38 @@ function beat1(): Beat1 {
 
 // ---------------------------------------------------------------- beat two: the one reward
 
+/** Which opened reward leads: what changes play first, the cosmetic and the counted last. */
 const RANK_ORDER: RewardCard['kind'][] = ['open', 'sled', 'feature', 'mirror', 'legs', 'hour', 'gate', 'garage', 'charm', 'flourish', 'title', 'gifts'];
-const SAYS: Partial<Record<string, string>> = {
-  'Daily contracts': 'Three small goals a day, in Daily and Cup',
-  'The Spirit Album': 'A sticker for everything you do, in Progress',
-  'A new sled': 'The Whirl Saucer is yours, in the Garage',
-  'A second charm gate': 'Two charm gates on every run',
-  'A third charm gate': 'Three charm gates on every run',
-  'The Long Night': 'Whole mountains back to back, in Progress',
-};
 const GLYPH: Partial<Record<RewardCard['kind'], IconName>> = { charm: 'star', gate: 'star', feature: 'book', sled: 'sledBold', mirror: 'flag', hour: 'snowflake', flourish: 'feather', garage: 'gift', title: 'flag', gifts: 'gift', legs: 'lantern', open: 'flag' };
 
+/** The one reward, turned over: a mountain opened, else a page's prize (named by the rank that gave it), else nothing
+ *  but Rider Rank's bar and the gifts. The rest of what opened is in Details, which says so by its own name. */
 interface Beat2 {
   art: HTMLElement;
   kicker: string;
   name: string;
+  /** One line of what it is, only for a system a player meets here for the first time. */
   line: string | null;
-  more: number;
+  /** The kicker already says Rider Rank, so the bar's row goes without its label. */
+  rankInKicker: boolean;
 }
 
 function beat2(): Beat2 | null {
   const sp = m.spine;
   const opened = [...(sp?.opened ?? [])].sort((a, b) => RANK_ORDER.indexOf(a.kind) - RANK_ORDER.indexOf(b.kind));
   const mt = m.unlockedMountains?.[0];
-  const extra = opened.length + (m.unlockedMountains?.length ?? 0) + ((sp?.stickers.length ?? 0) > 0 ? 1 : 0) - 1;
   if (mt) {
     const art = h('span', `r9-got-art b-${mt.biome}`);
     const sky = h('span', 't9-sky');
     sky.style.cssText = 'position:absolute;inset:0';
     sky.innerHTML = biomeArt(mt.biome);
     art.append(sky);
-    art.classList.add(`b-${mt.biome}`);
-    return { art, kicker: 'A new mountain', name: mt.name, line: m.spine?.primary.kind === 'again' ? null : 'Ready to ride from the title', more: extra };
+    return { art, kicker: 'New mountain', name: mt.name, line: null, rankInKicker: false };
   }
   if (opened.length > 0) {
     const r = opened[0];
-    const page = sp ? sp.after.page : r.page;
-    return { art: h('span', 'r9-got-art is-gift', ico(GLYPH[r.kind] ?? 'gift')), kicker: `Rider Rank ${page} opens`, name: r.name.replace(/^Charm: /, '').replace(/^Title: /, 'The title '), line: SAYS[r.name] ?? null, more: extra };
+    return { art: h('span', 'r9-got-art is-gift', ico(GLYPH[r.kind] ?? 'gift')), kicker: `Rider Rank ${r.page}`, name: prize(r), line: SAYS[r.name] ?? null, rankInKicker: true };
   }
-  const fin = m.finish;
-  if (fin && fin.medal > 0) return { art: h('span', 'r9-got-art', h('span', `p9-medal m-${fin.medal}`)), kicker: 'A medal for the whole run', name: `${MEDAL[fin.medal]}`, line: null, more: extra };
-  if (sp && sp.stickers.length > 0) return { art: h('span', 'r9-got-art is-gift', ico('sticker')), kicker: 'Spirit Album', name: sp.stickers.length === 1 ? sp.stickers[0].name : `${sp.stickers.length} new stickers`, line: null, more: 0 };
   return null;
 }
 
@@ -141,6 +134,9 @@ function beat2(): Beat2 | null {
 function primary(): { label: string; why: string | null; aria: string } {
   const p = m.spine?.primary;
   const label = p?.text ?? m.runAgainLabel?.text ?? 'Run Again';
+  // A mountain this run opened becomes the button when the spine's choice is a plain run again; otherwise it is named and waits.
+  const mt = m.unlockedMountains?.[0];
+  if (mt && (!p || p.kind === 'again')) return { label: `Ride ${mt.name}`, why: mt.tagline, aria: `Ride ${mt.name}, just opened` };
   let why = p?.sub ?? null;
   if (p?.kind === 'mission') {
     // "Pass a ghost: done before, so again" says what a player already knows: the button is the run, the reason the mission.
@@ -153,11 +149,16 @@ function primary(): { label: string; why: string | null; aria: string } {
     const t = /Time to beat (.+)$/.exec(why ?? '');
     return { label, why: t ? `${t[1]} to beat` : why, aria: p.aria };
   }
+  // A rematch's gap is its reason ("1.2 s to find"); beat one names the rival without it.
+  if (p?.kind === 'rematch' && why) {
+    const g = /^([\d.]+ [ms]) behind$/.exec(why);
+    if (g) return { label, why: nb(`${g[1]} to find`), aria: p.aria };
+  }
   // A medal's mark gets the gap to it: "Silver at 2:28.4: 2.6 s to find".
   const mark = /^(Gold|Silver|Bronze) at (\d+):(\d+\.\d)$/.exec(why ?? '');
   if (mark && m.finish) {
     const gap = m.finish.seconds - (Number(mark[2]) * 60 + Number(mark[3]));
-    if (gap > 0) why = `${why}, ${gap.toFixed(1)} s to find`;
+    if (gap > 0) why = `${why}, ${gap.toFixed(1)}\u00a0s to find`;
   }
   if (why) why = nb(why);
   return { label, why, aria: p?.aria ?? label };
@@ -212,12 +213,12 @@ function render(): void {
   if (b2) {
     got.append(b2.art, h('span', 'r9-got-k', b2.kicker), h('span', 'r9-got-n', b2.name));
     got.querySelector('.r9-got-n')?.setAttribute('translate', 'no');
-    if (b2.line || b2.more > 0) {
-      const line = h('span', 'r9-got-k', b2.line ?? '', b2.more > 0 ? `${b2.line ? '. ' : ''}${b2.more} more in Details` : '');
+    if (b2.line) {
+      const line = h('span', 'r9-got-k', b2.line);
       line.style.gridColumn = '2';
       got.append(line);
     }
-  }
+  } else got.classList.add('is-bar');
   if (sp) {
     const a = sp.after;
     const bar = h('div', 'p9-bar', h('span', ''));
@@ -225,16 +226,10 @@ function render(): void {
     const share = (b: typeof a) => (b.page >= b.of ? 1 : b.into / Math.max(1, b.into + b.need));
     fill.style.transform = `scaleX(${(landed ? share(a) : sp.before.page < a.page ? 0 : share(sp.before)).toFixed(3)})`;
     fill.dataset.to = share(a).toFixed(3);
+    bar.setAttribute('role', 'img');
+    bar.setAttribute('aria-label', `Rider Rank ${a.page}: ${fmt(a.need)} XP to the next page`);
     const gifts = m.giftsEarned > 0 ? h('span', 'r9-gifts', ico('gift'), ` +${fmt(m.giftsEarned)} gifts`) : null;
-    got.append(h('div', 'r9-rank', h('span', '', `Rider Rank ${a.page}`), bar, gifts));
-    if (!b2) {
-      const nx = a.next?.[0]?.name;
-      got.prepend(h('span', 'r9-got-art', ico('book')), h('span', 'r9-got-k', `Rider Rank ${a.page + 1} opens`), h('span', 'r9-got-n', nx ? nx.replace(/^Charm: /, 'The charm ').replace(/^Title: /, 'The title ') : 'Every page'));
-      const togo = h('span', 'r9-got-k', `${fmt(a.need)} XP to go`);
-      togo.style.gridColumn = '2';
-      got.querySelector('.r9-got-n')?.after(togo);
-      got.querySelector('.r9-rank > span')!.textContent = `Rider Rank ${a.page}`;
-    }
+    got.append(h('div', 'r9-rank', b2?.rankInKicker ? null : h('span', '', `Rider Rank ${a.page}`), bar, gifts));
   }
 
   const pr = primary();
@@ -303,7 +298,7 @@ function openDetails(_e?: unknown): void {
   el.setAttribute('aria-modal', 'true');
   el.setAttribute('aria-label', 'Details');
   let close = (): void => {};
-  el.append(h('header', 'p9-sheet-head', h('h2', 'p9-sheet-h', 'Details'), button('quiet', 'Back', { icon: 'back', fk: 'close-details', onClick: () => close() })));
+  el.append(h('header', 'p9-sheet-head', Object.assign(h('h2', 'p9-sheet-h', 'Details'), { tabIndex: -1 }), button('quiet', 'Back', { icon: 'back', fk: 'close-details', onClick: () => close() })));
   const body = h('div', 'p9-sheet-body');
   el.append(body);
 
@@ -323,7 +318,7 @@ function openDetails(_e?: unknown): void {
     }
     if (!mine) row('You', m.finish ? clock(m.finish.seconds) : `${fmt(m.distance)} m`, 'is-you');
     const sec = h('section', '', h('h3', 'r9-sec-h', 'The race'), list);
-    const said = m.twelve?.says && m.twelve.rider ? h('p', 'p9-block-p', `“${m.twelve.says}” ${m.twelve.rider.name}`) : m.raceLine && !/^(Daily|Cup|Trial):/.test(m.raceLine.text) ? h('p', 'p9-block-p', m.raceLine.text) : null;
+    const said = m.twelve?.says && m.twelve.rider ? h('p', 'p9-block-p', `“${m.twelve.says}” ${m.twelve.rider.name}`) : m.raceLine && !m.crashNote && !/^(Daily|Cup|Trial):/.test(m.raceLine.text) ? h('p', 'p9-block-p', m.raceLine.text) : null;
     if (said) sec.append(said);
     if (m.crashNote) sec.append(h('p', 'p9-block-p', m.crashNote));
     body.append(sec);
@@ -331,7 +326,7 @@ function openDetails(_e?: unknown): void {
 
   // Your run: the clock at each stage line against your best, and the tricks worth naming.
   const runList = h('ul', 'p9-list');
-  for (const s of m.finish?.splits ?? []) runList.append(h('li', 'p9-row', h('span', 'p9-row-t', s.name), h('span', 'p9-row-v gs9-num', `${clock(s.seconds)}${s.vsBest === null ? '' : `, ${Math.abs(s.vsBest).toFixed(1)} s ${s.vsBest < 0 ? 'ahead of' : 'behind'} your best`}`)));
+  for (const s of m.finish?.splits ?? []) runList.append(h('li', 'p9-row', h('span', 'p9-row-t', s.name), h('span', 'p9-row-v gs9-num', `${clock(s.seconds)}${s.vsBest === null ? '' : `, ${Math.abs(s.vsBest).toFixed(1)}\u00a0s ${s.vsBest < 0 ? 'ahead of' : 'behind'} your best`}`)));
   runList.append(h('li', 'p9-row', h('span', 'p9-row-t', 'Style score'), h('span', 'p9-row-v gs9-num', fmt(m.score))));
   if (m.bestCombo >= 1000) runList.append(h('li', 'p9-row', h('span', 'p9-row-t', 'Best combo'), h('span', 'p9-row-v gs9-num', fmt(m.bestCombo))));
   if (m.perfects > 0) runList.append(h('li', 'p9-row', h('span', 'p9-row-t', 'Perfect landings'), h('span', 'p9-row-v gs9-num', fmt(m.perfects))));
@@ -362,13 +357,13 @@ function openDetails(_e?: unknown): void {
     h(
       'section',
       '',
-      h('h3', 'r9-sec-h', 'Keep this run'),
+      h('h3', 'r9-sec-h', 'Keep This Run'),
       h(
         'div',
         'r9-acts',
-        button('secondary', 'Watch your run', { icon: 'video', fk: 'watch', onClick: () => toast('The reel would play') }),
-        button('secondary', 'Save a clip', { icon: 'clip', fk: 'clip', onClick: () => toast('The clip would record') }),
-        m.canChallenge ? button('secondary', 'Challenge a friend', { icon: 'link', fk: 'challenge', onClick: () => toast('A challenge link would be copied') }) : null,
+        button('secondary', 'Watch Your Run', { icon: 'video', fk: 'watch', onClick: () => toast('The reel would play') }),
+        button('secondary', 'Save Clip', { icon: 'clip', fk: 'clip', onClick: () => toast('The clip would record') }),
+        m.canChallenge ? button('secondary', 'Challenge a Friend', { icon: 'link', fk: 'challenge', onClick: () => toast('A challenge link would be copied') }) : null,
       ),
     ),
   );
@@ -376,7 +371,19 @@ function openDetails(_e?: unknown): void {
   const t = h('span', 't9-ride-t', h('span', 't9-ride-v', pr.label), pr.why ? h('span', 't9-ride-why', pr.why) : null);
   body.append(h('div', 'r9-det-go', button('primary', [t], { icon: 'play', fk: 'again-det', aria: pr.aria, cls: 'r9-again', onClick: () => toast(`${pr.aria}: the next run would start`) })));
   document.body.append(el);
-  close = openSheet(el, from, () => el.remove());
+  close = openSheet(el, from, () => {
+    el.remove();
+    setOpen(null);
+  });
+  setOpen('details');
+}
+
+/** The open sheet is in the URL (?open=details), so a state can be shared and reloaded. */
+function setOpen(v: string | null): void {
+  const u = new URL(location.href);
+  if (v) u.searchParams.set('open', v);
+  else u.searchParams.delete('open');
+  history.replaceState(null, '', u);
 }
 
 function toast(text: string): void {

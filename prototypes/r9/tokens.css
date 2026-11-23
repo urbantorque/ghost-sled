@@ -174,11 +174,12 @@
   box-shadow: inset 0 0 0 1px var(--hair-strong), var(--shadow);
 }
 
-/* Quiet: no fill; the words carry it. Home, Back, Close. */
+/* Quiet: a thin ink wash and its words, a step under secondary. Home, Back, Close. Over the scene the wash keeps the
+   words readable on white snow. */
 .gs9-b-quiet {
-  background: rgba(245, 243, 255, 0.05);
+  background: rgba(18, 25, 51, 0.55);
   box-shadow: inset 0 0 0 1px var(--hair);
-  color: var(--text-dim);
+  color: rgba(245, 243, 255, 0.86);
 }
 
 @media (hover: hover) {

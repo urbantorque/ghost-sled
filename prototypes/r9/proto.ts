@@ -64,11 +64,15 @@ export function openSheet(el: HTMLElement, from: HTMLElement | null, onClose: ()
     onClose();
     const top = stack[stack.length - 1];
     if (top) top.el.removeAttribute('inert');
-    else for (const s of document.querySelectorAll<HTMLElement>('[data-screen]')) s.removeAttribute('inert');
+    else {
+      document.body.classList.remove('has-sheet');
+      for (const s of document.querySelectorAll<HTMLElement>('[data-screen]')) s.removeAttribute('inert');
+    }
     from?.focus({ preventScroll: true });
   };
   stack.push({ el, from, close });
-  requestAnimationFrame(() => (el.querySelector<HTMLElement>('[data-first]') ?? el.querySelector<HTMLElement>('button, a[href]') ?? el).focus({ preventScroll: true }));
+  document.body.classList.add('has-sheet');
+  requestAnimationFrame(() => (el.querySelector<HTMLElement>('[data-first]') ?? el.querySelector<HTMLElement>('.p9-sheet-h[tabindex]') ?? el.querySelector<HTMLElement>('button, a[href]') ?? el).focus({ preventScroll: true }));
   return close;
 }
 
