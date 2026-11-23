@@ -261,8 +261,22 @@ function render(focus?: string): void {
     main.append(pick, rideButton(), aimEl!, doors);
     root.append(h('div', 't9-pool'), main);
   }
+  // The column arrives from the logo's side once, top to bottom (ART.md 10: a screen comes and goes the way it is built);
+  // a re-render (a mountain picked) swaps in place. Reduced motion: no movement (tokens.css).
+  if (!entered) {
+    entered = true;
+    Array.from(main.children).forEach((c, i) => {
+      const el = c as HTMLElement;
+      el.classList.add('gs9-enter');
+      el.style.setProperty('--from-x', '-18px');
+      el.style.setProperty('--from-y', '0px');
+      el.style.setProperty('--delay', `${i * 60}ms`);
+    });
+  }
   if (focus) root.querySelector<HTMLElement>(`[data-fk="${focus}"]`)?.focus({ preventScroll: true });
 }
+
+let entered = false;
 
 // ---------------------------------------------------------------- the doors' rooms
 

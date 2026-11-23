@@ -229,7 +229,7 @@ function render(): void {
     bar.setAttribute('role', 'img');
     bar.setAttribute('aria-label', `Rider Rank ${a.page}: ${fmt(a.need)} XP to the next page`);
     const gifts = m.giftsEarned > 0 ? h('span', 'r9-gifts', ico('gift'), ` +${fmt(m.giftsEarned)} gifts`) : null;
-    got.append(h('div', 'r9-rank', b2?.rankInKicker ? null : h('span', '', `Rider Rank ${a.page}`), bar, gifts));
+    got.append(h('div', `r9-rank${b2?.rankInKicker ? ' is-bare' : ''}`, b2?.rankInKicker ? null : h('span', '', `Rider Rank ${a.page}`), bar, gifts));
   }
 
   const pr = primary();

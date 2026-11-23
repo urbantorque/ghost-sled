@@ -28,6 +28,10 @@ family (`ui/icons.ts`), and its own art (`ui/art.ts`).
 | What today's style sheets define | `scripts/playtest/r9-css-audit.mjs`, output `shots/r9/screens/css-audit.json` |
 | The prototype frames and counts | `scripts/playtest/r9-protoshots.js`, output `shots/r9/screens/frames/` |
 
+Green: `npx tsc --noEmit -p .` and `-p prototypes/r9` (the prototypes' own config, which includes `src`), and the full
+suite in the heavy slot (`npx vitest run --maxWorkers=3`: 104 files, 1,892 tests, 290 s). Nothing under `src` or
+`tests` changed.
+
 Nothing under `prototypes/` is in the release's build input (`vite.config.ts` builds `index.html` only), and the boot path
 does not change. The prototypes import the game's own glyphs, art, formatting and pad cursor from `src/ui`, so they
 look and move as the game does without copying it.
@@ -306,7 +310,8 @@ and results sheets halve and the whole drops by about a quarter.
 How they are counted (`prototypes/r9/count.ts`, run in the page by `scripts/playtest/r9-protoshots.js`): the words a
 player can see (each text node whose element is drawn, on screen, not hidden, not at no opacity, and not a screen
 reader's one-pixel span; a word is any run with a letter or a figure in it, so "2:09.6", "+68" and the keycap "Space"
-count and "/" does not) and the controls a player can press (buttons, links and inputs drawn the same way). The
+count and "/" does not) and the controls a player can press (buttons, links and inputs drawn the same way). This is
+the truth lane's rule (`r9-truth.js` MEASURE, `r9-screenbars.ts words`), so its live figures and these compare. The
 review's figures (about 100 on the returning title, about 70 to 104 on the results) came from `document.body.innerText`,
 which also counts the screen reader's spoken lines; this counter does not, so today's figures below are lower than the
 review's and the two columns are like for like. Today's screens are the game's own UI on the same models over the same

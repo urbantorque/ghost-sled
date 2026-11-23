@@ -854,6 +854,11 @@ body {
   height: 6px;
 }
 
+/* The kicker already names the rank: the bar and the gifts only. */
+.r9-rank.is-bare {
+  grid-template-columns: 1fr auto;
+}
+
 .r9-gifts {
   color: var(--c-gift);
   white-space: nowrap;
