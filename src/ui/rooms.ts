@@ -196,6 +196,9 @@ function choose(f: Fill, kind: 'daily' | 'cup' | 'trial'): HTMLElement | null {
     aria: `Choose ${what}`,
     onClick: () => {
       f.close();
+      // (Ride says what it rides now, so it takes the focus: Space or A rides the run just chosen, where focus left on
+      // the door would open the room again.)
+      document.querySelector<HTMLElement>('.gs9-title [data-fk="ride"]')?.focus({ preventScroll: true });
       const t = m.trial;
       if (kind === 'daily') o.travel('daily', 'Daily Mountain', () => o.hd.onDaily());
       else if (kind === 'cup') o.travel('cup', 'Weekly Cup', () => o.hd.onCup?.());

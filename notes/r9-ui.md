@@ -163,3 +163,53 @@ All additive or inside the results' and the title's own functions; nothing refor
   not "Land 1 different tricks", now that the contracts are drawn); `scripts/playtest/r9-truth.js` (the rooms, the
   Choose, the round-9 sheets' surface, the crawl's second level, the duel's mountain from the title's model) and
   `scripts/playtest/r9-screenbars.ts` (the Cup's system words take "Cup"). `save.ts` and `spineview.ts` untouched.
+
+## web-design-guidelines (the Vercel Web Interface Guidelines, fetched fresh on 23 November)
+
+Run over `src/ui/title.ts`, `rooms.ts`, `results.ts`, `sequence.ts`, `kit9.ts`, `kit9.css`, `story.css`, `rooms.css` and
+the round-9 part of `screens.css`.
+
+- Fixed: block headings with a figure in Title Case ("Your Flame: 13 Days", "The Twelve: 10 of 12 Beaten"); the first
+  visit's toggle named "Sound" with `aria-pressed` (the visible "Sound On" or "Sound Off" contains the name), not a
+  label that changes under a pressed state; a list's default padding reset (`ol`, which the overlay's reset misses).
+- Clean: every control has visible words and an accessible name (glyphs `aria-hidden` beside them); the rooms and
+  Details are `role="dialog"` with `aria-modal` and a name, take focus on their heading, keep Tab inside, close on
+  Escape, Backspace, B and their own Close or Back, and give focus back to their opener (by its focus key when the
+  screen under them was drawn again); the quiet line is a polite live region; focus rings are `:focus-visible` (and the
+  pad's mark) with an ink fringe that holds on snow; hover on every button and chip; transform and opacity only, no
+  `transition: all`, every duration zero under reduced motion, the results' story interruptible by a tap or a key;
+  sheets `overscroll-behavior: contain`; `touch-action: manipulation` on every control; the safe-area insets in the
+  gutters and the phone sheet's foot; numbers through `Intl` (`fmt.ts`) and tabular; names `translate="no"`; curly
+  apostrophes and quotes; a single ellipsis character ("Loading…" on a pending ad offer, the dev mock's only).
+- Not taken, and why: a room or Details written into the URL (the game is one canvas page, a room is not a place to
+  link to, and the URL carries a friend's challenge); a skip link (the title is one short column over the scene).
+
+## What the main lane must decide
+
+1. **The intros live for a session.** `TitleSpine.intro` is what the runs of this session opened (a feature page, a
+   sled, a garage piece) and the day's news when it is news (a new month's chapter, the day's contracts, a move in the
+   Cup's league, the week's Trial), held in `app.ts` until its door is opened (`onIntroSeen`). A reload forgets a "New"
+   not yet opened. A save field (`introsSeen`) would keep it across sessions; I kept `save.ts` untouched. The Garage's
+   "New" has no line (the garage is the shop lane's place, not a room of mine): its door carries the tag only.
+2. **"Ready in the shop" opens the garage, not the piece.** Details' "Open the Garage" takes the title's own way in
+   (`ui.ts openGarage`); opening it at that sled needs the shop lane's garage to take a piece to show (a `showSleds`
+   pick), which I did not add to `menus.ts`.
+3. **Escape on CrazyGames.** Bound (decision 392's default); in fullscreen the first press leaves fullscreen. To be
+   checked on CrazyGames by a person.
+4. **The Trial leaves Ride's row.** The Cup/Trial switch under Ride is gone; the week's Trial is chosen in Daily and Cup
+   beside the Cup (decision 392). The Trial's rule and targets still stand over Ride while it is picked.
+5. **Ride's plain reason is the mountain's tagline** ("Pine forest, soft powder, snowmen") when nothing else applies:
+   the chip already names the place. A person should say whether it reads as a reason.
+6. **`menus.ts` is the shop lane's.** Two small hunks there (the comment and `closeTop`); the merge keeps both.
+7. **A Daily's or a Cup's medal leads with the time** (the third critic's "3rd" over "silver" fault, answered by
+   leading with the medal won on the clock and saying the place as the race's). If the main lane prefers the place to
+   lead everywhere, `resultsMoment` is the one place to change.
+
+## What only scripts have seen
+
+- Everything on the fixtures: the titles at every stage, the rooms, the results' cases (pinned runs, so the times are
+  not real), Escape and the pad's B (a scripted pad), Run Again timed, the crawl. No person has opened the title, a
+  room or Details, ridden a run to the new results, or heard the story's sounds against its beats.
+- Reduced motion lands the story whole (read from the code and its CSS; not captured).
+- A friend's challenge link on the new title, a Long Night's results and a Trial's results on a phone: drawn by the
+  code paths, not looked at by me beyond the desk captures.
