@@ -475,7 +475,7 @@ matt, glare ice dark and glossy).
 ## The three I propose: the Old Run, Gullhaven, Gablefall
 
 Three verbs nobody has ridden here: carve the wall, fly the wind, hop the roofs. Each is a different frame (a channel,
-an edge, a town from above), a different length (2.8, 3.0 and 4.8 km) and a different light (a forest's low sun, a
+an edge, a town from above), a different length (3.0, 4.8 and 2.8 km) and a different light (a forest's low sun, a
 storm over the sea, a snowfall).
 
 | axis | the Old Run | Gullhaven | Gablefall |
@@ -490,7 +490,7 @@ storm over the sea, a snowfall).
 | light and far plane | forest at a low sun; the lake far below | a storm over the sea | a snowfall; the town across the valley |
 
 - *Each pair differs on all eight axes* (the brief asks for four). On section 2's six figures no pair is within 10%
-  on more than one (the Old Run and Gablefall are both short: 88 and 100 s are 12% apart).
+  on any of them (the closest, the Old Run's 88 s and Gablefall's 100 s, are 12% apart).
 - *None is a high mountain above cloud* (the brief asks for two of three): a mid-mountain forest, a sea cape, a hill
   town.
 - *None unlocks behind the finale.* With the five: Pinecrest (0), Frostfang (4), **Gablefall (8)**, Ember (12), **the
