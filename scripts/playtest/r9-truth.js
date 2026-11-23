@@ -610,8 +610,9 @@ async (page) => {
     const SKIP = /^(Ride|Duel|Accept|Mute|Buy|Confirm|Light|Swap|Equip|Wear|Listen|Reset|Previous mountains|More mountains)\b|^Ride /;
     await go(st);
     await page.waitForTimeout(3000);
-    const titleCtl = (await page.evaluate(MEASURE, {})).controls.filter((x) => x.top && !x.inert);
-    const crawl = { stage: st, title: titleCtl.map((x) => ({ name: x.name, text: x.text, fk: x.fk, tabbable: x.tabbable, iconOnly: x.iconOnly })), doors: [], tab: [], pad: null };
+    const m0 = await page.evaluate(MEASURE, {});
+    const titleCtl = m0.controls.filter((x) => x.top && !x.inert);
+    const crawl = { stage: st, titleText: m0.chunks.filter((x) => !x.inert).map((x) => x.t).join(' | '), title: titleCtl.map((x) => ({ name: x.name, text: x.text, fk: x.fk, tabbable: x.tabbable, iconOnly: x.iconOnly })), doors: [], tab: [], pad: null };
     for (let i = 0; i < titleCtl.length; i++) {
       const ctl = titleCtl[i];
       if (SKIP.test(ctl.name) || ctl.primary) {
@@ -620,8 +621,10 @@ async (page) => {
       }
       await go(st);
       await page.waitForTimeout(2200);
-      const hit = await page.evaluate(({ x, y, w, h }) => {
-        const el = document.elementFromPoint(x + w / 2, y + h / 2);
+      // (The Cup's and the Daily's cards take no tap until their rivals are in.)
+      if (ctl.fk === 'cup' || ctl.fk === 'daily') await ready(ctl.fk === 'cup' ? 'Weekly Cup' : 'Daily Mountain');
+      const hit = await page.evaluate(({ x, y, w, h, fk }) => {
+        const el = (fk && document.querySelector(`[data-fk="${fk}"]`)) || document.elementFromPoint(x + w / 2, y + h / 2);
         const b = el && el.closest('button, [role=button], [role=tab], a[href]');
         if (!b) return false;
         b.click();
@@ -641,9 +644,9 @@ async (page) => {
         await page.evaluate((t) => Array.from(document.querySelectorAll('[role=tab]')).find((b) => (b.textContent || '').trim() === t).click(), t);
         await page.waitForTimeout(700);
         const m2 = await page.evaluate(MEASURE, {});
-        second.push({ via: t, text: m2.chunks.filter((x) => x.top).map((x) => x.t).join(' | ').slice(0, 1500) });
+        second.push({ via: t, text: m2.chunks.filter((x) => x.top).map((x) => x.t).join(' | ').slice(0, 6000) });
       }
-      crawl.doors.push({ from: ctl.name, clicked: hit, opened: sf, text: inSurface.map((x) => x.t).join(' | ').slice(0, 2500), doors, second });
+      crawl.doors.push({ from: ctl.name, clicked: hit, opened: sf, text: inSurface.map((x) => x.t).join(' | ').slice(0, 8000), doors, second });
     }
     // Keyboard: the Tab order from the top of the page.
     await go(st);

@@ -277,8 +277,9 @@ export function reach(crawl: Any): Record<string, { taps: number | null; via: st
   const padSet = new Set<string>(crawl.pad?.reached || []);
   for (const [sys, re] of Object.entries(SYSTEMS)) {
     const onTitle = (crawl.title || []).filter((c: Any) => re.test(`${c.name} ${c.text}`));
-    let taps = onTitle.length ? 0 : null;
-    let via: string | null = onTitle[0]?.name ?? null;
+    // Named by a control on the title, or shown in the title's own text (a control's name may only be heard).
+    let taps = onTitle.length || re.test(crawl.titleText || '') ? 0 : null;
+    let via: string | null = onTitle[0]?.name ?? (taps === 0 ? '(the title shows it)' : null);
     const doors: Any[] = (crawl.doors || []).filter((d: Any) => !d.skipped);
     const one = doors.find((d) => re.test(d.text || '') || (d.doors || []).some((x: string) => re.test(x)));
     if (taps === null && one) {
@@ -292,7 +293,8 @@ export function reach(crawl: Any): Record<string, { taps: number | null; via: st
     }
     const door = via ? via.split(' > ')[0] : null;
     const ctl = door ? (crawl.title || []).find((c: Any) => c.name === door) : null;
-    const inList = (set: Set<string>): boolean => !!ctl && [...set].some((f) => f.startsWith(String(ctl.name).slice(0, 40)));
+    // (By its focus key where it has one: a card's name changes as its rivals arrive.)
+    const inList = (set: Set<string>): boolean => !!ctl && [...set].some((f) => (ctl.fk ? f.endsWith(`[${ctl.fk}]`) : f.startsWith(String(ctl.name).slice(0, 30))));
     out[sys] = { taps, via, keyboard: ctl ? !!ctl.tabbable && inList(tabSet) : null, pad: ctl ? inList(padSet) : null, named: ctl ? re.test(ctl.name) || taps === 0 : null };
   }
   return out;
