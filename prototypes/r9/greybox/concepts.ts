@@ -582,7 +582,7 @@ const longswell: SceneDef = {
   look: { zenith: 0.5, horizon: 0.96, fog: 0.93, fogNear: 300, fogFar: 14000, sunAz: 152, sunEl: 14, sun: 2.8, ambient: 0.6 },
   views: [
     { key: 'opening', name: 'From the camp onto the swells', z: 22, speed: 20 },
-    { key: 'place', name: 'A swell set, the crevasse and its bridge ahead', z: 1386, speed: 34 },
+    { key: 'place', name: 'On a swell, the next ones to the horizon', z: 1386, speed: 34 },
   ],
 };
 

@@ -81,7 +81,7 @@ town below. Riding high on the banked wall is the line.*
 
 | axis | the Old Run | against the five |
 |---|---|---|
-| length and pace | 3,000 m (950 / 1,000 / 1,050); a mid rider about 85 to 90 s at about 34 m/s, 42 on the glaze | about 30% shorter and faster at the top; out on time |
+| length and pace | 3,000 m (950 / 1,000 / 1,050); a mid rider about 85 to 90 s at about 34 m/s, 36 to 39 on the glaze | a third shorter; out on time |
 | profile | steady at 0.17, no cliffs and no steps | half the five's grade, and none of their stepped cliffs |
 | width and frame | a U channel: a 5.2 m floor, curved walls 2.6 to 7.5 m high, 15 m lip to lip; the walls are ridden | a narrow channel against a 25 to 31 m corridor; out on width |
 | the opening | under the start house, inside the track: a flat 160 m straight and the first bend; no ramp, no leap | none of the shared opening |
@@ -90,9 +90,9 @@ town below. Riding high on the banked wall is the line.*
 | the finish | the outrun: the track flattens to the timing house and a sled coasts to a stop in it | no square, no town |
 | light and far plane | a low late sun through a forest, the run lit by iron lamps on its parapet; the lake and its town far below | a mid-mountain forest; no panorama, no sea of cloud |
 
-Different on all eight. Of section 2's six figures it is outside the five on all six by design: time (about 88 s),
-mean speed (about 34 m/s with a top of 42, under on a novice and over on an expert), air, turns (about 12 bends a
-km against 2.7), width (15 m) and hazards (none).
+Different on all eight. Of section 2's six figures it is outside the five on five by design: time (about 88 s), air,
+turns (about 12 bends a km against 2.7), width (15 m) and hazards (none); its mean speed (about 34 m/s) sits just
+under the five's 35.1, the glaze line faster and the floor much slower.
 
 **The course.** Three stages of track: the Hotel Straights (the start and two long S-bends), the Labyrinth (three
 short S-bends close together) and the Horseshoe (one long hook of about 60 degrees, the deepest bank on the run) into
@@ -103,12 +103,12 @@ where the track runs straight and wide enough for three arches (one on the floor
 **Its signature mechanic: ride the wall.** A bend carries the sled up its outside wall by itself: the track turns,
 the sled runs straight on, and gravity holds it on the bank. The steer sets how high: steer into the wall to climb,
 let go and it settles, steer down to drop. In a bend the wall has three bands: low in the floor the snow the sleds
-have scraped off lies as slush (slow: drag about 1.6); high on the wall is the glaze, the polished band a fast line
-keeps to (drag 0.4, about 37 m/s on the run's grade, 42 in a tuck); at the very top the lip turns a sled back with a
-scrape (speed and the combo, never a fall). On a straight the whole floor is fast ice and the button is the tuck. So
-a run is: tuck down the straight, let the bend take you up, hold the glaze through it, drop off the wall into the
-next bend's entry (the drop pays speed), and never touch the lip. It runs through most of the run: about 60% of the
-track is bends.
+have scraped off lies as slush (slow: drag about 1.6, where a sled settles near 18 m/s); high on the wall is the
+glaze, the polished band a fast line keeps to (drag 0.4: about 36 m/s on the run's grade, 39 in a tuck); at the very
+top the lip turns a sled back with a scrape (speed and the combo, never a fall). On a straight the whole floor is fast
+ice and the button is the tuck. So a run is: tuck down the straight, let the bend take you up, hold the glaze
+through it, drop off the wall into the next bend's entry (the drop pays speed), and never touch the lip. It runs
+through most of the run: about 60% of the track is bends.
 - A novice is turned by the walls without steering at all and finishes, slower, low in the slush.
 - An expert holds the glaze through every bend, takes the Labyrinth's three bends without dropping to the floor, and
   rides the Horseshoe high to its exit.
@@ -128,7 +128,7 @@ track is bends.
   0 and `shapeAt`'s blend of the five's fields is unchanged. `bareGround` adds the channel's cross-section only where
   `pipe > 0`; `surface` returns the new slush, glaze and track-ice surfaces only where `pipe > 0`; neither branch is
   entered by the five. The centre line adds an authored bend term only on `track` kinds. The lip is the sim's own
-  edge turn-back (`edge()`, a section `limit` of 0.6 m, as a bridge's). No new crash cause: nothing on the Old Run
+  edge turn-back (`edge()`, a section `limit` of 0.6 m, near a bridge's 0.8). No new crash cause: nothing on the Old Run
   can floor a rider. Per mountain: stage lengths `[950, 1000, 1050]`, an opening of a start-house straight and no
   first kicker or leap, a finish of a 120 m outrun and a 200 m coast. Today's `STAGE_LENGTHS`, `opening()`,
   `FINISH_SQUARE` and `RUN_OUT` become the five's entries in a per-mountain table, holding today's exact values.
@@ -160,7 +160,7 @@ harbour at its foot, the sea always on your right. A storm is out at sea. Where 
 wind climbs it.*
 
 ![Gullhaven: the opening](frame:gullhaven/opening)
-![Gullhaven: over the second gully](frame:gullhaven/place)
+![Gullhaven: at the second gully's lip, the sea below](frame:gullhaven/place)
 
 **What is different.**
 
@@ -370,7 +370,7 @@ its height. Every 25 to 60 m down most of the run.
 calving front at the bottom, nothing but ice to a flat horizon.*
 
 ![Longswell: the opening](frame:longswell/opening)
-![Longswell: a swell set and the crevasse](frame:longswell/place)
+![Longswell: on a swell, the next ones to the horizon](frame:longswell/place)
 
 **What is different.** 5,000 m at 0.17 with swells 3.2 m crest to trough every 45 m, skewed 15 degrees off the fall
 line; open, 60 to 120 m wide between wands; flat horizon, no mountains; a low midnight sun skimming the swells; no
@@ -480,7 +480,7 @@ storm over the sea, a snowfall).
 
 | axis | the Old Run | Gullhaven | Gablefall |
 |---|---|---|---|
-| length and pace | 3,000 m, about 88 s, fast | 4,800 m, about 160 s, slow on the ground | 2,800 m, about 100 s, slow |
+| length and pace | 3,000 m, about 88 s, quick on the glaze | 4,800 m, about 160 s, slow on the ground | 2,800 m, about 100 s, slow |
 | profile | steady 0.17 | shelves stepped by gullies | a staircase of roofs |
 | width and frame | a 15 m channel, walls ridden | a one-sided clifftop | two levels: street and roofs |
 | the opening | the start house, in the track | the beacon on the cape | the church's roof |
