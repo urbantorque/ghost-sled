@@ -3,7 +3,7 @@ import type { MountainCard, ResultsModel, TitleModel, TitleTwelve, TwelveRung } 
 import { bareFigures } from '../scripts/playtest/r9-screenbars';
 import { rankBar } from '../src/game/spineview';
 import { factText, resultsMoment, storyButton, storyReward } from '../src/ui/sequence';
-import { titleAim, titleRide } from '../src/ui/title';
+import { pickerOrder, shortName, titleAim, titleRide } from '../src/ui/title';
 
 // Round 9 (the ui lane): the words the new title and results say, held to section 2's copy bars without a browser.
 // Ride's reason is the run's purpose, never a duel the run is not and never the rider's time (DECISIONS 391); the
@@ -62,6 +62,35 @@ describe("Ride's reason", () => {
   it('says the Daily and the Cup when they are chosen', () => {
     expect(titleRide(title({ selected: 'daily' })).why).toBe('Today\u2019s Daily. Keeps your flame lit');
     expect(titleRide(title({ selected: 'cup', cup: { key: 'w', week: 48, ready: true, mood: 'Powder Day', event: null, best: 0, medal: 0 } })).why).toBe('This week\u2019s Cup');
+  });
+});
+
+describe('the picker of eight', () => {
+  // Phase B appends Gablefall, the Old Run and Gullhaven to MOUNTAINS (indices 5 to 7): the picker keys on the unlock
+  // path, the finale last, not on the index.
+  const eight: MountainCard[] = [
+    card('pinecrest', 'Pinecrest', { unlockGhosts: 0 }),
+    card('frostfang', 'Frostfang Glacier', { unlockGhosts: 4 }),
+    card('ember', 'Ember Peak', { unlockGhosts: 12 }),
+    card('sakura', 'Sakura Ridge', { unlockGhosts: 24, locked: true, unlockText: 'Pass 6 more ghosts to unlock' }),
+    card('lanternfall', 'Lanternfall', { unlockGhosts: 48, finale: true, biome: 'lantern', locked: true, unlockText: 'Beat 9 more of The Twelve to unlock' }),
+    card('gablefall', 'Gablefall', { unlockGhosts: 8 }),
+    card('oldrun', 'The Old Run', { unlockGhosts: 18 }),
+    card('gullhaven', 'Gullhaven', { unlockGhosts: 32, locked: true, unlockText: 'Pass 14 more ghosts to unlock' }),
+  ];
+
+  it('orders the chips on the unlock path, the finale last, whatever their index', () => {
+    expect(pickerOrder(eight).map((c) => c.id)).toEqual(['pinecrest', 'frostfang', 'gablefall', 'ember', 'oldrun', 'sakura', 'gullhaven', 'lanternfall']);
+    // (The five today, which carry no order yet in an old model, keep theirs.)
+    expect(pickerOrder(title().mountains.map((c) => ({ ...c, unlockGhosts: undefined }))).map((c) => c.id)).toEqual(['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall']);
+  });
+
+  it('gives every mountain a short name a player says', () => {
+    expect(eight.map(shortName)).toEqual(['Pinecrest', 'Frostfang', 'Ember', 'Sakura', 'Lanternfall', 'Gablefall', 'Old Run', 'Gullhaven']);
+  });
+
+  it('says what opens the nearest locked one in the quiet line', () => {
+    expect(titleAim(title({ mountains: eight })).text).toBe('6 more ghosts open Sakura Ridge');
   });
 });
 

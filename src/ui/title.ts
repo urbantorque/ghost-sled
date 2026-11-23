@@ -43,6 +43,30 @@ const PLACES: Readonly<Record<string, string>> = {
 /** Short names, as a player says them: the picker's chips and Ride carry these. */
 const SHORT: Readonly<Record<string, string>> = { pinecrest: 'Pinecrest', frostfang: 'Frostfang', ember: 'Ember', sakura: 'Sakura', lanternfall: 'Lanternfall' };
 
+/** A mountain's short name, as a player says it: the table's, else its name without a leading "The" or a trailing kind
+ *  of place ("The Old Run" is "Old Run", "Frostfang Glacier" "Frostfang"), so a mountain added later has one too. */
+export function shortName(c: Pick<MountainCard, 'id' | 'name'>): string {
+  return SHORT[c.id] ?? c.name.replace(/^The /, '').replace(/ (Glacier|Peak|Ridge|Mountain)$/, '');
+}
+
+/**
+ * The picker's order: the unlock path (each mountain's unlockGhosts, gentlest first), the finale last, whatever the
+ * order the mountains were registered in (round 9's three are appended to MOUNTAINS in phase B, between the five on the
+ * path: Pinecrest 0, Frostfang 4, Gablefall 8, Ember 12, the Old Run 18, Sakura 24, Gullhaven 32, Lanternfall). A card
+ * that does not say keeps its place among the rest.
+ */
+export function pickerOrder<T extends Pick<MountainCard, 'id' | 'biome' | 'unlockGhosts' | 'finale'>>(cards: readonly T[]): T[] {
+  const last = (c: T): boolean => c.finale ?? (c.id === 'lanternfall' || c.biome === 'lantern');
+  const at = (c: T, i: number): number => (last(c) ? Number.POSITIVE_INFINITY : (c.unlockGhosts ?? i));
+  return cards
+    .map((c, i) => ({ c, k: at(c, i), i }))
+    .sort((a, b) => a.k - b.k || a.i - b.i)
+    .map((x) => x.c);
+}
+
+/** More chips than this and the picker lays them out as two rows of four (eight mountains from phase B). */
+const STRIP_ONE_ROW = 6;
+
 /** The veil's beats (ms): it sweeps over the scene, the app builds the new mountain under it, the name holds long
  *  enough to read, and it sweeps on and off. screens.css (.gs-t-veil) carries the same figures. */
 export const TRAVEL_TIMING = { IN_MS: 260, HOLD_MS: 420, OUT_MS: 460 } as const;
@@ -281,7 +305,9 @@ export class Title {
     const strip = h('div', 'gs9-strip');
     strip.setAttribute('role', 'group');
     strip.setAttribute('aria-label', 'Where you ride');
-    for (const c of m.mountains) strip.append(this.chip(c, c.id === m.selected));
+    for (const c of pickerOrder(m.mountains)) strip.append(this.chip(c, c.id === m.selected));
+    // (Eight mountains do not fit one row on a 1280 desk or a 390 px phone with every name whole: two rows of four.)
+    strip.classList.toggle('is-many', m.mountains.length > STRIP_ONE_ROW);
     // A mouse wheel turns the strip when it scrolls (a phone's five chips).
     strip.addEventListener(
       'wheel',
@@ -306,7 +332,7 @@ export class Title {
     // (Your best in words: a trophy beside a time read as a medal, or as someone else's record.)
     const best = sel && c.bestTime ? h('span', 'gs9-chip-best', 'Best', NBSP, h('span', 'gs9-num', clock(c.bestTime))) : null;
     if (best) sky.append(best);
-    const name = h('span', 'gs9-chip-name', SHORT[c.id] ?? c.name);
+    const name = h('span', 'gs9-chip-name', shortName(c));
     name.setAttribute('translate', 'no');
     b.append(sky, name);
     const rank = c.top ? 'Top of the ladder' : typeof c.rank === 'number' ? `${ordinal9(c.rank)} of ${c.rankOf ?? c.rank} on its ladder` : '';
@@ -516,7 +542,7 @@ export class Title {
  *  beside your faster best read as already beaten (DECISIONS 391). */
 export function titleRide(m: TitleModel): { verb: string; why: string; aria: string; who: string | null } {
   const sel = m.mountains.find((x) => x.id === m.selected) ?? null;
-  const name = sel ? (SHORT[sel.id] ?? sel.name) : '';
+  const name = sel ? shortName(sel) : '';
   if (m.firstVisit && !m.challenge) return { verb: 'Ride', why: sel?.name ?? 'Pinecrest', aria: `Ride ${sel?.name ?? 'Pinecrest'}`, who: null };
   const raced = m.challenge && (m.challenge.old || m.challenge.mountain) ? m.challenge : null;
   if (raced) return { verb: 'Accept', why: raced.mountain, aria: `Accept: ${raced.mountain}`, who: null };

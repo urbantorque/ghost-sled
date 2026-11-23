@@ -510,6 +510,21 @@
   color: var(--text-dim);
 }
 
+/* Eight mountains (phase B): two rows of four equal chips, every name whole; the picked one keeps its ring and its
+   best. Desk and phone alike: a row of eight is wider than the logo's column at 1280 and than a phone. */
+.gs9-strip.is-many {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: min(100%, 540px);
+}
+
+.gs9-strip.is-many .gs9-chip,
+.gs9-strip.is-many .gs9-chip.is-sel {
+  width: auto;
+  min-width: 0;
+  min-height: clamp(66px, 10vmin, 88px);
+}
+
 /* The picked mountain is the larger chip: its name, and your best there in words. */
 .gs9-chip.is-sel {
   width: clamp(140px, 13vw, 200px);
@@ -779,6 +794,11 @@
 
   .gs9-chip-best {
     display: none;
+  }
+
+  .gs9-strip.is-many {
+    width: 100%;
+    overflow: visible;
   }
 
   .gs9-how.is-best-only {

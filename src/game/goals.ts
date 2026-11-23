@@ -35,6 +35,9 @@ export interface NextGoal {
   gap: number;
   /** Names the card says it with (a rider, a mission's text, a page). */
   names: string[];
+  /** Round 9: a contract another mountain serves (false): Run Again rides this one, so the button names one served here
+   *  first. Absent: served wherever you ride. */
+  here?: boolean;
 }
 
 export interface PrimaryButton {
@@ -142,7 +145,9 @@ export function nextGoals(d: SaveData, ctx: GoalContext): NextGoal[] {
     const gap = rt !== null && q !== null ? q - rt : Infinity;
     // (Round 9: the duel's line names where it rides, not the rider's time: a duel is won head to head, and the rider's
     // slower time beside your faster best read as already beaten, DECISIONS 391.)
-    out.push({ kind: 'duel', text: `Duel ${nd.rider.name}`, short: MOUNTAINS[nd.rider.home].name, reachable: gap <= REACH_DUEL_S, gap: Number.isFinite(gap) ? Math.max(0, gap) / 10 : 1, names: [nd.rider.name] });
+    // (Round 9: the duel this run just lost, again, is a rematch, said as one.)
+    const again = ctx.lostTo?.kind === 'duel' && ctx.lostTo.name === nd.rider.name;
+    out.push({ kind: 'duel', text: `${again ? 'Rematch' : 'Duel'} ${nd.rider.name}`, short: MOUNTAINS[nd.rider.home].name, reachable: gap <= REACH_DUEL_S, gap: Number.isFinite(gap) ? Math.max(0, gap) / 10 : 1, names: [nd.rider.name] });
   }
   // 4. Today's Daily.
   if (ctx.dailyReady && !ctx.key.startsWith('daily:') && !recentDaily(recent, ctx.day)) out.push({ kind: 'daily', text: "Today's Daily", short: '', reachable: true, gap: 0.05, names: ['Daily'] });
@@ -176,10 +181,15 @@ export function nextGoals(d: SaveData, ctx: GoalContext): NextGoal[] {
   const c = d.contracts;
   if (c && c.day === ctx.day) c.list.forEach((k, i) => {
     if (c.done & (1 << i)) return;
-    out.push({ kind: 'contract', text: contractText(k), short: '', reachable: contractInReach(k, recent), gap: 0.2, names: [contractText(k)] });
+    out.push({ kind: 'contract', text: contractText(k), short: '', reachable: contractInReach(k, recent), gap: 0.2, names: [contractText(k)], here: servedHere(k.on, ctx.key) });
   });
-  if (c?.form) out.push({ kind: 'form', text: contractText(c.form), short: '', reachable: contractInReach(c.form, recent), gap: 0.3, names: [contractText(c.form)] });
+  if (c?.form) out.push({ kind: 'form', text: contractText(c.form), short: '', reachable: contractInReach(c.form, recent), gap: 0.3, names: [contractText(c.form)], here: servedHere(c.form.on, ctx.key) });
   return out;
+}
+
+/** A contract's place (a mountain's id, 'daily' or 'any') against the run's key ('pinecrest', 'daily:2026-11-23'). */
+function servedHere(on: string, key: string): boolean {
+  return on === 'any' || on === key || (on === 'daily' && key.startsWith('daily:'));
 }
 
 function recentDaily(recent: readonly RecentRun[], day: string): boolean {
@@ -226,10 +236,11 @@ export function primaryButton(goals: readonly NextGoal[]): PrimaryButton {
   const mission = goals.filter((g) => g.kind === 'mission' && g.reachable && g.gap <= NEAR_MISSION).sort((a, b) => a.gap - b.gap)[0];
   if (mission) return { kind: 'mission', text: 'Run Again', sub: goalWords(mission), aria: `Run again. ${goalWords(mission)}`, goal: said(mission) };
   const duel = pick('duel');
-  if (duel) return { kind: 'duel', text: `Next Duel: ${duel.names[0]}`, sub: duel.short ? `On ${duel.short}, head to head` : null, aria: `Duel ${duel.names[0]}${duel.short ? ` on ${duel.short}` : ''}`, goal: said(duel) };
+  if (duel) return { kind: 'duel', text: duel.text.startsWith('Rematch') ? duel.text : `Next Duel: ${duel.names[0]}`, sub: duel.short ? `On ${duel.short}, head to head` : null, aria: `Duel ${duel.names[0]}${duel.short ? ` on ${duel.short}` : ''}`, goal: said(duel) };
   const daily = pick('daily');
   if (daily) return { kind: 'daily', text: "Today's Daily", sub: 'Keeps your flame lit', aria: "Ride today's Daily", goal: said(daily) };
-  const near = goals.filter((g) => g.reachable && (g.kind === 'page' || g.kind === 'rung' || g.kind === 'gold' || g.kind === 'contract' || g.kind === 'form' || g.kind === 'mission')).sort((a, b) => a.gap - b.gap)[0];
+  // (A goal this mountain serves before one only another can: Run Again rides this one.)
+  const near = goals.filter((g) => g.reachable && (g.kind === 'page' || g.kind === 'rung' || g.kind === 'gold' || g.kind === 'contract' || g.kind === 'form' || g.kind === 'mission')).sort((a, b) => Number(a.here === false) - Number(b.here === false) || a.gap - b.gap)[0];
   if (near) return { kind: 'again', text: 'Run Again', sub: goalWords(near), aria: `Run Again. ${goalWords(near)}`, goal: said(near) };
   return { kind: 'again', text: 'Run Again', sub: null, aria: 'Run Again', goal: null };
 }

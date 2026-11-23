@@ -946,6 +946,9 @@ export class App {
           unlockText: this.isOpen(m) ? '' : lockText(d, m),
           best: topScore(d.best[m.id]),
           bestTime: d.best[m.id]?.time ?? 0,
+          // (Round 9: the picker's order, by the unlock path with the finale last.)
+          unlockGhosts: m.unlockGhosts,
+          finale: m.finale === true,
           oldBest: oldBest(d, m.id)?.score ?? 0,
           rank: spot.rank,
           rankOf: spot.of,

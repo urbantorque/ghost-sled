@@ -249,3 +249,24 @@ the round-9 part of `screens.css`.
 - Reduced motion lands the story whole (read from the code and its CSS; not captured).
 - A friend's challenge link on the new title, a Long Night's results and a Trial's results on a phone: drawn by the
   code paths, not looked at by me beyond the desk captures.
+
+## The picker holds eight (the main lane's constraint, 23 November)
+
+Phase B appends Gablefall, the Old Run and Gullhaven to `MOUNTAINS` (indices 5 to 7). The picker now:
+
+- **orders the chips on the unlock path, the finale last**, keyed on each card's `unlockGhosts` and `finale` (two
+  optional `MountainCard` fields the app fills from `MountainDef`), never on the index (`title.ts pickerOrder`): Pinecrest
+  0, Frostfang 4, Gablefall 8, Ember 12, the Old Run 18, Sakura 24, Gullhaven 32, Lanternfall. A card that does not say
+  keeps its place (an old model, the five today), and Lanternfall falls last by its id or its lantern art even without
+  the field.
+- **gives every mountain a short name** (`shortName`: the table's five, else the name without a leading "The" or a
+  trailing Glacier, Peak, Ridge or Mountain: "Old Run", "Gablefall", "Gullhaven"), never cut.
+- **lays more than six chips out as two rows of four**, equal chips, the picked one keeping its ring and its best: a row
+  of eight is wider than the logo's column at 1280 and than a phone with every name whole. Five keep today's one row.
+- **Proved** on the UI harness's `title-eight` (`src/ui/harness.ts`: the five, then the three appended as phase B will,
+  18 ghosts passed, Sakura, Gullhaven and Lanternfall locked with what opens them), at 1280 x 720, 1920 x 1080 and a
+  390 x 844 phone (`shots/r9/ui/eight/desk-1280.png`, `wide-1920.png`, `phone-390.png`; the chips' names, widths and
+  accessible names in `desk.json` and `phone.json`): every chip inside the screen (the phone's last ends at 376 of 390),
+  no name cut, each locked chip named "Sakura Ridge. Locked. Pass 6 more ghosts to unlock", the quiet line "6 more ghosts
+  open Sakura Ridge", the console clean. And by `tests/r9words.test.ts` ("the picker of eight": the order, the short
+  names, the quiet line).

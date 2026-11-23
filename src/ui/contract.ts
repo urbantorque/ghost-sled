@@ -28,6 +28,10 @@ export interface MountainCard {
   bestTime?: number;
   /** The old course's best, shown as "Old best" until a new one exists (0 for none). */
   oldBest?: number;
+  /** Round 9: where it stands on the unlock path (MountainDef.unlockGhosts) and whether it is the finale: the title's
+   *  picker shows the mountains in that order, the finale last, whatever their index (three are appended in phase B). */
+  unlockGhosts?: number;
+  finale?: boolean;
   /** Your rank on this mountain's ladder of rankOf places (null with no run here). */
   rank?: number | null;
   rankOf?: number;
