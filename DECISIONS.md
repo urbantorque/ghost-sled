@@ -4406,3 +4406,24 @@ straight through.
         **trails stay in the air** (no marks on the snow, ART.md 4's one painted line kept); **the economy as proposed**
         (prices are one table); **the Lantern Row moves into the place**; **the second pass on the pieces before
         milestone 2 builds them**.
+
+393. **The owner's word at the stop: the proposed three, and straight through** ("I like these mountain ideas. Keep
+    going", 23 November).
+    - *Read as:* the three new mountains are the Old Run, Gullhaven and Gablefall, unlocking at 8, 18 and 32 ghosts;
+      every default of DECISIONS 392 holds, the brief's section 8 among them (additive under `SIM_VERSION` 10, three
+      stages each, out of the Daily and Cup mix, The Twelve stays twelve, the cap at 110 MB, no ads). The round runs
+      through milestones 1 to 4 without another stop; merging to `main` and publishing still wait for the owner's word.
+    - *The shared tokens first.* `src/ui/tokens.css` (from the prototype) is imported by `ui.ts` before `style.css`. The
+      twelve names both sheets define hold the same values, and `style.css`'s own overrides still win, so no screen
+      changes until it is moved onto the tokens: the run-20 title was checked on the dev server, its computed values
+      and its frame as before, the console clean. Both the screens and the garage lanes build on it.
+    - *The build in three phases*, lanes in parallel where their files do not overlap (`notes/r9-lanes.md`):
+      - *Phase A:* `r9-ui` (milestone 1's U1 to U3: the results, then the title with its rooms, the contracts and the
+        league built), `r9-shop` (milestone 2's G1 to G5: the pieces' second pass judged first, then the model, the
+        looks, the place, the moment) and `r9-ground` (milestone 3's M1: the one sim design for all three written and
+        reviewed before any code, then the groundwork and a lab prototype of the Old Run's wall). `app.ts`, `save.ts`
+        and `spineview.ts` are shared: each lane keeps to its own system's functions there, small and additive.
+      - *Phase B:* the mountains on the groundwork, the Old Run first, then Gullhaven and Gablefall, each pool
+        generated alone in the heavy slot.
+      - *Phase C:* U4 (the other screens, Escape), G6 (sets, the new mountains' included), M3's wiring, M4's proof,
+        then milestone 4's polish, proof run and report.
