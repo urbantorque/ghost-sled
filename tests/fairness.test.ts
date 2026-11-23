@@ -3,6 +3,7 @@ import { ChaosEvent, Mood, PLAIN } from '../src/sim/chaos';
 import { CHUNK_LEN, Course, FINISH_SQUARE, Ledge, Obstacle, RUN_OUT, SAFE_LANE, START_CLEAR_Z, STAGE_LENGTHS, Section, SectionKind } from '../src/sim/course';
 import { packInput } from '../src/sim/input';
 import { MOUNTAINS, biomeForSeed, dailySeed } from '../src/sim/mountains';
+import { eventsFor, layoutFor } from '../src/sim/course';
 import { SLED_RADIUS, Sim } from '../src/sim/sim';
 
 // Generation must guarantee a passable line at all times: a lane around the safe line that no
@@ -11,8 +12,16 @@ import { SLED_RADIUS, Sim } from '../src/sim/sim';
 // sled rides. Violations are collected and asserted once so the scan stays fast.
 
 const DAILIES = ['2026-10-24', '2026-12-25', '2027-03-01', '2027-07-19', '2027-01-02', '2027-05-30'].map(dailySeed);
-const SEEDS = [...MOUNTAINS.map((m) => m.seed), ...DAILIES];
+// (Round 9: the five's own promises (the first minute, the places, the leaps, the kickers, the square) hold on every
+// mountain laid by the five's acts and every Daily: SEEDS. A new mountain brings its own, in its own test file; what
+// every mountain keeps (a clear lane, ground that launches only where it means to, a driver who survives, the avalanche
+// outrun where it runs) holds on them all: EVERY.)
+const FIVE_MOUNTAINS = MOUNTAINS.filter((m) => layoutFor(m.seed).grammar === 'acts');
+const SEEDS = [...FIVE_MOUNTAINS.map((m) => m.seed), ...DAILIES];
+const EVERY = [...MOUNTAINS.map((m) => m.seed), ...DAILIES];
 const FINISH = STAGE_LENGTHS.reduce((a, b) => a + b, 0);
+/** A course's chunks to its run-out's end and a little past (the five's: CHUNKS). */
+const chunksOf = (c: Course): number => Math.ceil((c.finishZ + c.runOut) / CHUNK_LEN) + 2;
 /** The whole descent: to the finish, through the run-out and a little past it. */
 const CHUNKS = Math.ceil((FINISH + RUN_OUT) / CHUNK_LEN) + 2;
 /** The sim's air drag and friction (kept here because this file measures the ground, not the sim). */
@@ -37,7 +46,7 @@ function distToObstacle(o: Obstacle, x: number, z: number): number {
 function sectionsOf(c: Course): Section[] {
   const out: Section[] = [];
   let z = 0;
-  while (z < FINISH) {
+  while (z < c.finishZ) {
     const s = c.section(z);
     out.push(s);
     z = s.z1;
@@ -96,14 +105,16 @@ function fly(c: Course, zLip: number, v: number, g = G): Flight {
 }
 
 describe('fairness: guaranteed passable line', () => {
-  for (const seed of SEEDS) {
+  for (const seed of EVERY) {
     const tag = seed.toString(16);
+    const acts = layoutFor(seed).grammar === 'acts';
 
     it(`seed ${tag}: lane is clear of colliders, ramps and vents to the end of the run-out`, () => {
       const c = new Course(seed);
       const problems: string[] = [];
       let minClear = Infinity;
       let samples = 0;
+      const CHUNKS = chunksOf(c);
       for (let i = 0; i < CHUNKS; i++) {
         const near = [c.chunk(Math.max(0, i - 1)), c.chunk(i), c.chunk(i + 1)].flatMap((k) => k.obstacles);
         const zones = [c.zones(Math.max(0, i - 1)), c.zones(i)];
@@ -134,7 +145,8 @@ describe('fairness: guaranteed passable line', () => {
       expect(minClear).toBeGreaterThan(1.0);
     });
 
-    it(`seed ${tag}: line is smooth enough to follow at top speed`, () => {
+    // (A new mountain's line has its own limits: its walls, its path round a gully, its street. Its own test holds them.)
+    if (acts) it(`seed ${tag}: line is smooth enough to follow at top speed`, () => {
       const c = new Course(seed);
       const bad: string[] = [];
       const h = 2;
@@ -157,6 +169,7 @@ describe('fairness: guaranteed passable line', () => {
       // and the sim leaves the ground above about g / v^2 (0.011 at 30 m/s).
       const meant: { z0: number; z1: number }[] = [];
       for (const l of c.ledges) meant.push({ z0: l.z - l.kickLen - 3, z1: l.foot + 6 });
+      const CHUNKS = chunksOf(c);
       for (let i = 0; i < CHUNKS; i++) {
         const zn = c.zones(i);
         for (const r of zn.ramps) meant.push({ z0: r.z - 4, z1: r.z + r.len + 5 });
@@ -164,7 +177,7 @@ describe('fairness: guaranteed passable line', () => {
         for (const m of zn.moguls) meant.push({ z0: m.z0 - 4, z1: m.z1 + 4 });
       }
       const h = 2;
-      for (let z = 4; z < FINISH; z += 1) {
+      for (let z = 4; z < c.finishZ; z += 1) {
         if (meant.some((m) => z >= m.z0 && z <= m.z1)) continue;
         const y = (q: number) => c.ground(c.safeX(q), q);
         const k = (y(z + h) - 2 * y(z) + y(z - h)) / (h * h);
@@ -177,7 +190,7 @@ describe('fairness: guaranteed passable line', () => {
 
   it('a simple line-following driver survives every mountain on the real sim', () => {
     const crashes: string[] = [];
-    for (const seed of SEEDS.slice(0, 6)) {
+    for (const seed of [...MOUNTAINS.map((m) => m.seed), DAILIES[0]]) {
       const sim = new Sim({ seed, chaos: PLAIN, sled: 0 });
       for (let t = 0; t < 60 * 60 * 4 && !sim.s.crashed && sim.s.z < 6000; t++) {
         const s = sim.s;
@@ -192,14 +205,14 @@ describe('fairness: guaranteed passable line', () => {
         }
         sim.step(packInput(lvl, false, false));
       }
-      if (sim.s.crashed || sim.s.z < 3000) crashes.push(`seed ${seed.toString(16)}: ${sim.s.crashCause} at z=${sim.s.z.toFixed(0)}`);
+      if (sim.s.crashed || sim.s.z < Math.min(3000, sim.course.finishZ)) crashes.push(`seed ${seed.toString(16)}: ${sim.s.crashCause} at z=${sim.s.z.toFixed(0)}`);
     }
     expect(crashes).toEqual([]);
   });
 
   it('a clean, boost-free rider outruns the avalanche on every mountain in every mood', () => {
     const caught: string[] = [];
-    for (const m of MOUNTAINS) {
+    for (const m of MOUNTAINS.filter((q) => eventsFor(q.seed) & (1 << ChaosEvent.Avalanche))) {
       for (let mood = 0; mood <= 6; mood++) {
         const sim = new Sim({ seed: m.seed, chaos: { mood: mood as Mood, event: ChaosEvent.Avalanche, seed: 17 }, sled: 0 });
         for (let t = 0; t < 60 * 120 && !sim.s.crashed && sim.dyn.avalanche.phase !== 3; t++) {
@@ -224,7 +237,7 @@ describe('fairness: guaranteed passable line', () => {
 });
 
 describe('the descent', () => {
-  const MANY = [...MOUNTAINS.map((m) => m.seed), ...Array.from({ length: 200 }, (_, i) => dailySeed(`rhythm-${i}`))];
+  const MANY = [...FIVE_MOUNTAINS.map((m) => m.seed), ...Array.from({ length: 200 }, (_, i) => dailySeed(`rhythm-${i}`))];
 
   it('is a pure function of the seed, whatever order it is read in', () => {
     for (const seed of SEEDS.slice(0, 6)) {
@@ -280,7 +293,7 @@ describe('the descent', () => {
   });
 
   it('stages have real names, and no two dailies ride alike', () => {
-    for (const seed of SEEDS) for (const st of new Course(seed).stages) expect(st.name).not.toMatch(/^Stage \d/);
+    for (const seed of EVERY) for (const st of new Course(seed).stages) expect(st.name).not.toMatch(/^Stage \d/);
     const seen = new Set<string>();
     const orders = new Set<string>();
     for (const seed of MANY.slice(4)) {
@@ -738,7 +751,7 @@ describe('the descent', () => {
       return n;
     };
     let drops = 0;
-    for (const m of MOUNTAINS) {
+    for (const m of FIVE_MOUNTAINS) {
       const n = count(m.seed);
       // Ember's open ground is scarce, so its off-line kickers are few: its vents do that job.
       // (Round 8: Sakura gave a plain beat to its thresholds, and an off-line kicker with it.)
@@ -777,7 +790,7 @@ describe('the descent', () => {
       return { d: 0, air: 0 };
     };
     const bad: string[] = [];
-    for (const m of MOUNTAINS) {
+    for (const m of FIVE_MOUNTAINS) {
       const c = new Course(m.seed);
       for (let i = 0; i < CHUNKS; i++) {
         for (const r of c.zones(i).ramps) {

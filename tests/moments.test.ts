@@ -71,8 +71,9 @@ describe('set pieces', () => {
         expect(p.variants, `${m.id} ${p.key}`).toBeGreaterThanOrEqual(2);
         expect(p.variants).toBeLessThanOrEqual(3);
       }
-      // About 45 s apart at a cruise (and never within 900 m of each other).
-      for (let i = 1; i < list.length; i++) expect(list[i].z0 - list[i - 1].z0).toBeGreaterThan(900);
+      // About 45 s apart at a cruise (and never within 900 m of each other). (Round 9: the five's; a new mountain's are a
+      // stage apart, which its own course says.)
+      if (c.layout.grammar === 'acts') for (let i = 1; i < list.length; i++) expect(list[i].z0 - list[i - 1].z0).toBeGreaterThan(900);
     }
   });
 
