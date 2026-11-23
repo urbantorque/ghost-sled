@@ -466,6 +466,9 @@ then the strip), and the tabs scroll sideways.
 **Still short** (seen in the frames): the Watch button plays nothing yet (the trick's loop is milestone 2's: the rider's
 own trick pose on the stand); the lanterns' light is local light only (no bloom on this page); the Sounds shelf has no
 sound; the tiles are words only.
+The hats' close cameras and the phone's were stood back in the last commit (477c8a3) after the frames were shot; the
+browser slot stayed with another lane, so desk-hat-*.png and phone-*.png show the closer framing (the head fills the
+hat shots) and were not shot again.
 
 ## 5. The buy moment (G4) and upgrades showing (G2)
 
