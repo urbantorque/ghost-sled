@@ -341,9 +341,10 @@ async (page) => {
           await page.waitForTimeout(500);
           await shoot(`${st}-room-events`, { stage: st, screen: 'room-events' });
         }
+        // (The fields are in by now: a Choose not there in a few seconds is not coming, a Trial before Trials open.)
         for (const [k, shot] of [['cup', 'title-cup'], ['trial', 'title-trial'], ['daily', 'title-daily']]) {
           if (!(await room('events'))) break;
-          if (await click(`[data-fk="choose-${k}"]`, k === 'trial' ? 30000 : 60000)) {
+          if (await click(`[data-fk="choose-${k}"]`, k === 'trial' ? 4000 : 15000)) {
             await page.waitForTimeout(1800);
             await shoot(`${st}-${shot}`, { stage: st, screen: shot });
           }

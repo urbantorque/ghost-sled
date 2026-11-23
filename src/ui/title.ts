@@ -546,6 +546,8 @@ export class Title {
     const b = b9(this.ctx, 'quiet', label, {
       icon: 'speaker',
       fk: 'sound',
+      // (Named "Sound", its state pressed or not: the visible words say the same, and contain the name.)
+      aria: 'Sound',
       cls: 'gs9-sound',
       onClick: () => {
         this.muted = !this.muted;

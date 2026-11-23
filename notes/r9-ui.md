@@ -89,3 +89,47 @@ Backspace. The pause card is not a sheet: P and Start. In fullscreen the browser
 leaves fullscreen), so a player there presses it twice; Backspace and B always work. The pad's B on a room or Details
 goes back through the same `back()`. The title's four popovers are gone: their contents live in the rooms, which take
 focus, keep Tab inside and close on all three.
+
+## Text for ART.md 10 (the main lane edits ART.md; decision 392)
+
+Replace round 7's "The mountain's name and its feeling sit under the logo" (in "The title is the picked mountain's
+key art"), round 7's "The results lead with the moment ... "Finish the mission" ...", round 8's "The results are a story
+told in about five seconds ..." and "The title's corner is one stack ..." with:
+
+- **The title has one job at a time (round 9).** The logo; the mountains as a picker of chips, each its sky and its
+  short name ("Frostfang", "Ember"), the picked one larger with your best on it in words ("Best 1:52.2"; on a phone the
+  best stands under Ride, the chips being small, and the strip scrolls so every name is whole); Ride with its reason on
+  it; under Ride, once open, the picked mountain's hour (each half with a swatch of its sky) and its mirror; one quiet
+  line of what you are working toward (a glyph and at most nine words: the next mountain by ghosts, Lanternfall by The
+  Twelve, else the next Rider Rank named as a prize); and four labelled doors: Daily and Cup (wearing the flame, "13-day
+  flame", marigold), Progress, Garage (wearing the gifts, "90 gifts") and Settings. No mountain name or feeling line
+  under the logo: the picked chip names the place and the veil says its feeling while travelling. A first visit keeps
+  the logo, its tagline, Ride, the line "Pass ghosts to unlock new mountains" and a labelled Sound On.
+- **Ride's reason is the next run's purpose**, first that applies: a friend's challenge (Accept); the duel with the next
+  of The Twelve on the picked ground, said as the duel ("Suki Ember, head to head"), never with the rider's time, which
+  set beside a faster best read as already beaten, and only when the next run is the duel; the Daily, the Cup or the
+  Trial when chosen; your grudge waiting there; the rung above you on the mountain's ladder ("valo_rides is 0.1 s
+  ahead"); else how it rides (its hour, mirrored) or what it is like (its tagline), never the name the chip already says.
+- **A door opens a room** from the logo's side (the bottom on a phone): an ink sheet of blocks, each its words and its
+  one action. Daily and Cup holds the flame and its seven days, today's Daily, the day's contracts and the form, this
+  week's Cup with its league place and table, and the week's Trial once open; Progress holds Rider Rank and the next
+  page's prizes (the Almanac), The Twelve (their busts; all twelve a press away), the Long Night once open, the Spirit
+  Album, the medals (each mountain's ladder place and mastery stars) and the missions. Choose picks that run and closes
+  the room; Ride then says what it rides. Something new is introduced once, by a marigold "New" on its door and one line
+  at the top of its room. Nothing loading is shown: a block whose field is not in offers nothing until it is.
+- **The results are three beats over the scene (round 9)**, about 2.5 s: how you did (the place, its word and the time
+  in italic 900 at the top of the logo's side, gold-white for a win, the silver step for a podium; then one fact on an
+  ink chip that keeps inside the headline's rule, clear of the rider); the one reward that matters most, turned over,
+  with Rider Rank's bar filling at its foot and the gifts in words; and the one button, vermillion, always the run,
+  its reason under its words, then Home, Photo and Details, each with its word. A Daily's or a Cup's medal leads with
+  the time it was won on and the medal in words, the race's place its fact, so the two never read as disagreeing. A tap
+  or a key lands it; reduced motion shows the end. Everything else is Details, one level down, a sheet from the
+  column's side: the race, your run, what it paid point by point (the XP it lists adds up to the total it says), the
+  missions, and keeping the run (Watch Your Run, Save Clip, Challenge a Friend).
+- **One system (round 9, `tokens.css`, `kit9.css`):** eight type sizes on one unit, three weights, two radii (full pills
+  and 18 px cards), three button ranks with words on every one (primary vermillion, one a screen and always the run;
+  secondary an ink pill with a hairline; quiet a thin ink wash), one ink sheet for a room or Details, four durations and
+  two easings, all zero under reduced motion.
+- In the photo item ("From pause (Photo, beside Home) or the results (a camera beside Home)"): "or the results (Photo,
+  beside Home)". In the clip item ("Save Clip (a soft pill with its words, beside the camera in the results' foot)"):
+  "Save Clip (in the results' Details, beside Watch Your Run)".

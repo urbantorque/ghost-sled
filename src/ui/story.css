@@ -26,18 +26,34 @@
 }
 
 /* ---- beat one: how you did ---- */
+/* The figure, and beside it the fact (the third critic: under the headline the fact's chip sat on the rider's pom-pom,
+   whose head stands under the logo's side in the results' shot); the rule under both, the word under the rule. So the
+   whole moment keeps above the rider's head and the fact inside the headline's rule. */
 .gs9-mo {
   --mo: var(--c-text);
   position: absolute;
   top: var(--st);
   left: var(--sl);
   display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
   justify-items: start;
-  gap: 2px;
+  gap: 2px var(--sp-4);
   width: max-content;
-  max-width: min(36vw, 440px);
+  max-width: min(48vw, 640px);
   pointer-events: none;
   text-shadow: var(--halo);
+}
+
+.gs9-mo > .gs9-mo-rule,
+.gs9-mo > .gs9-mo-word {
+  grid-column: 1 / -1;
+}
+
+.gs9-mo > .gs9-mo-fact {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
 }
 
 .gs9-mo.is-win {
@@ -116,7 +132,6 @@
   align-items: center;
   gap: 0.5em;
   max-width: 100%;
-  margin-top: var(--sp-2);
   padding: 6px 14px 6px 10px;
   border-radius: var(--r-card);
   background: rgba(18, 25, 51, 0.8);

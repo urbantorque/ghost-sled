@@ -144,7 +144,7 @@ function eventsRoom(f: Fill): void {
     const n = fl.streak;
     const line = fl.litToday ? 'Lit today. Any run tomorrow keeps it going.' : fl.atRisk ? 'Ride today to keep it lit.' : 'Any run lights the day.';
     const ember = fl.ember ? ' You hold an ember: it keeps the flame through one missed day.' : ' Day 7 gives an ember, which keeps it through one missed day.';
-    body.append(block(n > 0 ? `Your Flame: ${n} ${n === 1 ? 'day' : 'days'}` : 'Your Flame', line + ember, null, days, 'is-flame'), sep());
+    body.append(block(n > 0 ? `Your Flame: ${n} ${n === 1 ? 'Day' : 'Days'}` : 'Your Flame', line + ember, null, days, 'is-flame'), sep());
   }
   // Today's Daily.
   const dm = m.daily;
@@ -255,7 +255,7 @@ function progressRoom(f: Fill): void {
     const nx = tw.next;
     const line = tw.crowned ? 'All twelve beaten, and all of them at once.' : nx ? `${nx.name} rides next, on ${nx.mountain}. ${nx.bio}` : tw.final ? `The last race: all twelve at once on ${tw.final.mountain}.` : tw.waiting ? `${tw.waiting.rider.name} waits on ${tw.waiting.rider.mountain}. ${tw.waiting.opens}.` : (tw.hook ?? '');
     const all = b9(o.ctx, 'secondary', 'All Twelve', { icon: 'trophy', fk: 'twelve', onClick: () => f.push('The Twelve', (b) => ladder(b, m, f), all) });
-    body.append(block(`The Twelve: ${tw.beaten} of ${tw.of} beaten`, curly(line), all, busts));
+    body.append(block(`The Twelve: ${tw.beaten} of ${tw.of} Beaten`, curly(line), all, busts));
   }
   // The Long Night, once open.
   const ln = sp?.longNight ?? null;
