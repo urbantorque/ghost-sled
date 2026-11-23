@@ -4427,3 +4427,38 @@ straight through.
         generated alone in the heavy slot.
       - *Phase C:* U4 (the other screens, Escape), G6 (sets, the new mountains' included), M3's wiring, M4's proof,
         then milestone 4's polish, proof run and report.
+
+394. **The three mountains' sim design, reviewed and approved before any sim code** (`notes/r9-ground.md` on
+    `r9-ground`, 49700db and 7bc73d7; the brief's M1: "one sim design for all three, written and reviewed first").
+    - *How the five stay byte for byte.* Every new path sits behind a per-course flag set in the `Sim` constructor
+      (`trackOn`, `liftOn`, `levelOn`), false on the five, every Daily and every Cup; on the five the same statements run
+      in the same order, with no new arithmetic (not even `+ 0`, which turns a `-0` into `+0` and changes `Sim.hash`),
+      no new course read and no new draw on any `Rng`. New things go in under new names only (biomes, section kinds,
+      surfaces, obstacle kinds, verbs appended); no shared type gains a field. Shared constants become a `Layout` row
+      per course whose five rows are today's values (`STAGE_LENGTHS = FIVE.stages` stays exported). `SIM_VERSION`
+      stays 10. The proof is `tests/five.test.ts`, written before any sim edit: digests of the five's and six Dailies'
+      courses on a grid, the chaos rolls the game reads, scripted and bot rides, and the lab pilots, captured on the
+      base and recomputed after every step.
+    - *The seam.* Each new mountain lays its own descent in its own file (`src/sim/oldrun.ts`, `gullhaven.ts`,
+      `gablefall.ts`) through a `Kit` interface, laying only its own section kinds, so the five's shared fill never
+      reaches it. `FINISH_Z` comes from the course in the eight game-layer files and every other read site.
+    - *The Old Run's wall needs four track-only sim behaviours* (gravity along the runners, the bank's yaw
+      `tan(theta) = v^2 / gR`, damping toward the channel's direction, a launch test that ignores turns within the
+      wall). The fresh reviewer's blocker found them needed: the five's ground step divides the drive by `1 + |grad|^2`,
+      which would have made the glaze high on the wall the slow line. They are a mechanic only the Old Run uses, under
+      new ids and behind its flag, so they are within the brief's "mechanics only the new mountains use" and need no
+      `SIM_VERSION` break or owner's word; the fingerprint proves the five never run them. Seventeen review findings,
+      all accepted; nine serious ones changed the design (the wall's swing damped, its walls measured square to the
+      channel on smooth per-bend profiles, Gullhaven's path kept off the gully's edge, Gablefall's roofs never met from
+      below, the bot's line asked every think, Trials and the Long Night switched once).
+    - *Answers to the lane's questions.* Scoring stays exactly as it is (glaze time is not a wall ride). The concept
+      changes the sim forces are taken: the Horseshoe a 35 degree hook, not 60; Gablefall's roofs never higher than the
+      last and its start gate on calm ground (the nave, then a close); Gullhaven's chute and sheds kinds of their own.
+      Each new mountain gets its own home riders, never a duel (the brief's decision 7). The Long Night goes to sixteen
+      legs in unlock order once all three register, Lanternfall still the finale, a saved best depth still a count of
+      legs. No avalanche or yeti on the Old Run, no yeti on Gullhaven. A Trial rides its mountain whether or not the
+      player has opened it, as today; `EIGHT_FROM` (the week the Trial turns over eight) is set at release. The three are
+      appended to `MOUNTAINS` (indices 5 to 7) and stay out of `BIOMES` (the Daily and Cup).
+    - *Next.* The lane builds the groundwork in its order (the fingerprint, the table, `FINISH_Z`, room for eight, the
+      fairness suite split, the seam) and a lab-only Old Run to test the wall with the pilots and the bot, before the
+      mountain lanes add worlds, scores and pools.
