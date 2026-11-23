@@ -172,12 +172,17 @@ export const MOUNTAINS: readonly MountainDef[] = [
   { id: 'lanternfall', name: 'Lanternfall', tagline: 'Where the spirit lights come from', seed: LANTERNFALL_SEED, unlockGhosts: 48, finale: true },
 ];
 
+/** Round 9: the Old Run's lab course (SHA-256's sixth initial word, beside Lanternfall's fifth). Built as the Old Run,
+ *  but not in MOUNTAINS: nobody can pick it. The Old Run's own lane registers the mountain (on this seed or its own). */
+export const OLDRUN_LAB_SEED = 0x9b05688c;
+
 const BIOME_BY_SEED = new Map<number, CourseBiome>([
   [0x51ed270b, 'alpine'],
   [0x2b7e1516, 'glacier'],
   [0x6a09e667, 'volcanic'],
   [0x3c6ef372, 'blossom'],
   [LANTERNFALL_SEED, 'lantern'],
+  [OLDRUN_LAB_SEED, 'oldrun'],
 ]);
 
 const BIOMES: readonly BiomeId[] = ['alpine', 'glacier', 'volcanic', 'blossom'];

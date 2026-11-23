@@ -6,7 +6,7 @@ import { momentPlays, setPieceKinds } from './moments';
 import { GATE_PAST_LINE, START_GATE_Z } from './charms';
 import { ALL_EVENTS } from './chaos';
 import type { Kit, KitPlan, KitRider } from './kit';
-import { OLDRUN_LAYOUT } from './oldrun';
+import { OLDRUN_KIT, OLDRUN_LAYOUT } from './oldrun';
 import { CHUNK_LEN, FOREST_LIMIT, SAFE_LANE, THRESHOLD_AFTER, THRESHOLD_AFTER_MIN, THRESHOLD_BEFORE, THRESHOLD_BEFORE_MAX, THRESHOLD_HW, bank } from './courseparts';
 
 export { CHUNK_LEN, FOREST_LIMIT, SAFE_LANE, THRESHOLD_AFTER, THRESHOLD_AFTER_MIN, THRESHOLD_BEFORE, THRESHOLD_BEFORE_MAX, THRESHOLD_HW, bank };
@@ -244,7 +244,7 @@ export const FINISH_SQUARE = FIVE.square;
 const LAYOUTS: Record<CourseBiome, Layout> = { alpine: FIVE, glacier: FIVE, volcanic: FIVE, blossom: FIVE, lantern: FIVE, oldrun: OLDRUN_LAYOUT };
 
 /** Each new mountain's own ground (round 9): none for the five, a Daily or a Cup. */
-const KITS: Partial<Record<CourseBiome, Kit>> = {};
+const KITS: Partial<Record<CourseBiome, Kit>> = { oldrun: OLDRUN_KIT };
 
 /** The descent a seed is laid as, without building its course. */
 export function layoutFor(seed: number): Layout {

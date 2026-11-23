@@ -691,15 +691,22 @@ export class Bot {
     for (let z = this.pz0 + 2; z <= zEnd; z += 2) {
       const x = this.pathX(z);
       const rel = x - L.safeX(z);
-      // Steeper than about 17 degrees off the line is not a line anyone rides.
-      if (rel - prevRel > 0.6 || rel - prevRel < -0.6) {
+      // Steeper than about 17 degrees off the line is not a line anyone rides. (Round 9, the Old Run: its racing line
+      // crosses the channel from wall to wall at a bend's entry, about 30 degrees off its floor's middle.)
+      const steep = this.onTrack ? 1.2 : 0.6;
+      if (rel - prevRel > steep || rel - prevRel < -steep) {
         worst = -1;
         break;
       }
       prevRel = rel;
       let cl = this.scene.clearance(x, z, -Infinity, skip);
-      const edge = -L.edgeExcess(x, z) - 1.5;
-      if (edge < cl) cl = edge;
+      // (Round 9, the Old Run: its walls are ridden, so only the lip is out: a line within half a metre of it.)
+      if (this.onTrack) {
+        if (L.edgeExcess(x, z) > -0.5) cl = -1;
+      } else {
+        const edge = -L.edgeExcess(x, z) - 1.5;
+        if (edge < cl) cl = edge;
+      }
       if (cl < worst) worst = cl;
       if (worst < -0.5) break;
     }

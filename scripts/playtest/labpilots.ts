@@ -161,10 +161,15 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
   const mr = mulberry(seed ^ 0x51ce);
   const sloppy = skill === 'expert' ? 0.25 : 1;
   const M = { index: -1, st: 0, dir: 0, at: -1, bias: 0, tap: 0, wait: 0, side: 0, flipped: false, pressed: false, airHold: 0, pressT: 0 };
+  // (Round 9: on a new mountain the line a rider of this skill rides there and then, kit.ts lineFor: up the Old Run's
+  // walls for the skilled. The five have no kit, and ride the safe line as they always did.)
+  const rider = { x: 0, y: 0, z: 0, v: 0, skill: skill === 'expert' ? 0.9 : skill === 'mid' ? 0.55 : skill === 'novice' ? 0.25 : 0, nerve: skill === 'expert' ? 0.7 : 0.3 };
+  const lineAt: (z: number) => number = c.kit && c.kit.lineFor ? (z: number) => c.lineFor(z, rider) : (z: number) => c.safeX(z);
   const steerTo = (s: AnySim, target: (z: number) => number, gain: number, lat: number): number => {
+    if (c.kit) Object.assign(rider, { x: s.x, y: s.y, z: s.z, v: s.speed });
     const look = s.z + 4 + s.speed * 0.35;
     const desired = Math.atan2(target(look) - s.x, look - s.z);
-    const err = desired - s.velHeading + (c.safeX(s.z) - s.x) * lat;
+    const err = desired - s.velHeading + (lineAt(s.z) - s.x) * lat;
     return Math.max(0, Math.min(8, Math.round(4 + err * gain)));
   };
   const nextRamp = (s: AnySim) => {
@@ -505,7 +510,7 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
       return { steer: 4, action: false };
     }
     let ramp = !act ? nextRamp(s) : null;
-    let target = (z: number) => c.safeX(z);
+    let target = lineAt;
     // A kicker whose flight comes down on glass that is to be slid across is ridden round: a popped flight off
     // the one above Mirror Lake lands 110 m into its 270 m, and what is left is too short for a slide each way.
     const ahead = pieceAhead(sim);

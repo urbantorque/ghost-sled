@@ -109,7 +109,7 @@ const STUCK_TICKS = 60;
 const OVERCAP_EASE = 6;
 /** Round 9, the Old Run: how hard its track damps a sled's swing across the channel (rad/s on the heading's difference
  *  from the channel's direction). About 0.7 of critical on its deepest wall, whose swing has a period of 2.5 s. */
-export const TRACK_DAMP = 3.5;
+export const TRACK_DAMP = 1.8;
 
 /** Round 9, the Old Run: how fast a banked surface turns a carving sled, rad/s: the ground's rise toward the channel's
  *  right (the gradient across the channel's direction `phi`), times gravity, over the speed (8 m/s at least). A sled

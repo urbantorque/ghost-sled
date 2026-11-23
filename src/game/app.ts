@@ -369,6 +369,11 @@ export class App {
     this.mountain = this.savedMountain();
     if (DEV_ON && DEV.has('m')) this.mountain = MOUNTAINS[Number(DEV.get('m'))] ?? this.mountain;
     this.daily = dailyMountain(dailyKey(new Date()));
+    // (Round 9, the ground lane: `?debug&seed=<hex>` rides a lab course, the Old Run's among them, in the Daily's place.)
+    if (DEV_ON && DEV.has('seed')) {
+      this.daily = { ...this.daily, seed: parseInt(DEV.get('seed') ?? '', 16) >>> 0, tagline: 'lab' };
+      this.mountain = this.daily;
+    }
     this.cup = cupMountain(this.trialWeek());
     this.trial = trialFor(this.trialWeek());
     // (The hours lane: the world's first light is the hour picked for the mountain it opens on.)
