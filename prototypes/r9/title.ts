@@ -382,7 +382,10 @@ function openDoor(d: Door, from: HTMLElement): void {
   } else if (d === 'garage') {
     sheet('Garage', from, (body) => {
       if (fresh) body.append(fresh);
-      body.append(block(`${fmt(m.wallet)} gifts to spend`, `Riding the ${m.sledName}. The garage itself is the garage lane's (a place, not a sheet): this door is where it opens from.`, null));
+      // (The garage itself is the garage lane's, a place and not a sheet: this door is where it opens from. Its page sits
+      // beside this one once the lanes are merged.)
+      const go = Object.assign(h('a', 'gs9-b gs9-b-secondary', ico('sledBold'), 'Open the Garage'), { href: './garage.html' });
+      body.append(block(`${fmt(m.wallet)} gifts to spend`, `Riding the ${m.sledName}.`, null, go));
     });
   } else {
     sheet('Settings', from, (body) => {

@@ -134,7 +134,7 @@ the right 54%, the hero's place in ART.md 10; on a phone the middle band between
 | After run 1 | Go again, a little better | RIDE, "valo_rides is 0.1 s ahead" (the rung above you on this mountain's ladder) | "1 more ghost opens Frostfang Glacier" | Daily contracts: "New" on Daily and Cup, one line inside it |
 | After run 5 | The first duel | DUEL, "Bram Oakhollow. 2:23.6 to beat" | "3 more ghosts open Sakura Ridge" | The Whirl Saucer: "New" on the Garage, one line inside |
 | After run 20 | Pick how to ride, then the next duel | DUEL, "Pip Thistle. 2:08.9 to beat"; the picker offers Day or Noon, and Mirrored | "Beat 6 more of The Twelve to open Lanternfall" | Nothing new this visit |
-| After run 50 | The last duels, the week's league | DUEL, "Suki Ember. 2:07.0 to beat" | "The Memory charm at Rider Rank 26: 900 XP to go" (every mountain open: the next page) | Up a division: "New" on Daily and Cup |
+| After run 50 | The last duels, the week's league | DUEL, "Suki Ember. 2:07.0 to beat" | "2,180 XP to Rider Rank 26: the Crane's Memory charm" (every mountain open: the next page) | Up a division: "New" on Daily and Cup |
 
 **Ride's reason** is the next run's purpose and nothing else, in this order: a friend's challenge; The Twelve's next
 duel on the picked mountain; the Daily or the Cup when picked; the rung above you on this mountain's ladder; the
@@ -150,7 +150,7 @@ Settings as a fourth labelled door rather than a gear, and with each door wearin
 | Door | Its figure (with its word) | What is behind it | Why there |
 | --- | --- | --- | --- |
 | **Daily and Cup** | "5-day flame" | The flame and its seven days; today's Daily (Choose); today's three contracts and how many are done; this week's Cup with its mood, your medal and best, and your place in its league (Choose); the week's Trial once open (Choose) | Everything that changes by the day or the week, so "come back tomorrow" has one place. The flame is kept by riding, and the Daily is the run that keeps it. |
-| **Progress** | "Rider Rank 16" | Rider Rank's page and what the next one holds (Almanac); The Twelve as twelve busts, the next one named with their bio (All twelve); the Long Night (Choose) once open; the Spirit Album's count (Album); the medal count (Medals); the three missions with their progress | Everything that is a long count of what you have done. The Long Night and the ladder get a seat for the first time. |
+| **Progress** | none (its room says "Rider Rank 16 of 50": a bare "Rank 16" on a door read as a place in a race) | Rider Rank's page and what the next one holds (Almanac); The Twelve as twelve busts, the next one named with their bio (All twelve); the Long Night (Choose) once open; the Spirit Album's count (Album); the medal count (Medals); the three missions with their progress | Everything that is a long count of what you have done. The Long Night and the ladder get a seat for the first time. |
 | **Garage** | "420 gifts" | The garage (the garage lane's place) | Gifts are spent there, so the wallet lives on its door. |
 | **Settings** | none | Today's settings sheet (U4 restyles it) | A word, not a lone gear. |
 
@@ -183,28 +183,32 @@ then says what it rides ("RIDE, Today's Daily. Keeps your flame lit"). So every 
 | "Duel Old Wren" on Ride and "Next of The Twelve: Old Wren" beside it | Ride's reason. The Twelve's card goes behind Progress. |
 | "1 more ghost opens Ember Peak" and "Pass 1 more ghost" on Ember's card | The quiet line. Ember's chip shows only its lock. |
 | Best in the stats pill and on the mountain's card | The picked card. |
-| Rider Rank's page on the corner card, its reward again on Ride's line | Progress's door ("Rider Rank 16") and room; the quiet line names the next page only when nothing nearer is left. |
+| Rider Rank's page on the corner card, its reward again on Ride's line | Progress's room; the quiet line names the next page only when nothing nearer is left ("2,180 XP to Rider Rank 26: the Crane's Memory charm"). |
 | "Finding rivals..." on the Cup's and the Daily's cards | Nothing. A room's Choose appears when its field is in; until then the block says what it is and offers nothing. |
 
 ### The results: three beats, then Details
 
 1. **How you did, in words:** the place ("2nd of 9", the figure in the moment's colour: gold-white for a win, the
-   silver step for a podium), the word ("On the podium") with the time, and one fact that made it, in this order: a
-   Trial's medal; one of The Twelve beaten or holding you off (their bust and name in their colour); a medal on the
-   Daily or the Cup ("Bronze in this week's Cup"); a new best ("A new best, 1.6 s quicker"); else the nearest rider
-   ("0.4 s behind tove_runs", the name in its ghost's colour). The race line that floated over the crowd is this line.
-2. **The one reward that matters most, opened:** one card turning over, in this order: a mountain opened (its sky); a
-   page's reward, the play-changing kinds first (a sled, a feature, a mirror, the Long Night's legs, an hour, a gate,
-   a garage piece, a charm, a flourish, a title, gifts), named as a player says it with one line of what it does ("Daily
-   contracts / Three small goals a day, in Daily and Cup"); a medal for the whole run; the stickers. If more opened, "3
-   more in Details". At the card's foot, Rider Rank's bar fills (the tick the brief keeps) with "Rider Rank 3" and the
-   gifts in words ("+68 gifts"). A run that opened nothing turns over the next page instead ("Rider Rank 17 opens / A
-   new scarf / 1,340 XP to go").
-3. **What's next, the one button**, its reason under its words, then Home, Photo and Details, each with its word.
+   silver step for a podium), the word ("On the podium") with the time, and one fact that made it, in this order: one
+   of The Twelve beaten or holding you off (their bust and name in their colour: "Bram Oakhollow beaten. 1 of 12
+   down.", "Pip Thistle held you off"); a medal on the Daily or the Cup ("Bronze in this week's Cup"); a new best ("A
+   new best, 1.6 s quicker"); else the nearest rider ("0.4 s behind tove_runs", the name in its ghost's colour). A
+   Trial's word is its medal ("Silver in the Trial") and needs no fact. A wreck says where and how far ("Hit a tree,
+   1,180 m from the line"). The race line that floated over the crowd is this line.
+2. **The one reward that matters most, opened:** one card turning over: a mountain opened (its sky and its name, "New
+   mountain / Frostfang Glacier"); else the prize of the page the run turned, the play-changing kinds first (a sled, a
+   feature, a mirror, the Long Night's legs, an hour, a gate, a garage piece, a charm, a flourish, a title, gifts),
+   named by the rank that gave it ("Rider Rank 5 / A new sled"), with one line only for a system met here for the
+   first time ("Rider Rank 2 / Daily contracts / Three small goals a day"). At its foot Rider Rank's bar fills (the tick
+   the brief keeps) with the gifts in words ("+68 gifts"). A run that opened nothing turns over the bar alone ("Rider
+   Rank 16", the bar, "+24 gifts"): the next page is the title's quiet line, not the results'. Everything else that
+   opened is in Details, which says so by its name.
+3. **What's next, the one button**, its reason under its words, then Home, Photo and Details, each with its word. A
+   rematch's gap is said on its button and nowhere else ("Rematch Pip Thistle / 1.2 s to find").
 
 **No second primary.** The opened mountain's own Ride It goes. The unlock becomes the button when the spine's choice is
-a plain Run Again ("Ride Frostfang Glacier"); otherwise the card says "Ready to ride from the title" and the button
-stays the spine's (a rematch, a duel, a mission within reach).
+a plain Run Again ("Ride Frostfang Glacier"); otherwise the card names it and the button stays the spine's (a rematch,
+a duel, a mission within reach), and the title's picker has it waiting.
 
 **Details** (a sheet from the column's side, Back and Escape and B return): the race (the finishing order with you in
 it, the rider's quote or the race line, the crash note); your run (each stage's clock against your best, the style
@@ -226,15 +230,17 @@ Every label I changed, before and after. The rule: a label is something a player
 | Results button, mission (48% of mid results, 69% of novice) | FINISH THE MISSION / "Pass a ghost: done before, so again" | RUN AGAIN / "Mission: pass a ghost." (and its shortfall, "12 m short", when there is one) |
 | Results button, Cup or Trial or Daily | RUN AGAIN / "Silver at 2:28.4" | RUN AGAIN / "Silver at 2:28.4, 2.6 s to find" |
 | Results button, duel | NEXT DUEL: OLD WREN / "Time to beat 2:09.6" | NEXT DUEL: OLD WREN / "2:09.6 to beat" |
-| Results, rank row | "Rider Rank 2 +410 XP", "Page 3 The Spirit Album +1 78 to go", "Finished +110", "7 behind you +56", "Medals +120" | "Rider Rank 3" and the bar, "+68 gifts"; every tick in Details as "Finished, 110 XP" |
-| Results, reward cards | "Unlocked / Frostfang Glacier / Ride It", "Daily contracts / Page 2", "Charm: Ember Step / Page 2", "12 stickers / ... and more" | One card: "A new mountain / Frostfang Glacier / Ready to ride from the title. 2 more in Details" |
+| Results, rank row | "Rider Rank 2 +410 XP", "Page 3 The Spirit Album +1 78 to go", "Finished +110", "7 behind you +56", "Medals +120" | "Rider Rank 3", the bar, "+68 gifts"; every tick in Details as "Finished 110 XP" |
+| Results, reward cards | "Unlocked / Frostfang Glacier / Ride It", "Daily contracts / Page 2", "Charm: Ember Step / Page 2", "12 stickers / ... and more" | One card: "New mountain / Frostfang Glacier", or "Rider Rank 5 / A new sled", or "Rider Rank 2 / Daily contracts / Three small goals a day"; the rest in Details |
 | Results, the race line | "81.4 s clear of tove_runs" floating over the crowd | Beat one's fact: "81.4 s ahead of tove_runs" (when nothing outranks it) |
 | Results, foot | Home, an unlabelled camera, Save Clip, Details | Home, Photo, Details; Save a clip in Details beside Watch your run |
 | Results, a duel's fact | "Bram Oakhollow falls. 1 of 12 beaten." | "Bram Oakhollow beaten. 1 of 12 down." |
-| Results, a wreck | "3,340 m / WIPED OUT / Hit a tree" with "1,180 m short of the finish." a block away | "3,340 m / WIPED OUT / Hit a tree, 1,180 m short of the line" |
+| Results, a wreck | "3,340 m / WIPED OUT / Hit a tree" with "1,180 m short of the finish." a block away | "3,340 m / WIPED OUT / Hit a tree, 1,180 m from the line" |
+| Results, a duel lost | "Pip Thistle held you off by 1.2 s." and the button "REMATCH PIP THISTLE / 1.2 s behind" | "Pip Thistle held you off" and "REMATCH PIP THISTLE / 1.2 s to find" (the gap once) |
+| Results, a Trial | "17 perfects / SILVER IN THE TRIAL / 17 perfects, 2 short of gold" | "17 perfects / SILVER IN THE TRIAL" and the button "RUN AGAIN / Gold at 19 perfects" |
 | Title, Ride | DUEL / "Old Wren" | DUEL / "Old Wren. 2:09.6 to beat" |
 | Title, Ride on a plain mountain | RIDE / "Next: valo_rides, 2:06.3, 0.1 s up" | RIDE / "valo_rides is 0.1 s ahead" |
-| Title, the corner | a flame and "1"; a gift and "670"; "Best 0:20.9"; "Rider Rank 4 / Page 5 A new sled +1 / 496 to go"; "14 /212" | Doors: "Daily and Cup / 1-day flame", "Progress / Rider Rank 4", "Garage / 670 gifts"; in Progress "Spirit Album: 14 of 212 stickers found" |
+| Title, the corner | a flame and "1"; a gift and "670"; "Best 0:20.9"; "Rider Rank 4 / Page 5 A new sled +1 / 496 to go"; "14 /212" | Doors: "Daily and Cup / 1-day flame", "Progress", "Garage / 670 gifts"; in Progress "Rider Rank 4 of 50" and "Spirit Album / 14 of 212 stickers found." |
 | Title, mountain cards | "Pinecrest / 0:20.9 best / Rank 1 of 87"; "Ember Peak / Pass 1 more ghost" | Chip "Pinecrest" with "0:20.9" on a trophy; "Ember" with a lock |
 | Title, The Twelve | "NEXT OF THE TWELVE / Old Wren / Pinecrest, 2:09.6 to beat / Keeps every lantern lit... / 1 of 12" | Ride's reason; in Progress "The Twelve: 1 of 12 beaten / Old Wren rides next, on Pinecrest. Keeps every lantern lit." |
 | Title, the Cup and the Daily | "Weekly Cup / Week 48 / Finding rivals...", "Daily Mountain / Nov 23 / Finding rivals..." | In Daily and Cup: "This week's Cup / Powder Day, with a Light Storm." and "Today's Daily / A new mountain and a new field every day" |
@@ -297,11 +303,36 @@ and results sheets halve and the whole drops by about a quarter.
 
 ## 4. The counts
 
-(Filled from `scripts/playtest/r9-protoshots.js` below.)
+How they are counted (`prototypes/r9/count.ts`, run in the page by `scripts/playtest/r9-protoshots.js`): the words a
+player can see (each text node whose element is drawn, on screen, not hidden, not at no opacity, and not a screen
+reader's one-pixel span; a word is any run with a letter or a figure in it, so "2:09.6", "+68" and the keycap "Space"
+count and "/" does not) and the controls a player can press (buttons, links and inputs drawn the same way). The
+review's figures (about 100 on the returning title, about 70 to 104 on the results) came from `document.body.innerText`,
+which also counts the screen reader's spoken lines; this counter does not, so today's figures below are lower than the
+review's and the two columns are like for like. Today's screens are the game's own UI on the same models over the same
+frames (`today.html`), shot once their story has landed (7 s); the prototype's once its story has (3.2 s).
+
+(The table is filled below from the last capture.)
 
 ## 5. The critics
 
 (Filled below.)
+
+## web-design-guidelines
+
+Run over `prototypes/r9/` (`tokens.css`, `screens.css`, `title.ts`, `results.ts`, `proto.ts`, `screens.html`,
+`screens.ts`) against the Vercel Web Interface Guidelines, fetched fresh. Fixed: buttons in Title Case as the game's
+are ("Watch Your Run", "Save Clip", "Challenge a Friend", "All Twelve", "Sound On", the rooms' block headings);
+`color-scheme: dark` on the root, not the body; hover states on the picker's chips; non-breaking spaces in "0.1 s" and
+"900 XP"; a room or Details opened is written into the URL (`?open=events`, `?open=details`) so a state can be shared
+and reloaded; a room opens on its heading, not on its Close, so no ring stands on Close before a key is pressed.
+Clean: every control has visible words (the icons are `aria-hidden` beside them); the dialogs are `role="dialog"` with
+`aria-modal` and a label, trap Tab, close on Escape, Backspace, B and their own Close, and give focus back to the door;
+the quiet line is a polite live region and the toast a status; transform and opacity only, no `transition: all`,
+reduced motion zeroes the four durations and lands the results whole; `touch-action: manipulation` and an intentional
+tap highlight on every control; sheets `overscroll-behavior: contain`; the screen keeps to the safe-area insets; numbers
+through `Intl` (`ui/fmt.ts`) and tabular; names `translate="no"`; no list over about twenty rows. Open: the owner's page
+(`screens.html`) has no skip link (it is a short list beside one frame).
 
 ## 6. What the main lane must decide
 
@@ -329,6 +360,21 @@ and results sheets halve and the whole drops by about a quarter.
    economy's question.
 7. **Photo on the results' front, the clip in Details.** Photo is of this moment over this scene; the clip is the reel
    and lives with Watch your run. Or both on the front (one more control).
+
+## Text to fold into ART.md 10, if the main lane takes the plan
+
+- **The title has one job at a time.** The logo, the picker (the mountains as chips with their skies and short names,
+  the picked one larger with your best; its hour and its mirror under it once open), Ride with its reason on it, one
+  quiet line of what you are working toward, and four labelled doors: Daily and Cup (wearing the flame), Progress,
+  Garage (wearing the gifts), Settings. A door opens a room from the logo's side (the bottom on a phone); its Choose
+  picks the run and Ride says it. Something new is introduced once, by a marigold "New" on its door and one line in
+  its room. Nothing loading is shown; a room's Choose waits for its field. (This replaces "the title's corner is one
+  stack" and "the mountain's name and its feeling sit under the logo"; the feeling stays on the veil.)
+- **The results are three beats over the scene**: how you did (the place, the word and the time, one fact in words);
+  the one reward, turned over, with Rider Rank's bar and the gifts at its foot; the one button with its reason, then
+  Home, Photo and Details. About 2.5 s, landed by a tap or a key. Everything else is Details, one level down.
+- **One system** (`tokens.css`): two radii, three weights, eight sizes of one unit, three button ranks with words on
+  every one, four durations and two easings; vermillion only on the one primary, which is always the run.
 
 ## 7. What milestone 1 would build (files, order, risk)
 
