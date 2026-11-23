@@ -164,7 +164,12 @@ async (page) => {
       return !!el && el.checkVisibility() && el.getAttribute('aria-disabled') !== 'true' && !el.disabled;
     }, sel, { timeout: t, polling: 100 }).then(() => true).catch(() => false);
     if (!ok) return false;
-    await page.evaluate((sel) => document.querySelector(sel).click(), sel);
+    // Focused first, as a keyboard or a pad user presses it: a sheet remembers what opened it and gives focus back.
+    await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      el.focus({ preventScroll: true });
+      el.click();
+    }, sel);
     return true;
   };
   // A selector for the first visible button whose aria-label (or text) starts with `p`.
