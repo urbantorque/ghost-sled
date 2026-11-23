@@ -6,8 +6,12 @@
 // Written in milestone 0 to fail on today's build: there are no new mountains yet, so it prints the five's baseline
 // and "no new mountains" and exits 0. It is a script, not a test (nothing in tests/ runs it), and nothing in the game
 // imports it, so the game's boot does no more work for it. A lab sweep: run it in the heavy slot.
-//   npx tsx scripts/playtest/r9-courses.ts [--seeds 6] [--pilots mid,novice,expert,clumsy] [--max 420]
-//        [--json <file>] [--no-rides] [--mountains pinecrest,ember]
+//   npx tsx scripts/playtest/r9-courses.ts [--seeds 6] [--clumsy-seeds 30] [--pilots mid,novice,expert,clumsy]
+//        [--max 900] [--json <file>] [--no-rides] [--mountains pinecrest,ember]
+// --max is a ride's cap in seconds. The game's own is an hour (daylight); at 420 s, five of the clumsy pilot's 150 runs
+// were cut off between 4,134 and 4,493 m, still riding, so the cap is well past where any pilot finishes.
+// The clumsy pilot rides more seeds than the rest (30 by default): its finish rate is a bar, and six runs a mountain
+// can only say 0, 17, 33, 50, 67, 83 or 100%.
 // --no-rides prints the course measures alone (a second, no slot needed). --json defaults to the main checkout's
 // shots/r9/measure/r9-courses.json, which r9-profiles.ts reads for where the mid pilot flew.
 //
@@ -28,8 +32,10 @@ const opt = (k: string, d: string): string => {
   return i >= 0 ? argv[i + 1] : d;
 };
 const SEEDS = +opt('seeds', '6');
+const CLUMSY_SEEDS = +opt('clumsy-seeds', '30');
+const seedsFor = (pilot: string): number => (pilot === 'clumsy' ? CLUMSY_SEEDS : SEEDS);
 const PILOTS = opt('pilots', 'mid,novice,expert,clumsy').split(',');
-const MAX = +opt('max', '420');
+const MAX = +opt('max', '900');
 const OUT = opt('json', 'C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r9/measure/r9-courses.json');
 const RIDES = !argv.includes('--no-rides');
 const ONLY = opt('mountains', '');
@@ -91,14 +97,14 @@ const t0 = performance.now();
 const facts: CourseFacts[] = LIST.map((m) => courseFacts(m));
 const rides: RideFacts[] = [];
 if (RIDES) {
-  for (const pilot of PILOTS) for (const m of LIST) for (let i = 0; i < SEEDS; i++) rides.push(ride(pilot, m, seedOf(i), MAX));
+  for (const pilot of PILOTS) for (const m of LIST) for (let i = 0; i < seedsFor(pilot); i++) rides.push(ride(pilot, m, seedOf(i), MAX));
 }
 const summary = (id: string, pilot: string): Summary => sum(rides.filter((r) => r.id === id && r.pilot === pilot));
 const isNew = (id: string): boolean => !FIVE.includes(id);
 const fiveFacts = facts.filter((c) => !isNew(c.id));
 const newFacts = facts.filter((c) => isNew(c.id));
 
-console.log(`r9-courses  ${LIST.length} mountains (${fiveFacts.length} of the five, ${newFacts.length} new)  ${RIDES ? `${PILOTS.join(',')} x ${SEEDS} seeds, max ${MAX} s` : 'no rides'}`);
+console.log(`r9-courses  ${LIST.length} mountains (${fiveFacts.length} of the five, ${newFacts.length} new)  ${RIDES ? `${PILOTS.join(',')} x ${SEEDS} seeds (clumsy ${CLUMSY_SEEDS}), max ${MAX} s` : 'no rides'}`);
 
 // ---------------------------------------------------------------- the courses
 
@@ -157,7 +163,7 @@ console.log(`\nsection kinds: the five use ${kindsOf(fiveFacts).size} (${[...kin
 
 if (RIDES) {
   for (const pilot of PILOTS) {
-    console.log(`\nTHE RIDES: ${pilot} (${SEEDS} seeds a mountain; seconds are the finishers' median)`);
+    console.log(`\nTHE RIDES: ${pilot} (${seedsFor(pilot)} seeds a mountain; seconds are the finishers' median)`);
     console.log('mountain       finished  secs   mean m/s  air %  air s  flights>0.5s  longest s  steer rev/km  rider bends/km  falls/run  wards/run  wrecks  set pieces won');
     for (const c of facts) {
       const s = summary(c.id, pilot);
@@ -200,6 +206,8 @@ const MORE: { key: string; of: (c: CourseFacts) => number }[] = [
   { key: 'leaps', of: (c) => c.leaps.length },
   { key: 'max cliff m', of: (c) => Math.max(...c.leaps.map((l) => l.height)) },
   { key: 'kickers on/km', of: (c) => c.features.kickOn },
+  { key: 'sky gates', of: (c) => c.features.skyGates },
+  { key: 'vents/km', of: (c) => c.features.vents },
   { key: 'ice m on line', of: (c) => c.features.iceM },
   { key: 'set pieces %', of: (c) => 100 * c.setPieceShare },
   { key: 'kinds', of: (c) => Object.keys(c.kinds).length },
@@ -225,7 +233,7 @@ const spread = (vals: { id: string; v: number }[]): { lo: number; hi: number; lo
   return { lo: lo.v, hi: hi.v, loId: lo.id, hiId: hi.id };
 };
 
-const json: Record<string, unknown> = { seeds: SEEDS, pilots: PILOTS, max: MAX, rides: RIDES, five: FIVE };
+const json: Record<string, unknown> = { seeds: SEEDS, clumsySeeds: CLUMSY_SEEDS, pilots: PILOTS, max: MAX, rides: RIDES, five: FIVE };
 const bar: Record<string, unknown> = {};
 const usable = RIDES && PILOTS.includes('mid');
 console.log('\nTHE FIVE\'S SPREAD (min and max across the five, and which)');
