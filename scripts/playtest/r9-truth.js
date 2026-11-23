@@ -61,6 +61,19 @@ async (page) => {
     };
     const shown = (el) => !!el && el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true }) && !el.closest('.gs-sr') && opacityOf(el) > 0.15;
     const inView = (r) => r.width >= 2 && r.height >= 4 && r.right > 0 && r.bottom > 0 && r.left < vw && r.top < vh;
+    // Clipped away by a scrolling or clipping ancestor (the mountain strip's cards scrolled out of it): a control with
+    // less than a third of it inside a clip box on the way up, a text with none of it (an ellipsis keeps a little).
+    const clipped = (el, r, frac = 0) => {
+      for (let e = el.parentElement; e && e !== document.body; e = e.parentElement) {
+        const cs = getComputedStyle(e);
+        if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+        const c = e.getBoundingClientRect();
+        const w = Math.min(r.right, c.right) - Math.max(r.left, c.left);
+        const h = Math.min(r.bottom, c.bottom) - Math.max(r.top, c.top);
+        if (w <= 0 || h <= 0 || w * h < r.width * r.height * frac) return true;
+      }
+      return false;
+    };
     // A box is what a reader takes in as one item: the control the text is on (a card that is a button reads as one),
     // else the nearest list item, paragraph, heading or element with a class naming an item (a token ending in -card,
     // -pill, -stat, -chip, -row, -tile, -item, -cell, -count, -wallet, -panel or -pop).
@@ -93,7 +106,7 @@ async (page) => {
         if (!shown(el)) continue;
         const rg = document.createRange();
         rg.selectNodeContents(n);
-        const rs = Array.from(rg.getClientRects()).filter(inView);
+        const rs = Array.from(rg.getClientRects()).filter((r) => inView(r) && !clipped(el, r));
         if (!rs.length) continue;
         out.push({ t, el, r: rs[0] });
       }
@@ -109,7 +122,7 @@ async (page) => {
     for (const el of scope.querySelectorAll('button, [role=button], [role=tab], [role=switch], a[href], input, select')) {
       if (!shown(el)) continue;
       const r = el.getBoundingClientRect();
-      if (!inView(r)) continue;
+      if (!inView(r) || clipped(el, r, 1 / 3)) continue;
       const vis = textOf(el)
         .map((x) => x.t)
         .join(' ');
