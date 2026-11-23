@@ -609,7 +609,13 @@ In this order, each green before the next (tsc, the touched tests, the console c
 8. **The Lantern Row moves into the place** (its rafters and the finish towns), and its tab goes.
 9. **The owner's decision 2** (colour roles locked) is assumed: every proposal differs by silhouette, material, pattern,
    motion or light.
-10. **Text for DECISIONS and ART.md** (the main lane's to write): the model (section 1), the economy table (section 2),
+10. **The second pass on the pieces before milestone 2 builds them** (section 3's six points, worst first: no navy
+    finishes, the tiers take the finish, trails in the air, lights that glow, five hats cut or reworked, scarf forms
+    big enough to read), judged again by a fresh critic on the same sheets. Today's near-duplicates it confirmed (four
+    of six trails, two of seven hats, Midnight against Basalt) go whatever is decided.
+11. **The page's frames** (`prototypes/r9/garage/frames`, 1.4 MB of JPEG) are committed so the page stands on any
+    checkout; drop them and point the page at `shots/r9/garage/sheet/` if the repo should carry none.
+12. **Text for DECISIONS and ART.md** (the main lane's to write): the model (section 1), the economy table (section 2),
     ART.md 5's hats list (twelve outlines), scarf forms (two tails, four tails, weighted ends, a cape, a bow), the burn
     that keeps the knit's value, trails as shapes and behaviours, finishes as finish and motif, the track's five tiers and
     the ornament post, and the garage as a place (section 4).
