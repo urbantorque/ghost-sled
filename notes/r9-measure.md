@@ -265,9 +265,10 @@ the far plane, palette) is marked as the render's and left to the screens and co
 - **The stage lines are the same plain corridor on all five:** a 190 m threshold (40 m above the line, 150 m below), at
   least 22 m wide with nothing on it, at 1,410 to 1,600 and 2,910 to 3,100 m, and the charm gates at 110, 1,550 and
   3,050 m on every mountain.
-- **The first minute is identical beyond the leap:** the first kicker on the line at 286 m (Lanternfall 296), nothing
-  else on the line before 800 m (kickers, mogul fields and sky gates all start there), the corridor's middle empty
-  until 900 m, every fall free before 700 m (`FREE_TUMBLE_Z`), the start at 14 m/s.
+- **The first minute is identical beyond the leap:** the first kicker on the line at 286 m (Lanternfall 296) and no
+  other on the line before 800 m (the run-in has one to four off it, at 204 to 418 m), no mogul field or sky gate
+  before 800 m, the corridor's middle empty until 900 m (0 to 6 colliders within 6 m of the line in the first 900 m),
+  every fall free before 700 m (`FREE_TUMBLE_Z`), the start at 14 m/s.
 - **The difficulty ramp is one curve:** every mountain narrows and fills over the same 4,500 m (`rampDistance` is
   `DESCENT` for all five); only the start and end widths and the density differ.
 - **The profile eases, it does not build:** stage 1 is the steepest on four (0.36 to 0.38 against 0.26 to 0.31 in
@@ -311,4 +312,57 @@ Outside `src/sim`, the game layer's five-mountain assumptions the brief already 
 length (`game/graveyards.ts` 64 and 127), and the title's strip; to which this adds every `FINISH_Z` read above and
 `race-lab.ts`'s own `FINISH = 4500`.
 
-(The stills follow.)
+## What the main lane must decide
+
+- **The new-rides bar's reading** (above): as written, four of the five pass it against the rest. The 15% margin, or
+  measures the five share exactly, would make it a test a reskin fails.
+- **The fair bar's baseline is 27 of 30** for the clumsy pilot (Pinecrest and Sakura), on 30 seeds and a 900 s cap.
+  Six seeds put the hardest the other way round.
+- **Every `FINISH_Z` read in the game layer** (eight files, listed above) must become the course's own `finishZ`
+  before a mountain of another length is raced, or its records will not count as finished. This is M1 groundwork the
+  brief's list does not name.
+- For DECISIONS (the main lane's to write): section 1's mountains review is right on the grammar (one opening, one
+  length, one set of stages, three leaps, one square, a mid rider home in 121 to 129 s) and wrong on four details
+  (18 kinds: 16 used, 9 on all five; a sky gate a stage: 1 to 3; ice everywhere: none on Ember; a tree and a rock
+  alike: a rock can be jumped). It missed that the stage lines, the first minute and the difficulty ramp are identical
+  too, and that the five differ most in colliders a km (43 to 126) and air (24 to 35% for the mid pilot).
+
+## What only a person can judge
+
+Every number here is the sim's or a pilot's. Whether the five feel like one course, whether a new mountain rides
+differently, and whether the greyscale set can be sorted are for a critic and then the owner; the lab pilots ride
+the five well, but none of them is a person, and the clumsy pilot's air in particular is a scripted hand bouncing off
+the banks.
+
+## The greyscale still set ("Not paintings")
+
+`shots/r9/measure/stills/`: `colour/` (the originals), `gray/` (greyscale copies, ffmpeg's `format=gray` as
+`blind-pairs.mjs --gray` makes them), `colour-sheet.png` and `gray-sheet.png` (a row a mountain in `MOUNTAINS` order,
+Pinecrest to Lanternfall; a column a frame, opening to finish), `plan.json`
+(`stills-plan.json` for this first set) and `raw/` (stills.js's own names and logs).
+
+The rule (`r9-stills-plan.ts`), so the same set can be shot on a new mountain: desk, High, 1280x720, the pool rider 0
+replayed as the player on a virtual clock (`stills.js`, the HUD hidden), five frames a mountain: the **opening** at
+60 m; three **places** at a quarter, a half and three quarters of the run (1,125, 2,250 and 3,375 m on the five, one
+in each stage); the **finish** 60 m short of the line. Files are named `<id>-<n>-<slot>-z<metre>-<section kind>[-<set
+piece>].png`. The places on the five:
+
+| | opening | a quarter | a half | three quarters | finish |
+|---|---|---|---|---|---|
+| Pinecrest | 60 start | 1,125 fork | 2,250 bowl | 3,375 fork | 4,440 square |
+| Frostfang | 60 start | 1,125 ravine | 2,250 ravine (the Crevasse Fields) | 3,375 tunnel (the Ice Cavern) | 4,440 square |
+| Ember | 60 start | 1,125 ravine | 2,250 fork | 3,375 bridge | 4,440 square |
+| Sakura | 60 start | 1,125 terraces (Petal Steps) | 2,250 fork | 3,375 fork | 4,440 square |
+| Lanternfall | 60 start | 1,125 ravine (the Cloud Sea) | 2,250 fork | 3,375 bridge | 4,440 square (the First Flame) |
+
+Shot on 23 November in one session (the dev server on 4910, the browser slot held 17 minutes); every one of the five
+loads logged no console error or warning. The rider is pool rider 0 of each mountain, so it is a different rider on
+each, at its own pace (it reached 4,440 m at 102 s on Sakura and 205 s on Lanternfall): the frames hold the run still
+for a fair comparison of builds, not of riders.
+
+What I saw in the greyscale sheet (my own look, not a critic's, and not the sorting test itself, which needs all
+eight): the finish column is one picture five times over (the same square, gate, stands and hanging lanterns); the
+openings are one composition (a wide trench falling away from a centred rider toward a valley under ranges); the
+three places differ more, by what the course puts there (ravine walls on Frostfang, Ember and Lanternfall, the
+Ice Cavern's roof, Sakura's open terraces and forks, Pinecrest's open fork and bowl). That matches the numbers: the
+five share the opening and the square exactly and differ in the middle.
