@@ -141,6 +141,9 @@
 .gs9-list {
   display: grid;
   gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .gs9-row {

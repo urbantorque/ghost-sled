@@ -1,22 +1,25 @@
-import type { MedalSet, MissionView, MountainCard, ScreenRect, TitleCup, TitleModel, TitleSpine, TitleTrial, TitleTwelve, TwelveRung, UIHandlers } from './contract';
-import { barShare } from './almanac';
+import type { MedalSet, MissionView, MountainCard, ScreenRect, TitleDoor, TitleModel, TitleTrial, UIHandlers } from './contract';
 import type { InputMode } from '../game/input';
 import { oldLinkLine } from '../game/challenge';
 import { clock } from '../game/standing';
-import { MOUNTAINS } from '../sim/mountains';
-import { biomeArt, riderBust } from './art';
-import { btn, captureFocus, h, kbd, Layer, padBtn, restoreFocus, sr, type Ctx } from './dom';
-import { dailyDate, fmt, metres, NBSP, progFigures, rewardsLine } from './fmt';
-import { icon } from './icons';
-import { EASE_OUT, SPRING, play, reduced } from './motion';
+import { biomeArt } from './art';
+import { h, kbd, Layer, padBtn, sr, type Ctx } from './dom';
+import { fmt, metres, NBSP, progFigures } from './fmt';
+import { icon, type IconName } from './icons';
+import { b9, ico9, ordinal9, sheetOpen } from './kit9';
+import { EASE_OUT, play, reduced } from './motion';
 import { pushRect } from './hud';
-import './hours.css';
+import { curly, nb, prizeLower } from './words';
 import './trials.css';
 
-// Title screen. Landscape: one column on the left reads logo, mountain cards, the Ride that rides
-// them, then the menu row; wallet and the daily and Cup cards keep to the right, and the 3D scene owns
-// the middle. Portrait: stacked, with Ride in the thumb zone. Each mountain card carries your rank and
-// medals on it, and Ride names the rider above you.
+// The title (round 9, U1): one job at a time. The main screen holds the logo; the mountains as a picker of chips with
+// short names, the picked one larger with your best on it; Ride with its reason on it; one quiet line of what you are
+// working toward; and four labelled doors (Daily and Cup, Progress, Garage, Settings). Each figure carries its word,
+// and each thing is said once: the next duel is Ride's reason and nowhere else; the next unlock is the quiet line, so
+// a locked chip shows only its lock; your gifts are on the Garage's door, where they are spent; your flame on the
+// Daily's, where it is kept. A door opens a room from the logo's side (the bottom on a phone): rooms.ts, loaded on
+// demand. Nothing loading is shown: a room's Choose waits for its field. Moving between mountains is a veil in the new
+// place's own air (round 7), which also says the place's feeling, now that the logo carries no place line.
 
 export interface TitleMenuHooks {
   openSleds(): void;
@@ -24,46 +27,55 @@ export interface TitleMenuHooks {
 }
 
 /**
- * Each place's line under the logo and on the veil that carries the title from one mountain to the next:
- * the feeling ART.md 15 gives it, in a few words. The title is that mountain's key art, so the words under
- * the logo are the mountain's own.
+ * Each place's feeling, on the veil that carries the title from one mountain to the next (ART.md 15, in a few
+ * words). Round 9 took it from under the logo: the picked chip names the place, Ride rides it.
  */
 const PLACES: Readonly<Record<string, string>> = {
   pinecrest: 'The bright day that turns to gold',
   frostfang: 'Blue hour, aurora, dawn',
-  ember: 'Under the mountain\u2019s breath',
+  ember: 'Under the mountain’s breath',
   sakura: 'The spring morning',
   lanternfall: 'Where the lights come from',
   daily: 'One mountain, new every day',
   cup: 'One week, one field, one mood',
 };
 
-/** The veil's beats (ms): it sweeps over the scene, the app builds the new mountain under it, the name
- *  holds long enough to read, and it sweeps on and off. style.css (.gs-t-veil) carries the same figures. */
+/** Short names, as a player says them: the picker's chips and Ride carry these. */
+const SHORT: Readonly<Record<string, string>> = { pinecrest: 'Pinecrest', frostfang: 'Frostfang', ember: 'Ember', sakura: 'Sakura', lanternfall: 'Lanternfall' };
+
+/** The veil's beats (ms): it sweeps over the scene, the app builds the new mountain under it, the name holds long
+ *  enough to read, and it sweeps on and off. screens.css (.gs-t-veil) carries the same figures. */
 export const TRAVEL_TIMING = { IN_MS: 260, HOLD_MS: 420, OUT_MS: 460 } as const;
 
-/** Medal names by rank (0 none). */
-const MEDAL = ['', 'Bronze', 'Silver', 'Gold'] as const;
+/** How long the quiet line says what opens a locked chip that was pressed. */
+const LOCKED_SAY_MS = 3200;
+
+const DOOR_LABEL: Record<TitleDoor, string> = { events: 'Daily and Cup', progress: 'Progress', garage: 'Garage', settings: 'Settings' };
+const DOOR_ICON: Record<TitleDoor, IconName> = { events: 'flame', progress: 'book', garage: 'sledBold', settings: 'gear' };
 
 /** Ride's prompt for the last input used: the Space keycap, the pad's A, or none for touch. */
 function rideKey(mode: InputMode): HTMLElement | null {
   if (mode === 'touch') return null;
-  return mode === 'gamepad' ? padBtn('A', 'gs-ride-key') : kbd('Space', 'gs-ride-key');
+  const k = mode === 'gamepad' ? padBtn('A', 'gs-ride-key') : kbd('Space', 'gs-ride-key');
+  k.setAttribute('aria-hidden', 'true');
+  return k;
+}
+
+/** A room as the title holds it while open (rooms.ts). */
+interface OpenRoom {
+  door: TitleDoor;
+  el: HTMLElement;
+  close(): void;
+  update(m: TitleModel): void;
 }
 
 export class Title {
   readonly layer: Layer;
   private readonly el: HTMLElement;
-  private popover: HTMLElement | null = null;
-  private popKind: 'missions' | 'medals' | 'twelve' | 'flame' = 'missions';
-  /** Round 8: the flame's button in the corner pill (its calendar's popover hangs under it). */
-  private flameBtnEl: HTMLButtonElement | null = null;
-  private missionsBtn: HTMLButtonElement | null = null;
-  private medalsBtn: HTMLButtonElement | null = null;
-  private twelveBtn: HTMLButtonElement | null = null;
-  private io: IntersectionObserver | null = null;
-  /** The veil that carries the title from one mountain to the next, kept across renders so its sweep is
-   *  never cut by the re-render it covers. */
+  /** The model on screen (the rooms read it; the capture scripts too). */
+  model: TitleModel | null = null;
+  /** The veil that carries the title from one mountain to the next, kept across renders so its sweep is never cut by
+   *  the re-render it covers. */
   private readonly veil: HTMLElement;
   private readonly veilName: HTMLElement;
   private readonly veilLine: HTMLElement;
@@ -72,6 +84,17 @@ export class Title {
   /** The first-visit sound toggle: muted here, and the master volume it gives back. */
   private muted = false;
   private unmuteTo = 1;
+  /** A locked chip just pressed: the quiet line says what opens it, for a moment. */
+  private locked: MountainCard | null = null;
+  private lockedTimer = 0;
+  private main: HTMLElement | null = null;
+  private aimEl: HTMLElement | null = null;
+  private room: OpenRoom | null = null;
+  /** The title's panels moved (a room opened or closed): the ghost tags' occluders are measured again (ui.ts). */
+  onLayout: () => void = () => undefined;
+  /** The intro lines whose door was opened this session (the app is told too, onIntroSeen). */
+  private readonly seen = new Set<string>();
+  private entered = false;
 
   constructor(
     parent: HTMLElement,
@@ -79,7 +102,7 @@ export class Title {
     private readonly hd: UIHandlers,
     private readonly hooks: TitleMenuHooks,
   ) {
-    this.el = h('section', 'gs-title');
+    this.el = h('section', 'gs-title gs9-title');
     this.el.setAttribute('aria-label', 'Ghost Sled');
     parent.append(this.el);
     this.veilName = h('span', 'gs-t-veil-name');
@@ -92,12 +115,11 @@ export class Title {
     window.addEventListener('resize', () => {
       if (this.layer.open) this.dock();
     });
-    document.addEventListener('pointerdown', (e) => {
-      if (!this.popover) return;
-      const t = e.target as Node | null;
-      if (t && (this.popover.contains(t) || this.missionsBtn?.contains(t) || this.medalsBtn?.contains(t) || this.twelveBtn?.contains(t))) return;
-      this.closeMissions();
-    });
+  }
+
+  /** A room is open over the title. */
+  get roomOpen(): boolean {
+    return this.room !== null;
   }
 
   show(m: TitleModel): void {
@@ -106,70 +128,60 @@ export class Title {
       if (m.master > 0) this.unmuteTo = m.master;
     }
     const fresh = !this.layer.open;
-    const fk = fresh ? null : captureFocus(this.el);
-    const oldTrack = this.el.querySelector<HTMLElement>('.gs-mtns');
-    const keepScroll = !fresh && oldTrack ? oldTrack.scrollLeft : -1;
-    const hadPopover = !fresh && this.popover !== null;
-    const popKind = this.popKind;
-    // A refresh while open (mountain picked, daily ready) swaps content in place: no entrance replay.
-    this.el.classList.toggle('is-static', !fresh);
+    if (fresh) this.entered = false;
+    const a = document.activeElement;
+    const fk = !fresh && a instanceof HTMLElement && this.main?.contains(a) ? (a.dataset.fk ?? null) : null;
+    const scroll = this.el.querySelector<HTMLElement>('.gs9-strip')?.scrollLeft ?? -1;
+    this.model = m;
     this.render(m);
     this.layer.show();
-    // The strip is centred on the selected card synchronously, before the first paint: deferring the
-    // read to a frame later would show the strip at its start and then jump. One layout per title
-    // render (opening it, picking a mountain) is the price.
-    const track = this.el.querySelector<HTMLElement>('.gs-mtns');
-    if (track) {
-      if (keepScroll >= 0) track.scrollLeft = keepScroll;
-      else {
-        const sel = track.querySelector<HTMLElement>('.is-sel');
-        if (sel) track.scrollLeft = Math.max(0, sel.offsetLeft - track.clientWidth / 2 + sel.offsetWidth / 2);
-      }
+    const strip = this.el.querySelector<HTMLElement>('.gs9-strip');
+    if (strip && scroll >= 0 && !fresh) strip.scrollLeft = scroll;
+    if (fk) this.el.querySelector<HTMLElement>(`[data-fk="${CSS.escape(fk)}"]`)?.focus({ preventScroll: true });
+    // A room open over the title takes the new model in place (its Choose appears once its field is in).
+    if (this.room) {
+      if (m.firstVisit) this.room.close();
+      else this.room.update(m);
     }
-    if (hadPopover && popKind === 'medals') this.openMedals(m, false);
-    else if (hadPopover && popKind === 'twelve') this.openTwelve(m, false);
-    else if (hadPopover && popKind === 'flame' && m.spine) this.openFlame(m.spine, false);
-    else if (hadPopover) this.openMissions(m.missions, false);
-    restoreFocus(this.el, fk);
     this.dock();
   }
 
   /**
-   * Where a toast docks while the title is up (--title-dock on the UI root, used on phones held
-   * upright): just under the wordmark and its tagline, which sit at the top centre there and hid
-   * "Challenge from an older Ghost Sled" under their letters. Layout offsets, so the entrance
-   * animation's transform never moves it; read in the same layout pass as the strip's centring above.
+   * Where a toast docks while the title is up (--title-dock on the UI root, used on phones held upright): just under
+   * the logo, which sits at the top centre there. Layout offsets, so the entrance animation's transform never moves it.
    */
   private dock(): void {
-    const main = this.el.querySelector<HTMLElement>('.gs-t-main');
-    if (!main) return;
-    const bottom = this.el.offsetTop + main.offsetTop + main.offsetHeight;
-    this.el.parentElement?.style.setProperty('--title-dock', `${Math.round(bottom)}px`);
+    const logo = this.el.querySelector<HTMLElement>('.gs-logo');
+    if (!logo) return;
+    let y = logo.offsetHeight;
+    for (let e: HTMLElement | null = logo; e && e !== this.el.parentElement; e = e.offsetParent as HTMLElement | null) y += e.offsetTop;
+    this.el.parentElement?.style.setProperty('--title-dock', `${Math.round(y)}px`);
   }
 
-  /** The title's panels, for the ghost tags to keep off (ui.ts occluders). Round 8's smoke: with none, the title's
-   *  one tag sat on the mountain's name on a phone and on the strip's arrow on a desk. Each block's own children, so
-   *  a block's empty width (the wordmark's row on a phone) stays open to the scene; the scrim, the dip and the veil
-   *  cover the whole frame and are left out. */
+  /** The title's panels, for the ghost tags to keep off (ui.ts occluders): each block of the main column (the picker's
+   *  chips and the doors one by one, so their gaps stay open to the scene), and a room while one is open. */
   measure(out: ScreenRect[], n: number): number {
-    if (!this.layer.open) return n;
-    for (const block of Array.from(this.el.children)) {
-      if (block === this.veil || block.classList.contains('gs-title-scrim') || block.classList.contains('gs-title-dip')) continue;
-      for (const c of Array.from(block.children)) n = pushRect(out, n, c);
+    if (!this.layer.open || !this.main) return n;
+    for (const block of Array.from(this.main.children)) {
+      if (block.classList.contains('gs9-pick') || block.classList.contains('gs9-doors')) for (const c of Array.from(block.querySelectorAll('.gs9-chip, .gs9-door, .gs9-seg'))) n = pushRect(out, n, c);
+      else n = pushRect(out, n, block);
     }
-    // (The strip's arrows hang outside the strip's own box. One faded out at the strip's end is left out.)
-    for (const a of Array.from(this.el.querySelectorAll('.gs-mtns-prev, .gs-mtns-next'))) if (a.checkVisibility?.({ visibilityProperty: true, opacityProperty: true }) !== false) n = pushRect(out, n, a);
+    const sound = this.el.querySelector('.gs9-sound');
+    if (sound) n = pushRect(out, n, sound);
+    if (this.room) n = pushRect(out, n, this.room.el);
     return n;
   }
 
   hide(): void {
-    this.closeMissions();
+    this.room?.close();
     this.endTravel();
+    window.clearTimeout(this.lockedTimer);
+    this.locked = null;
     this.layer.hide();
   }
 
-  /** The reel cut back to the start of its shot: a short dip of ink over the scene, so the loop reads as
-   *  an edit. Nothing under reduced motion, and never over a veil already crossing. */
+  /** The reel cut back to the start of its shot: a short dip of ink over the scene, so the loop reads as an edit.
+   *  Nothing under reduced motion, and never over a veil already crossing. */
   cut(): void {
     if (!this.layer.open || this.travelling || reduced() || typeof this.el.animate !== 'function') return;
     const scrim = this.el.querySelector('.gs-title-dip');
@@ -177,19 +189,17 @@ export class Title {
   }
 
   /**
-   * Picking another mountain is a designed move, not a swap: a veil in the new place's own air sweeps over
-   * the scene from the logo's side, the app builds the mountain under it (`go`), the place's name and its
-   * line hold on the veil, and it sweeps on off the far edge to show the new shot. The controls stay
-   * where they are, above it. Under reduced motion the mountain changes at once.
+   * Picking another mountain is a designed move, not a swap: a veil in the new place's own air sweeps over the scene
+   * from the logo's side, the app builds the mountain under it (`go`), the place's name and its line hold on the veil,
+   * and it sweeps on off the far edge to show the new shot. Under reduced motion the mountain changes at once.
    */
-  private travel(id: string, name: string, go: () => void, line?: string): void {
+  travel(id: string, name: string, go: () => void, line?: string): void {
     if (this.travelling) return;
     if (reduced() || typeof this.veil.animate !== 'function') {
       go();
       return;
     }
     this.travelling = true;
-    this.closeMissions();
     this.veil.className = `gs-t-veil v-${id} is-in`;
     this.veilName.textContent = name;
     this.veilLine.textContent = line ?? PLACES[id] ?? '';
@@ -216,8 +226,7 @@ export class Title {
     this.veil.className = 'gs-t-veil';
   }
 
-  /** The last input used changed while the title is up: Ride's prompt follows it (Space, the pad's A, or
-   *  none for touch). */
+  /** The last input used changed while the title is up: Ride's prompt follows it (Space, the pad's A, or none). */
   setInputMode(mode: InputMode): void {
     const ride = this.el.querySelector<HTMLElement>('[data-fk="ride"]');
     if (!ride) return;
@@ -226,323 +235,318 @@ export class Title {
     if (key) ride.append(key);
   }
 
+  // ---------------------------------------------------------------- the main screen
+
   private render(m: TitleModel): void {
-    this.io?.disconnect();
-    this.io = null;
-    this.popover = null;
-    const ctx = this.ctx;
     const el = this.el;
-    // (Everything but the veil: taking it out and putting it back would start its sweep again mid-crossing.)
-    for (const c of Array.from(el.children)) if (c !== this.veil) c.remove();
+    // (Everything but the veil and an open room: taking the veil out and putting it back would start its sweep again.)
+    for (const c of Array.from(el.children)) if (c !== this.veil && c !== this.room?.el) c.remove();
     if (!this.veil.isConnected) el.append(this.veil);
     el.classList.toggle('is-first', m.firstVisit);
     el.classList.toggle('has-challenge', m.challenge !== null);
-
-    this.twelveBtn = null;
-    el.prepend(h('div', 'gs-title-scrim'), h('div', 'gs-title-dip'));
-
-    // Logo + tagline. A brand-new player reads the hook directly above the button that starts it:
-    // on a phone that leaves the logo alone at the top, the sky and the rider's band open, and the
-    // words on the ink floor under the scene instead of floating over the sky.
-    const tagline = h('p', 'gs-tagline', 'Race the ghosts of every great run.');
-    // A returning player reads the mountain picked under the logo: its name and the feeling of its key art.
-    // (The trials lane: the week's Trial picked reads "Week 48 Trial" over its twist, "Mirrored Ember Peak in a Blizzard".)
-    const trialOn = m.selected === 'trial' && m.trial ? m.trial : null;
-    const placeLine = trialOn ? trialOn.name : PLACES[m.selected];
-    const picking = trialOn ? `Week ${trialOn.week} Trial` : m.selected === 'daily' ? 'Daily Mountain' : m.selected === 'cup' ? 'Weekly Cup' : (m.mountains.find((x) => x.id === m.selected)?.name ?? '');
-    const placeName = h('span', 'gs-t-place-n', picking);
-    placeName.setAttribute('translate', 'no');
-    const place = !m.firstVisit && placeLine && picking ? h('p', 'gs-t-place', placeName, h('span', 'gs-t-place-l', placeLine)) : null;
-    el.append(h('div', 'gs-t-main gs-t-anim', logo(), m.firstVisit ? null : (place ?? tagline)));
-
-    // Challenge banner + Ride.
-    const ride = h('div', 'gs-t-ride gs-t-anim');
-    if (m.firstVisit) ride.append(tagline);
-    if (m.challenge) {
-      // A friend's link opens on their ghost: "Racing Mila's ghost" over how far it went and where.
-      ride.append(challengeBanner(m.challenge));
-    } else if (trialOn) {
-      // The Trial picked: its rule and the three targets over Ride, where the greeting stands.
-      ride.append(trialPanel(trialOn));
-    } else if (m.greet && !m.firstVisit) {
-      // A returning player gets one line over Ride: who is waiting, what is close, or the nearest
-      // mission. It is read in context right above Ride, so it carries no live role.
-      ride.append(greeting(m.greet));
+    el.prepend(h('div', 'gs9-t-pool'), h('div', 'gs-title-dip'));
+    const main = h('div', 'gs9-t');
+    this.main = main;
+    main.append(logo());
+    if (m.firstVisit) main.append(h('p', 'gs9-t-tagline', 'Race the ghosts of every great run.'));
+    else main.append(this.picker(m));
+    main.append(this.rideBlock(m));
+    const how = m.firstVisit ? null : this.how(m);
+    if (how) main.append(how);
+    this.aimEl = this.aim(m);
+    main.append(this.aimEl);
+    if (!m.firstVisit) main.append(this.doors(m));
+    // While a room is open the screen under it stays inert (the room gives it back as it closes).
+    if (this.room) main.inert = true;
+    el.insertBefore(main, this.veil);
+    // A first visit has no doors (and so no Settings): one labelled Sound toggle keeps the top right, so a new player
+    // can mute before the first run starts any music.
+    if (m.firstVisit) el.insertBefore(this.soundToggle(), this.veil);
+    // The column arrives from the logo's side once, top to bottom (ART.md 10: a screen comes and goes the way it is
+    // built); a re-render (a mountain picked, the rivals in) swaps in place. Reduced motion: no movement (tokens.css).
+    if (!this.entered) {
+      this.entered = true;
+      Array.from(main.children).forEach((c, i) => {
+        const e = c as HTMLElement;
+        e.classList.add('gs9-enter');
+        e.style.setProperty('--from-x', '-18px');
+        e.style.setProperty('--from-y', '0px');
+        e.style.setProperty('--delay', `${i * 60}ms`);
+      });
     }
-    const showKey = m.inputMode !== 'touch';
-    // The button carries the choice it acts on. With the mountain cards on screen (the selected one
-    // outlined right above it) its subline says what that mountain is like, so the cards keep to a
-    // name and a lock line; a first visit has no cards, so it names the mountain, as does a challenge.
-    // A picked mountain with no record of yours yet wears what it is like on its own card (its lower
-    // half would stand empty), and the button names it instead.
-    // The Daily and the Cup are picked from cards of their own, so the button names those itself.
-    // With a ladder to climb it carries the name above you: what the next run is for.
-    const sel = m.mountains.find((x) => x.id === m.selected) ?? m.mountains[0];
-    const picked = m.selected === 'daily' ? 'Daily Mountain' : m.selected === 'cup' ? 'Weekly Cup' : trialOn ? 'Weekly Trial' : null;
-    const passed = m.firstVisit ? 0 : ghostsPassed(m);
-    const bare = !picked && !!sel && !sel.locked && sel.best <= 0 && !sel.oldBest && passed <= 0;
-    // Another day's Daily or another week's Cup: its course has gone, so nobody is being raced and the
-    // button is the plain one. The banner says so rather than promising a ghost that will not ride.
-    const raced = m.challenge && (m.challenge.old || m.challenge.mountain) ? m.challenge : null;
-    // (The modes lane: the picked mountain mirrored, its toggle on. A mirror is never a duel's ground.)
-    const mirrored = !raced && !picked && !m.firstVisit && !!m.mirror?.on;
-    // (The hours lane: the picked mountain's other hour, and Ride's line naming it when it is picked.)
-    const hour = !raced && !picked && !m.firstVisit && m.hour ? m.hour : null;
-    const named = hour?.on ? `${sel?.name ?? ''} ${hour.phrase}` : (sel?.name ?? '');
-    // The Twelve: on the next rider's home ground the run is the duel, and the button says so.
-    const tw = raced || m.firstVisit || picked || mirrored ? null : (m.twelve ?? null);
-    const duel = tw?.next?.here ? tw.next.name : tw?.final?.here ? 'The last race' : null;
-    const verb = raced ? 'Accept' : tw?.next?.here ? 'Duel' : 'Ride';
-    const where = raced ? raced.mountain : mirrored ? `${named}, mirrored` : (picked ?? named);
-    const aim = raced || m.firstVisit || picked || mirrored ? null : (m.nextRung ?? null);
-    // A link's Daily or Cup is still finding its rivals: the banner says where, the button why it does
-    // not go yet. (Not `disabled`, for the mode cards' reason: it keeps its focus and its name.)
-    const waiting = !!m.challenge?.waiting;
-    const status = 'Finding rivals…';
-    const subline = waiting ? status : (duel ?? aim ?? (raced || m.firstVisit || bare || picked || mirrored || hour?.on ? where : (sel?.tagline ?? where)));
-    const mtn = subline ? h('span', 'gs-ride-mtn', subline) : null;
-    if (subline === where || aim || duel) mtn?.setAttribute('translate', 'no');
-    const rideBtn = btn(
-      ctx,
-      {
-        cls: 'gs-btn-primary gs-ride',
-        icon: 'play',
-        sound: waiting ? 'tap' : 'confirm',
-        gameKey: true,
-        fk: 'ride',
-        onClick: () => {
-          if (!waiting) this.hd.onRide();
-        },
-      },
-      h('span', 'gs-btn-label gs-ride-label', h('span', 'gs-ride-verb', verb), mtn),
-      rideKey(m.inputMode),
-    );
-    rideBtn.setAttribute('aria-label', where ? `${verb}: ${duel ? `${duel} on ` : ''}${where}${trialOn ? `, ${trialOn.name}` : ''}${aim && !duel ? `. ${aim}` : ''}${waiting ? `. ${status.slice(0, -1)}` : ''}` : verb);
-    if (waiting) rideBtn.setAttribute('aria-disabled', 'true');
-    if (showKey) rideBtn.setAttribute('aria-keyshortcuts', 'Space');
-    ride.append(rideBtn);
-    // Under the Ride, one row of choices for how the picked mountain is ridden: the hour (the hours lane: the day or
-    // its other hour, once the Almanac has opened it) and the mirror (the modes lane, once open).
-    const opts = h('div', 'gs-t-opts');
-    if (hour) opts.append(this.hourPick(hour, sel?.name ?? 'this mountain'));
-    if (m.mirror && !raced && !picked && !m.firstVisit) {
-      const on = m.mirror.on;
-      const tg = btn(ctx, { cls: 'gs-btn-soft gs-t-mirror', fk: 'mirror', onClick: () => this.hd.onMirror?.(!on) }, h('span', 'gs-t-mirror-mark'), h('span', 'gs-btn-label', 'Mirrored'));
-      tg.setAttribute('aria-pressed', String(on));
-      tg.setAttribute('aria-label', `Ride ${sel?.name ?? 'this mountain'} mirrored`);
-      opts.append(tg);
-    }
-    // (The trials lane: the week's Cup or its Trial, while the Cup's card is picked; the card is the week's.)
-    if (m.trial && !raced && (m.selected === 'cup' || trialOn)) opts.append(this.weekPick(m.trial));
-    if (opts.childElementCount) ride.append(opts);
-    // A brand-new player learns the loop before the first tap: what the ghosts are for.
-    if (m.firstVisit && !m.challenge) ride.append(h('p', 'gs-t-goal', 'Pass ghosts to unlock new mountains'));
-    el.append(ride);
+  }
 
-    // A first visit has no menu row (and so no Settings), so a small sound toggle keeps the top
-    // right: a new player can mute before the first run starts any music.
-    if (m.firstVisit) {
-      el.append(this.soundToggle());
-      return;
-    }
-
-    // Wallet + best. A zero is left out (a returning player who sees "0 / Best 0" reads it as lost
-    // progress), and with both at zero the pill is not drawn at all.
-    const gifts = m.wallet > 0 ? h('span', 'gs-stat gs-stat-gift', icon('gift'), h('span', 'gs-num', fmt(m.wallet)), sr(' gifts')) : null;
-    const rec = record(m);
-    const best = rec ? h('span', 'gs-stat', icon('trophy', 'gs-stat-trophy'), h('span', 'gs-stat-l', rec.label), h('span', 'gs-num', rec.value)) : null;
-    // Round 8: the spine's corner (TitleSpine). The flame leads the pill (its calendar a tap away), Rider Rank's
-    // card under it opens the Almanac at the page being filled toward, and the one line of what is new today under
-    // that. The corner is one stack, so a phone keeps it at the top in the same order.
-    const sp = m.spine ?? null;
-    const flame = sp && (sp.flame.streak > 0 || sp.flame.ember) ? this.flameBtn(sp) : null;
-    this.flameBtnEl = flame;
-    const pill = gifts || best || flame ? h('div', 'gs-t-stats gs-panel gs-pill', flame, flame && (gifts || best) ? h('span', 'gs-stat-sep') : null, gifts, gifts && best ? h('span', 'gs-stat-sep') : null, best) : null;
-    const book = sp ? this.bookCard(sp) : null;
-    const news = sp?.whatsNew ? h('p', 'gs-t-news', icon('star'), h('span', 'gs-t-news-t', sp.whatsNew)) : null;
-    if (pill || book || news) el.append(h('div', 'gs-t-top gs-t-anim', pill, book, news));
-
-    // Mountains + daily.
-    const side = h('div', 'gs-t-side gs-t-anim');
-    const track = h('div', 'gs-mtns');
-    track.setAttribute('role', 'group');
-    track.setAttribute('aria-label', 'Mountains');
-    for (const c of m.mountains) track.append(this.mountainCard(c, c.id === m.selected, passed));
-    const prev = btn(ctx, { cls: 'gs-btn-soft gs-btn-round gs-mtns-prev', icon: 'chevL', aria: 'Previous mountains', onClick: () => this.page(track, -1) });
-    const next = btn(ctx, { cls: 'gs-btn-soft gs-btn-round gs-mtns-next', icon: 'chevR', aria: 'More mountains', onClick: () => this.page(track, 1) });
-    const strip = h('div', 'gs-mtns-wrap', track, prev, next);
-    side.append(strip);
-    track.addEventListener(
+  /** The picker: a chip a mountain, its sky and its short name; the picked one larger, with your best on it. */
+  private picker(m: TitleModel): HTMLElement {
+    const strip = h('div', 'gs9-strip');
+    strip.setAttribute('role', 'group');
+    strip.setAttribute('aria-label', 'Where you ride');
+    for (const c of m.mountains) strip.append(this.chip(c, c.id === m.selected));
+    // A mouse wheel turns the strip when it scrolls (a phone's five chips).
+    strip.addEventListener(
       'wheel',
       (e) => {
-        if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || track.scrollWidth <= track.clientWidth) return;
-        track.scrollLeft += e.deltaY;
+        if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || strip.scrollWidth <= strip.clientWidth) return;
+        strip.scrollLeft += e.deltaY;
         e.preventDefault();
       },
       { passive: false },
     );
-    // The mountain cards sit directly above the Ride that rides them; the daily is its own card.
-    el.append(side, h('div', `gs-t-daily gs-t-anim${m.cup ? ' has-cup' : ''}`, m.cup ? this.cupCard(m.cup, m.selected === 'cup' || !!trialOn, m.trial ?? null) : null, this.dailyCard(m.daily, m.selected === 'daily')));
-    this.watchEnds(track, prev, next, strip);
-    if (m.twelve) el.append(this.twelveCard(m.twelve, m));
-
-    // Secondary row.
-    const bar = h('nav', 'gs-t-bar gs-t-anim');
-    bar.setAttribute('aria-label', 'Menu');
-    const sledName = h('span', 'gs-btn-sub', m.sledName);
-    sledName.setAttribute('translate', 'no');
-    const sb = btn(ctx, { cls: 'gs-btn-soft gs-t-sleds', icon: 'sledBold', label: 'Garage', fk: 'sleds', onClick: () => this.hooks.openSleds() }, sledName);
-    sb.setAttribute('aria-label', `Garage, riding ${m.sledName}`);
-    bar.append(sb);
-    const mb = btn(ctx, {
-      cls: 'gs-btn-soft',
-      icon: 'flag',
-      label: 'Missions',
-      fk: 'missions',
-      onClick: () => (this.popover ? this.closeMissions() : this.openMissions(m.missions, true)),
-    });
-    const left = m.missions.filter((x) => !x.done).length;
-    if (left > 0) {
-      mb.append(h('span', 'gs-count', String(left)));
-      mb.setAttribute('aria-label', `Missions, ${left} open`);
-    }
-    // aria-controls is set while the popover exists (it must point at a live element).
-    mb.setAttribute('aria-expanded', 'false');
-    this.missionsBtn = mb;
-    const md = btn(ctx, { cls: 'gs-btn-soft', icon: 'trophy', label: 'Medals', fk: 'medals', onClick: () => (this.popover && this.popKind === 'medals' ? this.closeMissions() : this.openMedals(m, true)) });
-    md.setAttribute('aria-expanded', 'false');
-    this.medalsBtn = md;
-    bar.append(mb, md, btn(ctx, { cls: 'gs-btn-soft', icon: 'gear', label: 'Settings', fk: 'settings', onClick: () => this.hooks.openSettings() }));
-    el.append(bar);
+    return h('div', 'gs9-pick', strip);
   }
 
-  private mountainCard(c: MountainCard, selected: boolean, passed: number): HTMLButtonElement {
-    const b = h('button', `gs-mtn b-${c.biome}${selected ? ' is-sel' : ''}${c.locked ? ' is-locked' : ''}`);
+  private chip(c: MountainCard, sel: boolean): HTMLButtonElement {
+    const b = h('button', `gs9-chip b-${c.biome}${sel ? ' is-sel' : ''}${c.locked ? ' is-locked' : ''}`);
     b.type = 'button';
-    b.dataset.fk = 'm-' + c.id;
-    b.setAttribute('aria-pressed', String(selected));
-    if (c.locked) b.setAttribute('aria-disabled', 'true');
-    // The picked card carries the player's own record in its lower half: the best there and the
-    // ghosts passed so far (what unlocks the next mountain), each only once it is more than zero.
-    const mine = selected && !c.locked;
-    const best = record(c);
-    const rung = rankText(c);
-    const held = c.medals && !c.locked && hasMedal(c.medals) ? medalWords(c.medals) : '';
-    const said = c.locked ? `Locked. ${c.unlockText}` : [best ? `${best.label} ${best.value}` : '', rung ?? '', held, mine && passed > 0 ? `${fmt(passed)} ghosts passed` : ''].filter(Boolean).join('. ') || c.tagline;
-    b.setAttribute('aria-label', `${c.name}. ${said}`);
-    const sky = h('span', 'gs-mtn-sky');
+    b.dataset.fk = `m-${c.id}`;
+    b.setAttribute('aria-pressed', String(sel));
+    const sky = h('span', 'gs9-chip-sky gs-mtn-sky');
     sky.innerHTML = biomeArt(c.biome);
-    const art = h('span', 'gs-mtn-art', sky);
-    // The lock sits on the leading edge, so it still shows when the card only peeks into the strip;
-    // the picked card wears a check on its far corner.
-    if (c.locked) art.append(h('span', 'gs-mtn-lockico', icon('lock')));
-    else if (selected) art.append(h('span', 'gs-mtn-check', icon('check')));
-    // What you hold here: three stages, then the whole run. Empty rings are what is left to take.
-    if (!c.locked && c.medals) art.append(medalDots(c.medals, [], true));
-    const name = h('span', 'gs-mtn-name', c.name);
+    if (c.locked) sky.append(h('span', 'gs9-chip-lock', ico9('lock')));
+    // (Your best in words: a trophy beside a time read as a medal, or as someone else's record.)
+    const best = sel && c.bestTime ? h('span', 'gs9-chip-best', 'Best', NBSP, h('span', 'gs9-num', clock(c.bestTime))) : null;
+    if (best) sky.append(best);
+    const name = h('span', 'gs9-chip-name', SHORT[c.id] ?? c.name);
     name.setAttribute('translate', 'no');
-    const body = h('span', 'gs-mtn-body', name);
-    // A card is its name and one short line: how to unlock it (the lock already says "to unlock", so
-    // the card keeps the part that tells you how), or your best there; the picked one shows your best
-    // and ghosts passed on two. What a mountain is like rides on the Ride button's subline.
-    if (c.locked) body.append(h('span', 'gs-mtn-meta', c.unlockText.replace(/\s+to unlock\.?$/i, '')));
-    else if (mine && (best || passed > 0 || rung)) {
-      const rec = h('span', 'gs-mtn-rec');
-      rec.setAttribute('aria-hidden', 'true');
-      // (The trophy is a live record's: an old best gives its width to its label.)
-      const live = best?.label === 'Best';
-      if (best) rec.append(h('span', 'gs-mtn-recl', live ? icon('trophy') : null, h('span', 'gs-num', best.value), h('span', 'gs-mtn-recu', best.label.toLowerCase())));
-      // Your rank takes the second line once there is one: the locked cards still say how close the
-      // next mountain is, in ghosts.
-      if (rung) rec.append(rankRow(c, rung));
-      else if (passed > 0) rec.append(h('span', 'gs-mtn-recl is-ghost', icon('ghost'), h('span', 'gs-num', fmt(passed)), h('span', 'gs-mtn-recu', 'passed')));
-      body.append(rec);
-    } else if (mine) body.append(h('span', 'gs-mtn-meta is-about', c.tagline));
-    else if (best) {
-      body.append(h('span', 'gs-mtn-meta', `${best.label} `, h('span', 'gs-num', best.value)));
-      if (rung) body.append(h('span', 'gs-mtn-rec', rankRow(c, rung)));
-    } else if (rung) body.append(h('span', 'gs-mtn-rec', rankRow(c, rung)));
-    b.append(art, body);
+    b.append(sky, name);
+    const rank = c.top ? 'Top of the ladder' : typeof c.rank === 'number' ? `${ordinal9(c.rank)} of ${c.rankOf ?? c.rank} on its ladder` : '';
+    b.setAttribute('aria-label', c.locked ? `${c.name}. Locked. ${c.unlockText}` : `${c.name}${c.bestTime ? `. Your best ${clock(c.bestTime)}` : ''}${rank ? `. ${rank}` : ''}`);
+    if (c.locked) b.title = c.unlockText;
     b.addEventListener('click', () => {
       if (c.locked) {
         this.ctx.sound('back');
-        play(b, [{ transform: 'translateX(0)' }, { transform: 'translateX(-5px)' }, { transform: 'translateX(5px)' }, { transform: 'translateX(-3px)' }, { transform: 'translateX(0)' }], {
-          duration: 300,
-          easing: 'ease-out',
-        });
+        play(b, [{ transform: 'translateX(0)' }, { transform: 'translateX(-5px)' }, { transform: 'translateX(5px)' }, { transform: 'translateX(-3px)' }, { transform: 'translateX(0)' }], { duration: 300, easing: 'ease-out' });
+        // The quiet line says what opens it, for a moment, then goes back to the nearest goal.
+        this.locked = c;
+        this.renderAim();
+        window.clearTimeout(this.lockedTimer);
+        this.lockedTimer = window.setTimeout(() => {
+          if (this.locked !== c) return;
+          this.locked = null;
+          this.renderAim();
+        }, LOCKED_SAY_MS);
         return;
       }
       this.ctx.sound('tap');
-      if (!selected) this.travel(c.id, c.name, () => this.hd.onSelectMountain(c.id));
+      if (!sel) this.travel(c.id, c.name, () => this.hd.onSelectMountain(c.id));
     });
     return b;
   }
 
-  /** Round 8, the hours lane: the day or the picked mountain's other hour, as two halves of one soft pill beside the
-   *  mirror. Each half wears a swatch of its hour's sky at the start of a run, so the pick shows the light it picks;
-   *  the picked half is lit, never in vermillion (Ride's alone). A look only: the run, its ghosts and its record are
-   *  the same either way. */
-  private hourPick(hr: NonNullable<TitleModel['hour']>, mountain: string): HTMLElement {
-    const half = (alt: boolean): HTMLButtonElement => {
-      const [z, hz] = alt ? hr.alt : hr.day;
-      const sky = h('span', 'gs-t-hour-sky');
-      sky.style.setProperty('--sky-z', z);
-      sky.style.setProperty('--sky-h', hz);
-      sky.setAttribute('aria-hidden', 'true');
-      const b = btn(this.ctx, { cls: 'gs-t-hour-opt', fk: alt ? 'hour-alt' : 'hour-day', onClick: () => this.hd.onHour?.(alt) }, sky, h('span', 'gs-btn-label', alt ? hr.name : 'Day'));
-      b.setAttribute('aria-pressed', String(hr.on === alt));
-      b.setAttribute('aria-label', alt ? `Ride ${mountain} ${hr.phrase}` : `Ride ${mountain} by day`);
-      return b;
-    };
-    const g = h('div', 'gs-t-hour', half(false), half(true));
-    g.setAttribute('role', 'group');
-    g.setAttribute('aria-label', 'Hour');
-    return g;
+  /** Ride's words: the verb, and its reason (what this run is for), in this order: a friend's challenge; The Twelve's
+   *  next duel here; the Daily, the Cup or the Trial picked; your grudge waiting here; the rung above you on this
+   *  mountain's ladder; the mountain itself. A duel's reason says the duel, never the rider's time: their slower time
+   *  beside your faster best read as already beaten (DECISIONS 391). */
+  private rideWords(m: TitleModel): { verb: string; why: string; aria: string; who: string | null } {
+    const sel = m.mountains.find((x) => x.id === m.selected) ?? null;
+    const name = sel ? (SHORT[sel.id] ?? sel.name) : '';
+    if (m.firstVisit && !m.challenge) return { verb: 'Ride', why: sel?.name ?? 'Pinecrest', aria: `Ride ${sel?.name ?? 'Pinecrest'}`, who: null };
+    const raced = m.challenge && (m.challenge.old || m.challenge.mountain) ? m.challenge : null;
+    if (raced) return { verb: 'Accept', why: raced.mountain, aria: `Accept: ${raced.mountain}`, who: null };
+    if (m.selected === 'trial' && m.trial) return { verb: 'Ride', why: 'This week’s Trial', aria: `Ride this week's Trial: ${m.trial.name}. ${m.trial.rule}`, who: null };
+    if (m.selected === 'daily') {
+      const t = m.daily.time ?? 0;
+      return { verb: 'Ride', why: t > 0 ? `Today’s Daily. Best ${clock(t)}` : 'Today’s Daily. Keeps your flame lit', aria: "Ride today's Daily", who: null };
+    }
+    if (m.selected === 'cup') {
+      const b = m.cup?.best ?? 0;
+      return { verb: 'Ride', why: b > 0 ? `This week’s Cup. Best ${clock(b)}` : 'This week’s Cup', aria: "Ride this week's Cup", who: null };
+    }
+    const mirrored = !!m.mirror?.on;
+    const hour = m.hour?.on ? m.hour : null;
+    const where = `${name}${hour ? ` ${hour.phrase}` : ''}${mirrored ? ', mirrored' : ''}`;
+    const tw = m.twelve ?? null;
+    if (tw?.next?.here && tw.rides !== false && !mirrored) return { verb: 'Duel', why: `${tw.next.name}, head to head`, aria: `Duel ${tw.next.name} on ${tw.next.mountain}, head to head`, who: tw.next.name };
+    if (tw?.final?.here && tw.rides !== false && !mirrored) return { verb: 'Ride', why: 'The last race, all twelve', aria: `Ride the last race: all twelve of The Twelve on ${tw.final.mountain}`, who: null };
+    const grudge = m.greet ? /^(?:Your nemesis )?(.+) is waiting on /.exec(m.greet) : null;
+    if (grudge && !mirrored) return { verb: 'Ride', why: `${grudge[1]} is waiting`, aria: `Ride ${where}. ${grudge[1]} is waiting here`, who: grudge[1] };
+    const rung = /^Next: (.+), [\d:.]+, ([\d.]+ s) up$/.exec(m.nextRung ?? '');
+    if (rung && !mirrored && !hour) return { verb: 'Ride', why: `${rung[1]} is ${nb(rung[2])} ahead`, aria: `Ride ${where}. ${rung[1]} is ${rung[2]} ahead of you on its ladder`, who: rung[1] };
+    // (The picked chip names the place: Ride says how it rides, or what it is like, never its name a second time.)
+    const how = [hour ? hour.phrase.charAt(0).toUpperCase() + hour.phrase.slice(1) : '', mirrored ? (hour ? 'mirrored' : 'Mirrored') : ''].filter(Boolean).join(', ');
+    return { verb: 'Ride', why: how || (sel?.tagline ?? where), aria: `Ride ${where}`, who: null };
   }
 
-  /** Round 8, the trials lane: the week's two ways, the Cup and its Trial, as two halves of the hour's soft pill under
-   *  Ride. The Cup half wears the trophy; the Trial half the week's Trial medal held (an empty ring for none), so the
-   *  pick also says what is left to take. The picked half is lit, never in vermillion (Ride's alone). */
-  private weekPick(t: TitleTrial): HTMLElement {
-    const cup = btn(this.ctx, { cls: 'gs-t-hour-opt gs-t-week-opt', fk: 'week-cup', onClick: () => (t.on ? this.hd.onTrial?.(false) : undefined) }, icon('trophy', 'gs-t-week-ico'), h('span', 'gs-btn-label', 'Cup'));
-    cup.setAttribute('aria-pressed', String(!t.on));
-    cup.setAttribute('aria-label', 'Ride the Weekly Cup');
-    const medal = Math.max(0, Math.min(3, Math.floor(t.medal)));
-    // (The medal held, struck in its metal; none yet, the star the Trial's rule wears: an empty ring read as a radio.)
-    const disc = medal > 0 ? h('span', `gs-mdot m-${medal} gs-t-week-ico`) : icon('star', 'gs-t-week-ico');
-    disc.setAttribute('aria-hidden', 'true');
-    const trial = btn(
-      this.ctx,
-      {
-        cls: `gs-t-hour-opt gs-t-week-opt${t.ready ? '' : ' is-waiting'}`,
-        fk: 'week-trial',
-        onClick: () => {
-          if (t.on || !t.ready) return;
-          this.travel(t.mountain, `Week ${t.week} Trial`, () => this.hd.onTrial?.(true), t.name);
+  /** Ride, and over it a friend's challenge or the Trial's rule and targets when either is what it rides. */
+  private rideBlock(m: TitleModel): HTMLElement {
+    const box = h('div', 'gs9-t-ride');
+    if (m.challenge) box.append(challengeBanner(m.challenge));
+    else if (m.selected === 'trial' && m.trial) box.append(trialPanel(m.trial));
+    const w = this.rideWords(m);
+    // A link's Daily or Cup is still finding its rivals: Ride waits (aria-disabled, so it keeps its focus and its
+    // name) and says nothing about it: nothing loading is shown.
+    const waiting = !!m.challenge?.waiting;
+    const why = h('span', 'gs9-ride-why', w.why);
+    if (w.who || m.challenge) why.setAttribute('translate', 'no');
+    const t = h('span', 'gs9-ride-t', h('span', 'gs9-ride-v', w.verb), why);
+    const b = b9(this.ctx, 'primary', [t, rideKey(m.inputMode)], { icon: 'play', fk: 'ride', sound: waiting ? 'tap' : 'confirm', gameKey: true, aria: w.aria, cls: 'gs9-ride gs-ride', onClick: () => (waiting ? undefined : this.hd.onRide()) });
+    if (waiting) b.setAttribute('aria-disabled', 'true');
+    if (m.inputMode !== 'touch') b.setAttribute('aria-keyshortcuts', 'Space');
+    box.append(b);
+    return box;
+  }
+
+  /** How you ride the picked mountain, under Ride once open: its hour (the day or the other hour, each with a swatch of
+   *  its sky) and its mirror. On a phone the picked mountain's best stands here too (its chip is small). */
+  private how(m: TitleModel): HTMLElement | null {
+    const named = m.mountains.find((x) => x.id === m.selected) ?? null;
+    if (!named || m.challenge) return null;
+    const out = h('div', 'gs9-how');
+    if (named.bestTime) out.append(h('span', 'gs9-how-best', 'Best', NBSP, h('span', 'gs9-num', clock(named.bestTime))));
+    const name = named.name;
+    if (m.hour) {
+      const hr = m.hour;
+      const seg = h('div', 'gs9-seg');
+      seg.setAttribute('role', 'group');
+      seg.setAttribute('aria-label', 'Hour');
+      for (const alt of [false, true]) {
+        const [z, hz] = alt ? hr.alt : hr.day;
+        const sw = h('span', 'gs9-swatch');
+        sw.style.setProperty('--z', z);
+        sw.style.setProperty('--hz', hz);
+        sw.setAttribute('aria-hidden', 'true');
+        const b = b9(this.ctx, 'quiet', [sw, alt ? hr.name : 'Day'], { fk: alt ? 'hour-alt' : 'hour-day', aria: alt ? `Ride ${name} ${hr.phrase}` : `Ride ${name} by day`, onClick: () => this.hd.onHour?.(alt) });
+        b.setAttribute('aria-pressed', String(hr.on === alt));
+        seg.append(b);
+      }
+      out.append(seg);
+    }
+    if (m.mirror) {
+      const on = m.mirror.on;
+      const seg = h('div', 'gs9-seg');
+      const b = b9(this.ctx, 'quiet', [h('span', 'gs9-tick', on ? ico9('check') : null), 'Mirrored'], { fk: 'mirror', aria: `Ride ${name} mirrored`, onClick: () => this.hd.onMirror?.(!on) });
+      b.setAttribute('aria-pressed', String(on));
+      seg.append(b);
+      out.append(seg);
+    }
+    return out.childElementCount > 0 ? out : null;
+  }
+
+  /** The one quiet line: the nearest thing you are working toward, in words, and never what Ride already says. A
+   *  locked chip just pressed (what opens it); the next mountain by ghosts; Lanternfall by The Twelve; the next page of
+   *  the Almanac, named as a prize. */
+  private aimWords(m: TitleModel): { icon: IconName; text: string; tone: 'ghost' | 'plain' } {
+    if (m.firstVisit) return { icon: 'ghost', text: 'Pass ghosts to unlock new mountains', tone: 'ghost' };
+    const c = this.locked;
+    if (c) {
+      const what = c.unlockText.replace(/ to unlock$/, '').replace(/^Pass/, 'pass').replace(/^Beat/, 'beat');
+      return { icon: 'lock', text: `${c.name}: ${what} to open it`, tone: 'plain' };
+    }
+    const byGhosts = m.mountains
+      .filter((x) => x.locked && /ghost/.test(x.unlockText))
+      .map((x) => ({ c: x, n: Number(/(\d+)/.exec(x.unlockText)?.[1] ?? 999) }))
+      .sort((a, b) => a.n - b.n)[0];
+    if (byGhosts) return { icon: 'ghost', text: `${fmt(byGhosts.n)} more ${byGhosts.n === 1 ? 'ghost opens' : 'ghosts open'} ${byGhosts.c.name}`, tone: 'ghost' };
+    const lf = m.mountains.find((x) => x.locked && /Twelve/.test(x.unlockText));
+    if (lf) return { icon: 'trophy', text: `Beat ${/(\d+)/.exec(lf.unlockText)?.[1] ?? 'more'} more of The Twelve to open ${lf.name}`, tone: 'plain' };
+    const bar = m.spine?.bar;
+    const next = bar?.next?.[0];
+    // (The XP and the rank first, the prize after: "900 XP to Rider Rank 26: the Crane's Memory charm".)
+    if (bar && next) return { icon: 'book', text: `${fmt(bar.need)}${NBSP}XP to Rider Rank ${bar.page + 1}: ${prizeLower(next)}`, tone: 'plain' };
+    return { icon: 'book', text: 'Every page of the Almanac turned', tone: 'plain' };
+  }
+
+  private aim(m: TitleModel): HTMLElement {
+    const a = this.aimWords(m);
+    const el = h('p', `gs9-t-aim is-${a.tone}`, ico9(a.icon), h('span', '', curly(a.text)));
+    el.setAttribute('aria-live', 'polite');
+    return el;
+  }
+
+  private renderAim(): void {
+    const m = this.model;
+    if (!m || !this.aimEl) return;
+    const el = this.aim(m);
+    this.aimEl.replaceWith(el);
+    this.aimEl = el;
+  }
+
+  // ---------------------------------------------------------------- the doors
+
+  private doors(m: TitleModel): HTMLElement {
+    const nav = h('nav', 'gs9-doors');
+    nav.setAttribute('aria-label', 'More');
+    for (const d of ['events', 'progress', 'garage', 'settings'] as TitleDoor[]) nav.append(this.door(d, m));
+    return nav;
+  }
+
+  /** The intro this door carries: something new, until the door is opened. */
+  private introFor(d: TitleDoor, m: TitleModel): string | null {
+    const i = m.spine?.intro ?? null;
+    return i && i.door === d && !this.seen.has(i.line) ? i.line : null;
+  }
+
+  private door(d: TitleDoor, m: TitleModel): HTMLButtonElement {
+    const sp = m.spine ?? null;
+    let status: string | null = null;
+    let aria: string = DOOR_LABEL[d];
+    // Each door wears the one figure that belongs to it, with its word: the flame on the Daily's (it is kept by
+    // riding), the gifts on the Garage's (they are spent there). Progress wears none: its room says Rider Rank whole.
+    if (d === 'events' && sp && sp.flame.streak > 0) {
+      const n = sp.flame.streak;
+      status = `${n}-day flame`;
+      aria += `. Your flame: ${n} ${n === 1 ? 'day' : 'days'}${sp.flame.litToday ? ', lit today' : ', ride today to keep it'}`;
+    } else if (d === 'progress' && sp) aria += `. Rider Rank ${sp.bar.page}`;
+    else if (d === 'garage') {
+      status = `${fmt(m.wallet)} gifts`;
+      aria += `. ${fmt(m.wallet)} gifts to spend`;
+    }
+    // (A reader hears what is behind a room's door, so every system is named from the title.)
+    if (d === 'events') aria += `. Inside: your flame, today's Daily and contracts, this week's Cup and its league${m.trial ? ', the Trial' : ''}`;
+    else if (d === 'progress') aria += `. Inside: the Almanac, The Twelve${sp?.longNight ? ', the Long Night' : ''}${sp?.album ? ', the Spirit Album' : ''}, medals and missions`;
+    const intro = this.introFor(d, m);
+    const words = h('span', 'gs9-door-t', h('span', 'gs9-door-l', DOOR_LABEL[d]), status ? h('span', `gs9-door-s${d === 'events' ? ' is-flame' : ''}`, status) : null);
+    const b = b9(this.ctx, 'secondary', [words, intro ? h('span', 'gs9-tag is-gift gs9-new', 'New') : null], { icon: DOOR_ICON[d], fk: `door-${d}`, cls: 'gs9-door', aria: intro ? `${aria}. Something new` : aria, onClick: () => this.openDoor(d, b) });
+    if (d === 'events' || d === 'progress') b.setAttribute('aria-haspopup', 'dialog');
+    return b;
+  }
+
+  private openDoor(d: TitleDoor, from: HTMLButtonElement): void {
+    const m = this.model;
+    if (!m) return;
+    const intro = this.introFor(d, m);
+    if (intro) {
+      this.seen.add(intro);
+      this.hd.onIntroSeen?.(intro);
+      from.querySelector('.gs9-new')?.remove();
+      from.setAttribute('aria-label', (from.getAttribute('aria-label') ?? '').replace(/\. Something new$/, ''));
+    }
+    if (d === 'garage') return this.hooks.openSleds();
+    if (d === 'settings') return this.hooks.openSettings();
+    if (this.room || sheetOpen()) return;
+    // The rooms load on demand (not in the first download).
+    void import('./rooms').then((r) => {
+      if (!this.layer.open || this.room || !this.model || !this.main) return;
+      const main = this.main;
+      const room = r.openRoom(d, this.model, {
+        ctx: this.ctx,
+        hd: this.hd,
+        parent: this.el,
+        from,
+        behind: [main],
+        intro,
+        travel: (id, name, go, line) => this.travel(id, name, go, line),
+        onClose: () => {
+          this.room = null;
+          if (this.main) this.main.inert = false;
+          this.onLayout();
         },
-      },
-      disc,
-      h('span', 'gs-btn-label', 'Trial'),
-    );
-    trial.setAttribute('aria-pressed', String(t.on));
-    trial.setAttribute('aria-label', `Ride this week's Trial: ${t.name}. ${t.rule}${medal > 0 ? `. ${MEDAL[medal]} held` : ''}${t.ready ? '' : '. Finding rivals'}`);
-    if (!t.ready) trial.setAttribute('aria-disabled', 'true');
-    const g = h('div', 'gs-t-hour gs-t-week', cup, trial);
-    g.setAttribute('role', 'group');
-    g.setAttribute('aria-label', 'This week');
-    return g;
+      });
+      this.room = { door: d, ...room };
+      this.onLayout();
+    });
   }
 
   /**
-   * Mute, as a pressed/unpressed toggle with a fixed name. It sets the master volume (0, or what it
-   * was before), the same setting the Settings sheet shows once the menu row appears.
+   * Mute, as a toggle with its words ("Sound On", "Sound Off"). It sets the master volume (0, or what it was before),
+   * the same setting the Settings door shows once the doors appear.
    */
   private soundToggle(): HTMLButtonElement {
-    const b = btn(this.ctx, {
-      cls: 'gs-btn-soft gs-btn-round gs-t-sound gs-t-anim',
+    const label = h('span', 'gs9-b-t', this.muted ? 'Sound Off' : 'Sound On');
+    const b = b9(this.ctx, 'quiet', label, {
       icon: 'speaker',
-      aria: 'Mute',
       fk: 'sound',
+      cls: 'gs9-sound',
       onClick: () => {
         this.muted = !this.muted;
         this.hd.onSettings({ master: this.muted ? 0 : this.unmuteTo });
@@ -552,457 +556,28 @@ export class Title {
     const glyph = b.querySelector('.gs-i');
     const on = glyph?.innerHTML ?? '';
     const paint = () => {
-      b.setAttribute('aria-pressed', String(this.muted));
-      b.classList.toggle('is-muted', this.muted);
+      b.setAttribute('aria-pressed', String(!this.muted));
+      label.textContent = this.muted ? 'Sound Off' : 'Sound On';
       if (glyph) glyph.innerHTML = this.muted ? MUTED_SVG : on;
     };
     paint();
     return b;
   }
-
-  /** The Daily card: today's best, the day streak ("3 days in a row") and today's medal disc (TitleModel.daily). */
-  private dailyCard(d: TitleModel['daily'], selected: boolean): HTMLButtonElement {
-    const b = h('button', `gs-daily${selected ? ' is-sel' : ''}`);
-    b.type = 'button';
-    b.dataset.fk = 'daily';
-    b.setAttribute('aria-pressed', String(selected));
-    // Not `disabled` while its rivals are generated: that would drop it from the tab order, and
-    // keyboard and screen-reader players could not find the mode or hear its status.
-    if (!d.ready) {
-      b.setAttribute('aria-disabled', 'true');
-      b.classList.add('is-waiting');
-    }
-    // The key is the UTC day ("2026-10-24"); it shows as a short date in the player's locale.
-    const date = dailyDate(d.key);
-    const status = d.ready ? 'Fresh rivals' : 'Finding rivals…';
-    // Days in a row with a Daily run ("3 days in a row", from the second day: "Day 3" alone read as a
-    // date or a level), and today's medal beside the best. Round 8: with `flame` the days are the flame's (a run of
-    // any kind lights the day), and the flame is drawn in the title's corner, so the card leaves them to it.
-    const streak = Math.floor(d.streak ?? 0);
-    const medal = Math.max(0, Math.min(3, Math.floor(d.medal ?? 0)));
-    const days = `${NBSP}days in a row`;
-    const day = streak >= 2 && !d.flame ? h('span', 'gs-tag gs-daily-day', h('span', 'gs-num', String(streak)), days) : null;
-    const meta = h('span', `gs-daily-meta${day ? ' has-day' : ''}`, h('span', 'gs-daily-date gs-num', date), day, h('span', 'gs-tag gs-daily-status', status));
-    b.append(
-      h('span', 'gs-daily-ico', icon('snowflake')),
-      h('span', 'gs-daily-txt', h('span', 'gs-daily-title', 'Daily Mountain'), meta),
-    );
-    // Every number carries its label: with a medal the best reads "Bronze · Best 7,967", never a bare
-    // "Bronze 7,967" (the figure is the day's best score, not the medal's).
-    const disc = medal > 0 ? h('span', `gs-medal m-${medal}`, h('span', 'gs-medal-n', MEDAL[medal])) : null;
-    // (Round 8: the medal is won on time, so the best beside it is the day's best time; a day with no finish yet shows
-    // the score only when no medal stands beside it.)
-    const figure = d.time && d.time > 0 ? clock(d.time) : !disc && d.best > 0 ? fmt(d.best) : '';
-    if (figure || disc) {
-      const num = figure ? h('span', 'gs-num', figure) : null;
-      const best = disc
-        ? [disc, num ? h('span', 'gs-daily-score', h('span', 'gs-daily-sep', '·'), h('span', 'gs-daily-best-l', 'Best'), num) : null]
-        : [h('span', 'gs-daily-best-l', 'Best'), num];
-      b.append(h('span', `gs-daily-best${disc ? ' has-medal' : ''}`, ...best));
-    }
-    // The second call to action: an outlined ink disc with a play glyph. Vermillion Ride stays the
-    // only filled play target, and mint stays ghost information.
-    b.append(h('span', 'gs-daily-go', icon('play')));
-    const said = [`Daily Mountain, ${date}`, status.replace(/…$/, ''), streak >= 2 && !d.flame ? `${streak} days in a row` : '', medal > 0 ? `${MEDAL[medal]} medal today` : '', figure ? `Best ${figure}` : ''];
-    b.setAttribute('aria-label', said.filter(Boolean).join('. '));
-    b.addEventListener('click', () => {
-      if (!d.ready) return;
-      this.ctx.sound('confirm');
-      if (selected) this.hd.onDaily();
-      else this.travel('daily', 'Daily Mountain', () => this.hd.onDaily());
-    });
-    return b;
-  }
-
-  /**
-   * The week's Cup, the Daily's sibling: the same card, marigold-free (a Cup medal is the disc), with
-   * the week's mood and event where the Daily says what day it is, and your best time this week.
-   */
-  private cupCard(c: TitleCup, selected: boolean, trial: TitleTrial | null = null): HTMLButtonElement {
-    const b = h('button', `gs-daily gs-cup${selected ? ' is-sel' : ''}`);
-    b.type = 'button';
-    b.dataset.fk = 'cup';
-    b.setAttribute('aria-pressed', String(selected));
-    if (!c.ready) {
-      b.setAttribute('aria-disabled', 'true');
-      b.classList.add('is-waiting');
-    }
-    // (The trials lane: once Trials are open the card is the week's, "Cup and Trial", and says whichever of the two is
-    // picked: the Cup's mood and medal, or the Trial's measure, medal and best.)
-    const tOn = trial?.on === true;
-    const medal = Math.max(0, Math.min(3, Math.floor(tOn ? trial!.medal : c.medal)));
-    const what = tOn ? trial!.rule.split(',')[0] : c.ready ? [c.mood, c.event].filter(Boolean).join(', ') : 'Finding rivals…';
-    // (A phone's half-width card keeps the mood: the reveal names the event.)
-    const tag = h('span', 'gs-tag gs-daily-status', tOn ? what : c.ready ? c.mood : what, !tOn && c.ready && c.event ? h('span', 'gs-cup-ev', `, ${c.event}`) : null);
-    const meta = h('span', 'gs-daily-meta', h('span', 'gs-daily-date gs-num', `Week ${c.week}`), tag);
-    const title = trial ? 'Cup and Trial' : 'Weekly Cup';
-    b.append(h('span', 'gs-daily-ico', icon(tOn ? 'star' : 'trophy')), h('span', 'gs-daily-txt', h('span', 'gs-daily-title', title), meta));
-    const disc = medal > 0 ? h('span', `gs-medal m-${medal}`, h('span', 'gs-medal-n', MEDAL[medal])) : null;
-    const best = tOn ? trial!.best : c.best > 0 ? clock(c.best) : null;
-    if (best || disc) {
-      const num = best ? h('span', 'gs-num', best) : null;
-      b.append(h('span', `gs-daily-best${disc ? ' has-medal' : ''}`, disc, num ? h('span', 'gs-daily-score', h('span', 'gs-daily-best-l', 'Best'), num) : null));
-    }
-    b.append(h('span', 'gs-daily-go', icon('play')));
-    const said = [`${tOn ? 'Weekly Trial' : 'Weekly Cup'}, week ${c.week}`, what.replace(/…$/, ''), medal > 0 ? `${MEDAL[medal]} medal this week` : '', best ? `Best ${best}` : '', trial && !tOn ? "This week's Trial is under Ride" : ''];
-    b.setAttribute('aria-label', said.filter(Boolean).join('. '));
-    b.addEventListener('click', () => {
-      if (!c.ready) return;
-      this.ctx.sound('confirm');
-      if (selected) this.hd.onCup?.();
-      else this.travel('cup', 'Weekly Cup', () => this.hd.onCup?.());
-    });
-    return b;
-  }
-
-  /**
-   * The Twelve's home on the title: who rides next, their bust, their home ground and a line of their
-   * character. The card picks that mountain (the title travels there and Ride becomes the duel); its
-   * count opens the ladder. With nobody to duel yet it names who waits and what opens them.
-   */
-  private twelveCard(t: TitleTwelve, m: TitleModel): HTMLElement {
-    const box = h('div', 'gs-t12 gs-t-anim');
-    const face: Pick<TwelveRung, 'hat' | 'accent'> = t.next ?? t.waiting?.rider ?? { hat: 'crown', accent: '#E8D9FF' };
-    const bust = h('span', 'gs-t12-bust');
-    bust.innerHTML = riderBust(face.hat, face.accent);
-    let kicker = 'Next of The Twelve';
-    let name = '';
-    let line: (string | HTMLElement)[] = [];
-    let bio = '';
-    let said = '';
-    let go: (() => void) | null = null;
-    if (t.next) {
-      const n = t.next;
-      name = n.name;
-      const where = h('span', '', n.mountain);
-      where.setAttribute('translate', 'no');
-      line = n.time ? [where, ', ', h('span', 'gs-num', n.time), ' to beat'] : [where];
-      bio = n.bio;
-      said = `Next of The Twelve: ${n.name}, on ${n.mountain}${n.time ? `, ${n.time} to beat` : ''}. ${n.bio}`;
-      if (!n.here) go = () => this.travel(n.mountainId, n.mountain, () => this.hd.onSelectMountain(n.mountainId));
-    } else if (t.final) {
-      const f = t.final;
-      kicker = 'The Twelve';
-      name = 'The Last Race';
-      line = [`All twelve at once on ${f.mountain}`];
-      said = `The Twelve: the last race, all twelve at once on ${f.mountain}`;
-      if (!f.here) go = () => this.travel(f.mountainId, f.mountain, () => this.hd.onSelectMountain(f.mountainId));
-    } else if (t.waiting) {
-      const w = t.waiting;
-      kicker = 'The Twelve';
-      name = w.rider.name;
-      line = [`Waits on ${w.rider.mountain}. ${w.opens}`];
-      said = `The Twelve: ${w.rider.name} waits on ${w.rider.mountain}. ${w.opens}`;
-      box.classList.add('is-waiting');
-    } else {
-      kicker = 'The Twelve';
-      name = t.crowned ? 'The crown is yours' : t.tally;
-      line = [t.crowned ? 'All twelve beaten in one race' : (t.hook ?? '')];
-      said = `The Twelve: ${name}`;
-      box.classList.add('is-crowned');
-    }
-    box.style.setProperty('--rider', face.accent);
-    const who = h('span', 'gs-t12-name', name);
-    who.setAttribute('translate', 'no');
-    const main = h('button', 'gs-t12-main', bust, h('span', 'gs-t12-txt', h('span', 'gs-t12-k', kicker), who, h('span', 'gs-t12-line', ...line), bio ? h('span', 'gs-t12-bio', bio) : null));
-    main.type = 'button';
-    main.dataset.fk = 't12';
-    main.setAttribute('aria-label', go ? `${said}. Go to their mountain` : `${said}. Open the ladder`);
-    main.addEventListener('click', () => {
-      this.ctx.sound('tap');
-      if (go) go();
-      else if (this.popover && this.popKind === 'twelve') this.closeMissions();
-      else this.openTwelve(m, true);
-    });
-    const count = h('button', 'gs-t12-count', h('span', 'gs-t12-count-n gs-num', String(t.beaten)), h('span', 'gs-t12-count-of gs-num', `of ${t.of}`), icon('chevR'));
-    count.type = 'button';
-    count.dataset.fk = 't12-ladder';
-    count.setAttribute('aria-label', `The Twelve: ${t.tally}. Open the ladder`);
-    count.setAttribute('aria-expanded', 'false');
-    count.addEventListener('click', () => {
-      this.ctx.sound('tap');
-      if (this.popover && this.popKind === 'twelve') this.closeMissions();
-      else this.openTwelve(m, true);
-    });
-    this.twelveBtn = count;
-    box.append(main, count);
-    return box;
-  }
-
-  /**
-   * The ladder: all twelve, gentlest first, each with their bust, their home ground and their time there,
-   * and who has fallen. The one that rides now can be gone to from its row. A popover like the medal
-   * wall's, so there is no sheet to dismiss.
-   */
-  private openTwelve(m: TitleModel, animate: boolean): void {
-    this.closeMissions();
-    const t = m.twelve;
-    if (!t || !this.twelveBtn) return;
-    const pop = h('div', 'gs-pop gs-panel gs-t12-pop');
-    pop.id = 'gs-twelve-pop';
-    pop.setAttribute('role', 'region');
-    pop.setAttribute('aria-label', 'The Twelve');
-    const close = btn(this.ctx, { cls: 'gs-btn-soft gs-btn-round gs-t12-close', icon: 'close', aria: 'Close the ladder', sound: 'back', fk: 't12-close', onClick: () => this.closeMissions() });
-    pop.append(h('div', 'gs-t12-head', h('h2', 'gs-h2 gs-t12-h', 'The Twelve', h('span', 'gs-wall-n', h('span', 'gs-num', t.tally))), close));
-    pop.append(h('p', 'gs-t12-key', t.crowned ? 'Every one of them beaten, and all of them at once.' : `Beat each rider on their home ground, one duel at a time.${t.hook ? ` ${t.hook}.` : ''}`));
-    const list = h('ol', 'gs-t12-list');
-    t.rungs.forEach((r, i) => {
-      const li = h('li', `gs-t12-rung is-${r.state}`);
-      li.style.setProperty('--rider', r.accent);
-      li.style.setProperty('--i', String(i));
-      const bust = h('span', 'gs-t12-bust');
-      bust.innerHTML = riderBust(r.hat, r.accent);
-      const name = h('span', 'gs-t12-rname', r.name);
-      name.setAttribute('translate', 'no');
-      const where = h('span', '', r.mountain);
-      where.setAttribute('translate', 'no');
-      const meta = h('span', 'gs-t12-rmeta', where, r.time ? h('span', 'gs-num', r.time) : null);
-      let tag: HTMLElement | null = null;
-      if (r.state === 'beaten') tag = h('span', 'gs-t12-tag is-beaten', icon('check'), 'Beaten');
-      else if (r.state === 'locked') tag = h('span', 'gs-t12-tag is-locked', icon('lock'), sr('Their mountain is locked'));
-      else if (r.state === 'next' && t.next) {
-        const n = t.next;
-        if (n.here) tag = h('span', 'gs-t12-tag is-next', 'Rides now');
-        else {
-          tag = btn(this.ctx, { cls: 'gs-btn-soft gs-t12-go', label: 'Go', icon: 'arrowR', aria: `Go to ${n.mountain} to duel ${n.name}`, fk: 't12-go', onClick: () => this.travel(n.mountainId, n.mountain, () => this.hd.onSelectMountain(n.mountainId)) });
-        }
-      }
-      li.append(h('span', 'gs-t12-num gs-num', String(i + 1)), bust, h('span', 'gs-t12-rtxt', name, h('span', 'gs-t12-rbio', r.bio), meta));
-      if (tag) li.append(tag);
-      list.append(li);
-    });
-    pop.append(list);
-    this.el.append(pop);
-    if (animate) {
-      play(pop, [{ opacity: 0, transform: 'translateY(14px) scale(0.98)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: SPRING });
-      if (!reduced()) for (const li of Array.from(list.children)) play(li, [{ opacity: 0, transform: 'translateX(-10px)' }, { opacity: 1, transform: 'none' }], { duration: 300, delay: 60 + 28 * Number((li as HTMLElement).style.getPropertyValue('--i')), easing: EASE_OUT, fill: 'backwards' });
-    }
-    this.popover = pop;
-    this.popKind = 'twelve';
-    this.twelveBtn.setAttribute('aria-expanded', 'true');
-    this.twelveBtn.setAttribute('aria-controls', pop.id);
-  }
-
-  private page(track: HTMLElement, dir: number): void {
-    const card = track.querySelector<HTMLElement>('.gs-mtn');
-    const stepW = card ? card.offsetWidth + 10 : 160;
-    track.scrollBy({ left: dir * stepW, behavior: reduced() ? 'auto' : 'smooth' });
-  }
-
-  /**
-   * Hide each arrow (and its edge fade) when that end of the strip is already in view, and mark the
-   * cards cut by an edge: they fade their text and keep only the art and lock, so a peeking card
-   * never shows a word sliced in half.
-   */
-  private watchEnds(track: HTMLElement, prev: HTMLButtonElement, next: HTMLButtonElement, strip: HTMLElement): void {
-    const cards = track.querySelectorAll<HTMLElement>('.gs-mtn');
-    if (cards.length === 0 || typeof IntersectionObserver === 'undefined') return;
-    const first = cards[0];
-    const last = cards[cards.length - 1];
-    const seen = new Map<Element, boolean>();
-    this.io = new IntersectionObserver(
-      (entries) => {
-        for (const en of entries) {
-          const whole = en.intersectionRatio > 0.95;
-          seen.set(en.target, whole);
-          en.target.classList.toggle('is-peek', !whole);
-        }
-        const a = seen.get(first) === true;
-        const z = seen.get(last) === true;
-        prev.disabled = a;
-        next.disabled = z;
-        strip.classList.toggle('more-l', !a);
-        strip.classList.toggle('more-r', !z);
-      },
-      { root: track, threshold: [0, 0.95, 1] },
-    );
-    for (const c of cards) this.io.observe(c);
-  }
-
-  /**
-   * The medal wall: every mountain's rank and what you hold, the week's Cup under them. A popover like
-   * the missions' (they share the slot), so it stays small and there is no sheet to dismiss.
-   */
-  private openMedals(m: TitleModel, animate: boolean): void {
-    this.closeMissions();
-    const bar = this.el.querySelector('.gs-t-bar');
-    if (!bar || !this.medalsBtn) return;
-    const pop = h('div', 'gs-pop gs-panel gs-wall');
-    pop.id = 'gs-medals-pop';
-    pop.setAttribute('role', 'region');
-    pop.setAttribute('aria-label', 'Medals');
-    const open = m.mountains.filter((c) => !c.locked);
-    const gold = open.reduce((n, c) => n + (c.medals ? c.medals.stages.filter((x) => x >= 3).length + (c.medals.run >= 3 ? 1 : 0) : 0), 0);
-    pop.append(h('h2', 'gs-h2 gs-wall-h', 'Medals', h('span', 'gs-wall-n', h('span', 'gs-num', `${gold} of ${m.mountains.length * 4}`), ' gold')));
-    const list = h('ul', 'gs-wall-list');
-    for (const c of m.mountains) {
-      const rung = rankText(c);
-      const name = h('span', 'gs-wall-name', c.name);
-      name.setAttribute('translate', 'no');
-      // Mastery's stars ride in the rank's cell, so the row keeps its three columns.
-      const stars = !c.locked && c.stars ? h('span', 'gs-wall-stars', ` · ★ ${c.stars.got}/${c.stars.of}`) : null;
-      stars?.setAttribute('aria-label', `, mastery ${c.stars?.got} of ${c.stars?.of} stars`);
-      const li = h('li', `gs-wall-row${c.locked ? ' is-locked' : ''}${c.top ? ' is-top' : ''}`, name, h('span', 'gs-wall-rank gs-num', c.locked ? 'Locked' : (rung ?? 'No run yet'), stars), !c.locked && c.medals ? medalDots(c.medals) : null);
-      list.append(li);
-    }
-    if (m.cup) {
-      const c = m.cup;
-      list.append(h('li', 'gs-wall-row is-cup', h('span', 'gs-wall-name', `Week ${c.week} Cup`), h('span', 'gs-wall-rank gs-num', c.best > 0 ? clock(c.best) : 'No run yet'), medalDots({ stages: [], run: c.medal })));
-    }
-    // (The trials lane: the week's Trial, your best figure and its medal, under the Cup.)
-    if (m.trial) {
-      const t = m.trial;
-      list.append(h('li', 'gs-wall-row is-cup', h('span', 'gs-wall-name', `Week ${t.week} Trial`), h('span', 'gs-wall-rank gs-num', t.best ? `Best ${t.best}` : 'No run yet'), medalDots({ stages: [], run: t.medal })));
-    }
-    pop.append(list, h('p', 'gs-wall-key', 'Three stages, then the whole run. Stars: medals, sky gates, set pieces swept clean, home riders beaten, a clean finish.'));
-    bar.append(pop);
-    if (animate) play(pop, [{ opacity: 0, transform: 'translateY(8px) scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'cubic-bezier(0.2, 0.9, 0.2, 1.1)' });
-    this.popover = pop;
-    this.popKind = 'medals';
-    this.medalsBtn.setAttribute('aria-expanded', 'true');
-    this.medalsBtn.setAttribute('aria-controls', pop.id);
-  }
-
-  private openMissions(list: MissionView[], animate: boolean): void {
-    this.closeMissions();
-    const bar = this.el.querySelector('.gs-t-bar');
-    if (!bar || !this.missionsBtn) return;
-    const pop = h('div', 'gs-pop gs-panel');
-    pop.id = 'gs-missions-pop';
-    pop.setAttribute('role', 'region');
-    pop.setAttribute('aria-label', 'Missions');
-    pop.append(h('h2', 'gs-h2', 'Missions'));
-    pop.append(missionList(list));
-    bar.append(pop);
-    if (animate) play(pop, [{ opacity: 0, transform: 'translateY(8px) scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'cubic-bezier(0.2, 0.9, 0.2, 1.1)' });
-    this.popover = pop;
-    this.popKind = 'missions';
-    this.missionsBtn.setAttribute('aria-expanded', 'true');
-    this.missionsBtn.setAttribute('aria-controls', pop.id);
-  }
-
-  private closeMissions(): void {
-    this.popover?.remove();
-    this.popover = null;
-    this.missionsBtn?.setAttribute('aria-expanded', 'false');
-    this.missionsBtn?.removeAttribute('aria-controls');
-    this.medalsBtn?.setAttribute('aria-expanded', 'false');
-    this.medalsBtn?.removeAttribute('aria-controls');
-    this.twelveBtn?.setAttribute('aria-expanded', 'false');
-    this.twelveBtn?.removeAttribute('aria-controls');
-    this.flameBtnEl?.setAttribute('aria-expanded', 'false');
-    this.flameBtnEl?.removeAttribute('aria-controls');
-  }
-
-  /**
-   * Keep the lantern lit (round 8): the flame and its days, in the corner pill. A day not yet ridden leaves the
-   * flame drawn hollow (the ember, if held, beside it); a tap opens the seven-day calendar.
-   */
-  private flameBtn(sp: TitleSpine): HTMLButtonElement {
-    const f = sp.flame;
-    const b = h('button', `gs-t-flame${f.litToday ? ' is-lit' : ''}${f.atRisk ? ' is-risk' : ''}`, icon('flame'), h('span', 'gs-num', String(f.streak)), f.ember ? h('span', 'gs-t-ember') : null);
-    b.type = 'button';
-    b.dataset.fk = 'flame';
-    b.setAttribute('aria-label', `Your flame: ${f.streak} ${f.streak === 1 ? 'day' : 'days'}${f.litToday ? ', lit today' : f.atRisk ? ', ride today to keep it' : ''}${f.ember ? ', an ember held' : ''}. Open the calendar`);
-    b.setAttribute('aria-expanded', 'false');
-    b.addEventListener('click', () => {
-      this.ctx.sound('tap');
-      if (this.popover && this.popKind === 'flame') this.closeMissions();
-      else this.openFlame(sp, true);
-    });
-    return b;
-  }
-
-  /** The seven-day calendar: the days ridden, today's, and what each pays (the seventh pays gifts and an ember). */
-  private openFlame(sp: TitleSpine, animate: boolean): void {
-    this.closeMissions();
-    const top = this.el.querySelector('.gs-t-top');
-    if (!top || !this.flameBtnEl) return;
-    const f = sp.flame;
-    const pop = h('div', 'gs-pop gs-panel gs-flame-pop');
-    pop.id = 'gs-flame-pop';
-    pop.setAttribute('role', 'region');
-    pop.setAttribute('aria-label', 'Your flame');
-    const days = h('ol', 'gs-flame-days');
-    for (const c of f.calendar) {
-      const state = c.day < f.nextDay ? 'is-done' : c.day === f.nextDay ? 'is-next' : 'is-ahead';
-      const pay = h('span', 'gs-flame-pay', h('span', 'gs-num', `+${fmt(c.xp)}`), ' XP');
-      const gift = c.gifts > 0 ? h('span', 'gs-flame-gift', icon('gift'), h('span', 'gs-num', fmt(c.gifts))) : null;
-      const li = h('li', `gs-flame-day ${state}${c.ember ? ' has-ember' : ''}`, h('span', 'gs-flame-dn gs-num', String(c.day)), icon('flame', 'gs-flame-ico'), pay, gift);
-      li.setAttribute('aria-label', `Day ${c.day}: ${fmt(c.xp)} XP${c.gifts > 0 ? `, ${fmt(c.gifts)} gifts` : ''}${c.ember ? ' and an ember' : ''}${state === 'is-done' ? ', done' : state === 'is-next' ? ', next' : ''}`);
-      days.append(li);
-    }
-    const line = f.litToday ? 'Lit today. Come back tomorrow for the next day.' : f.atRisk ? 'Ride today to keep it lit.' : 'Any run lights the day.';
-    const ember = f.ember ? 'You hold an ember: it keeps the flame through one missed day.' : 'Day 7 gives an ember, which keeps the flame through one missed day.';
-    pop.append(
-      h('h2', 'gs-h2 gs-flame-h', 'Your Flame', h('span', 'gs-wall-n', h('span', 'gs-num', `${f.streak} ${f.streak === 1 ? 'day' : 'days'}`), f.best > f.streak ? h('span', 'gs-flame-best', `, best ${f.best}`) : null)),
-      days,
-      h('p', 'gs-flame-line', line),
-      h('p', 'gs-flame-key', ember),
-    );
-    top.append(pop);
-    if (animate) play(pop, [{ opacity: 0, transform: 'translateY(-8px) scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: SPRING });
-    this.popover = pop;
-    this.popKind = 'flame';
-    this.flameBtnEl.setAttribute('aria-expanded', 'true');
-    this.flameBtnEl.setAttribute('aria-controls', pop.id);
-  }
-
-  /**
-   * Rider Rank on the title (round 8): the page reached, the bar toward the next and what that page gives; it opens
-   * the Almanac. The Spirit Album's count rides beside it once the album is open.
-   */
-  private bookCard(sp: TitleSpine): HTMLElement {
-    const b = sp.bar;
-    const fill = h('span', 'gs-t-book-fill');
-    fill.style.transform = `scaleX(${barShare(b).toFixed(4)})`;
-    const bar = h('span', 'gs-t-book-bar', fill);
-    bar.setAttribute('aria-hidden', 'true');
-    const next = b.next && b.next.length > 0 ? b.next.map((r) => r.name).join(', ') : null;
-    const nextEl = next
-      ? h('span', 'gs-t-book-next', h('span', 'gs-t-book-nk', `Page ${b.page + 1}`), Object.assign(h('span', 'gs-t-book-nn', rewardsLine(b.next!.map((r) => r.name))), { title: next }), h('span', 'gs-t-book-togo gs-num', `${fmt(b.need)}${NBSP}to go`))
-      : h('span', 'gs-t-book-next', 'Every page turned');
-    const main = h('button', 'gs-t-book-main', icon('book', 'gs-t-book-ico'), h('span', 'gs-t-book-txt', h('span', 'gs-t-book-rank', 'Rider Rank ', h('span', 'gs-num', String(b.page))), bar, nextEl));
-    main.type = 'button';
-    main.dataset.fk = 'almanac';
-    main.setAttribute('aria-label', `Almanac: Rider Rank ${b.page} of ${b.of}${next ? `. Page ${b.page + 1}: ${next}, ${fmt(b.need)} XP to go` : ''}`);
-    main.addEventListener('click', () => {
-      this.ctx.sound('tap');
-      this.hd.onOpenAlmanac?.();
-    });
-    const al = sp.album;
-    const album = al
-      ? btn(this.ctx, { cls: 'gs-t-album', icon: 'sticker', fk: 'album', aria: `Spirit Album: ${al.got} of ${al.of} stickers`, sound: 'tap', onClick: () => this.hd.onOpenAlbum?.() }, h('span', 'gs-num', String(al.got)), h('span', 'gs-t-album-of gs-num', `/${al.of}`))
-      : null;
-    return h('div', 'gs-t-book', main, album);
-  }
 }
 
-/** The card's rank: "Rank 19 of 37", "Top of the ladder" once you have beaten it, null with no run. */
-function rankText(c: Pick<MountainCard, 'rank' | 'rankOf' | 'top'>): string | null {
-  if (c.top) return 'Top of the ladder';
-  return typeof c.rank === 'number' ? `Rank ${c.rank} of ${c.rankOf ?? c.rank}` : null;
-}
-
-/** A card's rank line. A narrow card has no room for "Top of the ladder": the top wears the trophy and
- *  your best's gold-white on its own figures, and the card's name for a reader still says it. */
-function rankRow(c: Pick<MountainCard, 'rank' | 'rankOf' | 'top'>, text: string): HTMLElement {
-  return h('span', `gs-mtn-recl is-rank${c.top ? ' is-top' : ''}`, c.top ? icon('trophy') : null, h('span', 'gs-num', c.top ? `Rank ${c.rank ?? 1} of ${c.rankOf ?? 1}` : text));
-}
-
-const hasMedal = (m: MedalSet): boolean => m.run > 0 || m.stages.some((x) => x > 0);
+const MEDAL = ['', 'Bronze', 'Silver', 'Gold'] as const;
 
 /** What a row of medals says to a reader: "Stage 1 gold, whole run bronze", only what you hold. */
-function medalWords(m: MedalSet): string {
+export function medalWords(m: MedalSet): string {
   const parts = m.stages.flatMap((x, i) => (x > 0 ? [`Stage ${i + 1} ${MEDAL[x].toLowerCase()}`] : []));
   if (m.run > 0) parts.push(`whole run ${MEDAL[m.run].toLowerCase()}`);
   return parts.length > 0 ? `Medals: ${parts.join(', ')}` : 'No medals yet';
 }
 
 /**
- * A row of medal discs: one per stage, a hairline, then the larger whole-run disc. A disc you do not
- * hold is an empty ring. `fresh` lands those this run raised (0 to 2 a stage, 3 the whole run); `quiet`
- * leaves the words to its parent, whose own name says them.
+ * A row of medal discs: one per stage, a hairline, then the larger whole-run disc. A disc you do not hold is an empty
+ * ring. `fresh` lands those this run raised (0 to 2 a stage, 3 the whole run); `quiet` leaves the words to its parent,
+ * whose own name says them.
  */
 export function medalDots(m: MedalSet, fresh: readonly number[] = [], quiet = false): HTMLElement {
   const dot = (v: number, at: number, run: boolean): HTMLElement => h('span', `gs-mdot m-${Math.max(0, Math.min(3, Math.floor(v)))}${run ? ' is-run' : ''}${fresh.includes(at) ? ' is-new' : ''}`);
@@ -1016,10 +591,9 @@ export function medalDots(m: MedalSet, fresh: readonly number[] = [], quiet = fa
 }
 
 /**
- * Round 8, the trials lane: the Trial picked, over Ride where the greeting stands. Its rule in the greeting's own scene
- * type, then the three targets struck as the medals they win (bronze, silver, gold, each disc in its metal with its
- * figure), and your best this week. The targets are what a player sees before riding; until the field is in, the line
- * says it is being found.
+ * Round 8, the trials lane: the Trial picked, over Ride. Its rule, then the three targets struck as the medals they win
+ * (bronze, silver, gold, each disc in its metal with its figure), your best this week and the days it has left. Until
+ * its field is in, the rule alone (nothing loading is shown).
  */
 function trialPanel(t: TitleTrial): HTMLElement {
   const rule = h('p', 'gs-t-greet gs-t-trial-rule', icon('star'), h('span', '', t.rule));
@@ -1028,15 +602,13 @@ function trialPanel(t: TitleTrial): HTMLElement {
     const row = h('p', 'gs-t-trial-goals');
     t.targets.forEach((v, i) => {
       const held = t.medal > i;
-      // (The disc is drawn; a reader hears the medal's name before its figure.)
       row.append(h('span', `gs-medal m-${i + 1} gs-t-trial-goal${held ? ' is-held' : ''}`, sr(`${MEDAL[i + 1]} `), h('span', 'gs-num', v), held ? sr(', held') : null));
     });
-    // (The unit once, after gold: the discs alone read as coins. Then your best, and the days the week has left.)
     if (t.unit) row.lastElementChild?.append(h('span', 'gs-t-trial-unit', ` ${t.unit}`));
     if (t.best) row.append(h('span', 'gs-t-trial-best', 'Best ', h('span', 'gs-num', t.best)));
     row.append(h('span', 'gs-t-trial-best', t.left));
     box.append(row);
-  } else box.append(h('p', 'gs-t-trial-goals is-waiting', 'Finding rivals…'));
+  }
   return box;
 }
 
@@ -1056,39 +628,17 @@ function logo(): HTMLElement {
 }
 
 /**
- * How many ghosts the player has passed in all: the game's own count when the model carries one,
- * otherwise read back from a locked mountain's "Pass N more ghosts" line against its threshold
- * (0 once every mountain is open and no count is given).
- */
-function ghostsPassed(m: TitleModel): number {
-  if (typeof m.ghostsPassed === 'number') return m.ghostsPassed;
-  for (const c of m.mountains) {
-    const need = c.locked ? /(\d+)/.exec(c.unlockText) : null;
-    const def = need ? MOUNTAINS.find((d) => d.id === c.id) : undefined;
-    if (need && def) return Math.max(0, def.unlockGhosts - Number(need[1]));
-  }
-  return 0;
-}
-
-/**
- * A friend's challenge: "Racing Mila's ghost" over "2:31.4 on Pinecrest" (their finish), or "2,340 m on
- * Pinecrest" (how far a run that did not finish went). A run on today's Daily Mountain reads "on the
- * Daily Mountain" and one on this week's Cup "on the Weekly Cup". One on another day's Daily or another
- * week's Cup has no course left and no ghost to ride (no mountain named): "Mila's race has closed". Links
- * from before distances were carried keep the score: "Beat a score of 12,480 on Pinecrest". A link from
- * an older course has no ghost to race, only a distance to pass: "Mila rode 2,340 m on the old
- * Pinecrest. Beat it." No live role: it sits right above the Accept button, read in context, and the
- * title re-renders often.
+ * A friend's challenge: "Racing Mila's ghost" over "2:31.4 on Pinecrest" (their finish), or "2,340 m on Pinecrest" (how
+ * far a run that did not finish went). One on another day's Daily or another week's Cup has no course left: "Mila's
+ * race has closed". A link from an older course: "Mila rode 2,340 m on the old Pinecrest. Beat it."
  */
 function challengeBanner(c: NonNullable<TitleModel['challenge']>): HTMLElement {
   if (c.old) {
-    // (Names in it are handles and places: auto-translate stays off the short line.)
     const line = h('span', 'gs-challenge-k', oldLinkLine({ name: c.name, distance: c.distance ?? 0, mountain: c.mountain }));
     line.setAttribute('translate', 'no');
     return h('div', 'gs-challenge', icon('ghost', 'gs-challenge-ico'), h('div', 'gs-challenge-txt', line));
   }
-  // Player and mountain names are proper nouns: keep auto-translate off them.
-  const who = h('span', '', `${c.name}\u2019s`);
+  const who = h('span', '', `${c.name}’s`);
   who.setAttribute('translate', 'no');
   const k = c.mountain ? h('span', 'gs-challenge-k', 'Racing ', who, ' ghost') : h('span', 'gs-challenge-k', who, ' race has closed');
   const where = c.daily ? (c.mountain ? 'the Daily Mountain' : '') : c.mountain;
@@ -1102,38 +652,6 @@ function challengeBanner(c: NonNullable<TitleModel['challenge']>): HTMLElement {
         : h('span', 'gs-challenge-v', 'Beat a score of ', h('span', 'gs-num', fmt(c.score)), ' on ', place);
   }
   return h('div', 'gs-challenge', icon('ghost', 'gs-challenge-ico'), h('div', 'gs-challenge-txt', k, v));
-}
-
-/** The record a card or the stats pill shows: your best time, else your best score, else the old
- *  course's best until a new one exists; null with nothing to show. */
-function record(c: { best: number; bestTime?: number; oldBest?: number }): { label: string; value: string } | null {
-  if (c.bestTime && c.bestTime > 0) return { label: 'Best', value: clock(c.bestTime) };
-  if (c.best > 0) return { label: 'Best', value: fmt(c.best) };
-  return c.oldBest && c.oldBest > 0 ? { label: 'Old best', value: fmt(c.oldBest) } : null;
-}
-
-/**
- * The returning player's greeting (progress.titleGreeting): a grudge waiting here (the rival's name in
- * rose, "Your nemesis" when it is one), the ghosts still to pass for the next mountain (mint), or the
- * nearest mission (its flag).
- */
-function greeting(text: string): HTMLElement {
-  const grudge = /^(Your nemesis )?(.+) is waiting on (.+)$/.exec(text);
-  if (grudge) {
-    const who = h('span', 'gs-t-greet-who', grudge[2]);
-    who.setAttribute('translate', 'no');
-    const where = h('span', '', grudge[3]);
-    where.setAttribute('translate', 'no');
-    return h('p', 'gs-t-greet is-grudge', icon('ghost'), h('span', '', grudge[1] ?? '', who, ' is waiting on ', where));
-  }
-  const unlock = /^(\d+) (more ghosts? opens?) (.+)$/.exec(text);
-  if (unlock) {
-    const where = h('span', '', unlock[3]);
-    where.setAttribute('translate', 'no');
-    return h('p', 'gs-t-greet is-unlock', icon('ghost'), h('span', '', h('span', 'gs-t-greet-n gs-num', unlock[1]), ` ${unlock[2]} `, where));
-  }
-  // "1,600 m" never breaks before its unit.
-  return h('p', 'gs-t-greet is-mission', icon('flag'), h('span', '', text.replace(/(\d) m\b/g, `$1${NBSP}m`)));
 }
 
 /** "270/800" on screen, "270 of 800" to a reader (the mission rows, and the results' folded row). */

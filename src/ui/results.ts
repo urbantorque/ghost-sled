@@ -218,6 +218,7 @@ export class Results {
     story.el.setAttribute('aria-label', 'Run results');
     if (!intro) story.finish();
     this.el.replaceChildren(story.el);
+    this.el.dataset.view = 'story';
   }
 
   // ---------------------------------------------------------------- Details

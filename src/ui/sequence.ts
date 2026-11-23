@@ -313,7 +313,7 @@ export class Story {
   constructor(
     private readonly m: ResultsModel,
     ctx: Ctx,
-    mode: InputMode,
+    private readonly mode: InputMode,
     private readonly hooks: StoryHooks,
     offers: HTMLElement[],
   ) {
@@ -360,8 +360,9 @@ export class Story {
     got.dataset.beat = '3';
     let rankInKicker = false;
     if (reward?.kind === 'mountain') {
-      const art = h('span', `gs9-got-art b-${reward.mountain.biome}`);
-      art.innerHTML = biomeArt(reward.mountain.biome);
+      const sky = h('span', 'gs-mtn-sky');
+      sky.innerHTML = biomeArt(reward.mountain.biome);
+      const art = h('span', `gs9-got-art b-${reward.mountain.biome}`, sky);
       const n = h('span', 'gs9-got-n', reward.mountain.name);
       n.setAttribute('translate', 'no');
       got.append(art, h('span', 'gs9-got-k', 'New mountain'), n);
@@ -477,6 +478,8 @@ export class Story {
     for (const s of Array.from(this.el.querySelectorAll<HTMLElement>('[data-beat]'))) s.classList.add('is-on');
     this.el.classList.remove('is-playing');
     this.el.classList.add('is-done');
+    // A keyboard player waiting on the story lands on the button as it arrives.
+    if (this.mode === 'keyboard' && document.activeElement === this.el) this.again.focus({ preventScroll: true });
     this.pay();
   }
 

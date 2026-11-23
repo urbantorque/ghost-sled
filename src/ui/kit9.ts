@@ -96,7 +96,10 @@ export function openSheet(el: HTMLElement, from: HTMLElement | null, behind: HTM
     // (A sheet still open under this one keeps its own screen inert; it comes back to life itself.)
     for (const b of under) if (!stack.some((s) => s.behind.includes(b))) b.inert = false;
     onClose();
-    if (from?.isConnected) from.focus({ preventScroll: true });
+    // (The screen under it may have been drawn again meanwhile: the control with the same focus key takes it.)
+    const fk = from?.dataset.fk;
+    const back = from?.isConnected ? from : fk ? document.querySelector<HTMLElement>(`[data-fk="${CSS.escape(fk)}"]`) : null;
+    back?.focus({ preventScroll: true });
   };
   stack.push({ el, from, behind: under, close });
   el.addEventListener('keydown', (e) => {

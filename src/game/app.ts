@@ -26,7 +26,7 @@ import { reduced } from '../ui/motion';
 import { REVEAL_TIMING } from '../ui/reveal';
 import { RESULTS_TIMING } from '../ui/results';
 import { forgetSeatedPortraits, prewarmSledPortraits, setSledPortraits } from '../ui/menus';
-import type { AlmanacModel, GarageShelf, GhostKind, HintKind, HudModel, MountainCard, PaintCard, ResultsModel, ResultsSpine, TitleSpine, LanternTownView, SettingsModel, TitleModel, TitleTrial, TitleTwelve, TwelveRung } from '../ui/contract';
+import type { AlmanacModel, GarageShelf, GhostKind, HintKind, HudModel, MountainCard, PaintCard, ResultsModel, ResultsSpine, TitleIntro, TitleSpine, LanternTownView, SettingsModel, TitleModel, TitleTrial, TitleTwelve, TwelveRung } from '../ui/contract';
 import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS, FINISH_RESULTS_MS, FINISH_SKIP_MS, IDLE_FEEL } from './beats';
 import { type OldLink, linkLine, linkMountain, readChallengeLink, targetZ } from './challenge';
 import { Director } from './director';
@@ -256,6 +256,10 @@ export class App {
   private lastWallTick = -1e9;
   private grinds = 0;
   private results: ResultsModel | null = null;
+  /** Round 9 (U1): what opened since the title was last up, each said once on its door (titleIntro), and the lines
+   *  whose door has been opened this session. */
+  private intros: TitleIntro[] = [];
+  private readonly introsSeen = new Set<string>();
   /** Counts results cards shown and hidden: a card's first-frame sounds skip a card already gone. */
   private resultsSeq = 0;
   /** Rewards landed on this card (each coin's index). */
@@ -412,6 +416,8 @@ export class App {
       onHour: (on) => this.pickHour(on),
       onRideMode: (mode) => this.rideMode(mode),
       onOpenAlbum: () => this.openAlbum(),
+      // (Round 9: a door's "New" was read: the next thing new may take its door.)
+      onIntroSeen: (line) => this.introsSeen.add(line),
       onResultsBeat: (kind, i) => this.resultsBeat(kind, i),
       // Round 8 (the photo lane): photo mode, from pause and from the results.
       onPhoto: () => this.openPhoto(),
@@ -619,6 +625,9 @@ export class App {
     };
     const waits = waitingRider(t, open);
     const at = next ? MOUNTAINS[duelMountain(next)] : null;
+    // (Round 9: whether the next run on that ground is the duel: the first waits for a save's third run, so Ride never
+    // says "Duel" for a run that is not one.)
+    const rides = at !== null && duelOn(t, MOUNTAINS.indexOf(at), open, this.save.data.runs) !== null;
     return {
       beaten: t?.beaten.length ?? 0,
       of: TWELVE.length,
@@ -629,7 +638,32 @@ export class App {
       hook: gateLine(t),
       crowned: t?.crowned === true,
       rungs: TWELVE.map(rung),
+      rides,
     };
+  }
+
+  /** Round 9 (U1): the title's one thing new, said once: the newest system or piece a run opened, else the day's news
+   *  when it is news (a new month's chapter, the day's contracts, a move in the Cup's league), until its door is opened.
+   *  The flame's days are on the Daily and Cup door already. */
+  private titleIntro(news: string | null): TitleIntro | null {
+    const day: TitleIntro | null = news && /^New this month/.test(news) ? { door: 'progress', line: news } : news && /contracts today|division|Trial:/.test(news) ? { door: 'events', line: news } : null;
+    const all = day ? [...this.intros, day] : this.intros;
+    for (let i = all.length - 1; i >= 0; i--) if (!this.introsSeen.has(all[i].line)) return all[i];
+    return null;
+  }
+
+  /** What a run's opened rewards introduce on the title (ui/words.ts SAYS says the same on the results' card). */
+  private keepIntros(opened: ResultsSpine['opened']): void {
+    const say: Record<string, TitleIntro> = {
+      'Daily contracts': { door: 'events', line: 'New: daily contracts. Three small goals a day, each worth XP.' },
+      'The Spirit Album': { door: 'progress', line: 'New: the Spirit Album. A sticker for all you do.' },
+      'The Long Night': { door: 'progress', line: 'New: the Long Night. Mountains back to back, ridden from here.' },
+      Trials: { door: 'events', line: 'New: Trials. A new rule every week, beside the Cup.' },
+    };
+    for (const r of opened) {
+      const i = say[r.name] ?? (r.kind === 'sled' ? { door: 'garage' as const, line: 'New: a sled of your own, in the garage.' } : r.kind === 'garage' ? { door: 'garage' as const, line: `New: ${r.name}, in the garage.` } : null);
+      if (i && !this.intros.some((x) => x.line === i.line)) this.intros.push(i);
+    }
   }
 
   /** A link opened this Daily or Cup before its rivals were generated: its title stands, Ride waits. */
@@ -892,7 +926,8 @@ export class App {
     const open = (id: string): boolean => MOUNTAINS.some((m) => m.id === id && this.isOpen(m));
     let spine: TitleSpine | undefined;
     // (The trials lane: a week's Trial not yet ridden is the day's news when nothing else is.)
-    const trialNews = this.trialsOpen() && this.trialReady && !tp && !d.trials?.[this.trial.week] ? `This week's Trial: ${this.trial.name}. Pick it on the Cup.` : null;
+    const trialNews = this.trialsOpen() && this.trialReady && !tp && !d.trials?.[this.trial.week] ? `This week's Trial: ${this.trial.name}. Choose it in Daily and Cup.` : null;
+    const intro = (news: string | null): TitleIntro | null => this.titleIntro(news);
     const model: TitleModel = {
       mountains: MOUNTAINS.map((m) => {
         const spot = this.spotFor(m.id);
@@ -959,6 +994,7 @@ export class App {
         if (!spine) {
           spine = titleSpine(d, today, { week, cupPool: cupPool(), open });
           if (!spine.whatsNew && trialNews) spine.whatsNew = trialNews;
+          spine.intro = intro(spine.whatsNew);
         }
         return spine;
       },
@@ -2815,6 +2851,8 @@ export class App {
     const spineOut = this.settleSpineRun(sim, sum, settled, climb, board, you, mi);
     // (Round 8, the photo lane: the stickers it earned take the frames this run kept of them.)
     this.shots?.settle(spineOut.outcome.stickers);
+    // (Round 9: what it opened is said once on the title's doors.)
+    this.keepIntros(spineOut.view.opened);
     this.keepShots();
     // (A page that opens a mountain shows its unlock card, as the ghosts passed and The Twelve do.)
     for (const { reward: r } of spineOut.outcome.opened) {

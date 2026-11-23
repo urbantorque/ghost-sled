@@ -118,6 +118,9 @@ export interface TitleTwelve {
   /** The last race is won. */
   crowned: boolean;
   rungs: TwelveRung[];
+  /** Round 9: the next run on the next rider's home ground is the duel (the first duel waits for a save's third run,
+   *  twelve.ts FIRST_DUEL_RUN): Ride never says "Duel" for a run that is not one. Absent reads as true. */
+  rides?: boolean;
 }
 
 /** The Twelve on a run's results: what the duel did. */
@@ -488,6 +491,8 @@ export interface UIHandlers {
   /** Round 8: a beat of the results' sequence landed (ui/sequence.ts), for its sound: the rank bar starts a stretch of
    *  its fill, a page turns at the top, a card turns over (i its index), the one button comes forward. */
   onResultsBeat?(kind: 'fill' | 'page' | 'card' | 'button', i: number): void;
+  /** Round 9: a door's "New" was opened: its one line was read, and the next thing new may take the door. */
+  onIntroSeen?(line: string): void;
   /** Round 8: open the Almanac or the Spirit Album (the title's and the garage's way in). */
   onOpenAlmanac?(): void;
   onOpenAlbum?(): void;
@@ -754,6 +759,17 @@ export interface TitleSpine {
   titles: string[];
   /** The Lantern Row, a town a mountain that is open. */
   lanterns: LanternTownView[];
+  /** Round 9 (U1): something new since the last title, introduced once: a "New" on its door and this one line in its
+   *  room (the app keeps it until the door is opened, onIntroSeen). */
+  intro?: TitleIntro | null;
+}
+
+/** The title's four doors (round 9): the day's and the week's events, your progress, the garage, settings. */
+export type TitleDoor = 'events' | 'progress' | 'garage' | 'settings';
+
+export interface TitleIntro {
+  door: TitleDoor;
+  line: string;
 }
 
 /** The Lantern Row (game/lanterns.ts): one finish town's row of eight, as the title, the garage and the world read it.

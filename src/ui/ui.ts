@@ -203,6 +203,8 @@ export class UI implements GameUI {
     // A pass waiting under the banner that names its ghost ("GRUDGE SETTLED Mila") was said by it.
     this.hud.bannerName = () => this.notices.currentName;
     this.hud.onLayout = dirty;
+    // (Round 9: a title's room opening or closing moves its panels.)
+    this.title.onLayout = dirty;
     this.fx.onLayout = dirty;
     this.notices.onLayout = dirty;
     this.hints.onLayout = dirty;
