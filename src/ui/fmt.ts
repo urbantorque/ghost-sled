@@ -1,4 +1,5 @@
 import type { GhostKind } from './contract';
+import { prizesLine } from './words';
 
 // Number and label formatting. Copy rule: hyphen-minus only, never en or em dashes.
 
@@ -13,10 +14,10 @@ export function fmt(n: number): string {
 /** Non-breaking space, so "34 m" never wraps between number and unit. */
 export const NBSP = ' ';
 
-/** A page's rewards on one line that never cuts a name: the first, then "+N" for the rest (the whole list is spoken
- *  and in the line's title). */
+/** A page's rewards in words, every prize named ("A new sled and a flourish for Spinning Top"). Round 9's copy pass:
+ *  the first name and a bare "+1" for the rest was a figure a new player could not read (19 of the 50 pages). */
 export function rewardsLine(names: string[]): string {
-  return names.length > 1 ? `${names[0]}${NBSP}+${names.length - 1}` : (names[0] ?? '');
+  return prizesLine(names.map((name) => ({ name })));
 }
 
 export function metres(n: number): string {

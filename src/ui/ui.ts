@@ -31,6 +31,7 @@ import { h, type Ctx, type UiSound } from './dom';
 import { Fx } from './fx';
 import { Hint } from './hint';
 import { Hud, pushRect } from './hud';
+import { closeTopSheet, sheetOpen, topSheet } from './kit9';
 import { Menus } from './menus';
 import { Notices } from './notices';
 import { PadNav } from './padnav';
@@ -72,7 +73,7 @@ export class UI implements GameUI {
   private readonly menus: Menus;
   private readonly touch: TouchViz;
   private readonly padNav = new PadNav();
-  private readonly hd: UIHandlers;
+  private readonly hd: UIHandlers & UIMenuHandlers;
   private readonly loadEl: HTMLElement;
   private loadShown = false;
   private lastLoad = -1;
@@ -140,11 +141,21 @@ export class UI implements GameUI {
       (e) => {
         if (e.detail === 0) return;
         const t = e.target instanceof Element ? e.target.closest('button') : null;
-        if (!t || this.menus.contains(t)) return;
+        // (Round 9: a room or Details is a sheet too, and keeps focus inside it.)
+        if (!t || this.menus.contains(t) || t.closest('.gs9-sheet')) return;
         t.blur();
       },
       true,
     );
+
+    // Round 9: Escape and Backspace go back (back(), above): on the window's bubbling phase, so photo mode, which
+    // takes every key at capture while it is open, keeps its own Escape. A field being typed in keeps Backspace.
+    window.addEventListener('keydown', (e) => {
+      if ((e.code !== 'Escape' && e.code !== 'Backspace') || e.repeat) return;
+      const t = e.target;
+      if (e.code === 'Backspace' && t instanceof HTMLElement && (t.isContentEditable || (t instanceof HTMLInputElement && t.type !== 'range' && t.type !== 'checkbox'))) return;
+      if (this.back()) e.preventDefault();
+    });
 
     this.touch = new TouchViz(this.el);
     this.hud = new Hud(this.el, ctx, hd);
@@ -155,16 +166,14 @@ export class UI implements GameUI {
     this.revealer = new Reveal(this.notices.revealSlot, this.hud);
     this.menus = new Menus(this.el, ctx, hd);
     this.title = new Title(this.el, ctx, hd, {
-      openSleds: () => {
-        if (hd.onOpenSleds) hd.onOpenSleds();
-        else if (this.menus.lastSleds) this.menus.showSleds(this.menus.lastSleds.cards, this.menus.lastSleds.wallet, this.menus.lastSleds.paints, this.menus.lastSleds.shelves, this.menus.lastSleds.lanterns);
-      },
+      openSleds: () => this.openGarage(),
       openSettings: () => {
         if (hd.onOpenSettings) hd.onOpenSettings();
         else this.menus.showSettings(this.menus.lastSettings ?? DEFAULT_SETTINGS);
       },
     });
-    this.results = new Results(this.el, ctx, hd);
+    // (Round 9: Details' "Open the Garage" takes the title's own way into the garage.)
+    this.results = new Results(this.el, ctx, hd, { openGarage: () => this.openGarage() });
     // Menus are created before title/results for module wiring; keep them stacked on top.
     this.el.append(this.menus.pause.el, this.menus.sleds.el, this.menus.settings.el, this.menus.books.el);
 
@@ -198,6 +207,22 @@ export class UI implements GameUI {
     this.notices.onLayout = dirty;
     this.hints.onLayout = dirty;
     this.markOcc();
+  }
+
+  /** The garage, the one way in (the title's Garage door, and the results' Details when a sled is ready there). */
+  private openGarage(): void {
+    if (this.hd.onOpenSleds) this.hd.onOpenSleds();
+    else if (this.menus.lastSleds) this.menus.showSleds(this.menus.lastSleds.cards, this.menus.lastSleds.wallet, this.menus.lastSleds.paints, this.menus.lastSleds.shelves, this.menus.lastSleds.lanterns);
+  }
+
+  /**
+   * Round 9: Escape and Backspace close the top surface, as the pad's B does: a sheet (the garage, settings, the
+   * books), else a room or Details (kit9.ts), and focus goes back to the control that opened it. In fullscreen the
+   * browser takes Escape first (on CrazyGames it leaves fullscreen), so there a player presses it twice; Backspace and
+   * B always work. The pause card keeps P and Start. Returns true when it closed something.
+   */
+  private back(): boolean {
+    return this.menus.closeTop() || closeTopSheet();
   }
 
   private markOcc(): void {
@@ -256,7 +281,8 @@ export class UI implements GameUI {
   }
 
   get modal(): boolean {
-    return this.results.layer.open || this.menus.anyOpen;
+    // (Round 9: a title's room is a sheet: Space and Enter do not ride under it.)
+    return this.results.layer.open || this.menus.anyOpen || sheetOpen();
   }
 
   private setMode(mode: InputMode): void {
@@ -290,7 +316,13 @@ export class UI implements GameUI {
       if (menu === this.menus.pause.el) menu.querySelector<HTMLElement>('[data-fk="resume"]')?.click();
       return true;
     }
-    const scope = menu ?? (this.results.layer.open ? this.results.layer.el : this.title.layer.open ? this.title.layer.el : null);
+    // (Round 9: a room over the title or Details over the results is the scope, and modal: B closes it.)
+    const sheet = menu ? null : topSheet();
+    if (sheet && p.b) {
+      this.back();
+      return false;
+    }
+    const scope = menu ?? sheet ?? (this.results.layer.open ? this.results.layer.el : this.title.layer.open ? this.title.layer.el : null);
     if (!scope) {
       this.padNav.idle();
       if (p.start && this.hud.layer.open) {
@@ -305,7 +337,7 @@ export class UI implements GameUI {
       return false;
     }
     // In a sheet over the title, Start is not Ride.
-    return this.padNav.step(p, scope, menu !== null, performance.now()) || (p.start && menu !== null);
+    return this.padNav.step(p, scope, menu !== null || sheet !== null, performance.now()) || (p.start && (menu !== null || sheet !== null));
   }
 
   showTitle(m: TitleModel): void {

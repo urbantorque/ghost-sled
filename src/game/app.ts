@@ -164,17 +164,6 @@ function validRecord(r: string | undefined | null): boolean {
  *  long (ms) for it to run (it resumes within a few frames of the unmute). */
 const WAKE_WAIT_MS = 700;
 
-/** How many Beat stamps the results card shows at first (results.ts standings): your row, the two
- *  places above it and the one below in a field over 5 rows (first place shows the three it beat);
- *  a smaller field shows whole. One soft mallet sounds per stamp in view. */
-function beatStampsShown(ghosts: number, ahead: number): number {
-  const n = ghosts + 1;
-  const beaten = ghosts - ahead;
-  if (n <= 5) return beaten;
-  const lo = Math.max(0, Math.min(ahead - 2, n - 4));
-  return Math.max(0, Math.min(beaten, lo + 4 - 1 - ahead));
-}
-
 interface Challenge {
   record: RunRecord;
   attempts: number;
@@ -2964,6 +2953,10 @@ export class App {
       stages: this.stageTable(sim, decided?.text ?? null, climb),
       canRideHome: sim.s.crashed && !sim.finished && sim.distance < sim.course.finishZ - 300 && !this.homeRide,
     };
+    // Round 9 (U2): a mountain this run opened is the one button when the spine's choice is a plain Run Again ("Ride
+    // Frostfang Glacier", ui/sequence.ts storyButton), so Run Again, by the button or Space, rides it there.
+    const opened = unlockedMountains[0];
+    if (opened && spineOut.primary.kind === 'again' && this.results.runAgainLabel?.text === 'Run Again') this.againTo = opened.id;
     this.ui.hideHud();
     if (nightGoesOn) {
       this.save.flush();
@@ -3229,22 +3222,19 @@ export class App {
     return fr ? friendLine(fr.name, fr.standing, this.youStanding(sim)) : null;
   }
 
-  /** The results card's sounds on its CSS beats (results.ts RESULTS_TIMING), laid by the engine: the
-   *  count-up ticking up the ladder, the place stamp, the New best chord on its stamp and a mallet per
-   *  Beat stamp in view. Each mission's chime plays as its Done stamp starts on screen (missionStamp)
-   *  and each reward's coin as it lands (rewardLanded), which the card calls whichever path it took: a
-   *  phone's folded list chimes for nothing it does not draw. Reduced motion plays it all at once, the
-   *  one chime and the one coin included. (The only mission sound: settleRun credits, nothing chimes
-   *  twice.) */
+  /** The results' sounds on their timeline (results.ts RESULTS_TIMING), laid by the engine. Round 9's story (ui/
+   *  sequence.ts) counts nothing up and stamps no Beat on a race list, so it keeps only the place's stamp (as the
+   *  place's word lands) and the new best's chord (as its fact does); the bar's ticks, the page's stamp and the card's
+   *  mallet ride its beats (resultsBeat). Each finished mission's chime and coin come as the bar starts to fill
+   *  (missionStamp, rewardLanded). Reduced motion plays it all at once, the one chime and the one coin included.
+   *  (The only mission sound: settleRun credits, nothing chimes twice.) */
   private resultsSounds(m: ResultsModel, lagS = 0): void {
     const rows = (pred: (mv: ResultsModel['missions'][number]) => boolean): number[] => m.missions.flatMap((mv, i) => (pred(mv) ? [i] : []));
-    const youAt: Standing = { time: m.finish?.seconds ?? null, distance: m.distance };
-    const ahead = m.ghosts.filter((g) => aheadOf({ time: g.time ?? null, distance: g.distance ?? 0 }, youAt)).length;
     const still = reduced();
     const show = {
-      count: m.score > 0,
-      newBest: m.newBest,
-      beats: beatStampsShown(m.ghosts.length, ahead),
+      count: false,
+      newBest: m.finish?.newBest === true,
+      beats: 0,
       missions: still ? rows((mv) => mv.justCompleted) : [],
       coins: still ? rows((mv) => mv.justCompleted && mv.reward > 0) : [],
     };

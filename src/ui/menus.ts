@@ -11,7 +11,10 @@ import { hatArt, paintArt, scarfArt, soundArt, trailArt } from './garageart';
 
 // Pause overlay (Resume, the run's missions, inline settings, Home) and the two sheets: the Garage and
 // Settings.
-// Escape is deliberately not bound: on CrazyGames it exits fullscreen. The game maps P to pause.
+// Escape and Backspace close the top sheet (round 9, DECISIONS 392: ui.ts back() calls closeTop below), as the pad's
+// B and each sheet's Close do. Until round 9 Escape was deliberately unbound because on CrazyGames it exits
+// fullscreen; it still does there, as the browser takes it first, so in fullscreen a player presses it twice (and
+// Backspace and B always work). The pause card is not a sheet: the game maps P to pause and resume.
 // The Garage is a shop in tabs (round 6): Sleds, Paint, Scarves, Hats, Trails and Sounds. Each tab is a
 // large preview of the picked item (what it is in one plain line, the one action) beside a grid of tiles
 // that pick what the preview shows. The sleds are renders of the real in-game meshes when the game hands
@@ -877,6 +880,16 @@ export class Menus {
     this.books.hide();
     this.onChange();
     if (was && !this.pause.open) this.restore();
+  }
+
+  /** Round 9: closes the sheet on top (settings over the books over the garage), as its own Close does, for Escape,
+   *  Backspace (ui.ts back) and the pad's B. False with none open: the pause card is not one. */
+  closeTop(): boolean {
+    const top = this.settings.open ? this.settings : this.books.open ? this.books : this.sleds.open ? this.sleds : null;
+    if (!top) return false;
+    this.ctx.sound('back');
+    this.closeSheet(top);
+    return true;
   }
 
   private closeSheet(l: Layer): void {

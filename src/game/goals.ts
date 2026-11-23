@@ -5,7 +5,6 @@ import { type Board, NEAR_GOLD_S, NEAR_RUNG_S, bestStanding, medalsHeld, spotOn 
 import { type RunSummary, missionDef, missionTier } from './missions';
 import type { SaveData } from './save';
 import type { Contract, RecentRun } from './spinesave';
-import { clock } from './standing';
 import { homeTime, mountainOpen, nextDuel } from './twelve';
 
 // The next run (round 8, G5): every goal the results could name, whether your last runs put it in reach, and the
@@ -79,6 +78,9 @@ export const REMATCH_M = 50;
 /** The next duel is in reach when one of your recent runs on its mountain came within this of the rider's time (s). */
 export const REACH_DUEL_S = 0.4;
 
+/** A small gap in words: "0.4 s", or "a whisker" under a tenth ("0.0 s ahead" read as level). */
+const secs = (gap: number): string => (gap < 0.05 ? 'a whisker' : `${gap.toFixed(1)} s`);
+
 const median = (xs: number[]): number => {
   const s = xs.slice().sort((a, b) => a - b);
   return s.length ? s[(s.length - 1) >> 1] : 0;
@@ -125,7 +127,11 @@ export function nextGoals(d: SaveData, ctx: GoalContext): NextGoal[] {
     const top = Math.max(...vals, 0);
     const reachable = top >= t.target * REACH_MISSION || (def.unit === 'n' && t.target >= 2 && top >= t.target - 1);
     const left = Math.max(0, t.target - Math.max(top, a.best));
-    const short = left <= 0 ? 'done before, so again' : def.unit === 'm' ? `${Math.ceil(left)} m short` : def.unit === 's' ? `${left.toFixed(1)} s short` : def.unit === 'deg' ? `${left * 180} short` : def.unit === 'm/s' ? `${Math.ceil(left)} m/s short` : `${Math.ceil(left)} to go`;
+    // (Round 9: a target one of your last runs met before the mission was drawn is not offered. A mission completes
+    // on the run that meets it, so `left` at nothing means the run that met it came first, and the card used to say
+    // "done before, so again", on about half of all results.)
+    if (left <= 0) continue;
+    const short = def.unit === 'm' ? `${Math.ceil(left)} m short` : def.unit === 's' ? `${left.toFixed(1)} s short` : def.unit === 'deg' ? `${left * 180} degrees short` : def.unit === 'm/s' ? `${Math.ceil(left)} m/s short` : `${Math.ceil(left)} more to go`;
     out.push({ kind: 'mission', text: `Finish: ${t.text}`, short, reachable, gap: t.target > 0 ? left / t.target : 0, names: [t.text] });
   }
   // 3. The next duel.
@@ -134,7 +140,9 @@ export function nextGoals(d: SaveData, ctx: GoalContext): NextGoal[] {
     const rt = homeTime(nd.rider);
     const q = quickest(MOUNTAINS[nd.rider.home].id);
     const gap = rt !== null && q !== null ? q - rt : Infinity;
-    out.push({ kind: 'duel', text: `Duel ${nd.rider.name}`, short: rt !== null ? clock(rt) : '', reachable: gap <= REACH_DUEL_S, gap: Number.isFinite(gap) ? Math.max(0, gap) / 10 : 1, names: [nd.rider.name] });
+    // (Round 9: the duel's line names where it rides, not the rider's time: a duel is won head to head, and the rider's
+    // slower time beside your faster best read as already beaten, DECISIONS 391.)
+    out.push({ kind: 'duel', text: `Duel ${nd.rider.name}`, short: MOUNTAINS[nd.rider.home].name, reachable: gap <= REACH_DUEL_S, gap: Number.isFinite(gap) ? Math.max(0, gap) / 10 : 1, names: [nd.rider.name] });
   }
   // 4. Today's Daily.
   if (ctx.dailyReady && !ctx.key.startsWith('daily:') && !recentDaily(recent, ctx.day)) out.push({ kind: 'daily', text: "Today's Daily", short: '', reachable: true, gap: 0.05, names: ['Daily'] });
@@ -143,7 +151,8 @@ export function nextGoals(d: SaveData, ctx: GoalContext): NextGoal[] {
   if (at.page < PAGES) {
     const per = median(recent.map((r) => r.xp));
     const next = ALMANAC[at.page];
-    out.push({ kind: 'page', text: `Page ${at.page + 1}: ${next.rewards.map(rewardName).join(', ')}`, short: `${at.need} to go`, reachable: per > 0 && at.need <= per, gap: per > 0 ? at.need / per / 2 : 1, names: [`Page ${at.page + 1}`] });
+    // (Round 9: a page is Rider Rank's, said with its unit: "Page 8: 300 to go" was a figure a new player could not read.)
+    out.push({ kind: 'page', text: `Rider Rank ${at.page + 1}: ${next.rewards.map(rewardName).join(', ')}`, short: `${NF.format(at.need)} XP`, reachable: per > 0 && at.need <= per, gap: per > 0 ? at.need / per / 2 : 1, names: [`Rider Rank ${at.page + 1}`] });
   }
   // 6. The ladder and the golds, on a named mountain.
   if (ctx.mi >= 0 && ctx.board) {
@@ -151,7 +160,7 @@ export function nextGoals(d: SaveData, ctx: GoalContext): NextGoal[] {
     const q = quickest(ctx.key);
     if (spot.next && spot.next.standing.time !== null && q !== null && spot.rank !== null) {
       const gap = q - spot.next.standing.time;
-      out.push({ kind: 'rung', text: `Rank ${spot.rank - 1}: ${spot.next.name}`, short: `${Math.max(0, gap).toFixed(1)} s`, reachable: gap <= NEAR_RUNG_S, gap: Math.max(0, gap) / 20, names: [spot.next.name] });
+      out.push({ kind: 'rung', text: `Rank ${spot.rank - 1}: ${spot.next.name}`, short: secs(gap), reachable: gap <= NEAR_RUNG_S, gap: Math.max(0, gap) / 20, names: [spot.next.name] });
     }
     const held = medalsHeld(d.climb?.[ctx.key]);
     for (let i = 0; i < 3; i++) {
@@ -160,7 +169,7 @@ export function nextGoals(d: SaveData, ctx: GoalContext): NextGoal[] {
       const ss = recent.filter((r) => r.k === ctx.key).map((r) => r.ss[i]).filter((s): s is number => typeof s === 'number');
       if (!ss.length) continue;
       const gap = Math.min(...ss) - gold;
-      out.push({ kind: 'gold', text: `Gold in Stage ${i + 1}`, short: `${Math.max(0, gap).toFixed(1)} s`, reachable: gap <= NEAR_GOLD_S, gap: Math.max(0, gap) / 10, names: [`Stage ${i + 1}`] });
+      out.push({ kind: 'gold', text: `Gold in stage ${i + 1}`, short: secs(gap), reachable: gap <= NEAR_GOLD_S, gap: Math.max(0, gap) / 10, names: [`Stage ${i + 1}`] });
     }
   }
   // 7. Contracts: today's not yet met, and the form contract.
@@ -177,19 +186,50 @@ function recentDaily(recent: readonly RecentRun[], day: string): boolean {
   return recent.some((r) => r.k === `daily:${day}`);
 }
 
-/** The card's one primary button (the rule in the header). */
+const NF = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+const lower = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
+
+/**
+ * A goal as the button's line says it (round 9's copy pass): a player's words, every figure with its unit, never
+ * "Page 8: 300 to go". "Mission: ride 800 m in one run. 12 m short", "300 XP to Rider Rank 8", "SparkleCedar is 1.2 s
+ * ahead", "Gold in stage 2: 0.4 s to find", "Contract: pass 3 ghosts on Ember Peak".
+ */
+export function goalWords(g: NextGoal): string {
+  switch (g.kind) {
+    case 'mission':
+      return `Mission: ${lower(g.names[0])}.${g.short ? ` ${g.short[0].toUpperCase()}${g.short.slice(1)}` : ''}`;
+    case 'page':
+      return `${g.short} to ${g.names[0]}`;
+    case 'rung':
+      return `${g.names[0]} is ${g.short} ahead`;
+    case 'gold':
+      return `${g.text}: ${g.short} to find`;
+    case 'contract':
+      return `Contract: ${lower(g.text)}`;
+    case 'form':
+      return `Your form: ${lower(g.text)}`;
+    default:
+      return g.short ? `${g.text}: ${g.short}` : g.text;
+  }
+}
+
+/**
+ * The card's one primary button (the rule in the header). Round 9: the button is always the run (Run Again, Rematch,
+ * Next Duel, Today's Daily); a mission is only ever its reason, never "Finish the mission" (read as resuming a run just
+ * lost). Its kind stays the rule's, for the career harness's bars.
+ */
 export function primaryButton(goals: readonly NextGoal[]): PrimaryButton {
   const pick = (k: GoalKind): NextGoal | undefined => goals.filter((g) => g.kind === k && g.reachable).sort((a, b) => a.gap - b.gap)[0];
   const said = (g: NextGoal): PrimaryButton['goal'] => ({ kind: g.kind, names: g.names });
   const rematch = pick('rematch');
   if (rematch) return { kind: 'rematch', text: rematch.text, sub: rematch.short, aria: `${rematch.text}, ${rematch.short}, run again`, goal: said(rematch) };
   const mission = goals.filter((g) => g.kind === 'mission' && g.reachable && g.gap <= NEAR_MISSION).sort((a, b) => a.gap - b.gap)[0];
-  if (mission) return { kind: 'mission', text: 'Finish the mission', sub: `${mission.names[0]}: ${mission.short}`, aria: `Finish the mission, ${mission.names[0]}, ${mission.short}, run again`, goal: said(mission) };
+  if (mission) return { kind: 'mission', text: 'Run Again', sub: goalWords(mission), aria: `Run again. ${goalWords(mission)}`, goal: said(mission) };
   const duel = pick('duel');
-  if (duel) return { kind: 'duel', text: `Next Duel: ${duel.names[0]}`, sub: duel.short ? `Time to beat ${duel.short}` : null, aria: `Duel ${duel.names[0]}`, goal: said(duel) };
+  if (duel) return { kind: 'duel', text: `Next Duel: ${duel.names[0]}`, sub: duel.short ? `On ${duel.short}, head to head` : null, aria: `Duel ${duel.names[0]}${duel.short ? ` on ${duel.short}` : ''}`, goal: said(duel) };
   const daily = pick('daily');
-  if (daily) return { kind: 'daily', text: "Today's Daily", sub: 'Keep the flame lit', aria: "Ride today's Daily", goal: said(daily) };
+  if (daily) return { kind: 'daily', text: "Today's Daily", sub: 'Keeps your flame lit', aria: "Ride today's Daily", goal: said(daily) };
   const near = goals.filter((g) => g.reachable && (g.kind === 'page' || g.kind === 'rung' || g.kind === 'gold' || g.kind === 'contract' || g.kind === 'form' || g.kind === 'mission')).sort((a, b) => a.gap - b.gap)[0];
-  if (near) return { kind: 'again', text: 'Run Again', sub: near.short ? `${near.text}: ${near.short}` : near.text, aria: `Run Again, ${near.text}`, goal: said(near) };
+  if (near) return { kind: 'again', text: 'Run Again', sub: goalWords(near), aria: `Run Again. ${goalWords(near)}`, goal: said(near) };
   return { kind: 'again', text: 'Run Again', sub: null, aria: 'Run Again', goal: null };
 }
