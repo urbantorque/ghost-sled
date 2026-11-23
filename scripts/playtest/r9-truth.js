@@ -516,7 +516,7 @@ async (page) => {
           s.invuln = 0;
           s.ghost = 0;
           let o = null;
-          for (let k = Math.floor(s.z / 64); k <= Math.floor(s.z / 64) + 4 && !o; k++) for (const q of sim.course.zones(k).obstacles) if (q.z > s.z + 4 && (!o || q.z < o.z)) o = q;
+          for (let k = Math.floor(s.z / 64); k <= Math.floor(s.z / 64) + 4 && !o; k++) for (const q of sim.course.chunk(k).obstacles) if (q.z > s.z + 4 && (!o || q.z < o.z)) o = q;
           if (o) {
             s.x = o.x;
             s.z = o.z - 2.5;
