@@ -3,14 +3,18 @@ import { hash32, hashString } from './prng';
 /** The five looks the world and the music are dressed for: the four, and Lanternfall's own (round 7). */
 export type BiomeId = 'alpine' | 'glacier' | 'volcanic' | 'blossom' | 'lantern';
 /** What a course is built as. Since Lanternfall's world was built this is the look itself; the name is kept for
- *  the sim's tables. */
-export type CourseBiome = BiomeId;
+ *  the sim's tables. (Round 9: and a new mountain that lays its own ground, under its own id, until its world lane makes
+ *  it a look of its own: it borrows one meanwhile, LOOK below.) */
+export type CourseBiome = BiomeId | 'oldrun';
 export type MountainId = 'pinecrest' | 'frostfang' | 'ember' | 'sakura' | 'lanternfall' | 'daily';
 
+/** A new mountain's borrowed look, until its world lane gives it its own (round 9; Lanternfall's round 7 path). */
+const LOOK: Partial<Record<CourseBiome, BiomeId>> = { oldrun: 'alpine' };
+
 /** The look a course biome is drawn and scored with: its own (Lanternfall borrowed Frostfang's until its world
- *  was built). */
+ *  was built), or a new mountain's borrowed one. */
 export function lookOf(b: CourseBiome): BiomeId {
-  return b;
+  return LOOK[b] ?? (b as BiomeId);
 }
 
 /** Generation parameters. A course is a pure function of its seed: the seed selects these. */
@@ -135,6 +139,25 @@ const BIOME_PARAMS: Record<CourseBiome, MountainParams> = {
     snowmanChance: 0,
     rampDistance: DESCENT,
   },
+  // The Old Run (round 9): an old ice track down a forest, laid by its own file (oldrun.ts). Its channel is the kit's,
+  // so nothing here lays a feature: no colliders, kickers, drops, moguls, ice patches, vents or gates; its grade is
+  // the track's steady 0.17 and its ramp its own 3,000 m.
+  oldrun: {
+    biome: 'oldrun',
+    slope: 0.17,
+    wander: 0,
+    halfWidthStart: 7.5,
+    halfWidthEnd: 7.5,
+    density: 0,
+    kickerChance: 0,
+    dropChance: 0,
+    mogulChance: 0,
+    iceChance: 0,
+    ventChance: 0,
+    gateChance: 0,
+    snowmanChance: 0,
+    rampDistance: 3000,
+  },
 };
 
 /** Lanternfall's seed. Chosen among eight: its descent keeps every promise the fairness test makes of a
@@ -171,7 +194,7 @@ export function courseBiomeForSeed(seed: number): CourseBiome {
 
 /** The look a seed is drawn and scored with. */
 export function biomeForSeed(seed: number): BiomeId {
-  return courseBiomeForSeed(seed);
+  return lookOf(courseBiomeForSeed(seed));
 }
 
 /** Parameters for any seed. Named mountains use their biome table; other seeds (daily) get a

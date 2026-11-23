@@ -5,6 +5,8 @@ import { Rng, hash32 } from './prng';
 import { momentPlays, setPieceKinds } from './moments';
 import { GATE_PAST_LINE, START_GATE_Z } from './charms';
 import { ALL_EVENTS } from './chaos';
+import type { Kit, KitPlan, KitRider } from './kit';
+import { OLDRUN_LAYOUT } from './oldrun';
 import { CHUNK_LEN, FOREST_LIMIT, SAFE_LANE, THRESHOLD_AFTER, THRESHOLD_AFTER_MIN, THRESHOLD_BEFORE, THRESHOLD_BEFORE_MAX, THRESHOLD_HW, bank } from './courseparts';
 
 export { CHUNK_LEN, FOREST_LIMIT, SAFE_LANE, THRESHOLD_AFTER, THRESHOLD_AFTER_MIN, THRESHOLD_BEFORE, THRESHOLD_BEFORE_MAX, THRESHOLD_HW, bank };
@@ -239,7 +241,10 @@ export const RUN_OUT = FIVE.runOut;
 export const FINISH_SQUARE = FIVE.square;
 
 /** Each course biome's descent. */
-const LAYOUTS: Record<CourseBiome, Layout> = { alpine: FIVE, glacier: FIVE, volcanic: FIVE, blossom: FIVE, lantern: FIVE };
+const LAYOUTS: Record<CourseBiome, Layout> = { alpine: FIVE, glacier: FIVE, volcanic: FIVE, blossom: FIVE, lantern: FIVE, oldrun: OLDRUN_LAYOUT };
+
+/** Each new mountain's own ground (round 9): none for the five, a Daily or a Cup. */
+const KITS: Partial<Record<CourseBiome, Kit>> = {};
 
 /** The descent a seed is laid as, without building its course. */
 export function layoutFor(seed: number): Layout {
@@ -297,6 +302,8 @@ const TALL: Record<CourseBiome, ObstacleKind[]> = {
   volcanic: ['basalt', 'charpine', 'basalt'],
   blossom: ['blossom', 'blossom', 'pine'],
   lantern: ['spire', 'spire', 'basalt'],
+  // (Round 9: the Old Run stands nothing in its track; these rows are never read there.)
+  oldrun: ['pine', 'pine', 'pine'],
 };
 
 const LOW: Record<CourseBiome, ObstacleKind[]> = {
@@ -305,6 +312,7 @@ const LOW: Record<CourseBiome, ObstacleKind[]> = {
   volcanic: ['lavarock', 'lavarock', 'log'],
   blossom: ['lantern', 'rock', 'log'],
   lantern: ['lantern', 'rock', 'iceblock'],
+  oldrun: ['rock', 'rock', 'log'],
 };
 
 /**
@@ -348,7 +356,11 @@ export type SectionKind =
   | 'tunnel'
   | 'terraces'
   | 'leap'
-  | 'finish';
+  | 'finish'
+  // Round 9, the Old Run (oldrun.ts): its channel, its tight S-bends, and the outrun it finishes in.
+  | 'track'
+  | 'labyrinth'
+  | 'outrun';
 export const SECTION_KINDS: readonly SectionKind[] = [
   'cruise',
   'chute',
@@ -368,6 +380,9 @@ export const SECTION_KINDS: readonly SectionKind[] = [
   'terraces',
   'leap',
   'finish',
+  'track',
+  'labyrinth',
+  'outrun',
 ];
 /** What a section does to the course. `slope`, `wander`, `wave`, `span`, `obstacles`, `kickers`,
  *  `moguls`, `drops` and `relief` are multipliers (1 = the plain corridor); the rest are as noted. */
@@ -473,6 +488,11 @@ const SHAPES: Record<SectionKind, SectionShape> = {
   terraces: shaped({ pin: 0.5, width: 8, wander: 0.25, wave: 8, span: 0.05, obstacles: 0.2, relief: 0.2, ...BARE }),
   leap: shaped({ pin: 0.5, width: 8, wander: 0.2, wave: 14, span: 0, obstacles: 0.3, relief: 0.3, ...BARE }),
   finish: shaped({ pin: 1, wander: 0.15, wave: 2, span: 0.15, obstacles: 0, relief: 0.2, limit: 3, ...BARE }),
+  // Round 9, the Old Run: the kit draws its line, its width and its cross-section; these say only that nothing stands
+  // or launches in it, that its line is the floor's middle and that its lip turns a sled back.
+  track: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 0.5, ...BARE }),
+  labyrinth: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 0.5, ...BARE }),
+  outrun: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 0.5, ...BARE }),
 };
 
 /** The ground's real gradient for the kinds that promise one; the rest scale the mountain's own slope. */
@@ -488,6 +508,9 @@ const GRADE: Partial<Record<SectionKind, readonly [number, number]>> = {
   terraces: [0.1, 0.1],
   leap: [0.38, 0.42],
   finish: [0.08, 0.08],
+  track: [0.17, 0.17],
+  labyrinth: [0.17, 0.17],
+  outrun: [0.05, 0.05],
 };
 
 /** The half-width of the kinds that pin it. */
@@ -500,6 +523,9 @@ const WIDTH: Partial<Record<SectionKind, readonly [number, number]>> = {
   bridge: [5.2, 5.8],
   tunnel: [7.2, 8.8],
   finish: [11.6, 12.4],
+  track: [7.5, 7.5],
+  labyrinth: [7.5, 7.5],
+  outrun: [7.5, 7.5],
 };
 
 const BLEND: Record<SectionKind, number> = {
@@ -521,6 +547,9 @@ const BLEND: Record<SectionKind, number> = {
   terraces: 80,
   leap: 100,
   finish: 100,
+  track: 40,
+  labyrinth: 40,
+  outrun: 60,
 };
 
 /** The metres of a section's body past its blend. Terraces and leaps work theirs out from what they hold. */
@@ -543,6 +572,9 @@ const BODY: Record<SectionKind, readonly [number, number]> = {
   terraces: [178, 256],
   leap: [232, 250],
   finish: [0, 0],
+  track: [0, 0],
+  labyrinth: [0, 0],
+  outrun: [0, 0],
 };
 
 /** A slope that steepens is a crest: the blend takes long enough to stay under this curvature (a sled
@@ -583,6 +615,8 @@ const CLIFFS: Record<CourseBiome, { first: readonly [number, number]; plain: rea
   blossom: { first: [14, 16], plain: [13.5, 15], last: [16, 19] },
   // The dive into the cloud, the break out under it (the mountain's great leap), and the leap into Firstlight.
   lantern: { first: [18, 20], plain: [22.5, 24.5], last: [19, 21] },
+  // (Round 9: the Old Run has no leaps; never read there.)
+  oldrun: { first: [15, 17], plain: [13.5, 16], last: [18, 21] },
 };
 
 /** Terraces: the lead to the first lip, the step spacing and the steps' fall. */
@@ -698,6 +732,12 @@ const SCRIPTS: Record<CourseBiome, readonly [Act, Act, Act]> = {
     { name: 'The Lamp Road', blocks: [['leap'], ['fork'], ['street'], ['bridge'], ['treerun'], ['bowl']] },
     { name: 'Firstlight', blocks: [['benches'], ['bridge'], ['street'], ['chute'], ['leap']] },
   ],
+  // The Old Run (round 9): its acts' names; its kit (oldrun.ts) lays their ground, not these blocks.
+  oldrun: [
+    { name: 'The Hotel Straights', blocks: [['track']] },
+    { name: 'The Labyrinth', blocks: [['labyrinth']] },
+    { name: 'The Horseshoe', blocks: [['track']] },
+  ],
 };
 
 /** What each mountain promises to hold, on every seed. */
@@ -707,6 +747,7 @@ const SIGNATURES: Record<CourseBiome, readonly SectionKind[]> = {
   volcanic: ['ravine', 'tunnel', 'bridge', 'fork'],
   blossom: ['terraces', 'tunnel', 'street', 'fork'],
   lantern: ['ravine', 'fork', 'street', 'bridge'],
+  oldrun: [],
 };
 
 /** Lanternfall's avenues: a street there stands between two rows of stone lamps, a pair every LAMP_STEP metres,
@@ -811,7 +852,7 @@ function edgeRise(e: number, sh: SectionShape): number {
 }
 
 /** A stretch of z. */
-interface Band {
+export interface Band {
   z0: number;
   z1: number;
   /** A clear band a vent may still stand in. */
@@ -901,11 +942,26 @@ export class Course {
 
   /** The descent this course is laid as (round 9): the five's, or a new mountain's own. */
   readonly layout: Layout;
+  /** A new mountain's own ground (kit.ts), or null: the five, every Daily and every Cup. */
+  readonly kit: Kit | null;
+  /** Which of the kit's hooks it has, read once here, so the five's paths test a boolean and nothing else. */
+  private readonly ownCentre: boolean;
+  private readonly ownWidth: boolean;
+  private readonly ownGround: boolean;
+  private readonly ownSurface: boolean;
+  /** Air that lifts a sled somewhere on this course (the sim's lift, kit.ts). */
+  readonly hasLift: boolean;
 
   constructor(seed: number) {
     this.seed = seed >>> 0;
     this.params = paramsForSeed(this.seed);
     this.layout = LAYOUTS[this.params.biome];
+    this.kit = KITS[this.params.biome] ?? null;
+    this.ownCentre = this.kit?.centre !== undefined;
+    this.ownWidth = this.kit?.halfWidth !== undefined;
+    this.ownGround = this.kit?.ground !== undefined;
+    this.ownSurface = this.kit?.surface !== undefined;
+    this.hasLift = this.kit?.lift !== undefined;
     this.sC = hash32(this.seed, 1);
     this.sW = hash32(this.seed, 2);
     this.sS = hash32(this.seed, 3);
@@ -1284,6 +1340,20 @@ export class Course {
   /** Lays the whole descent out at once, a pure function of the seed: sections first, then what stands
    *  on them. */
   private lay(): void {
+    // (Round 9: a new mountain lays its own descent, kit.ts.)
+    const kit = this.kit;
+    if (kit) {
+      const plan: KitPlan = { clear: this.plan.clear, busy: this.plan.busy, narrow: this.plan.narrow };
+      kit.compose(this, new Rng(hash32(this.seed, 0x5c71)), (k, prev) => this.blendOf(k, prev)).forEach((b, i) => {
+        const sec = this.pushSection(b.kind, b.len, b.blend, b.gate === true);
+        kit.lay(this, sec, new Rng(hash32(this.seed, i, 0xed6e)), plan);
+        this.layBands(sec);
+      });
+      this.layKicks();
+      this.layFields();
+      this.layRails();
+      return;
+    }
     const beats = this.compose();
     let leapsLeft = beats.filter((b) => b.kind === 'leap').length;
     let leapNo = 0;
@@ -1750,6 +1820,8 @@ export class Course {
   }
 
   private centerXAt(z: number): number {
+    // (Round 9: a new mountain's line is its own.)
+    if (this.ownCentre) return this.kit!.centre!(this, z);
     const amp = this.params.wander * (0.35 + 0.65 * this.difficulty(z)) * smoothstep(0, 220, z);
     // Each section bends at its own wavelength. The bend's phase is the integral of its frequency,
     // so a change of wavelength speeds the bends up or slows them down without a kink.
@@ -1771,6 +1843,7 @@ export class Course {
   }
 
   private halfWidthAt(z: number): number {
+    if (this.ownWidth) return this.kit!.halfWidth!(this, z);
     const p = this.params;
     const base = lerp(p.halfWidthStart, p.halfWidthEnd, this.difficulty(z)) + 2.5 * noise1(this.sW, z / 180);
     const sh = this.shapeAt(z);
@@ -1850,6 +1923,8 @@ export class Course {
     const sh = this.shapeAt(z);
     let h = this.baseY(z);
     if (sh.relief > 0) h += 1.1 * sh.relief * noise2(this.sR, x / 36, z / 44);
+    // (Round 9: a new mountain's cross-section is its own, past the edge too.)
+    if (this.ownGround) return this.kit!.ground!(this, x, z, h);
     const e = this.edgeExcess(x, z);
     if (e > 0) h += edgeRise(e, sh);
     if (sh.ridge > 0) {
@@ -1904,6 +1979,11 @@ export class Course {
   }
 
   surface(x: number, z: number): Surface {
+    // (Round 9: a new mountain's surfaces are its own.)
+    if (this.ownSurface) {
+      const k = this.kit!.surface!(this, x, z);
+      if (k) return k;
+    }
     // (A threshold's body is plain snow: the chunk-long patches a fork's strip or a sheet lays reach into it.)
     const sec = this.section(z);
     if (sec.gate && z >= sec.z0 + sec.blend) return SNOW;
@@ -2437,6 +2517,8 @@ export class Course {
       }
     }
 
+    // (Round 9: what a new mountain stands on its own ground, by the same rule for room.)
+    if (this.kit?.obstacles) this.kit.obstacles(this, chunk, rng, { clearOf, add: (kind, x, z, r, h) => void add(kind, x, z, r, h) }, diff);
     this.placeLights(chunk, rng, diff);
     return chunk;
   }
@@ -2676,6 +2758,40 @@ export class Course {
         if (!blocked(x, z)) lights.push({ id: id++, x, z, hover: 0.9, value: 3 });
       }
     }
+    // (Round 9: a new mountain's own lights, numbered on from the chunk's.)
+    if (this.kit?.lights) this.kit.lights(this, chunk, rng, diff, (x, z, hover, value) => void lights.push({ id: id++, x, z, hover, value }));
+  }
+
+  // ---------------------------------------------------------------- round 9: what a new mountain's kit answers
+
+  /** The centre line's slope dx/dz at z: a new mountain's own (the track's p), 0 on the five (which never ask). */
+  channelSlope(z: number): number {
+    return this.kit?.slope ? this.kit.slope(this, z) : 0;
+  }
+
+  /** Upward acceleration of the air at (x, y, z), m/s^2 at full gravity (0 on a course with no lift). */
+  liftAt(x: number, y: number, z: number): number {
+    return this.kit?.lift ? this.kit.lift(this, x, y, z) : 0;
+  }
+
+  /** A lift column's middle at z, or null. */
+  liftX(z: number): number | null {
+    return this.kit?.liftX ? this.kit.liftX(this, z) : null;
+  }
+
+  /** The line a rider of this kind rides at z here and now: the kit's, or the safe line. */
+  lineFor(z: number, r: KitRider): number {
+    return this.kit?.lineFor ? this.kit.lineFor(this, z, r) : this.safeX(z);
+  }
+
+  /** The track's settling line for a speed (the Old Run), or the safe line. */
+  raceX(z: number, v: number): number {
+    return this.kit?.raceX ? this.kit.raceX(this, z, v) : this.safeX(z);
+  }
+
+  /** Where a pop pays, from z0 to z1 (a kit's; none on the five). */
+  lips(z0: number, z1: number): readonly { z: number; x0: number; x1: number }[] {
+    return this.kit?.lips ? this.kit.lips(this, z0, z1) : [];
   }
 }
 

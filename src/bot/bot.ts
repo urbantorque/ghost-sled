@@ -5,7 +5,8 @@ import { DRAFT_BIT, InputRecorder, LogEvent, packInput } from '../sim/input';
 import { Rng, hash32, hashFloat } from '../sim/prng';
 import { RunRecord, applyLogEvent } from '../sim/replay';
 import { type RiderPoint, RivalWatch, draftsOn, riderPoint } from '../sim/rivals';
-import { DT, LANTERN, Sim, TICK_RATE } from '../sim/sim';
+import { DT, LANTERN, Sim, TICK_RATE, TRACK_DAMP, wallYaw } from '../sim/sim';
+import type { KitRider } from '../sim/kit';
 import { Lines } from './lines';
 import type { RideStyle } from './roster';
 import { AirPlan, Flight, PlanResult, Rot, RotParams, actionAt, predictFlight, runPlan, solveFlip, solveSpin, steerAt } from './model';
@@ -411,6 +412,12 @@ export class Bot {
   private reflex = false;
   /** Riding a set piece's gates (momentOff): no detours, a nearer look. */
   private inGates = false;
+  /** Round 9: a new mountain's line for this rider as it is (kit.ts lineFor), and the Old Run's track (the walls' yaw
+   *  and the damped swing in its heading). Read once at construction; false on the five, so nothing below runs there. */
+  private readonly kitLine: boolean;
+  private readonly onTrack: boolean;
+  private readonly rider: KitRider = { x: 0, y: 0, z: 0, v: 0, skill: 0, nerve: 0 };
+  private readonly grad = { x: 0, z: 0 };
 
   constructor(
     private readonly sim: Sim,
@@ -427,6 +434,11 @@ export class Bot {
     this.key = hash32(profile.seed, 0x5ee);
     this.rotP = this.rotParams();
     this.nextThink = this.rng.int(2, 12);
+    this.kitLine = this.course.kit?.lineFor !== undefined;
+    this.onTrack = this.course.layout.grammar === 'oldrun';
+    this.rider.skill = this.t.skill;
+    // (The fork coin's own odds, read, never drawn: a new mountain's bold choices are made by nerve as the rider goes.)
+    this.rider.nerve = this.t.ambition * (0.2 + 0.8 * this.t.skill);
   }
 
   /** The body's rates as the sim has them: the sled, the mood and the charms held (Whirlwind, Paper Kite). */
@@ -533,6 +545,13 @@ export class Bot {
       this.lapseUntil = now + Math.round(this.t.lapseTicks * (0.5 + this.rng.next()));
       return;
     }
+    if (this.kitLine) {
+      const s = this.sim.s;
+      this.rider.x = s.x;
+      this.rider.y = s.y;
+      this.rider.z = s.z;
+      this.rider.v = s.speed;
+    }
     this.groundThink(now);
   }
 
@@ -560,7 +579,9 @@ export class Bot {
     // (In the guide light's wake the line is the light's own, weave and all.)
     if (this.wake) return this.lines.safeX(z) + pathOff(this.wake, z);
     // (Down a slalom of sitting gates the line is the slalom itself, one smooth swing gate to gate.)
-    return this.lines.safeX(z) + (this.slalom ? this.slalomOff(this.slalom, z) : this.off) + this.charmOff(z);
+    const x = this.lines.safeX(z) + (this.slalom ? this.slalomOff(this.slalom, z) : this.off) + this.charmOff(z);
+    // (Round 9: a new mountain's line for this rider as it is at this thought.)
+    return this.kitLine ? x + this.course.lineFor(z, this.rider) - this.lines.safeX(z) : x;
   }
 
   /** The lane this rider rides for at each charm gate, chosen once its offers are dealt (-1 not yet). */
@@ -1029,7 +1050,13 @@ export class Bot {
     const xp = s.x + s.vx * lead;
     const zp = s.z + s.vz * lead;
     const tr = turnRate(s.speed) * sim.sled.turn * (s.drifting ? 1.5 : s.action ? 1.12 : 1);
-    const hp = s.heading + s.steer * tr * lead;
+    let hp = s.heading + s.steer * tr * lead;
+    if (this.onTrack) {
+      // (Round 9, the Old Run: its walls turn the sled and its track damps the swing, as the sim does: sim.ts wallYaw.)
+      const phi = datan2(this.course.channelSlope(zp), 1);
+      this.course.gradient(xp, zp, this.grad);
+      hp += (clamp(phi - s.heading, -1, 1) * TRACK_DAMP - wallYaw(this.grad, phi, s.speed, sim.gravity)) * lead;
+    }
 
     if (s.drifting && this.mode !== 'drift') {
       // The sim started a drift (hard steering while crouched): ride it out as one.

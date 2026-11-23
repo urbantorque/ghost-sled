@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { BOT_SKILLS, BOT_STYLES, DAILY_KEYS, SCRIPT_ROLLS, botRide, chaosFacts, courseFacts, courseSeeds, digest, fiveSeeds, pilotRide, scriptedRide } from '../scripts/r9/fivedigest';
 import { dailySeed } from '../src/sim/mountains';
+import { Course, FIVE } from '../src/sim/course';
+import { PLAIN } from '../src/sim/chaos';
+import { Sim } from '../src/sim/sim';
 
 // Round 9 opens the sim once, additively, for three new mountains, and the five must not move by a bit (the brief's
 // section 3; notes/r9-ground.md section 0). These are the five's fingerprints, captured on round-9 at 6255b8d before any
@@ -46,6 +49,16 @@ const PILOTS: Record<string, string> = {
 };
 
 describe('the five, byte for byte', () => {
+  it('enters no path of a new mountain: no kit, the layout FIVE, no track, no lift', () => {
+    for (const { id, seed } of courseSeeds()) {
+      const c = new Course(seed);
+      expect(c.kit, id).toBeNull();
+      expect(c.layout, id).toBe(FIVE);
+      expect(c.hasLift, id).toBe(false);
+      expect((new Sim({ seed, chaos: PLAIN, sled: 0 }) as unknown as { trackOn: boolean }).trackOn, id).toBe(false);
+    }
+  });
+
   for (const { id, seed } of courseSeeds()) {
     it(`${id}: the course is what it was`, () => {
       expect(digest(courseFacts(seed))).toBe(COURSES[id]);
