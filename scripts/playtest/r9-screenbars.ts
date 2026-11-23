@@ -123,6 +123,7 @@ export function bareFigures(chunks: readonly Chunk[]): Figure[] {
       if (/\bPage \d+\b/i.test(t)) out.push({ kind: 'page', text: t, box: b.text });
       if (/\bRank \d+ of \d+\b/.test(t)) out.push({ kind: 'rank', text: t, box: b.text });
       if (/\b\d[\d,]* to go\b/.test(t) && !/\d[\d,]* (XP|gifts?|ghosts?|m|s|runs?|pages?) to go/.test(t)) out.push({ kind: 'togo', text: t, box: b.text });
+      else if (/^to go$/.test(t) && /^[\d,]+$/.test(cs[i - 1]?.t ?? '')) out.push({ kind: 'togo', text: `${cs[i - 1].t} to go`, box: b.text });
       // (A clock time, "1:53.0", says it is a time by its form, and is not counted bare.)
       if (/^[\d,.:]+$/.test(t) && !/^\d+:\d{2}(\.\d+)?$/.test(t) && !hasWord(b.text)) out.push({ kind: 'bare', text: t, box: b.text });
     });
