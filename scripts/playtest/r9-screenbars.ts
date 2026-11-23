@@ -10,6 +10,10 @@
 // whitespace-separated token in it with a letter or a digit, so "+1", "/212" and "0:20.9" are a word each and "·" is
 // none. Text drawn by CSS (::before, ::after) and text in the canvas are not counted. On a sheet only the sheet's text
 // counts (the title behind it is blurred and inert).
+//
+// The dev server's mock platform offers rewarded ads (src/platform/mock.ts: on in a dev build), so a capture there has
+// Double Gifts, Watch Ad: Double Gifts and a revive that the published build, with no ads, never shows. They are left
+// out of every count here (AD_OFFER), so the figures are the published build's.
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -78,8 +82,11 @@ export const words = (chunks: readonly Chunk[]): number => chunks.reduce((a, c) 
 export function readable(shot: Shot): Chunk[] {
   const ch = shot.chunks || [];
   const sheet = shot.top && !['title', 'results', 'none'].includes(shot.top);
-  return ch.filter((c) => (sheet ? c.top : !c.inert));
+  return ch.filter((c) => (sheet ? c.top : !c.inert) && !AD_OFFER.test(c.t));
 }
+
+/** A rewarded ad's offer, which only the dev server's mock platform makes. */
+export const AD_OFFER = /^(Double Gifts|Watch Ad: Double Gifts|Watch Ad|Revive|Watch an ad.*)$/i;
 
 const boxesOf = (chunks: readonly Chunk[]): { box: number; text: string; chunks: Chunk[] }[] => {
   const m = new Map<number, Chunk[]>();
@@ -210,7 +217,7 @@ export function vermillionFill(bg: string): boolean {
 /** One thing to press: the primaries, the controls styled like one, the lone icons, the controls with no name. */
 export function pressables(shot: Shot): { controls: number; primaries: string[]; lookalikes: string[]; loneIcons: string[]; unnamed: number } {
   const sheet = shot.top && !['title', 'results', 'none'].includes(shot.top);
-  const cs = (shot.controls || []).filter((c) => (sheet ? c.top : !c.inert));
+  const cs = (shot.controls || []).filter((c) => (sheet ? c.top : !c.inert) && !AD_OFFER.test(c.text) && !/Double Gifts|Watch Ad|Revive/i.test(c.name));
   const prim = cs.filter((c) => c.primary);
   const lookalike = cs.filter((c) => !c.primary && (vermillionFill(c.bg) || prim.some((p) => p.bg === c.bg && c.bg !== 'rgba(0, 0, 0, 0)')));
   return {
@@ -333,8 +340,8 @@ function main(): void {
     console.log(`\n=== ${F.form}: ${Object.keys(S).length} shots from ${F.parts.length} parts ===`);
     console.log(`\nWORDS (bars: the title at run 50 at most 40; the results' first view at most 35; a fresh title no worse than today)`);
     for (const [k, s] of Object.entries(S)) {
-      if (!/-title$|-title-ready$|-results-[a-z-]+$/.test(k)) continue;
-      const bar = /-50-title/.test(k) ? 40 : /-results-/.test(k) ? 35 : null;
+      // (Every shot; the bars only on theirs. Details is one level down: the 35 is the first view's.)
+      const bar = /-50-title(-ready)?$/.test(k) ? 40 : /-results-/.test(k) && !k.endsWith('-details') ? 35 : null;
       console.log(`  ${k.padEnd(34)} ${String(s.figures.words).padStart(4)} words${bar ? `   bar ${bar}: ${s.figures.words <= bar ? 'MET' : `fails by ${s.figures.words - bar}`}` : ''}`);
     }
     console.log(`\nONE THING TO PRESS (bar: one primary a screen, nothing else styled like one, no lone icons)`);
