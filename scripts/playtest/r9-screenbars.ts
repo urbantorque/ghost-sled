@@ -98,8 +98,9 @@ const UNIT = /^(gifts?|XP|ghosts?|pages?|stickers?|stars?|medals?|runs?|m|s|seco
  *   rank      "Rank 1 of 87" (reads as the race's place, not the ladder's)
  *   togo      "496 to go" with no unit
  *   bare      a chunk that is only a number, in a box with no word at all (the flame's "1", a lone count)
- * What it cannot catch: a figure whose word is only an icon (a gift box beside "670" with the word in .gs-sr),
- * jargon that is a word ("XP"), a figure explained elsewhere on the screen, and numbers drawn by CSS or the canvas.
+ * A figure labelled only by an icon (a gift box beside "670", the flame beside "5", the word kept for a screen reader)
+ * is bare: the bar asks for a word. What it cannot catch: jargon that is a word ("XP"), a figure explained elsewhere on
+ * the screen, and numbers drawn by CSS or the canvas.
  */
 export function bareFigures(chunks: readonly Chunk[]): Figure[] {
   const out: Figure[] = [];
@@ -145,11 +146,15 @@ export function repeats(chunks: readonly Chunk[], names: readonly string[] = kno
   for (const [f, bs] of figs) if (bs.length >= 2) out.push({ kind: 'figure', what: f, n: bs.length, boxes: bs.map((b) => b.text.slice(0, 80)) });
   const sh = new Map<string, typeof boxes>();
   boxes.forEach((b, i) => {
-    const ws = lower[i].replace(/[^a-z0-9' ]+/g, ' ').split(/\s+/).filter(Boolean);
+    // (A figure is one token, '#': "1 more ghost" and "Pass 1 more ghost" share "# more ghost".)
+    const ws = lower[i].replace(/\d[\d:.,]*/g, ' # ').replace(/[^a-z#' ]+/g, ' ').split(/\s+/).filter(Boolean);
     const seen = new Set();
     for (let k = 0; k + 3 <= ws.length; k++) {
       const g = ws.slice(k, k + 3);
-      if (g.every((w) => STOP.has(w) || /^\d+$/.test(w))) continue;
+      if (g.every((w) => STOP.has(w) || w === '#')) continue;
+      // Words that are only a name and figures ("frostfang glacier #") are the name's repeat, counted above.
+      const real = g.filter((w) => w !== '#');
+      if (names.some((n) => real.every((w) => n.toLowerCase().split(/\s+/).includes(w)))) continue;
       const key = g.join(' ');
       if (seen.has(key)) continue;
       seen.add(key);

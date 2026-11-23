@@ -61,17 +61,24 @@ async (page) => {
     };
     const shown = (el) => !!el && el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true }) && !el.closest('.gs-sr') && opacityOf(el) > 0.15;
     const inView = (r) => r.width >= 2 && r.height >= 4 && r.right > 0 && r.bottom > 0 && r.left < vw && r.top < vh;
-    const BOX = 'button, a[href], li, [role=tab], [role=button], [role=listitem], [role=dialog], label, h1, h2, h3, h4, p';
-    const BOXCLS = /(^|[-\s])(card|pill|stat|chip|row|tile|badge|pop|head|cell|item|line|wallet|count|tag|need)($|[-\s])/;
+    // A box is what a reader takes in as one item: the control the text is on (a card that is a button reads as one),
+    // else the nearest list item, paragraph, heading or element with a class naming an item (a token ending in -card,
+    // -pill, -stat, -chip, -row, -tile, -item, -cell, -count, -wallet, -panel or -pop).
+    const CTL = 'button, a[href], [role=tab], [role=button]';
+    const BOX = 'li, [role=listitem], [role=dialog], label, h1, h2, h3, h4, p';
+    const BOXTOKEN = /-(card|pill|stat|chip|row|tile|item|cell|count|wallet|panel|pop)$/;
     const boxIds = new Map();
     const boxOf = (el) => {
-      let b = el;
-      for (let e = el; e && e !== scope && e !== document.body; e = e.parentElement) {
-        if (e.matches(BOX) || BOXCLS.test(typeof e.className === 'string' ? e.className : '')) {
-          b = e;
-          break;
+      let b = el.closest(CTL);
+      if (!b || !scope.contains(b))
+        for (let e = el; e && e !== scope && e !== document.body; e = e.parentElement) {
+          const cls = typeof e.className === 'string' ? e.className.split(/\s+/) : [];
+          if (e.matches(BOX) || cls.some((k) => BOXTOKEN.test(k))) {
+            b = e;
+            break;
+          }
         }
-      }
+      if (!b) b = el;
       if (!boxIds.has(b)) boxIds.set(b, boxIds.size);
       return boxIds.get(b);
     };
@@ -476,9 +483,37 @@ async (page) => {
       await page.waitForTimeout(800);
       await pinFrom(1800);
       await page.waitForTimeout(1500);
+      // Into the next obstacle with no get-up and no lantern to ward it, again until the sim crashes on its own tick
+      // (a crash made outside a tick is never drained to the app).
       await page.evaluate(() => {
         window.__pinOn = false;
-        window.__gs.run.sim.crash('tree');
+        const until = performance.now() + 15000;
+        const hit = () => {
+          const rr = window.__gs.run;
+          if (!rr || rr.sim.s.crashed || performance.now() > until) return;
+          const sim = rr.sim;
+          const s = sim.s;
+          s.getUps = 0;
+          s.lantern = 0;
+          s.invuln = 0;
+          s.ghost = 0;
+          let o = null;
+          for (let k = Math.floor(s.z / 64); k <= Math.floor(s.z / 64) + 4 && !o; k++) for (const q of sim.course.zones(k).obstacles) if (q.z > s.z + 4 && (!o || q.z < o.z)) o = q;
+          if (o) {
+            s.x = o.x;
+            s.z = o.z - 2.5;
+            s.y = sim.course.ground(s.x, s.z);
+            s.vx = 0;
+            s.vz = 18;
+            s.vy = 0;
+            s.speed = 18;
+            s.heading = 0;
+            s.velHeading = 0;
+            s.grounded = true;
+          }
+          setTimeout(hit, 400);
+        };
+        hit();
       });
       ok = ok && (await phase('results', 60000));
     } else if (sc === 'duel-won' || sc === 'duel-lost') {
