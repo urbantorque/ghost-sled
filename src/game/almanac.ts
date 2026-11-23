@@ -1,5 +1,7 @@
 import { ROSTER } from '../bot/roster';
 import type { SaveData } from './save';
+import { SCARVES, type Source, TRAILS, chapterPieces } from './garage';
+import { PAINTS } from './paints';
 
 // The Almanac (round 8, G4): Rider Rank's track. Every run pays experience into one rank (rank.ts), and each
 // page of the Almanac is a rank with a reward on it. Fifty pages, the first ten quick and each opening something
@@ -66,7 +68,7 @@ export type Reward =
   | { kind: 'mirror'; mountain: string }
   | { kind: 'hour'; mountain: string }
   | { kind: 'flourish'; trick: string }
-  | { kind: 'garage'; shelf: 'scarf' | 'trail' | 'paint'; id: string }
+  | { kind: 'garage'; shelf: 'scarf' | 'trail' | 'paint' | 'ornament'; id: string }
   | { kind: 'title'; title: string }
   | { kind: 'gifts'; gifts: number }
   | { kind: 'legs'; legs: number }
@@ -216,7 +218,7 @@ export function rewardName(r: Reward): string {
     case 'feature':
       return { contracts: 'Daily contracts', album: 'The Spirit Album', rival: 'Call your rival', longNight: 'The Long Night', trials: 'Trials' }[r.feature];
     case 'sled':
-      return 'A new sled';
+      return r.sled === 1 ? 'The Whirl Saucer' : 'A new sled';
     case 'mirror':
       return `Mirror ${MOUNTAIN_NAMES[r.mountain] ?? r.mountain}`;
     case 'hour':
@@ -224,7 +226,7 @@ export function rewardName(r: Reward): string {
     case 'flourish':
       return `A flourish for ${TRICK_NAMES[r.trick] ?? r.trick}`;
     case 'garage':
-      return GARAGE_EXTRAS.find((g) => g.id === r.id)?.name ?? r.id;
+      return [...GARAGE_EXTRAS, ...CHAPTER_EXTRAS].find((g) => g.id === r.id)?.name ?? r.id;
     case 'title':
       return `Title: ${r.title}`;
     case 'gifts':
@@ -253,34 +255,37 @@ export const TRICK_NAMES: Readonly<Record<string, string>> = {
   emberTwist: 'Ember Twist', spiritKnot: 'Spirit Knot', crosswind: 'Crosswind', spinningTop: 'Spinning Top',
 };
 
-// ---------------------------------------------------------------- the garage's new pieces
+// ---------------------------------------------------------------- the garage's pieces
 
-/** A piece the Almanac or a chapter adds to the garage: a scarf, a trail or a paint, in garage.ts's shapes.
- *  `page`: found only on that Almanac page (never sold). `chapter`: a chapter's set, sold for gifts from its
- *  month on and found on its pages. */
+/** A piece the Almanac or a chapter adds to the garage, as the app lists it: a scarf, a trail, a finish or an
+ *  ornament (garage.ts and paints.ts hold the looks). `page`: found only on that Almanac page (never sold).
+ *  `chapter`: a chapter's set, sold for gifts from its month on and found on its pages. */
 export interface GarageExtra {
   id: string;
-  shelf: 'scarf' | 'trail' | 'paint';
+  shelf: 'scarf' | 'trail' | 'paint' | 'ornament';
   name: string;
   blurb: string;
   price: number;
   page?: number;
   chapter?: number;
-  /** The look, in the shelf's own fields (garage.ts ScarfDef, TrailDef, paints.ts Paint). */
-  look: Record<string, unknown>;
 }
 
-const scarf = (pattern: string, accent: string, length: number, width: number, tassels: boolean): Record<string, unknown> => ({ pattern, accent, length, width, tassels });
-const trail = (tint: string, tintK: number, mote: string, motes: number, moteStyle: string): Record<string, unknown> => ({ tint, tintK, mote, motes, moteStyle });
+const extraOf = (shelf: GarageExtra['shelf'], d: { id: string; name: string; blurb: string; price: number; source: Source }): GarageExtra => ({
+  id: d.id,
+  shelf,
+  name: d.name,
+  blurb: d.blurb,
+  price: d.price,
+  ...(d.source.kind === 'almanac' ? { page: d.source.page } : {}),
+  ...(d.source.kind === 'chapter' ? { chapter: d.source.month } : {}),
+});
 
+/** The Almanac's own pieces: things the shop never sells (pages 17, 28, 38, 42, 46 and 50). */
 export const GARAGE_EXTRAS: readonly GarageExtra[] = [
-  { id: 'almanacknot', shelf: 'scarf', name: 'Almanac Knot', blurb: 'Knotted short, an ink band at each tip', price: 0, page: 17, look: scarf('tip', 'ink', 0.9, 1.1, false) },
-  { id: 'almanacmoth', shelf: 'trail', name: 'Lamp Moths', blurb: 'Cream motes that circle low behind you', price: 0, page: 28, look: trail('#FFF6E6', 0.2, '#FFF1D6', 30, 'twinkle') },
-  { id: 'almanacdusk', shelf: 'paint', name: 'Almanac Dusk', blurb: 'The blue of the page at dusk', price: 0, page: 38, look: { hex: '#46507E' } },
-  { id: 'almanacveil', shelf: 'scarf', name: 'Night Veil', blurb: 'Long and fine, a cream fringe', price: 0, page: 42, look: scarf('plain', 'cream', 1.4, 0.8, true) },
-  { id: 'almanacember', shelf: 'trail', name: 'Banked Embers', blurb: 'Marigold embers that settle in the groove', price: 0, page: 46, look: trail('#FFE6B3', 0.25, '#FFD34D', 36, 'twinkle') },
-  { id: 'almanackeeper', shelf: 'trail', name: "Keeper's Lantern", blurb: 'A stream of lantern light, for the last page', price: 0, page: 50, look: trail('#FFEFC2', 0.4, '#FFD34D', 64, 'stream') },
-];
+  ...SCARVES.filter((s) => s.source.kind === 'almanac').map((s) => extraOf('scarf', s)),
+  ...TRAILS.filter((s) => s.source.kind === 'almanac').map((s) => extraOf('trail', s)),
+  ...PAINTS.filter((s) => s.source.kind === 'almanac').map((s) => extraOf('paint', s)),
+].sort((a, b) => (a.page ?? 0) - (b.page ?? 0));
 
 // ---------------------------------------------------------------- chapters
 
@@ -323,27 +328,21 @@ export function chapterOf(key: string): Chapter | null {
   return m ? (CHAPTERS[Number(m[1]) - 1] ?? null) : null;
 }
 
-/** A chapter's set: a scarf, a trail and a paint, each sold for gifts from its month on and found on its pages. */
+/** A chapter's set: a scarf, a trail and an ornament that look like their month (garage.ts), each sold for gifts
+ *  from its month on and found on its pages. (Round 8's were one pattern list and two colour lists turned, so they
+ *  repeated the shop; a chapter's third piece was a paint, the piece least seen at race distance.) */
 export function chapterSet(month: number): GarageExtra[] {
-  const ch = CHAPTERS[month - 1];
-  const tints = ['#FFF6E6', '#E8F0FF', '#FFEFC2', '#FFE8F0', '#FFE6B3', '#FFFBEA', '#FFE1C7', '#F6EEFF', '#FFF1D6', '#EDE6FF', '#F2F6FF', '#FFE9B0'];
-  const hexes = ['#5B7F6A', '#8FB4D9', '#3F3A66', '#C79AB0', '#5A3B36', '#A8C6D8', '#6B4A3A', '#B49AC0', '#7A6A3A', '#3A3A52', '#D8DEE9', '#4A3550'];
-  const patterns = ['bars', 'rib', 'tip', 'bands', 'tipStripes', 'plain'];
-  const k = month - 1;
-  return [
-    { id: `ch${month}scarf`, shelf: 'scarf', name: `${ch.name} Scarf`, blurb: ch.line, price: 260, chapter: month, look: scarf(patterns[k % patterns.length], k % 2 ? 'cream' : 'ink', 1 + (k % 3) * 0.1, 1, k % 4 === 0) },
-    { id: `ch${month}trail`, shelf: 'trail', name: `${ch.name} Trail`, blurb: ch.line, price: 380, chapter: month, look: trail(tints[k], 0.3, '#FFD34D', 30 + k * 2, k % 3 === 0 ? 'stream' : 'twinkle') },
-    { id: `ch${month}paint`, shelf: 'paint', name: `${ch.name} Paint`, blurb: ch.line, price: 320, chapter: month, look: { hex: hexes[k] } },
-  ];
+  const p = chapterPieces(month);
+  return [extraOf('scarf', p.scarf), extraOf('trail', p.trail), extraOf('ornament', p.ornament)];
 }
 
-/** A chapter's ten pages: its scarf on page 3, its trail on page 6, its paint on page 8 and its title on page 10;
+/** A chapter's ten pages: its scarf on page 3, its trail on page 6, its ornament on page 8 and its title on page 10;
  *  gifts between. */
 export function chapterRewards(month: number, page: number): Reward[] {
   const set = chapterSet(month);
   if (page === 3) return [{ kind: 'garage', shelf: 'scarf', id: set[0].id }];
   if (page === 6) return [{ kind: 'garage', shelf: 'trail', id: set[1].id }];
-  if (page === 8) return [{ kind: 'garage', shelf: 'paint', id: set[2].id }];
+  if (page === 8) return [{ kind: 'garage', shelf: 'ornament', id: set[2].id }];
   if (page === 10) return [{ kind: 'title', title: CHAPTERS[month - 1].title }];
   return [{ kind: 'gifts', gifts: 25 + 5 * page }];
 }
@@ -351,17 +350,15 @@ export function chapterRewards(month: number, page: number): Reward[] {
 /** Every chapter piece, every month: what the garage must know to keep an owned one. */
 export const CHAPTER_EXTRAS: readonly GarageExtra[] = CHAPTERS.flatMap((ch) => chapterSet(ch.month));
 
-/** The pieces on the garage's shelf for gifts on a day: every chapter's set from its first month on (chapters arrive
- *  from ROUND8_START: none before the game had them). Almanac pieces are never sold. */
+/** The months whose chapters have arrived by a day (chapters arrive from ROUND8_START: none before the game had
+ *  them), at most a year back (a year holds all twelve). */
 export const ROUND8_START = '2026-12';
-export function shelfExtras(day: string): GarageExtra[] {
+export function monthsOpen(day: string): Set<number> {
   const now = chapterKey(day);
-  if (!now || now < ROUND8_START) return [];
-  const out: GarageExtra[] = [];
-  // Months from the start to now, at most a year back (a year holds all twelve).
+  const seen = new Set<number>();
+  if (!now || now < ROUND8_START) return seen;
   let [y, m] = ROUND8_START.split('-').map(Number);
   const [ny, nm] = now.split('-').map(Number);
-  const seen = new Set<number>();
   while (y < ny || (y === ny && m <= nm)) {
     seen.add(m);
     m++;
@@ -370,6 +367,13 @@ export function shelfExtras(day: string): GarageExtra[] {
       y++;
     }
   }
-  for (const month of seen) out.push(...chapterSet(month));
+  return seen;
+}
+
+/** The pieces on the garage's shelf for gifts on a day: every chapter's set from its first month on. Almanac pieces
+ *  are never sold. */
+export function shelfExtras(day: string): GarageExtra[] {
+  const out: GarageExtra[] = [];
+  for (const month of monthsOpen(day)) out.push(...chapterSet(month));
   return out;
 }

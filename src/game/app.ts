@@ -39,7 +39,8 @@ import { planMarquee } from './marquee';
 import { ROSTER, riderByName } from '../bot/roster';
 import { STAR_GIFTS, masteryBoard, readMastery, settleMastery } from './mastery';
 import { PAINTS, paintById } from './paints';
-import { SHELVES, type ShelfId, freeItem, hatById, scarfById, soundById, trailById } from './garage';
+import { SLED_SHOP, creditLines, tiersOn } from './tracks';
+import { SETS, SHELVES, type ShelfId, freeItem, hatById, ornamentById, scarfById, setPiecesFor, soundById, trailById } from './garage';
 import { WARD_CURVE } from './timescale';
 import { courseFor } from '../sim/course';
 import { rollForVariant } from '../sim/moments';
@@ -69,7 +70,7 @@ import { type SpineOutcome, type SpineRun, type SpineSettlement, settleSpine } f
 import { albumModel, almanacModel, lanternRow, resultsSpine, titleSpine } from './spineview';
 import { flameNow } from './flame';
 import { type Board, type ClimbOutcome, type Spot, bestStanding, boardOf, climbMoment, decidedLine, goldHook, laps, medalsHeld, nextLine, rungHook, settleClimb, spotOn, stageSeconds } from './ladder';
-import { type BestRun, type Climb, Grudge, SHELF_KEYS, SaveStore, oldBest, retireGrudge, rideableGrudge, shelfState } from './save';
+import { type BestRun, type Climb, Grudge, SHELF_KEYS, SaveStore, oldBest, ornamentState, retireGrudge, rideableGrudge, shelfState } from './save';
 import { useFixture } from './devsave';
 import { type GrudgeRow, type SettleResult, Settlement, cupMedalNow, dailyMedalNow, dailyStreakNow, isNemesis, medalFor, medalThresholds, settleBest, settleGrudge, settleRun, topScore } from './settle';
 import { inReach } from './pacer';
@@ -375,7 +376,6 @@ export class App {
     setHour(this.hourPicked() ? 'alt' : 'day');
     this.world = new World(root, this.mountain.seed, qualityFor(this.tiers.tier));
     if (DEV_ON) this.world.devPipe(DEV);
-    this.world.rider.setPaint(paintById(this.save.data.paint).hex);
     this.applyLook();
     this.audio.setQuality(detailOf(this.tiers.tier));
     this.tiers.onChange = (t: Tier) => {
@@ -452,7 +452,6 @@ export class App {
     this.platform.loadingStart();
     this.save.rebind(this.platform.storage);
     // The platform's save may differ from the local one: wear what it says (paint, hat, scarf, trail, sound).
-    this.world.rider.setPaint(paintById(this.save.data.paint).hex);
     this.applyLook();
     if (this.platform.muteAudio) this.audio.setMuted('sdk', true);
     this.applyAudioSettings();
@@ -1023,7 +1022,7 @@ export class App {
     if (p === PAINTS[0]) delete d.paint;
     else d.paint = p.id;
     this.save.flush();
-    this.world.rider.setPaint(p.hex);
+    this.world.rider.setFinish(p);
     this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards(), this.garageShelves(), this.lanternRows());
   }
 
@@ -1059,6 +1058,12 @@ export class App {
     this.world.rider.setScarf(scarfById(shelfState(d, 'scarf').on));
     this.world.setTrail(trailById(shelfState(d, 'trail').on));
     this.audio.setSledSound(soundById(shelfState(d, 'sound').on).id);
+    // (Round 9: the sled's finish, and every sled's fitted tiers and the ornament on its post: whichever is ridden wears
+    // its own.)
+    this.world.rider.setFinish(paintById(d.paint));
+    const tracks: Record<number, number> = {};
+    for (const s of SLED_SHOP) tracks[s.index] = tiersOn(d, s.index);
+    this.world.rider.setTracks(tracks, ornamentState(d).on);
   }
 
   garageShelves(): GarageShelf[] {
@@ -1642,6 +1647,8 @@ export class App {
     this.leavePhoto(false);
     this.beginShots();
     this.spineSettlement = null;
+    this.linesCredited = 0;
+    this.setPiecesOpened = [];
     this.againTo = null;
     this.dayMedalAtStart = this.mountain.id === 'daily' ? dailyMedalNow(d.daily, this.daily.tagline) : this.mountain.id === 'cup' ? cupMedalNow(d.cup, this.cup.tagline) : 0;
     this.lanternfallPagedAtStart = almanacOpens(d, 'lanternfall');
@@ -2764,6 +2771,8 @@ export class App {
       const board = masteryBoard(course, this.mountain.id, rec, d.climb?.[key]?.medal ?? 0);
       mastery = { got: board.filter((s) => s.done).length, of: board.length, fresh: [...this.masteryFresh] };
     }
+    // Round 9 (the shop lane): the garage's part of the settle, in the game layer after the sim is done.
+    this.settleShop(sim, mi >= 0 && !this.night && !trial && key === this.mountain.id ? mastery : null);
     // The missions this card shows Done: a revive never pops them again mid-run.
     for (const mv of settled.missions) if (mv.justCompleted) this.missionsSettled.add(mv.id);
     const missions = { views: settled.missions };
@@ -3000,6 +3009,42 @@ export class App {
     });
   }
 
+  /** Stage lines already credited to this run's sled (a revive's second settle credits only what is new). */
+  private linesCredited = 0;
+  /** Set pieces this run opened, for the results' cards (a revive's second settle keeps the first's). */
+  private setPiecesOpened: Array<{ shelf: 'scarf' | 'trail' | 'ornament'; id: string; name: string; mountain: string }> = [];
+
+  /**
+   * Round 9, the shop lane: the stage lines this run crossed go to the sled it rode (its track's tiers open by riding,
+   * tracks.ts), and a mountain's mastery board past a third, two thirds or all of its stars opens the next piece of
+   * its set (garage.ts SETS). Both are the game layer's, after the run has settled: nothing of the garage reaches the
+   * sim or the bot, and a run that crashes early still counts the lines it rode.
+   */
+  private settleShop(sim: Sim, mastery: { got: number; of: number } | null): void {
+    const d = this.save.data;
+    const lines = Math.min(3, sim.stageTicks.length);
+    if (this.run && lines > this.linesCredited) {
+      creditLines(d, this.run.sled, lines - this.linesCredited);
+      this.linesCredited = lines;
+    }
+    if (!mastery) return;
+    const m = this.mountain.id;
+    const set = SETS[m];
+    if (!set) return;
+    const held = d.sets?.[m] ?? 0;
+    const now = setPiecesFor(mastery.got, mastery.of);
+    for (let i = held; i < now; i++) {
+      const id = set[i];
+      const shelf = i === 0 ? 'scarf' : i === 1 ? 'trail' : 'ornament';
+      const list = shelf === 'scarf' ? 'scarves' : shelf === 'trail' ? 'trails' : 'ornaments';
+      const have = d[list] ?? [];
+      if (!have.includes(id)) d[list] = [...have, id];
+      const name = shelf === 'scarf' ? scarfById(id).name : shelf === 'trail' ? trailById(id).name : ornamentById(id).name;
+      this.setPiecesOpened.push({ shelf, id, name, mountain: this.mountain.name });
+    }
+    if (now > held) d.sets = { ...(d.sets ?? {}), [m]: now };
+  }
+
   /**
    * Round 8: the spine's settle of this run (rank.ts settleSpine), from the run's own events and what the settles
    * before it returned, built as the bars harness builds it (scripts/playtest/r8career.ts). A revive's second card
@@ -3057,6 +3102,8 @@ export class App {
     };
     const outcome = settleSpine(d, run, this.spineSettlement);
     this.spineSettlement = outcome.settlement;
+    // (Round 9: a set piece the mastery board opened turns over with the pages' rewards, its set named on it.)
+    for (const p of this.setPiecesOpened) outcome.opened.push({ page: 0, reward: { kind: 'garage', shelf: p.shelf, id: p.id }, name: p.name, from: `${p.mountain}'s set` });
     let primary = outcome.primary;
     const open = (i: number): boolean => this.isOpen(MOUNTAINS[i]);
     const next = nextDuel(d.twelve, open);

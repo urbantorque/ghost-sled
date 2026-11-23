@@ -3,7 +3,7 @@ import { ALMANAC, LANTERNFALL_PAGE, CHAPTERS, CHAPTER_EXTRAS, CHARM_IDS, GARAGE_
 import { albumCatalogue, albumCompletion, awardStickers, stickersFor, type AlbumRun } from '../src/game/album';
 import { drawContracts, drawForm, meets, settleContracts, type ContractRun } from '../src/game/contracts';
 import { CALENDAR_XP, flameNow, lightDay } from '../src/game/flame';
-import { isItem, scarfById, trailById } from '../src/game/garage';
+import { isItem, isOrnament, scarfById, trailById } from '../src/game/garage';
 import { nextGoals, primaryButton, type NextGoal } from '../src/game/goals';
 import { DIVISIONS, LEAGUE_SIZE, leagueField, leagueNow, nextDivision, settleLeague } from '../src/game/league';
 import { LANTERNS, lightLantern, litByTown, litIn, readLit } from '../src/game/lanterns';
@@ -99,6 +99,7 @@ describe('the Almanac', () => {
     expect(chapterRewards(12, 10)[0].kind).toBe('title');
     for (const e of [...CHAPTER_EXTRAS, ...GARAGE_EXTRAS]) {
       if (e.shelf === 'paint') expect(isPaint(e.id) && paintById(e.id).id === e.id).toBe(true);
+      else if (e.shelf === 'ornament') expect(isOrnament(e.id)).toBe(true);
       else expect(isItem(e.shelf, e.id)).toBe(true);
     }
     expect(scarfById('ch12scarf').id).toBe('ch12scarf');

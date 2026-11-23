@@ -1,12 +1,12 @@
-import { AdditiveBlending, AlwaysStencilFunc, BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Euler, Group, InstancedBufferAttribute, InstancedMesh, Material, Matrix4, Mesh, MeshBasicMaterial, Object3D, Quaternion, ReplaceStencilOp, ShaderMaterial, Vector2, Vector3, Vector4 } from 'three';
+import { AdditiveBlending, AlwaysStencilFunc, BufferAttribute, BufferGeometry, Color, ConeGeometry, CylinderGeometry, DoubleSide, DynamicDrawUsage, Euler, Group, IcosahedronGeometry, InstancedBufferAttribute, InstancedMesh, LatheGeometry, Material, Matrix4, Mesh, MeshBasicMaterial, Object3D, Quaternion, ReplaceStencilOp, ShaderMaterial, TorusGeometry, Vector2, Vector3, Vector4 } from 'three';
 import { FLOW_HEX } from '../game/beats';
-import { type HatId, type ScarfDef, SCARVES } from '../game/garage';
+import { type HatId, type ScarfDef, type ScarfEnds, SCARVES } from '../game/garage';
 import { Course } from '../sim/course';
 import { reduced } from '../ui/motion';
 import { inRock, visualGround } from './ground';
 import { ghostStencil, makeToonMaterial, shared, type ToonOptions } from './materials';
 import { type TrickIn, emptyTrickPose, trickPose } from './trickpose';
-import { ARM_ELBOW, ARM_REST_BEND, ARM_WRIST, RIDER_COLORS, RIDER_HALF_WIDTH, RIDER_HEIGHT, RIDER_NECK, RIDER_SCALE, RIDER_SHOULDER, SCARF_KNOT, type RiderDetail, type SledSeat, ghostRiderGeometry, paintSled, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometryFor, sledSeat, withSway } from './meshes';
+import { ARM_ELBOW, ARM_REST_BEND, ARM_WRIST, RIDER_COLORS, RIDER_HALF_WIDTH, RIDER_HEIGHT, RIDER_NECK, RIDER_SCALE, RIDER_SHOULDER, SCARF_KNOT, type RiderDetail, type SledSeat, type FinishLook, ghostRiderGeometry, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledSeat, sledWithTrack, withSway } from './meshes';
 
 // The player's rider: sled + body + arms with procedural poses and a verlet scarf. The scarf's
 // wrap and knot are part of the body mesh; its two tails are simulated here and stream from the
@@ -168,8 +168,9 @@ const ECHO_LAGS: readonly (readonly [number, number])[] = [
   [0.03, 0.34],
   [0.065, 0.18],
 ];
-/** A scarf's tassels: strands at each tip, and how long they hang. */
-const TASSELS = 4;
+/** A scarf's tassels: strands at each tip, and how long they hang (round 9: seven, a third of the tail on the Fringe
+ *  Knit, so the fringe splays big enough to read past 5 m). */
+const TASSELS = 7;
 const TASSEL_L = 0.11 * RIDER_SCALE;
 const CREAM_KNIT = new Color('#F3E6D4');
 /** Round 8 (the flow pass): the scarf's tail burning at full Spirit Flow, from the rider's vermillion at the knot through
@@ -178,6 +179,182 @@ const CREAM_KNIT = new Color('#F3E6D4');
 const BURN_MID = new Color('#FF6A1A').multiplyScalar(1.15);
 const BURN_TIP = new Color('#FFC23A').multiplyScalar(1.1);
 const INK_KNIT = new Color('#1A2140');
+/** A cream stitch burning: a pale gold (the burn keeps the knit's value, round 9). */
+const BURN_CREAM = new Color('#FFF0C8');
+/** Round 9: the ribbon is three vertices across (its edges and its middle), so a pattern can run across it as well as
+ *  along it (piping, chevrons, dots), and what weights a tail's end (a pom, a lamp, a drop) and a bow at the knot are
+ *  shapes in the same mesh, written each frame round the tip's own frame: one draw, whatever the scarf. */
+const COLS = 3;
+const RIBBON_V = 2 * TAIL_ROWS * COLS;
+/** Vertices kept for each tail's end shape and for the bow (flat triangles; unused ones fold to a point). */
+const END_V = 246;
+const BOW_V = 360;
+const TASSEL_V = 2 * TASSELS * 3;
+const END_AT = RIBBON_V + TASSEL_V;
+const BOW_AT = END_AT + 2 * END_V;
+const SCARF_V = BOW_AT + BOW_V;
+
+/** A shape in a tail end's own frame (x across the ribbon, y on along the tail past its tip, z out of its face) or in
+ *  the knot's (x across the rider's back, y up, z back toward the lens), as flat triangles with their normals and
+ *  colours. */
+interface ScarfShape {
+  pos: Float32Array;
+  nrm: Float32Array;
+  col: Float32Array;
+  count: number;
+}
+
+function shapeOf(parts: Array<{ geo: BufferGeometry; color: Color; m?: Matrix4 }>, max: number): ScarfShape {
+  const pos: number[] = [];
+  const nrm: number[] = [];
+  const col: number[] = [];
+  for (const p of parts) {
+    const g = p.geo.index ? p.geo.toNonIndexed() : p.geo;
+    if (p.m) g.applyMatrix4(p.m);
+    g.computeVertexNormals();
+    const a = g.getAttribute('position');
+    const n = g.getAttribute('normal');
+    for (let i = 0; i < a.count && pos.length / 3 < max; i++) {
+      pos.push(a.getX(i), a.getY(i), a.getZ(i));
+      nrm.push(n.getX(i), n.getY(i), n.getZ(i));
+      col.push(p.color.r, p.color.g, p.color.b);
+    }
+  }
+  const count = Math.floor(pos.length / 9) * 3;
+  return { pos: new Float32Array(pos.slice(0, count * 3)), nrm: new Float32Array(nrm.slice(0, count * 3)), col: new Float32Array(col.slice(0, count * 3)), count };
+}
+
+const mAt = (x: number, y: number, z: number, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1): Matrix4 => new Matrix4().compose(new Vector3(x, y, z), new Quaternion().setFromEuler(new Euler(rx, ry, rz)), new Vector3(sx, sy, sz));
+
+/** What weights a tail's end (garage.ts ScarfEnds), in the end's frame, sized for the ribbon's width: a big knit pom
+ *  that swings it low, a little paper lamp, a cream snowball, a round drop, a point (an icicle, a fang), a fan of
+ *  flame tongues, a cream tassel. Null for none and for a fringe (drawn as strands). */
+function endShape(ends: ScarfEnds, accent: Color, width: number): ScarfShape | null {
+  const V = RIDER_COLORS.accent;
+  const w = TAIL_W * width;
+  switch (ends) {
+    case 'pom':
+      return shapeOf([{ geo: new IcosahedronGeometry(0.11 * RIDER_SCALE, 1), color: V.clone().multiplyScalar(0.94), m: mAt(0, 0.085 * RIDER_SCALE, 0) }], END_V);
+    case 'ball':
+      return shapeOf([{ geo: new IcosahedronGeometry(0.075 * RIDER_SCALE, 1), color: CREAM_KNIT, m: mAt(0, 0.065 * RIDER_SCALE, 0) }], END_V);
+    case 'lamp': {
+      const S = RIDER_SCALE;
+      return shapeOf(
+        [
+          { geo: new CylinderGeometry(0.05 * S, 0.056 * S, 0.12 * S, 8, 1, true), color: new Color('#FFE7B0').multiplyScalar(1.45), m: mAt(0, 0.12 * S, 0) },
+          { geo: new CylinderGeometry(0.024 * S, 0.05 * S, 0.035 * S, 6), color: INK_KNIT, m: mAt(0, 0.045 * S, 0) },
+          { geo: new CylinderGeometry(0.056 * S, 0.03 * S, 0.03 * S, 6), color: INK_KNIT, m: mAt(0, 0.195 * S, 0) },
+        ],
+        END_V,
+      );
+    }
+    case 'drop': {
+      const prof = [new Vector2(0.001, 0), new Vector2(0.03, 0.03), new Vector2(0.055, 0.075), new Vector2(0.06, 0.11), new Vector2(0.045, 0.145), new Vector2(0.001, 0.16)].map((v) => v.multiplyScalar(RIDER_SCALE));
+      return shapeOf([{ geo: new LatheGeometry(prof, 8), color: V.clone().multiplyScalar(0.9) }], END_V);
+    }
+    case 'point':
+      return shapeOf([{ geo: new ConeGeometry(w * 0.32, 0.2 * RIDER_SCALE, 4), color: accent, m: mAt(0, 0.08 * RIDER_SCALE, 0, Math.PI, Math.PI / 4, 0, 1, 1, 0.35) }], END_V);
+    case 'flame': {
+      const parts = [-1, 0, 1].map((k) => ({ geo: new ConeGeometry(w * 0.14, (0.16 - 0.04 * Math.abs(k)) * RIDER_SCALE, 4), color: k === 0 ? CREAM_KNIT : V.clone().multiplyScalar(0.9), m: mAt(k * w * 0.26, 0.06 * RIDER_SCALE, 0, Math.PI, 0, k * 0.35, 1, 1, 0.4) }));
+      return shapeOf(parts, END_V);
+    }
+    case 'tassel':
+      return shapeOf(
+        [
+          { geo: new ConeGeometry(0.05 * RIDER_SCALE, 0.17 * RIDER_SCALE, 8, 1, true), color: CREAM_KNIT, m: mAt(0, 0.1 * RIDER_SCALE, 0, Math.PI, 0, 0) },
+          { geo: new IcosahedronGeometry(0.03 * RIDER_SCALE, 0), color: CREAM_KNIT.clone().multiplyScalar(0.9), m: mAt(0, 0.02 * RIDER_SCALE, 0) },
+        ],
+        END_V,
+      );
+    default:
+      return null;
+  }
+}
+
+/** The Almanac Knot's bow at the back of the neck, in the knot's frame: two big loops and the knot between them. */
+function bowShape(): ScarfShape {
+  const V = RIDER_COLORS.accent;
+  const S = RIDER_SCALE;
+  return shapeOf(
+    [
+      { geo: new TorusGeometry(0.075 * S, 0.03 * S, 3, 8), color: V, m: mAt(-0.09 * S, 0.02 * S, 0.02, 0, 0.35, 0.35, 1, 0.62, 0.7) },
+      { geo: new TorusGeometry(0.075 * S, 0.03 * S, 3, 8), color: V.clone().multiplyScalar(0.92), m: mAt(0.09 * S, 0.02 * S, 0.02, 0, -0.35, -0.35, 1, 0.62, 0.7) },
+      { geo: new IcosahedronGeometry(0.042 * S, 0), color: V.clone().multiplyScalar(0.85), m: mAt(0, 0.02 * S, 0.03) },
+    ],
+    BOW_V,
+  );
+}
+
+/** The knit's colour at a row of a tail (0 the knot, R - 1 the tip) and a column across it (0 and 2 its edges, 1 its
+ *  middle), for a scarf's pattern (garage.ts ScarfPattern): the classic's vermillion, a touch deeper at the knot, and
+ *  the pattern's cream or ink. */
+function knitAt(def: ScarfDef, r: number, c: number, out: Color): Color {
+  const R = TAIL_ROWS;
+  const V = RIDER_COLORS.accent;
+  const A = def.accent === 'cream' ? CREAM_KNIT : def.accent === 'ink' ? INK_KNIT : V;
+  const edge = c !== 1;
+  let k = r < 3 ? 0.86 : 1;
+  let accent = false;
+  switch (def.pattern) {
+    case 'tipStripes':
+      if (r === R - 6 || r === R - 3) k = 0.68;
+      break;
+    case 'bars':
+      accent = r === R - 7 || r === R - 6 || r === R - 4 || r === R - 3;
+      break;
+    case 'tip':
+      accent = r >= R - 5;
+      if (r === R - 6) k = 0.8;
+      break;
+    case 'bands':
+      accent = r >= 3 && r % 3 === 0;
+      break;
+    case 'rib':
+      if (r >= 2 && r % 2 === 0) return out.copy(V).lerp(INK_KNIT, 0.62);
+      break;
+    case 'piping':
+      accent = r >= 2 && edge;
+      break;
+    case 'chevron':
+      accent = r >= 3 && (edge ? r % 4 === 0 : r % 4 === 1);
+      break;
+    case 'braid':
+      accent = r >= 2 && c === r % 3;
+      if (!accent && r >= 2) k = (r + c) % 2 ? 0.86 : 1;
+      break;
+    case 'graded':
+      accent = r >= 3 && (r % 3 === 0 || (r > 10 && r % 3 === 1));
+      break;
+    case 'rays':
+      accent = r === 6 || r === 10 || r === 11 || r === 14 || r === 15;
+      break;
+    case 'flameBand':
+      if (r >= R - 3) return out.copy(INK_KNIT);
+      if ((r === R - 6 && !edge) || r === R - 5) return out.copy(CREAM_KNIT);
+      break;
+    case 'dots':
+      accent = r >= 3 && r % 3 === 1 && !edge;
+      break;
+    case 'crescent':
+      accent = r >= 2 && ((r % 4 === 2 && edge) || (r % 4 === 3 && !edge));
+      break;
+    case 'holes':
+      accent = r >= 3 && r % 3 === 1 && !edge;
+      break;
+    case 'fold':
+      k = r < 2 ? 0.86 : r % 2 ? 1.0 : 0.6;
+      break;
+    case 'scallop':
+      accent = r >= 2 && edge && r % 2 === 0;
+      break;
+    case 'teeth':
+      accent = r >= R - 9 && edge && r % 2 === 1;
+      break;
+    case 'plain':
+      break;
+  }
+  return accent ? out.copy(A) : out.copy(V).multiplyScalar(k);
+}
 
 /** The after-image's glass: a white-gold fresnel edge with a breath of light inside, added over the scene. */
 function echoMaterial(): ShaderMaterial {
@@ -652,6 +829,18 @@ export class Rider {
   private tails: Tail[] = [];
   private tailGeo: BufferGeometry;
   private scarf: Mesh;
+  /** Round 9: a four-tailed scarf's second pair, each tail's end shape and the bow (built by setScarf). */
+  private scarfTwin: Mesh;
+  private endS: ScarfShape | null = null;
+  private bowS: ScarfShape | null = null;
+  /** Round 9: the sled's lit parts and its inlay (setTrack), and the stern post's top in the sled's frame. */
+  private sledGlow: Mesh;
+  private sledInlay: Mesh;
+  private postAt: Vector3 | null = null;
+  private finish: FinishLook | null = null;
+  /** Tiers fitted, by sled id (game/tracks.ts): what a sled wears whenever it is the one ridden. */
+  private tracksBy: Record<number, number> = {};
+  private ornament = 'lamp';
   private rows: Vector3[] = [];
   private anchor = new Vector3();
   private anchorPrev = new Vector3();
@@ -845,7 +1034,7 @@ export class Rider {
     this.mat = mat;
     // Each arm bends at its own elbow: the same shader, its own joint angles.
     this.armMats = this.joints.map((j) => riderMaterial({ coolShade: 0.5, rim: 0.4 }, this.u, 0.7, 0.75, true, j));
-    this.sled = new Mesh(markSled(withSway(sledGeometryFor(0)), 0, false), mat);
+    this.sled = new Mesh(markSled(withSway(sledWithTrack(0, 0, 'lamp', null).body), 0, false), mat);
     this.sitGeo = riderTorsoGeometry();
     this.body = new Mesh(this.sitGeo, mat);
     const headGeo = riderHeadGeometry().translate(-RIDER_NECK.x, -RIDER_NECK.y, -RIDER_NECK.z);
@@ -886,19 +1075,22 @@ export class Rider {
       this.tails.push(t);
     }
     for (let r = 0; r < TAIL_ROWS; r++) this.rows.push(new Vector3());
-    // Two ribbons of TAIL_ROWS rows, then each tail's tassels (three vertices a strand, collapsed to a
-    // point when the scarf has none).
-    const verts = 2 * TAIL_ROWS * 2 + 2 * TASSELS * 3;
+    // Two ribbons of TAIL_ROWS rows, three vertices across; then each tail's tassels (three vertices a strand),
+    // each tail's end shape and the bow at the knot (round 9), all flat triangles, folded to a point when the scarf
+    // has none.
+    const verts = SCARF_V;
     this.tailGeo = new BufferGeometry();
     const col = new Float32Array(verts * 3);
     const idx: number[] = [];
     for (let k = 0; k < 2; k++) {
       for (let r = 0; r < TAIL_ROWS - 1; r++) {
-        const a = (k * TAIL_ROWS + r) * 2;
-        idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+        for (let c = 0; c < COLS - 1; c++) {
+          const a = (k * TAIL_ROWS + r) * COLS + c;
+          idx.push(a, a + 1, a + COLS, a + 1, a + COLS + 1, a + COLS);
+        }
       }
     }
-    for (let i = 2 * TAIL_ROWS * 2; i < verts; i += 3) idx.push(i, i + 1, i + 2);
+    for (let i = RIBBON_V; i < verts; i += 3) idx.push(i, i + 1, i + 2);
     this.tailGeo.setAttribute('position', new BufferAttribute(new Float32Array(verts * 3), 3).setUsage(DynamicDrawUsage));
     this.tailGeo.setAttribute('normal', new BufferAttribute(new Float32Array(verts * 3), 3).setUsage(DynamicDrawUsage));
     this.tailGeo.setAttribute('color', new BufferAttribute(col, 3));
@@ -913,6 +1105,22 @@ export class Rider {
     (this.scarf.material as ShaderMaterial).stencilRef = 3;
     this.scarf.frustumCulled = false;
     this.scarf.castShadow = true;
+    // (Round 9: a four-tailed scarf's second pair is the same mesh again, drawn a hand lower, a little shorter and
+    // turned out from the knot: one more draw, only while one is worn.)
+    this.scarfTwin = new Mesh(this.tailGeo, this.scarf.material);
+    this.scarfTwin.matrixAutoUpdate = false;
+    this.scarfTwin.frustumCulled = false;
+    this.scarfTwin.castShadow = true;
+    this.scarfTwin.visible = false;
+    // The sled's lit parts (a lamp's paper, an ornament's glow) and the fifth tier's inlay: their own materials, in
+    // the rider's stencil like the rest of it (round 9).
+    this.sledGlow = new Mesh(new BufferGeometry(), new MeshBasicMaterial({ vertexColors: true }));
+    riderStencil(this.sledGlow.material as Material);
+    this.sledGlow.visible = false;
+    this.sledInlay = new Mesh(new BufferGeometry(), new MeshBasicMaterial({ color: INK_KNIT.clone() }));
+    riderStencil(this.sledInlay.material as Material);
+    this.sledInlay.visible = false;
+    this.sled.add(this.sledGlow, this.sledInlay);
 
     // The tumbling body keeps its arms (flung out, then propping it up once it sits) and its head
     // (tilted, dazed, once it sits).
@@ -1012,50 +1220,46 @@ export class Rider {
   setScarf(def: ScarfDef): void {
     if (def === this.scarfLook) return;
     this.scarfLook = def;
-    for (let k = 0; k < this.tails.length; k++) this.tails[k].seg = TAIL_SEG[k] * def.length;
+    // How many tails and of what lengths (round 9): two, one long and one short, four (the second pair is the twin
+    // mesh), or one thick rope (the second tail tucked away at the knot).
+    const L = def.length;
+    const segs = def.form === 'long' ? [TAIL_SEG[0] * 1.75, TAIL_SEG[1] * 0.55] : def.form === 'one' ? [TAIL_SEG[0] * 1.1, TAIL_SEG[1] * 0.08] : [TAIL_SEG[0], TAIL_SEG[1]];
+    for (let k = 0; k < this.tails.length; k++) this.tails[k].seg = segs[k] * L;
+    this.endS = endShape(def.ends, def.accent === 'ink' ? INK_KNIT : CREAM_KNIT, def.width);
+    this.bowS = def.bow ? bowShape() : null;
+    this.scarfTwin.visible = def.form === 'four' && this.scarf.visible;
     this.paintScarf();
   }
 
-  /** The scarf's knit in its vertex colours: vermillion, a touch deeper at the knot where the cloth bunches,
-   *  and the scarf's own pattern down each tail (the classic's two deeper stripes near the tip make the
-   *  flutter easy to read). Its accent, if any, is cream or ink, never a third colour. */
+  /** The scarf's knit in its vertex colours (knitAt): vermillion, a touch deeper at the knot where the cloth bunches,
+   *  and the scarf's own pattern down each tail and across it; then its fringe, its ends' shapes and its bow. Its
+   *  accent, if any, is cream or ink, never a third colour. */
   private paintScarf(): void {
     const col = this.tailGeo.getAttribute('color') as BufferAttribute;
     const def = this.scarfLook;
     const R = TAIL_ROWS;
     const V = RIDER_COLORS.accent;
-    const A = def.accent === 'cream' ? CREAM_KNIT : def.accent === 'ink' ? INK_KNIT : V;
     const c = new Color();
-    for (let i = 0; i < 2 * R * 2; i++) {
-      const r = Math.floor(i / 2) % R;
-      let k = r < 3 ? 0.86 : 1;
-      let accent = false;
-      switch (def.pattern) {
-        case 'tipStripes':
-          if (r === R - 6 || r === R - 3) k = 0.7;
-          break;
-        case 'bars':
-          accent = r === R - 7 || r === R - 6 || r === R - 4 || r === R - 3;
-          break;
-        case 'tip':
-          accent = r >= R - 3;
-          if (r === R - 4) k = 0.8;
-          break;
-        case 'bands':
-          accent = r >= 4 && r % 4 === 0;
-          break;
-        case 'rib':
-          k = r % 2 === 0 ? 0.8 : 1;
-          break;
-        case 'plain':
-          break;
-      }
-      c.copy(accent ? A : V).multiplyScalar(accent ? 1 : k);
+    for (let i = 0; i < RIBBON_V; i++) {
+      const r = Math.floor(i / COLS) % R;
+      knitAt(def, r, i % COLS, c);
       col.setXYZ(i, c.r, c.g, c.b);
     }
     // Tassels in the accent if it is cream, else a deeper vermillion.
     const t = def.accent === 'cream' ? CREAM_KNIT : c.copy(V).multiplyScalar(0.82);
-    for (let i = 2 * R * 2; i < col.count; i++) col.setXYZ(i, t.r, t.g, t.b);
+    for (let i = RIBBON_V; i < END_AT; i++) col.setXYZ(i, t.r, t.g, t.b);
+    for (let k = 0; k < 2; k++) {
+      for (let i = 0; i < END_V; i++) {
+        const s = this.endS && i < this.endS.count ? i * 3 : -1;
+        if (s >= 0) col.setXYZ(END_AT + k * END_V + i, this.endS!.col[s], this.endS!.col[s + 1], this.endS!.col[s + 2]);
+        else col.setXYZ(END_AT + k * END_V + i, V.r, V.g, V.b);
+      }
+    }
+    for (let i = 0; i < BOW_V; i++) {
+      const s = this.bowS && i < this.bowS.count ? i * 3 : -1;
+      if (s >= 0) col.setXYZ(BOW_AT + i, this.bowS!.col[s], this.bowS!.col[s + 1], this.bowS!.col[s + 2]);
+      else col.setXYZ(BOW_AT + i, V.r, V.g, V.b);
+    }
     col.needsUpdate = true;
     this.scarfBase = (col.array as Float32Array).slice();
     this.burnShown = 0;
@@ -1077,26 +1281,49 @@ export class Rider {
     this.burnScarf(this.burnK);
   }
 
+  /** Round 9: the burn keeps the knit. Each stitch burns at its own value, so an ink band stays dark in the flame and a
+   *  cream bar burns a pale gold (round 8's burn took every stitch past 85% of the tail to one flame colour, so no
+   *  pattern survived Spirit Flow). And it glows only down its far half: the burning cloth near the knot stays under
+   *  the bloom's threshold, so the flame's glow never spreads over the coat's back (ART.md 8). */
   private burnScarf(k: number): void {
     const base = this.scarfBase;
     if (!base) return;
     const col = this.tailGeo.getAttribute('color') as BufferAttribute;
     const a = col.array as Float32Array;
     const R = TAIL_ROWS;
-    const hot = new Color();
+    const hot = this.burnHot;
+    const vl = 0.2126 * RIDER_COLORS.accent.r + 0.7152 * RIDER_COLORS.accent.g + 0.0722 * RIDER_COLORS.accent.b;
     for (let i = 0; i < col.count; i++) {
-      // Along the tail (0 the knot, 1 the tip); the tassels burn as the tip does.
-      const along = i < 2 * R * 2 ? (Math.floor(i / 2) % R) / (R - 1) : 1;
+      // Along the tail (0 the knot, 1 the tip); the tassels and the ends burn as the tip does, the bow as the knot.
+      const along = i < RIBBON_V ? (Math.floor(i / COLS) % R) / (R - 1) : i < BOW_AT ? 1 : 0;
       const b = k * Math.min(1, Math.max(0, (along - 0.25) / 0.6));
+      if (b <= 0) {
+        a[i * 3] = base[i * 3];
+        a[i * 3 + 1] = base[i * 3 + 1];
+        a[i * 3 + 2] = base[i * 3 + 2];
+        continue;
+      }
       const e = b * b * (3 - 2 * b);
       hot.copy(BURN_MID).lerp(BURN_TIP, Math.min(1, Math.max(0, (along - 0.55) / 0.45)));
+      if (along < 0.6) hot.multiplyScalar(0.86);
+      const v = (0.2126 * base[i * 3] + 0.7152 * base[i * 3 + 1] + 0.0722 * base[i * 3 + 2]) / vl;
+      if (v > 1.25) hot.lerp(BURN_CREAM, 0.6);
+      else hot.multiplyScalar(Math.max(0.28, Math.min(1, v)));
       a[i * 3] = base[i * 3] + (hot.r - base[i * 3]) * e;
       a[i * 3 + 1] = base[i * 3 + 1] + (hot.g - base[i * 3 + 1]) * e;
       a[i * 3 + 2] = base[i * 3 + 2] + (hot.b - base[i * 3 + 2]) * e;
     }
     col.needsUpdate = true;
     this.burnShown = k;
+    // The fifth tier's inlay burns with the scarf: ink while it is cold. (The constructor paints the scarf before
+    // the sled's inlay is made.)
+    const im = this.sledInlay?.material as MeshBasicMaterial | undefined;
+    if (!im) return;
+    if (k <= 0.01) im.color.copy(INK_KNIT);
+    else im.color.copy(INK_KNIT).lerp(this.burnHot.copy(BURN_MID).lerp(BURN_TIP, k).multiplyScalar(1.35), Math.min(1, k * 1.4));
   }
+
+  private readonly burnHot = new Color();
 
   /** A dash's spirit shimmer, eased (0 to 1): uniforms on every rider material, plus the after-images
    *  when `echoes` (Medium and High). `calm` (reduced motion) slows the bands' rise. */
@@ -1155,12 +1382,36 @@ export class Rider {
   /** Swap the sled model (unlocks show up on the slope, not just in a menu), and the way the rider
    *  sits it: on a saucer or a tray it sits cross-legged and leans over the rim. A wreck thrown
    *  clear of its sled always sits in the snow with its legs out. */
-  /** The sled's paint (game/paints.ts): '' is its natural finish. Applied on the next setSled. */
-  private paintHex = '';
-
+  /** The sled's finish (game/paints.ts, round 9: a ground and a motif); null or a bare hex for round 8's paints.
+   *  Applied by rebuilding the sled. */
   setPaint(hex: string): void {
-    if (hex === this.paintHex) return;
-    this.paintHex = hex;
+    this.setFinish(hex ? { hex, motif: 'none', accent: 'cream' } : null);
+  }
+
+  setFinish(f: FinishLook | null): void {
+    const same = (a: FinishLook | null, b: FinishLook | null) => (a === null || (!a.hex && a.motif === 'none') ? b === null || (!b.hex && b.motif === 'none') : b !== null && a.hex === b.hex && a.motif === b.motif && a.accent === b.accent);
+    if (same(f, this.finish)) return;
+    this.finish = f;
+    this.rebuildSled();
+  }
+
+  /** Every sled's fitted tiers (game/tracks.ts, 0 to 5, by sled id) and the ornament on a stern post (from the fourth
+   *  tier): whichever sled is ridden wears its own. */
+  setTracks(by: Readonly<Record<number, number>>, ornament: string): void {
+    const orn = ornament || 'lamp';
+    const same = orn === this.ornament && Object.keys({ ...by, ...this.tracksBy }).every((k) => (by[Number(k)] ?? 0) === (this.tracksBy[Number(k)] ?? 0));
+    if (same) return;
+    this.tracksBy = { ...by };
+    this.ornament = orn;
+    this.rebuildSled();
+  }
+
+  /** The sled now ridden with `tiers` fitted (the garage trying a tier on, a capture). */
+  setTrack(tiers: number, ornament = this.ornament): void {
+    this.setTracks({ ...this.tracksBy, [this.sledId]: Math.max(0, Math.min(5, Math.floor(tiers))) }, ornament);
+  }
+
+  private rebuildSled(): void {
     const id = this.sledId;
     this.sledId = -1;
     this.setSled(id);
@@ -1169,10 +1420,18 @@ export class Rider {
   setSled(id: number): void {
     if (id === this.sledId) return;
     this.sledId = id;
-    const geo = markSled(withSway(paintSled(sledGeometryFor(id, this.lite), this.paintHex)), id, this.lite);
+    const built = sledWithTrack(id, this.tracksBy[id] ?? 0, this.ornament, this.finish, this.lite);
+    const geo = markSled(withSway(built.body), id, this.lite);
     this.sled.geometry.dispose();
     this.sled.geometry = geo;
     (this.crashSled.children[0] as Mesh).geometry = geo;
+    this.sledGlow.geometry.dispose();
+    this.sledGlow.geometry = built.glow ?? new BufferGeometry();
+    this.sledGlow.visible = built.glow !== null;
+    this.sledInlay.geometry.dispose();
+    this.sledInlay.geometry = built.inlay ?? new BufferGeometry();
+    this.sledInlay.visible = built.inlay !== null;
+    this.postAt = built.post;
     this.seat = sledSeat(id);
     this.body.geometry = this.seat.crossLegged ? (this.crossGeo ??= riderTorsoGeometry(true, false, this.lite)) : this.sitGeo;
     (this.crashBody.children[0] as Mesh).geometry = this.body.geometry;
@@ -1182,9 +1441,21 @@ export class Rider {
     this.headLift = this.seat.crossLegged ? 0.15 : 0.03;
   }
 
+  /** Where a lit ornament on the stern post is in the world (its light on the snow behind: world.ts), or null when the
+   *  sled has no post or its ornament is not lit. */
+  postLight(out: Vector3): Vector3 | null {
+    if (!this.postAt || !this.root.visible || !this.sledGlow.visible) return null;
+    return this.sled.localToWorld(out.copy(this.postAt).setY(this.postAt.y - 0.17));
+  }
+
+  /** The sled's id, its fitted tiers and its ornament, as worn now. */
+  get sledLook(): { id: number; tiers: number; ornament: string } {
+    return { id: this.sledId, tiers: this.tracksBy[this.sledId] ?? 0, ornament: this.ornament };
+  }
+
   /** Objects to add to the scene (scarf and crash parts live in world space). */
   get objects(): Object3D[] {
-    return [this.root, this.scarf, this.crashBody, this.crashSled, this.stars, this.echo];
+    return [this.root, this.scarf, this.scarfTwin, this.crashBody, this.crashSled, this.stars, this.echo];
   }
 
   /**
@@ -1203,7 +1474,7 @@ export class Rider {
         motionInv.copy(this.leanG.matrixWorld).invert();
         motionLo.set(Infinity, Infinity, Infinity);
         motionHi.set(-Infinity, -Infinity, -Infinity);
-        for (let i = 0; i < pos.count; i++) {
+        for (let i = 0; i < RIBBON_V; i++) {
           motionP.fromBufferAttribute(pos, i).applyMatrix4(this.scarf.matrixWorld).applyMatrix4(motionInv);
           motionLo.min(motionP);
           motionHi.max(motionP);
@@ -1226,6 +1497,7 @@ export class Rider {
   heroRoots(cb: (o: Object3D, on: boolean) => void): void {
     cb(this.root, true);
     cb(this.scarf, this.burnShown < 0.02);
+    cb(this.scarfTwin, this.burnShown < 0.02);
     cb(this.crashBody, true);
     cb(this.crashSled, true);
   }
@@ -1234,6 +1506,7 @@ export class Rider {
   setVisible(v: boolean): void {
     this.root.visible = v && !this.crash;
     this.scarf.visible = v || this.crash !== null;
+    this.scarfTwin.visible = this.scarf.visible && this.scarfLook.form === 'four';
     if (!this.crash) this.stars.visible = false;
   }
 
@@ -2582,7 +2855,8 @@ export class Rider {
     }
   }
 
-  /** Smooth each chain (Catmull-Rom) into ribbon rows, tapered and twisted along its length. */
+  /** Smooth each chain (Catmull-Rom) into ribbon rows, tapered and twisted along its length, three vertices across;
+   *  then the fringe, each tail's end shape round its tip's own frame and the bow round the knot's (round 9). */
   private buildScarf(time: number, airborne: boolean): void {
     const pos = this.tailGeo.getAttribute('position') as BufferAttribute;
     const nrm = this.tailGeo.getAttribute('normal') as BufferAttribute;
@@ -2592,6 +2866,7 @@ export class Rider {
     const W = this.vB;
     const B = this.vC;
     const twistAmp = airborne ? 1.1 : 0.75;
+    const look = this.scarfLook;
     let v = 0;
     for (const t of this.tails) {
       const P = t.pts;
@@ -2636,34 +2911,37 @@ export class Rider {
         const s = Math.sin(th);
         W.multiplyScalar(c).addScaledVector(B, s);
         B.crossVectors(W, T);
-        const hw = 0.5 * tailWidth(u) * this.scarfLook.width;
+        // (A folded fan opens as it streams: its rows alternate a little wider and narrower.)
+        const fold = look.pattern === 'fold' && r > 1 ? (r % 2 ? 1.12 : 0.88) : 1;
+        const hw = 0.5 * tailWidth(u) * look.width * fold;
         const p = rows[r];
         pos.setXYZ(v, p.x - W.x * hw, p.y - W.y * hw, p.z - W.z * hw);
-        pos.setXYZ(v + 1, p.x + W.x * hw, p.y + W.y * hw, p.z + W.z * hw);
-        nrm.setXYZ(v, B.x, B.y, B.z);
-        nrm.setXYZ(v + 1, B.x, B.y, B.z);
-        v += 2;
+        pos.setXYZ(v + 1, p.x, p.y, p.z);
+        pos.setXYZ(v + 2, p.x + W.x * hw, p.y + W.y * hw, p.z + W.z * hw);
+        for (let q = 0; q < COLS; q++) nrm.setXYZ(v + q, B.x, B.y, B.z);
+        v += COLS;
       }
     }
-    // The tassels: thin strands fanned off each tip along its last run, drooping a little (collapsed to a
-    // point when the scarf has none).
-    const fringe = this.scarfLook.tassels;
-    let tv = 2 * TAIL_ROWS * 2;
+    // The tassels: thin strands fanned off each tip along its last run, drooping a little (collapsed to a point when
+    // the scarf has none); the Fringe Knit's hang a third of the tail and splay wide.
+    const fringe = look.ends === 'fringe';
+    const ends = this.endS;
+    let tv = RIBBON_V;
     for (let k = 0; k < 2; k++) {
-      const end = (k * TAIL_ROWS + TAIL_ROWS - 1) * 2;
+      const end = (k * TAIL_ROWS + TAIL_ROWS - 1) * COLS;
       const lx = pos.getX(end);
       const ly = pos.getY(end);
       const lz = pos.getZ(end);
-      const rx = pos.getX(end + 1);
-      const ry = pos.getY(end + 1);
-      const rz = pos.getZ(end + 1);
+      const rx = pos.getX(end + 2);
+      const ry = pos.getY(end + 2);
+      const rz = pos.getZ(end + 2);
       // The run of the tip (this tail's last two rows), recomputed from the ribbon itself.
-      const px = (pos.getX(end - 2) + pos.getX(end - 1)) / 2;
-      const py = (pos.getY(end - 2) + pos.getY(end - 1)) / 2;
-      const pz = (pos.getZ(end - 2) + pos.getZ(end - 1)) / 2;
-      const ex = (lx + rx) / 2;
-      const ey = (ly + ry) / 2;
-      const ez = (lz + rz) / 2;
+      const px = pos.getX(end - 2);
+      const py = pos.getY(end - 2);
+      const pz = pos.getZ(end - 2);
+      const ex = pos.getX(end + 1);
+      const ey = pos.getY(end + 1);
+      const ez = pos.getZ(end + 1);
       let dx = ex - px;
       let dy = ey - py;
       let dz = ez - pz;
@@ -2674,8 +2952,10 @@ export class Rider {
       const nx = nrm.getX(end);
       const ny = nrm.getY(end);
       const nz = nrm.getZ(end);
+      // (A tucked-away second tail of a one-tailed rope carries no fringe or end.)
+      const shown = !(look.form === 'one' && k === 1);
       for (let j = 0; j < TASSELS; j++) {
-        if (!fringe) {
+        if (!fringe || !shown) {
           for (let q = 0; q < 3; q++) {
             pos.setXYZ(tv + q, ex, ey, ez);
             nrm.setXYZ(tv + q, nx, ny, nz);
@@ -2686,20 +2966,76 @@ export class Rider {
         const f0 = j / TASSELS;
         const f1 = (j + 0.72) / TASSELS;
         const fm = (f0 + f1) / 2;
-        const spread = (fm - 0.5) * 0.9;
-        const len = TASSEL_L * (0.85 + 0.3 * ((j * 37 + k * 11) % 5) / 4) * this.scarfLook.length;
-        const wave = Math.sin(time * 14 + j * 1.7 + k) * 0.015;
+        const spread = (fm - 0.5) * 1.6;
+        const len = TASSEL_L * 2.4 * (0.85 + 0.3 * ((j * 37 + k * 11) % 5) / 4) * look.length;
+        const wave = Math.sin(time * 14 + j * 1.7 + k) * 0.02;
         const bx = lx + (rx - lx) * fm;
         const by = ly + (ry - ly) * fm;
         const bz = lz + (rz - lz) * fm;
         pos.setXYZ(tv, lx + (rx - lx) * f0, ly + (ry - ly) * f0, lz + (rz - lz) * f0);
         pos.setXYZ(tv + 1, lx + (rx - lx) * f1, ly + (ry - ly) * f1, lz + (rz - lz) * f1);
-        pos.setXYZ(tv + 2, bx + dx * len + (rx - lx) * spread + nx * wave, by + dy * len - 0.025 + (ry - ly) * spread + ny * wave, bz + dz * len + (rz - lz) * spread + nz * wave);
+        pos.setXYZ(tv + 2, bx + dx * len + (rx - lx) * spread + nx * wave, by + dy * len - 0.03 + (ry - ly) * spread + ny * wave, bz + dz * len + (rz - lz) * spread + nz * wave);
         for (let q = 0; q < 3; q++) nrm.setXYZ(tv + q, nx, ny, nz);
         tv += 3;
       }
+      // The end's shape, in the tip's frame: x across (the ribbon's width), y on along the run, z out of its face.
+      let wx = rx - lx;
+      let wy = ry - ly;
+      let wz = rz - lz;
+      const wl = Math.hypot(wx, wy, wz) || 1;
+      wx /= wl;
+      wy /= wl;
+      wz /= wl;
+      const base = END_AT + k * END_V;
+      for (let i = 0; i < END_V; i++) {
+        if (!ends || !shown || i >= ends.count) {
+          pos.setXYZ(base + i, ex, ey, ez);
+          nrm.setXYZ(base + i, nx, ny, nz);
+          continue;
+        }
+        const sx = ends.pos[i * 3];
+        const sy = ends.pos[i * 3 + 1];
+        const sz = ends.pos[i * 3 + 2];
+        pos.setXYZ(base + i, ex + wx * sx + dx * sy + nx * sz, ey + wy * sx + dy * sy + ny * sz, ez + wz * sx + dz * sy + nz * sz);
+        const qx = ends.nrm[i * 3];
+        const qy = ends.nrm[i * 3 + 1];
+        const qz = ends.nrm[i * 3 + 2];
+        nrm.setXYZ(base + i, wx * qx + dx * qy + nx * qz, wy * qx + dy * qy + ny * qz, wz * qx + dz * qy + nz * qz);
+      }
+    }
+    // The bow at the knot, facing back along the travel (toward the chase lens): x across the back, y up.
+    const knot = this.tails[0].pts[0];
+    const bow = this.bowS;
+    const bx = side.x;
+    const bz = side.z;
+    const kx = -this.travel.x;
+    const kz = -this.travel.z;
+    for (let i = 0; i < BOW_V; i++) {
+      if (!bow || i >= bow.count) {
+        pos.setXYZ(BOW_AT + i, knot.x, knot.y, knot.z);
+        nrm.setXYZ(BOW_AT + i, 0, 1, 0);
+        continue;
+      }
+      const sx = bow.pos[i * 3];
+      const sy = bow.pos[i * 3 + 1];
+      const sz = bow.pos[i * 3 + 2];
+      pos.setXYZ(BOW_AT + i, knot.x + bx * sx + kx * sz, knot.y + sy, knot.z + bz * sx + kz * sz);
+      const qx = bow.nrm[i * 3];
+      const qy = bow.nrm[i * 3 + 1];
+      const qz = bow.nrm[i * 3 + 2];
+      nrm.setXYZ(BOW_AT + i, bx * qx + kx * qz, qy, bz * qx + kz * qz);
     }
     pos.needsUpdate = true;
     nrm.needsUpdate = true;
+    // A four-tailed scarf's second pair: the same tails a hand lower, shorter, and turned out from the knot.
+    if (this.scarfTwin.visible) {
+      const m = this.scarfTwin.matrixWorld;
+      m.makeTranslation(-knot.x, -knot.y, -knot.z);
+      m.premultiply(this.twinM.makeRotationY(0.42 * this.flareSide));
+      m.premultiply(this.twinM.makeScale(0.8, 0.82, 0.8));
+      m.premultiply(this.twinM.makeTranslation(knot.x, knot.y - 0.1, knot.z));
+    }
   }
+
+  private readonly twinM = new Matrix4();
 }

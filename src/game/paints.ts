@@ -1,42 +1,62 @@
-// Sled paints (round 5): the garage's first shelf. A paint recolours a sled's body and wood, never its
-// runners, its trim or the rider's scarf and beanie, which stay the player's vermillion (ART.md section 1).
-// Paints are bought with gifts and change nothing in a race: they are a look, not an edge.
+// Sled finishes (round 5's paints, round 9's finishes): a finish is a base and a motif where the chase lens sees a
+// sled (the tail, the rails, the slats' ends, a round sled's rim and face), never one flat hex. A finish recolours a
+// sled's body and wood at their own value, so the grain and the hull's shading stay; the runners, the trim and the
+// rider's scarf and hat stay the player's vermillion (ART.md section 1). The tiers of a sled's track take its finish
+// (meshes.ts finishSled paints the sled and its tiers as one).
+//
+// Round 9's second pass: no navy and no near-ink ground (the coat owns ink navy, and a dark blue sled merged with it
+// into one mass at race distance), so today's Midnight and Basalt keep their ids under warm or mid grounds. The
+// months' chapter paints left the shelf (each chapter's third piece is an ornament); a save that holds one keeps it
+// as a plain finish. Ids never change: a save's paints are its finishes.
 //
 // Pure data: no DOM, render or audio imports.
 
-import { CHAPTER_EXTRAS, GARAGE_EXTRAS } from './almanac';
+import type { Source } from './garage';
+
+/** Where a finish's motif falls, in its accent (cream or ink): a pinstripe round the deck's edge, star specks over
+ *  the tail, a light frame round a dark deck, burnt scrolls at the slats' ends, a chequer band across the tail, a
+ *  hex lattice, two racing stripes, scrollwork along the rails, ruled lines like a page. */
+export type FinishMotif = 'none' | 'pinstripe' | 'stars' | 'twotone' | 'scroll' | 'chequer' | 'hex' | 'stripes' | 'gilt' | 'ruled';
 
 export interface Paint {
   id: string;
   name: string;
-  /** The body's colour (the wood's grain and the hull's shading are kept under it). */
+  blurb: string;
+  /** The ground's colour (the wood's grain and the hull's shading are kept under it); '' the natural wood. */
   hex: string;
   price: number;
+  motif: FinishMotif;
+  accent: 'cream' | 'ink';
+  source: Source;
 }
 
-/** No mint (ghosts), no rose (a grudge), no gold-white (your best), no vermillion (you): those are taken. */
+const SHOP: Source = { kind: 'shop' };
+
+/** No mint (ghosts), no rose (a grudge), no gold-white (your best), no vermillion (you), no ink navy (the coat). */
 export const PAINTS: readonly Paint[] = [
-  { id: 'natural', name: 'Natural', hex: '', price: 0 },
-  { id: 'pine', name: 'Pine Lacquer', hex: '#3E7A5C', price: 60 },
-  { id: 'glacier', name: 'Glacier', hex: '#9FC4E8', price: 80 },
-  { id: 'midnight', name: 'Midnight', hex: '#2A3570', price: 100 },
-  { id: 'plum', name: 'Plum', hex: '#7A4A8C', price: 120 },
-  { id: 'cocoa', name: 'Cocoa', hex: '#6A4636', price: 140 },
-  { id: 'snow', name: 'Snowfield', hex: '#E9ECF5', price: 180 },
-  { id: 'ash', name: 'Basalt', hex: '#3A3640', price: 220 },
+  { id: 'natural', name: 'Natural', blurb: 'Oiled wood: two browns and the grain', hex: '', price: 0, motif: 'none', accent: 'cream', source: { kind: 'free' } },
+  { id: 'pine', name: 'Pine Lacquer', blurb: 'Deep green lacquer, a cream pinstripe round the edge', hex: '#2F6A4E', price: 80, motif: 'pinstripe', accent: 'cream', source: SHOP },
+  { id: 'glacier', name: 'Glacier Enamel', blurb: 'Pale ice enamel under a dark rider, an ink pinstripe', hex: '#BFD8EC', price: 110, motif: 'pinstripe', accent: 'ink', source: SHOP },
+  { id: 'midnight', name: 'Midnight Stars', blurb: 'A warm night-black, cream stars across the tail', hex: '#3A2C2A', price: 150, motif: 'stars', accent: 'cream', source: SHOP },
+  { id: 'plum', name: 'Plum Two-Tone', blurb: 'Plum slats in a cream frame', hex: '#6E3F82', price: 200, motif: 'twotone', accent: 'cream', source: SHOP },
+  { id: 'cocoa', name: 'Burnt Scroll', blurb: 'Dark stain with scrolls burnt into the slats\' ends', hex: '#6A4636', price: 250, motif: 'scroll', accent: 'ink', source: SHOP },
+  { id: 'snow', name: 'Finish Chequer', blurb: 'White, an ink chequer band across the tail', hex: '#EEF0F6', price: 310, motif: 'chequer', accent: 'ink', source: SHOP },
+  { id: 'ash', name: 'Basalt Hex', blurb: 'Dark slate under a cream hex lattice', hex: '#57535F', price: 380, motif: 'hex', accent: 'cream', source: SHOP },
+  { id: 'stripes', name: 'Twin Stripe', blurb: 'Ochre with two broad cream racing stripes', hex: '#9A6A2E', price: 480, motif: 'stripes', accent: 'cream', source: SHOP },
+  { id: 'gilt', name: 'Gilt Scroll', blurb: 'Oxblood lacquer, cream scrollwork along the rails', hex: '#5E2430', price: 650, motif: 'gilt', accent: 'cream', source: SHOP },
+  { id: 'almanacdusk', name: 'Almanac Pages', blurb: 'A cream deck ruled in ink like a page of the Almanac', hex: '#EADBC0', price: 0, motif: 'ruled', accent: 'ink', source: { kind: 'almanac', page: 38 } },
 ];
 
+/** The months' chapter paints of round 8, kept for a save that holds one (never sold, never found again). */
+const CHAPTER_PAINT_HEX = ['#5B7F6A', '#8FB4D9', '#3F3A66', '#C79AB0', '#5A3B36', '#A8C6D8', '#6B4A3A', '#B49AC0', '#7A6A3A', '#3A3A52', '#D8DEE9', '#4A3550'];
+const CHAPTER_PAINT_NAMES = ['First Light', 'The Long Frost', 'Thaw Lanterns', 'Blossom Run', 'Ash and Ember', 'Midsummer Snow', 'Night Market', 'Paper Cranes', 'Harvest Moon', 'The Haunting', 'First Snow', 'Lantern Night'];
+export const KEPT_PAINTS: readonly Paint[] = CHAPTER_PAINT_HEX.map((hex, i) => ({ id: `ch${i + 1}paint`, name: `${CHAPTER_PAINT_NAMES[i]} Paint`, blurb: 'A chapter paint of round 8, kept', hex, price: 0, motif: 'none', accent: 'cream', source: { kind: 'chapter', month: i + 1 } }));
+
 export function paintById(id: string | null | undefined): Paint {
-  return PAINTS.find((p) => p.id === id) ?? extraPaint(id) ?? PAINTS[0];
+  return PAINTS.find((p) => p.id === id) ?? KEPT_PAINTS.find((p) => p.id === id) ?? PAINTS[0];
 }
 
-/** A paint the Almanac or a chapter adds (almanac.ts), or null. */
-function extraPaint(id: string | null | undefined): Paint | null {
-  const e = [...GARAGE_EXTRAS, ...CHAPTER_EXTRAS].find((x) => x.id === id && x.shelf === 'paint');
-  return e ? { id: e.id, name: e.name, hex: String(e.look.hex), price: e.price } : null;
-}
-
-/** A paint a save may hold: the shelf's own or an added one. */
+/** A finish a save may hold: the shelf's own, the Almanac's, or a kept chapter paint. */
 export function isPaint(id: unknown): id is string {
-  return typeof id === 'string' && (PAINTS.some((p) => p.id === id) || extraPaint(id) !== null);
+  return typeof id === 'string' && (PAINTS.some((p) => p.id === id) || KEPT_PAINTS.some((p) => p.id === id));
 }
