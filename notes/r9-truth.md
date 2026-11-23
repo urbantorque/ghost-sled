@@ -60,6 +60,11 @@ written over it (a reload starts the fixture again). `tests/devsave.test.ts` loa
 store and checks the days, and that the real save is untouched. `?save=fresh` is a first visit without touching the
 real save.
 
+**The release does not grow.** Built twice in the heavy slot with `npx vite build`: `round-9` as it was (aba7931,
+extracted to `dist/r9-truth-basesrc`) and this branch. Both are 35 files and 63,260,913 bytes (60.33 MiB), and every
+file's md5 is the same: the release is byte for byte what it was. No file in `dist` holds `gs-fixture`, `useFixture`,
+`shiftSave` or `r9-fixture`. The first download is therefore unchanged too.
+
 ## 2. Captures
 
 (filled as the parts land)
@@ -73,3 +78,19 @@ real save.
 ## 6. What the main lane must decide
 
 ## 7. How to re-run everything
+
+- **Fixtures** (heavy slot, 50 s): `npx tsx scripts/playtest/r9-fixtures.ts` (`--runs`, `--pilots`, `--out`). Their
+  test: `npx vitest run tests/devsave.test.ts`.
+- **A fixture in the game:** `npx vite --port 4900 --host 127.0.0.1 --strictPort`, then
+  `http://127.0.0.1:4900/?debug&save=mid-50` (any name in `scripts/playtest/fixtures`; `&tier=high`, `&autoride=1`,
+  `&m=2` and the other dev switches as usual). Dev server only: a build or a preview ignores it.
+- **Captures** (one browser, through the slot): `bash scripts/playtest/r9-truth.sh <desk|phone> <name>="<config>" ...`,
+  a config being `{ part: 'titles'|'sheets'|'results'|'again'|'crawl', stages: [...], scenario, link, linkStages, n }`
+  (r9-truth.js's header says what each part shoots). Raw JSON lands in `shots/r9/truth/raw/<form>-<name>.json`, the
+  frames in `shots/r9/truth/<form>-<stage>-<screen>.png`.
+- **The bars:** `npx tsx scripts/playtest/r9-screenbars.ts` merges the raw files into `shots/r9/truth/desk.json` and
+  `phone.json` (each shot with its `figures`: words, primaries, look-alikes, lone icons, bare figures, repeats,
+  loading) and prints every bar with today's figure; it exits 0. The pure bars: `npx vitest run tests/r9screens.test.ts`.
+- **Counting a prototype the same way:** r9-truth.js's `MEASURE` runs on any page (`page.evaluate(MEASURE, { sel:
+  '<root>' })`); without the game it counts everything under `.gs-ui` or the body. Its output goes to
+  r9-screenbars.ts's `shotFigures`.
