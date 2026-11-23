@@ -34,12 +34,27 @@ Read this file first, then your own brief in `notes/r9-briefs/` (your brief wins
 
 ## What holds for every lane
 
-- **Milestone 0 changes nothing a player sees.** It measures, designs and prototypes. Dev-only switches, fixtures,
-  scripts, tests and prototype pages are fine; nothing new may reach the release's first download, and the release's
-  behaviour for a player does not change. Prototype pages live under `prototypes/r9/` (served by the dev server) or in
-  the UI harness (`ui-harness.html`), never in the game's own boot path.
-- **The sim is closed in milestone 0.** Nobody edits `src/sim`, `src/bot` or `src/data/ghosts`. Reading them is
-  expected. Render, audio and UI never feed back into the sim.
+- **Milestone 0 is done and the owner's word is given** (DECISIONS 388 to 393: the Old Run, Gullhaven and
+  Gablefall; every default of 392). The build lanes change what a player sees, toward the designs milestone 0 made
+  and the decisions 392 records. Read 388 to 393 first: they are your brief's ground.
+- **The sim opens once, and only for the mountains.** Milestones 1 and 2 never edit `src/sim`, `src/bot` or
+  `src/data/ghosts`. Only the groundwork lane (`r9-ground`) and the mountain lanes after it do, additively: new
+  entries under new ids, a shared constant per mountain only where the five keep their exact value, the five's seeds,
+  pools and records byte for byte (the determinism, fairness, pool and migration suites prove it). Render, audio and
+  UI never feed back into the sim.
+- **Nothing new before the first frame.** New screens, rooms and the garage's place load on demand (`import()`);
+  the first download stays under 20 MB (11.29 MB at round 8) and the first frame does not get slower.
+- **Shared files.** `src/game/app.ts`, `save.ts`, `spineview.ts`, `src/ui/contract.ts` and `ui.ts` are touched by
+  more than one lane. In them keep to your own system's functions and types, add rather than rewrite, never reformat
+  or reorder what is not yours, and list every hunk you made there in your notes; the main lane merges. `save.ts`
+  gains only optional fields read by sanitising readers, and an old save always loads.
+- **The yardsticks.** The save fixtures (`?debug&save=fresh`, `mid-1` to `mid-100`, `novice-1` to `novice-100`;
+  dev server only, your real save untouched) show every stage; `scripts/playtest/r9-truth.js` (through `r9-truth.sh`)
+  shoots and counts every screen; `scripts/playtest/r9-screenbars.ts` and `tests/r9screens.test.ts` hold the screen
+  bars; `scripts/playtest/r9-garage-economy.ts` the economy; `scripts/playtest/r9-courses.ts` the mountain bars.
+  When your work makes an `it.fails` bar pass, turn it into a plain test in the same commit.
+- **Prototype pages** stay under `prototypes/r9/` as milestone 0 left them; the game never imports from there (copy
+  what you take into `src`).
 - **Colour roles are locked** (ART.md 1): the rider owns vermillion, ghosts mint, marigold is the lantern's and the
   gifts'. Hazards are never warm and never mint. Original work only: no existing game's names, characters, look,
   levels or music. Everything procedural: no image, model or font files in what ships (a prototype page may use a
@@ -74,7 +89,11 @@ Read this file first, then your own brief in `notes/r9-briefs/` (your brief wins
 - Serve with `npx vite --port <your port> --host 127.0.0.1 --strictPort` (dev) or build with
   `npx vite build --outDir dist/r9-<lane> --emptyOutDir` (heavy slot) and `npx vite preview --outDir dist/r9-<lane>
   --port <your port> --host 127.0.0.1 --strictPort`, in the background. Stop your server when you finish. Ports: truth
-  4900, measure 4910, concepts 4920, screens 4930, garage 4940.
+  4900, measure 4910, concepts 4920, screens 4930, garage 4940; the build lanes: ui 4950, shop 4960, ground 4970, the
+  mountains 4980, 4990 and 5000.
+- **UI work** uses the design-taste-frontend skill (ART.md and these rules win where they differ), is looked at under
+  playwright on a desk and a phone with the console read, and is checked against the web-design-guidelines skill
+  before it is called done.
 
 ## How work is judged
 
