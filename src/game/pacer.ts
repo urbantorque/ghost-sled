@@ -126,9 +126,9 @@ export function inReach(real: number | null, yours: number): boolean {
   return real !== null && real >= yours * REACH;
 }
 
-/** The riders are still reading you at z. */
-export function reading(z: number, finishZ: number): boolean {
-  return z < finishZ - PACE_OPEN;
+/** The riders are still reading you at z (round 9: until the course's own last stage, `open` metres long). */
+export function reading(z: number, finishZ: number, open = PACE_OPEN): boolean {
+  return z < finishZ - open;
 }
 
 /** The next rate from the current one and the rate that would land a rider on its place. */

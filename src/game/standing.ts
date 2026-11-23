@@ -1,4 +1,4 @@
-import { STAGE_LENGTHS } from '../sim/course';
+import { STAGE_LENGTHS, finishZFor } from '../sim/course';
 
 // The race's one order. Finishers rank by finish time, then riders who did not finish rank by
 // distance. Every comparator, every row and every line of copy goes through here, so no two places
@@ -7,8 +7,13 @@ import { STAGE_LENGTHS } from '../sim/course';
 //
 // Pure: no DOM, render or audio imports.
 
-/** The finish line, metres (every course runs the same stages). */
+/** The five's finish line, metres, and every Daily's and Cup's. Round 9's mountains have their own: finishZOf. */
 export const FINISH_Z = STAGE_LENGTHS.reduce((a, b) => a + b, 0);
+
+/** A seed's finish line, metres (round 9: a new mountain's course is its own length). */
+export function finishZOf(seed: number): number {
+  return finishZFor(seed);
+}
 
 export interface Standing {
   /** Finish time in seconds, or null for a rider who did not finish. */
@@ -44,8 +49,9 @@ export function placeAtFinish(tracks: ReadonlyArray<{ ready: boolean; finishTick
 }
 
 /** A record's standing from its header: a finished run's `ticks` is the tick it crossed the line. */
-export function recordStanding(r: { ticks: number; distance: number }): Standing {
-  return { time: r.distance >= FINISH_Z && r.ticks > 0 ? r.ticks / 60 : null, distance: r.distance };
+export function recordStanding(r: { ticks: number; distance: number; seed?: number }, finishZ = r.seed !== undefined ? finishZOf(r.seed) : FINISH_Z): Standing {
+  // (Round 9: on its own course's line; a record carries its seed.)
+  return { time: r.distance >= finishZ && r.ticks > 0 ? r.ticks / 60 : null, distance: r.distance };
 }
 
 const NF = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });

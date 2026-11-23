@@ -2,7 +2,7 @@ import { MOUNTAINS } from '../sim/mountains';
 import { type RunRecord, headerFromString, recordFromString } from '../sim/replay';
 import { SIM_VERSION } from '../sim/sim';
 import type { RideMountain } from './cup';
-import { FINISH_Z, recordStanding } from './standing';
+import { finishZOf, recordStanding } from './standing';
 
 // Reading a challenge link, whichever way it arrived (`?c=` or the platform's invite param). A link
 // from this build is a friend's ghost to race. A link from an older build cannot ride this course, but
@@ -40,8 +40,8 @@ export function readChallengeLink(raw: string): ChallengeLink {
 }
 
 /** Where an old link's band stands on this course: its distance, clamped to the finish. */
-export function targetZ(o: Pick<OldLink, 'distance'>): number {
-  return Math.min(o.distance, FINISH_Z);
+export function targetZ(o: Pick<OldLink, 'distance' | 'seed'>): number {
+  return Math.min(o.distance, finishZOf(o.seed));
 }
 
 /** The mountain a link's run was ridden on, among what can be ridden today (the four, today's Daily,

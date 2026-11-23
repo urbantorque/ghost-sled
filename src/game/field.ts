@@ -4,7 +4,8 @@ import { recordFromString } from '../sim/replay';
 import type { GhostKind } from '../ui/contract';
 import type { GhostRole } from './beats';
 import type { PoolGhostData } from './ghostdata';
-import { FINISH_Z, predictedTime, recordStanding } from './standing';
+import { MOUNTAINS } from '../sim/mountains';
+import { FINISH_Z, finishZOf, predictedTime, recordStanding } from './standing';
 
 // The race field: which ghosts ride a run. A run has an end now, so the field is built around when
 // this player would reach it (the anchor, anchorFor: their predicted finish time) rather than where
@@ -76,6 +77,8 @@ export interface FieldInput {
   key?: string;
   /** Riders who may not ride yet, by name (round 8: The Hollow King before his duel, twelve.ts withheldRiders). */
   withheld?: readonly string[];
+  /** The course's finish line (round 9: a new mountain's own length; absent, the five's). */
+  finishZ?: number;
 }
 
 export interface FieldPick {
@@ -144,9 +147,17 @@ export const FIELD_TIE_S = 1.5;
  * carried to the line. (A pool that does not record finishTick reads a finisher's `ticks`, which
  * includes however long the generator kept the run going past the line.)
  */
-export function poolTime(g: Pick<PoolGhostData, 'distance' | 'ticks' | 'finishTick'>): number {
+export function poolTime(g: Pick<PoolGhostData, 'distance' | 'ticks' | 'finishTick'>, finishZ = FINISH_Z): number {
   if (typeof g.finishTick === 'number' && g.finishTick > 0) return g.finishTick / 60;
-  return predictedTime(g.distance, g.ticks / 60);
+  return predictedTime(g.distance, g.ticks / 60, finishZ);
+}
+
+/** A save key's course length (round 9): its mountain's own, through the night and mirror prefixes; the five's for a
+ *  Daily, a Cup and a Trial's key (which names a week, not a mountain). */
+export function finishZOfKey(key: string): number {
+  const id = key.replace(/^(?:night:)?(?:mirror:)?/, '');
+  const m = MOUNTAINS.find((q) => q.id === id);
+  return m ? finishZOf(m.seed) : FINISH_Z;
 }
 
 function median(xs: number[]): number {
@@ -168,14 +179,22 @@ function runs(xs: unknown): number[] {
  *  time from the pool. Clamped to 100 to 420 s. */
 export function anchorFor(runTimes: Readonly<Record<string, number[]>>, key: string): number {
   const own = runs(runTimes?.[key]).slice(-ANCHOR_RUNS);
+  // (Round 9: another mountain's times are read at this one's length, and the bounds scale with it: the five are all
+  // 4,500 m, so on them every ratio is 1.)
+  const fz = finishZOfKey(key);
   let a = 0;
   if (own.length) a = Math.min(median(own), ANCHOR_LAST * own[own.length - 1]);
   else {
     const others: number[] = [];
-    for (const k of Object.keys(runTimes ?? {})) if (k !== key) others.push(...runs(runTimes[k]).slice(-ANCHOR_RUNS));
+    for (const k of Object.keys(runTimes ?? {})) {
+      if (k === key) continue;
+      const r = fz / finishZOfKey(k);
+      for (const t of runs(runTimes[k]).slice(-ANCHOR_RUNS)) others.push(t * r);
+    }
     if (others.length) a = ANCHOR_NEW * median(others);
   }
-  return a > 0 ? Math.min(ANCHOR_MAX, Math.max(ANCHOR_MIN, a)) : 0;
+  const s = fz / FINISH_Z;
+  return a > 0 ? Math.min(ANCHOR_MAX * s, Math.max(ANCHOR_MIN * s, a)) : 0;
 }
 
 /** Your last predicted finish times on a mountain key, oldest first (FieldInput.recent). */
@@ -192,10 +211,12 @@ export function fieldCount(extra: number, recent: readonly number[]): number {
 
 /** The pace a field laid across your runs is read at: the anchor, or the median of your last three
  *  when that is quicker (a player who is improving run by run is not raced on last week's pace). */
-export function fieldPace(anchor: number, recent: readonly number[]): number {
+export function fieldPace(anchor: number, recent: readonly number[], finishZ = FINISH_Z): number {
   const last = runs(recent).slice(-FIELD_SLOW_RUNS);
   if (!last.length) return anchor;
-  const m = Math.min(ANCHOR_MAX, Math.max(ANCHOR_MIN, median(last)));
+  // (Round 9: the bounds at the course's own length.)
+  const s = finishZ / FINISH_Z;
+  const m = Math.min(ANCHOR_MAX * s, Math.max(ANCHOR_MIN * s, median(last)));
   return anchor > 0 ? Math.min(anchor, m) : m;
 }
 
@@ -298,7 +319,7 @@ function check(record: string | undefined | null): { distance: number; time: num
   if (!record) return null;
   try {
     const r = recordFromString(record);
-    return { distance: r.distance, time: recordStanding(r).time ?? predictedTime(r.distance, r.ticks / 60) };
+    return { distance: r.distance, time: recordStanding(r).time ?? predictedTime(r.distance, r.ticks / 60, finishZOf(r.seed)) };
   } catch {
     return null;
   }
@@ -339,8 +360,10 @@ export function pickField(i: FieldInput): FieldPick[] {
 
   // The pool's candidates (your best and the friend never ride twice; the grudge may be picked here),
   // fastest first, each with its predicted time.
+  // (Round 9: the course's own line; the five's when the input does not say.)
+  const fz = i.finishZ ?? FINISH_Z;
   const times = new Map<PoolGhostData, number>();
-  for (const g of i.pool) times.set(g, poolTime(g));
+  for (const g of i.pool) times.set(g, poolTime(g, fz));
   const timeOf = (g: PoolGhostData): number => times.get(g) ?? 0;
   const cands = fieldCandidates(i.pool, i.mood, i.event, count + 3)
     .filter((g) => !i.withheld?.includes(g.name) && g.record !== you?.record && g.record !== friend?.record && timeOf(g) > 0)
@@ -348,9 +371,9 @@ export function pickField(i: FieldInput): FieldPick[] {
   const first = !(Number.isFinite(i.anchor) && i.anchor > 0);
   const recent = runs(i.recent);
   const paced = first && i.kind === 'pool' && i.key !== undefined ? FIRST_RUN_PACE[i.key] : undefined;
-  const a = first ? (paced ?? ANCHOR_DEFAULT) : recent.length ? fieldPace(i.anchor, recent) : i.anchor;
+  const a = first ? (paced ?? ANCHOR_DEFAULT * (fz / FINISH_Z)) : recent.length ? fieldPace(i.anchor, recent, fz) : i.anchor;
 
-  const wreckOf = (distance: number): number | null => (distance >= FINISH_Z ? null : distance);
+  const wreckOf = (distance: number): number | null => (distance >= fz ? null : distance);
   const used = new Set<PoolGhostData>();
   const spots: Spot[] = [];
   if (you && youRec) spots.push({ time: youRec.time, wreck: wreckOf(you.distance) });
@@ -456,7 +479,7 @@ export function pickField(i: FieldInput): FieldPick[] {
   if (you) out.push({ name: you.name, kind: 'you', score: you.score, record: you.record, distance: you.distance, time: youRec!.time });
   if (tail) out.push(tail);
   if (friend) out.push({ name: friend.name, kind: 'friend', score: friend.score, record: friend.record, distance: friendRec!.distance, time: friendRec!.time });
-  const rival = rivalOf(out, a, promised?.record ?? null);
+  const rival = rivalOf(out, a, promised?.record ?? null, fz);
   if (rival) rival.rival = true;
   // Only here: the Daily and the Cup share their field, and a named rider is a promise.
   if (first && i.kind === 'pool') for (const p of out) if (p.kind === 'pool' && p.role && p.record !== promised?.record) p.reads = true;
@@ -469,7 +492,7 @@ export function pickField(i: FieldInput): FieldPick[] {
  * finisher goes first, so the rival is still there at the last line. With nobody quicker, the quickest
  * rider in the field. Never your own best: that has its own figure.
  */
-export function rivalOf(field: FieldPick[], anchor: number, promised: string | null = null): FieldPick | null {
+export function rivalOf(field: FieldPick[], anchor: number, promised: string | null = null, finishZ = FINISH_Z): FieldPick | null {
   const named = promised ? field.find((f) => f.record === promised) : undefined;
   if (named) return named;
   const friend = field.find((p) => p.kind === 'friend');
@@ -477,7 +500,7 @@ export function rivalOf(field: FieldPick[], anchor: number, promised: string | n
   const grudge = field.find((p) => p.kind === 'grudge');
   if (grudge) return grudge;
   const rows = field.filter((p) => p.kind !== 'you' && typeof p.time === 'number');
-  const riders = rows.filter((p) => (p.distance ?? 0) >= FINISH_Z);
+  const riders = rows.filter((p) => (p.distance ?? 0) >= finishZ);
   const from = riders.length > 0 ? riders : rows;
   let best: FieldPick | null = null;
   for (const p of from) if (p.time! < anchor && (!best || p.time! > best.time!)) best = p;

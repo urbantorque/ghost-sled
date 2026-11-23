@@ -78,7 +78,7 @@ export interface Graveyard {
 export type GraveRider = { distance: number; ticks?: number; score?: number; falls?: readonly number[] };
 
 /** Every fall in a pool, nearest first, with who fell. */
-function fallsIn(pool: ReadonlyArray<GraveRider>): Array<{ z: number; rider: number }> {
+function fallsIn(pool: ReadonlyArray<GraveRider>, finishZ: number): Array<{ z: number; rider: number }> {
   const out: Array<{ z: number; rider: number }> = [];
   // (A slow rider carries its base's run whole: the same score, distance and falls under a new name.)
   const seen = new Set<string>();
@@ -87,8 +87,8 @@ function fallsIn(pool: ReadonlyArray<GraveRider>): Array<{ z: number; rider: num
       const run = `${g.score}/${g.distance}/${g.falls.join()}`;
       if (seen.has(run)) return;
       seen.add(run);
-      for (const z of g.falls) if (Number.isFinite(z) && z > 0 && z < FINISH_Z) out.push({ z, rider });
-    } else if (Number.isFinite(g.distance) && g.distance > 0 && g.distance < FINISH_Z && !((g.ticks ?? 0) >= CAPPED_TICKS)) out.push({ z: g.distance, rider });
+      for (const z of g.falls) if (Number.isFinite(z) && z > 0 && z < finishZ) out.push({ z, rider });
+    } else if (Number.isFinite(g.distance) && g.distance > 0 && g.distance < finishZ && !((g.ticks ?? 0) >= CAPPED_TICKS)) out.push({ z: g.distance, rider });
   });
   return out.sort((a, b) => a.z - b.z);
 }
@@ -101,8 +101,8 @@ function fallsIn(pool: ReadonlyArray<GraveRider>): Array<{ z: number; rider: num
  * (bundledGraveyards): they are skipped while the list has others left, and this mountain's names are
  * added to it.
  */
-export function graveyards(pool: ReadonlyArray<GraveRider>, key: string, taken?: Set<string>): Graveyard[] {
-  const d = fallsIn(pool);
+export function graveyards(pool: ReadonlyArray<GraveRider>, key: string, taken?: Set<string>, finishZ = FINISH_Z): Graveyard[] {
+  const d = fallsIn(pool, finishZ);
   const spots: Array<{ z: number; fell: number }> = [];
   while (spots.length < GRAVE_MAX) {
     let best: { z: number; fell: number } | null = null;
@@ -146,9 +146,9 @@ export function graveyards(pool: ReadonlyArray<GraveRider>, key: string, taken?:
  * name stands on two mountains ('Bonepile Bend' was both Pinecrest's 370 m cairn and Sakura's 291 m
  * one). Deterministic: the same pools always give the same names.
  */
-export function bundledGraveyards(mountains: ReadonlyArray<{ key: string; pool: ReadonlyArray<GraveRider> }>): Map<string, Graveyard[]> {
+export function bundledGraveyards(mountains: ReadonlyArray<{ key: string; pool: ReadonlyArray<GraveRider>; finishZ?: number }>): Map<string, Graveyard[]> {
   const taken = new Set<string>();
   const out = new Map<string, Graveyard[]>();
-  for (const m of mountains) out.set(m.key, graveyards(m.pool, m.key, taken));
+  for (const m of mountains) out.set(m.key, graveyards(m.pool, m.key, taken, m.finishZ));
   return out;
 }

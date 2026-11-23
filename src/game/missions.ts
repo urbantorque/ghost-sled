@@ -48,6 +48,8 @@ export interface RunSummary {
   tumbles: number;
   wallRides: number;
   grinds: number;
+  /** The course's finish line (round 9: a new mountain's own length; absent, the five's 4,500 m). */
+  finishZ?: number;
 }
 
 /** How a progress figure reads: metres, seconds, m/s, spin degrees (half turns x 180) or a count. */
@@ -75,8 +77,9 @@ const NF = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 /** 1600 -> "1,600"; 1.5 -> "1.5"; 2 -> "2". */
 const n = (v: number): string => NF.format(v);
 const plural = (v: number, one: string, many: string): string => (v === 1 ? one : many);
-/** A finish faster than `s` seconds: met or not (a slower time is no progress toward it). */
-const under = (s: number) => (r: RunSummary): number => (r.finished && r.finishSeconds < s ? 1 : 0);
+/** A finish faster than `s` seconds: met or not (a slower time is no progress toward it). Only on a course of the five's
+ *  length (round 9): a shorter mountain's time is not a quicker run. */
+const under = (s: number) => (r: RunSummary): number => (r.finished && r.finishSeconds < s && (r.finishZ ?? FINISH_Z) === FINISH_Z ? 1 : 0);
 
 const DEFS: MissionDef[] = [
   { id: 'dist800', text: '', target: 800, reward: 25, metric: (r) => r.distance, grow: 'x2', cap: FINISH_Z, unit: 'm', say: (t) => `Ride ${n(t)} m in one run` },

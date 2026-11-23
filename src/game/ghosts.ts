@@ -3,7 +3,7 @@ import { type RiderPoint, type RivalEvent, RivalWatch, draftsOn } from '../sim/r
 import { riderByName } from '../bot/roster';
 import type { GhostKind } from '../ui/contract';
 import type { GhostRole } from './beats';
-import { AIR_RATE, OPENER_END_T, OPENER_HEAD, OPENER_AIR, openerLead, openerOf, openerRate, PACE_AIM, PACE_EVERY, PACE_FROM, easeSpeed, ownOnMap, paceRate, playedOnMap, reading, slowMap, stringOffset } from './pacer';
+import { AIR_RATE, OPENER_END_T, OPENER_HEAD, OPENER_AIR, openerLead, openerOf, openerRate, PACE_AIM, PACE_EVERY, PACE_FROM, easeSpeed, ownOnMap, paceRate, playedOnMap, PACE_OPEN, reading, slowMap, stringOffset } from './pacer';
 import { FINISH_Z, type Standing } from './standing';
 import {
   F_AIRPITCH,
@@ -456,7 +456,7 @@ export class GhostManager {
 
   /** A first run's riders read you (pacer.ts). Cheap and rare: once a quarter of a second, and never
    *  with no rider reading. riding is false once your run is over: they ride on at the rate they had. */
-  pace(tick: number, z: number, riding: boolean): void {
+  pace(tick: number, z: number, riding: boolean, finishZ = FINISH_Z, open = PACE_OPEN): void {
     if (this.readers === 0 || tick < this.paceAt) return;
     this.paceAt = tick + PACE_EVERY;
     // (The opener reads your speed now, not the eased one: it looks over its shoulder.)
@@ -465,7 +465,8 @@ export class GhostManager {
     this.openerPeak = Math.max(this.openerPeak, this.paceV);
     this.paceZ = z;
     this.paceTick = tick;
-    const reads = riding && reading(z, FINISH_Z);
+    // (Round 9: the course's own line and last stage.)
+    const reads = riding && reading(z, finishZ, open);
     const aim = z + (this.paceV * PACE_AIM) / 60;
     let i = 0;
     for (const t of this.tracks) {
@@ -484,7 +485,7 @@ export class GhostManager {
         const ahead = this.zAt(t, tick) > z;
         waiting = openerLead(vNow, this.openerPeak) < 0;
         t.rate = openerRate(t.rate, ahead ? (this.ownAt(t, z + (vNow * PACE_AIM) / 60 + openerLead(vNow, this.openerPeak), s) - own) / PACE_AIM : t.pace, ahead, t.pace, waiting);
-      } else t.rate = reads ? paceRate(t.rate, (this.ownAt(t, aim + stringOffset(k, this.readers, aim, FINISH_Z), s) - own) / PACE_AIM) : paceRate(t.rate, t.pace);
+      } else t.rate = reads ? paceRate(t.rate, (this.ownAt(t, aim + stringOffset(k, this.readers, aim, finishZ), s) - own) / PACE_AIM) : paceRate(t.rate, t.pace);
       const flying = (t.frames[s * FRAME_STRIDE + F_FLAGS] & FLAG_GROUNDED) === 0;
       t.warp = { from: tick, at: own, rate: flying ? Math.max(t.rate, waiting ? OPENER_AIR : AIR_RATE) : t.rate };
       if (!t.warps) {
