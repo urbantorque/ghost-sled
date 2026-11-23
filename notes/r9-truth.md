@@ -67,18 +67,21 @@ file's md5 is the same: the release is byte for byte what it was. No file in `di
 
 ## 2. Captures
 
-**Status (kept current):** desk done (titles at all eleven stages with the Cup, Trial and Daily picked and a
-challenge link; results for a first finish, a duel won and lost, the Daily, the Cup, a Trial and the Long Night
-between legs and at its end, each with Details; every sheet and popover at mid-1, 5, 20, 50, 100 and novice-50, pause
-and photo mode; Run Again; the crawl at mid-50 and mid-5). Being redone on desk with the final counting rules (titles,
-sheets, crawl): the counts below may move by a lone icon or a repeat. **The crash and the phone are still running.**
+**Status:** desk and phone done: the title at all eleven stages (after 3 s, as a player meets it, and once the rivals
+are in), with the Cup, the Trial (mid-100) and the Daily picked and a friend's challenge link (fresh, mid-20); the
+results for a first finish, a crash, a duel won and lost, the Daily, the Cup, a Trial and the Long Night (between its
+legs and at its end), each at the first view and Details; every garage shelf, the Almanac, the album, missions, medals,
+the flame's calendar, The Twelve and settings at mid-1, 5, 20, 50, 100 and novice-50, with pause and photo mode in a
+run; Escape and the pad's B on each; Run Again timed; the crawl of the title's doors at mid-50 and mid-5 (desk also
+mid-100). Seen by me as well as counted: the frames named in sections 2 and 5; the rest only the script has read.
 
 Where: frames `C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r9/truth/<form>-<stage>-<screen>.png` (for example
-`desk-mid-50-title.png`, `desk-mid-50-title-ready.png`, `desk-mid-20-results-duel-lost.png`, `desk-mid-50-garage-Hats.png`,
-`desk-mid-50-twelve.png`), the counts in `shots/r9/truth/desk.json` and `phone.json` (one per form factor: every shot
-with its visible text chunks, its controls and `figures`), and each part's raw output in `shots/r9/truth/raw/`.
-Desk is 1280x720 at High, phone 390x844 DPR 2 at Medium, both headless, on the dev server with the fixtures, the origin
-loaded once before anything was shot. The console was clean in every part (no errors, no warnings).
+`desk-mid-50-title.png`, `phone-mid-50-title-ready.png`, `desk-mid-20-results-duel-lost.png`,
+`phone-mid-5-results-crash.png`, `desk-mid-50-garage-Hats.png`, `desk-mid-50-twelve.png`); the counts in
+`shots/r9/truth/desk.json` and `phone.json` (one per form factor: every shot with its visible text chunks, its
+controls and its `figures`, and the sheets' Escape and B, Run Again and the crawl); each part's raw output in
+`shots/r9/truth/raw/`. Desk is 1280x720 at High, phone 390x844 DPR 2 at Medium, headless, on the dev server with the
+fixtures, the origin loaded once before anything was shot. No console error or warning in any part.
 
 **How it counts** (r9-truth.js `MEASURE`, r9-screenbars.ts): a word is a whitespace token with a letter or a digit
 in a text node a reader can see (not `display:none` or hidden, not `.gs-sr`, no ancestor under 0.15 opacity, in the
@@ -86,85 +89,103 @@ viewport, not scrolled out of a clipping parent; on a sheet only the sheet's tex
 word each; "·" is none. CSS-drawn text and the canvas are not counted. A control is a button, tab, link or input seen
 the same way: its accessible name, whether it carries `gs-btn-primary`, whether its fill is the primary's vermillion
 (a look-alike), and whether it shows no text (a lone icon). The dev server's mock platform offers rewarded ads (Double
-Gifts, a revive, a midgame ad) that the published build does not: they are left out of every count.
+Gifts, Revive, a midgame ad) that the published build never shows: they are left out of every count. A popover's
+shot counts the title around it too; its own words are given apart. The phone's Details scroll, so only the part on
+screen is counted there.
 
-**Today, desk** (the full table per shot is in section 8; `--md` prints it):
+**The title** (words after 3 s, and once the rivals are in; then controls, primaries, lone icons, bare figures,
+repeats, and whether "Finding rivals…" showed):
 
-| screen | run 1 | run 5 | run 20 | run 50 | run 100 |
+| title | run 1 | run 5 | run 20 | run 50 | run 100 |
 |---|---|---|---|---|---|
-| title words, mid (once rivals are in) | 111 (113) | 108 (110) | 118 (120) | 115 (117) | 119 (121) |
-| title words, novice | 105 (107) | 109 (111) | 111 (113) | 120 (122) | 122 (124) |
-| title controls / primaries / lone icons | 21 / 1 / 2 | | | 21 / 1 / 2 | |
-| title bare figures (mid) | 9 | 12 | 13 | 12 | 13 |
-| title repeats (mid) | 4 | 3 | 3 | 3 | 2 |
-| "Finding rivals…" at 3 s | yes | yes | yes | yes | yes |
+| desk, mid: words | 111 (113) | 108 (110) | 118 (120) | 115 (117) | 119 (121) |
+| desk, novice: words | 105 (107) | 109 (111) | 111 (113) | 120 (122) | 122 (124) |
+| desk, mid: controls / primaries / lone icons / bare / repeats / loading | 16/1/1/6/4/yes | 17/1/1/9/3/yes | 20/1/1/10/3/yes | 20/1/1/10/3/yes | 20/1/1/10/2/yes |
+| phone, mid: words | 61 (63) | 57 (57) | 58 (58) | 59 (57) | 74 (72) |
+| phone, novice: words | 59 (59) | 61 (61) | 59 (59) | 66 (64) | 66 (64) |
+| phone, mid: controls / primaries / lone icons / bare / repeats / loading | 14/1/0/3/2/yes | 14/1/0/4/1/yes | 18/1/1/5/2/yes | 17/1/0/5/2/yes | 18/1/1/5/1/yes |
 
-The fresh title: 18 words, 2 controls (Ride, and Mute as a lone icon), no bare figure, no repeat. With a friend's
-challenge link: one more line.
+The fresh title: 18 words on desk and 17 on phone, two controls (Ride, and Mute as a lone icon), no bare figure, no
+repeat. A friend's challenge link keeps it at 18 ("Racing Elif-346's ghost 2:13.4 on Pinecrest", Accept) and adds one
+line to a returning title. The phone shows about half the desk's words because its strip shows fewer cards and The
+Twelve's card drops its line; it stacks the Daily's and the Cup's cards and the strip over the rider
+(`phone-mid-50-title-ready.png`: the rider's head sits behind the two cards).
 
-| results, first view (Details) | words | controls | bare figures | repeats |
+**The results** (first view; Details in brackets):
+
+| results | desk words | desk controls | desk bare | phone words | phone controls | phone bare |
+|---|---|---|---|---|---|---|
+| first finish (fresh) | 79 (175) | 5 (9) | 9 (11) | 64 (68) | 5 | 6 |
+| crash (mid-5) | 75 (113) | 7 | 7 | 53 (61) | 6 | 5 |
+| duel won (mid-20) | 74 (207) | 5 (9) | 7 (13) | 51 (69) | 5 | 4 |
+| duel lost (mid-20) | 68 (178) | 5 (9) | 7 (8) | 51 (64) | 5 | 4 |
+| Long Night's end (mid-50) | 66 (166) | 5 (9) | 6 (5) | 51 (68) | 5 | 3 |
+| Daily (mid-20) | 60 (127) | 5 (9) | 7 (4) | 47 (63) | 5 | 4 |
+| Trial (mid-100) | 60 (155) | 5 (9) | 7 (5) | 50 (64) | 5 | 4 |
+| Cup (mid-50) | 57 (134) | 5 (9) | 6 (4) | 44 (62) | 5 | 3 |
+| between the Long Night's legs | 27 | 0 | 0 | 27 | 0 | 0 |
+
+Every results first view has one primary, no look-alike, no repeat (Details: 2 to 8) and one lone icon, the camera
+("Photo mode"). The crash (desk and phone) also offers Ride It on the card of the mountain the run opened: a second
+action.
+
+**The sheets and popovers at mid-50** (the other stages within a few words; every shot is in the table in section 8):
+
+| surface | desk words | phone words | primaries | lone icons |
 |---|---|---|---|---|
-| first finish (fresh) | 79 (175) | 5 (9) | 8 (11) | 0 (7) |
-| duel won (mid-20) | 74 (207) | 5 (9) | 6 (13) | 0 (8) |
-| duel lost (mid-20) | 68 (178) | 5 (9) | 6 (8) | 0 (6) |
-| Long Night's end (mid-50) | 66 (166) | 5 (9) | 5 (5) | 0 (6) |
-| Daily (mid-20) | 60 (127) | 5 (9) | 6 (4) | 0 (3) |
-| Trial (mid-100) | 60 (155) | 5 (9) | 6 (5) | 0 (2) |
-| Cup (mid-50) | 57 (134) | 5 (9) | 5 (4) | 0 (2) |
-| between the Long Night's legs | 27 | 0 | 0 | 0 |
-
-Every results first view has one primary, no look-alike and one lone icon (the camera, "Photo mode").
-
-| sheet or popover (mid-50) | words | controls | primaries | lone icons |
-|---|---|---|---|---|
-| garage (each shelf) | 53 to 76 | 8 to 17 | 0 (all owned) | 1 (Close) |
-| Almanac | 134 | 4 | 0 | 1 |
-| Spirit Album | 174 | | 0 | 1 |
-| missions popover (with the title around it) | 142 | | | |
-| medals popover | 180 | | | |
-| flame calendar popover | 164 | | | |
-| The Twelve popover | 351 | | | 3 (Close the ladder, and the strip's two) |
-| settings | 21 | | 0 | 1 |
-| pause | 52 | | 1 | 0 |
-| photo mode | 24 | | 1 | 3 (grid, focus, back to the first frame) |
+| garage, by shelf | 53 to 76 | 37 to 69 | 0 (all owned) | Close |
+| Almanac | 134 | 70 | 0 | Close |
+| Spirit Album | 174 | 52 | 0 | Close |
+| missions popover (its own words) | 25 | 25 | 1 (the title's Ride) | |
+| medals popover | 63 | 63 | | |
+| flame calendar popover | 47 | 47 | | |
+| The Twelve popover | 234 | 183 | | Close the ladder |
+| settings | 21 | 20 | 0 | Close |
+| pause | 52 | 48 | 1 (Resume) | none |
+| photo mode | 24 | 24 | 1 | grid, focus, back to the first frame |
 
 ## 3. Escape and the pad's B
 
-The same at every stage (mid-1, 5, 20, 50, 100 and novice-50), desk:
+The same at every stage, desk and phone. Each surface opened as the keyboard and the pad open it (its opener focused,
+then pressed):
 
-| surface | Escape | the pad's B | where focus goes |
+| surface | Escape | the pad's B | focus after B |
 |---|---|---|---|
-| garage (sheet) | stays open | closes | Escape: stays on Close; B: (being re-measured with the sheet opened by a focused control) |
-| Almanac, Spirit Album (the books sheet) | stays open | closes | as the garage |
-| settings (sheet) | stays open | closes | as the garage |
-| missions, medals, flame calendar, The Twelve (title popovers) | stays open | **stays open** | focus never enters the popover (it stays where it was) |
-| pause card (in a run) | stays open | closes (resumes the run) | Resume holds focus while it is open |
-| photo mode (from pause) | closes, back to pause | closes, back to pause | Resume |
+| garage (sheet) | stays open (focus stays on Close) | closes | back to Garage |
+| Almanac, Spirit Album (the books sheet) | stays open | closes | back to its card |
+| settings (sheet) | stays open | closes | back to Settings |
+| missions, medals, flame calendar, The Twelve (title popovers) | stays open | **stays open** | never left the opener: focus does not enter the popover |
+| pause card (in a run) | stays open (focus on Resume) | closes, the run goes on | the game |
+| photo mode (from pause) | closes, back to pause (Resume) | closes, back to pause (Resume) | Resume |
 
 Why: Escape is unbound on purpose (`src/ui/menus.ts:14`: "Escape is deliberately not bound: on CrazyGames it exits
-fullscreen"), and only photo mode (`photo.ts:381`) and riding home (`app.ts:702`) read it. The pad's B is "back" only
-on a modal surface (`ui.ts` padMenu passes `modal = menu !== null`, and `padnav.ts` clicks the close button or Resume);
+fullscreen"); only photo mode (`photo.ts:381`) and riding home (`app.ts:702`) read it. The pad's B is "back" only on
+a modal surface (`ui.ts` padMenu passes `modal = menu !== null`; `padnav.ts` then clicks the close button or Resume);
 the title's popovers are not modal to it, so B does nothing there. A tap outside closes a popover (`title.ts:95`).
+(The first desk pass opened each surface with a bare click and so saw focus land on the page's body after B; the
+sheet gives focus back to what opened it, and the table above is from the pass that focused the opener first.)
 
 ## 4. The bars and today's figures
 
-Scripts: `npx tsx scripts/playtest/r9-screenbars.ts` (the browser bars, over the captures; exits 0) and
+Scripts: `npx tsx scripts/playtest/r9-screenbars.ts` (the browser bars, read from the captures; it exits 0) and
 `npx vitest run tests/r9screens.test.ts` (the detectors held to known cases, and two copy bars as `it.fails`).
 
 | bar (section 2) | today, desk | today, phone |
 |---|---|---|
-| title at run 50: at most 40 words | mid-50 115 (117 with rivals in), novice-50 120 (122): fails by 75 to 82 | pending |
-| results' first view: at most 35 words | 57 (Cup) to 79 (first finish): fails by 22 to 44 | pending |
-| a fresh title no worse than today | 18 words, 2 controls (the baseline) | pending |
-| one primary a screen | every title and results view: 1; garage, books, settings: 0 | pending |
-| nothing else styled like one | 0 look-alikes on every shot | pending |
-| no lone icons | fails everywhere: Mute on the fresh title; the strip's arrow on every returning title; the camera on every results; Close on every sheet; Close the ladder; photo mode's three | pending |
-| plain figures | returning title 9 to 13 bare; results first view 5 to 8; fresh title 0 | pending |
-| said once | returning title 2 to 4 repeats; results first view 0, Details 2 to 8 | pending |
-| never loading | "Finding rivals…" on the Cup and the Daily at 3 s on every returning title | pending |
-| nothing lost (two taps, pointer, keyboard, pad, named) | mid-50: 16 of 20 systems; the league and contracts not found at all; photo and clips only from a run | pending |
-| as fast as today (Run Again to riding under 2 s) | warm presses 114, 253, 259, 265 ms (cold 520 ms); one 5,120 ms press was the mock platform's midgame ad, which the published build never plays | pending |
-| copy (vitest, `it.fails`) | 19 of 50 Almanac pages named with a bare "+N"; 33 of 33 missions, once met, offered as "done before, so again" | |
+| the title at run 50: at most 40 words | mid-50 115 (117 with the rivals in), novice-50 120 (122): fails by 75 to 82 | mid-50 59 (57), novice-50 66 (64): fails by 17 to 26 |
+| the results' first view: at most 35 words | 57 (the Cup) to 79 (a first finish): fails by 22 to 44 | 44 (the Cup) to 64 (a first finish): fails by 9 to 29 |
+| a fresh title no worse than today | 18 words, 2 controls (the baseline) | 17 words, 2 controls |
+| one primary a screen | every title, results and the pause card: 1; garage, books, settings: 0 | the same |
+| nothing else styled like one | no look-alike on any shot | the same |
+| no lone icons | fails on every screen: Mute (fresh title), the strip's arrow (returning titles), the camera (every results), Close (every sheet), Close the ladder, photo mode's buttons | the same, less the strip's arrow; a garage tile half scrolled out reads as one |
+| plain figures | returning title 6 to 10 bare; results first view 6 to 9; fresh title 0 | returning title 3 to 5; results first view 3 to 6 |
+| said once | returning title 2 to 4 repeats; results first view 0, Details 2 to 8 | returning title 1 to 3; results first view 0 (the Long Night's 1) |
+| never loading | "Finding rivals…" on the Cup and the Daily at 3 s on every returning title | the same |
+| nothing lost (two taps; pointer, keyboard, pad; named) | mid-50: 16 of 20 found (Trials only as an Almanac page still to come); contracts and the league never shown (at mid-100 the league is a news line that week); photo and clips only from a run; mastery and the Long Night behind doors that do not name them; every door in the Tab order and the pad's reach | the same |
+| as fast as today: Run Again to riding under 2 s | warm presses 101, 183, 213, 235, 395 ms (cold 239); 5,134 ms behind the mock platform's midgame ad | warm presses 78, 183, 191, 253 ms (cold 148); one 5,187 ms press was the mock platform's midgame ad |
+| copy (vitest, `it.fails`) | 19 of 50 Almanac pages are named with a bare "+N"; 33 of 33 missions, once met, are offered as "done before, so again" | |
+
+Round 8 recorded Run Again to riding at about 550 ms; today's warm presses are under that on both.
 
 **The detectors**, what they catch and what they cannot:
 - *Bare figures*: a signed figure with no unit after it ("+1", "A new sled +1", "+110"); a fraction in a box with no
@@ -173,129 +194,134 @@ Scripts: `npx tsx scripts/playtest/r9-screenbars.ts` (the browser bars, over the
   a word ("XP"), a figure explained elsewhere on the screen, figures drawn by CSS or the canvas. A clock time is not
   counted bare (its form says it is a time).
 - *Repeats*: a known name (a mountain, one of The Twelve) in two boxes; a time or a figure of three or more digits in
-  two boxes; three words in a row in two boxes (a figure is one token, and a list's field labels such as "Best" and
+  two boxes; three words in a row in two boxes (a figure is one token; a list's field labels such as "Best" and
   "Rank" do not count). A box is the control a text is on, else its list item, paragraph or card. Not caught: the
   same thing said in other words or by a picture (a rider's portrait and the word "Duel"), or once on a sheet and
   once under it.
 - *Loading*: "Finding rivals", "loading", "generating", "please wait", or a short line ending in an ellipsis.
 - *Nothing lost*: the crawl opens each title control once by its focus key (the Cup's and the Daily's cards once
   their rivals are in), reads what opened and each of its tabs, walks the Tab order, and walks the pad from its first
-  press in all four directions breadth first. A system counts as reached when its words (r9-screenbars.ts `SYSTEMS`)
+  press in all four directions, breadth first. A system counts as reached when its words (r9-screenbars.ts `SYSTEMS`)
   are on the title (0 taps), behind a title control (1), or behind a tab of that (2); "named" is whether that door's
   accessible name says the system.
 
-**Nothing lost at mid-50, desk:**
+**Nothing lost at mid-50** (desk and phone agree):
 
-| system | taps | through | keyboard | pad | named |
-|---|---|---|---|---|---|
-| rank and Almanac | 0 | the Rider Rank card | yes | yes | yes |
-| album | 0 | the sticker count | yes | yes | yes |
-| flame | 0 | the flame | yes | yes | yes |
-| gifts | 0 by sight (a figure with an icon), named only for a screen reader | the stats pill (not a control) | - | - | no word on screen |
-| bests | 0 | the mountain cards and the pill | yes | yes | yes |
-| The Twelve | 0 | its card | yes | yes | yes |
-| the Cup | 0 | its card (no tap until its rivals are in) | yes | yes | yes |
-| the league | **not found** | only a line in the results' Details | | | |
-| Trials | (not open at mid-50; a future Almanac page) | | | | |
-| the Daily | 0 | its card | yes | yes | yes |
-| contracts | **not found** | only in the results (a reward card, Details) | | | |
-| missions | 0 | Missions | yes | yes | yes |
-| medals | 0 | Medals, the cards | yes | yes | yes |
-| mastery | 1 | Medals (its stars) | yes | yes | no |
-| the Long Night | 1 | the Almanac (its Ride) | yes | yes | no |
-| hours | 0 | the Day / Night pick | yes | yes | yes |
-| mirrors | 0 | Mirrored | yes | yes | yes |
-| photo | from a run only (pause, results) | | | | |
-| clips | from the results only (Save Clip) | | | | |
-| the garage | 0 | Garage | yes | yes | yes |
+| system | taps | through | keyboard and pad | named |
+|---|---|---|---|---|
+| rank and Almanac | 0 | the Rider Rank card | yes | yes |
+| album | 0 | the sticker count | yes | yes |
+| flame | 0 | the flame | yes | yes |
+| gifts | 0 by sight, as a figure with a gift icon | the stats pill (not a control); the word only for a screen reader | - | not on screen |
+| bests | 0 | the mountain cards and the pill | yes | yes |
+| The Twelve | 0 | its card | yes | yes |
+| the Cup | 0 | its card (no tap until its rivals are in) | yes | yes |
+| the league | **never shown** | a news line in a week the division moved; a line in the results' Details | - | - |
+| Trials | not open at mid-50 (a future Almanac page); at mid-100 1 tap (the Cup's card) then the Trial switch | | yes | yes |
+| the Daily | 0 | its card | yes | yes |
+| contracts | **never shown** | an Almanac page's name; "Contracts met" in Details | - | - |
+| missions | 0 | Missions | yes | yes |
+| medals | 0 | Medals, the cards | yes | yes |
+| mastery | 1 | Medals (its stars) | yes | no |
+| the Long Night | 1 | the Almanac (its Ride) | yes | no |
+| hours | 0 | the Day / other hour pick | yes | yes |
+| mirrors | 0 | Mirrored | yes | yes |
+| photo | from a run only (pause, the results' camera) | | | |
+| clips | from the results only (Save Clip) | | | |
+| the garage | 0 | Garage | yes | yes |
 
-The title's Tab order is 22 stops and the pad reaches every title control from its first press (88 presses).
+The title's Tab order is 21 to 22 stops; the pad reaches every title control from its first press (80 to 88 presses).
 
 ## 5. Section 1 "The screens", line by line
 
-Each line of the review, against the captures (desk; phone to follow) and the code. Frames are under
-`shots/r9/truth/`.
+Each line of the review against the captures (desk and phone) and the code; the frames are under `shots/r9/truth/`.
 
 **What is already strong**
 - *A first visit's title: the logo, one line, one big Ride, and 18 words in all.* **Right.** `desk-fresh-title.png`:
-  18 words, two controls. Missed: the second control, Mute, is a lone icon.
+  18 words (17 on phone), two controls. Missed: the second control, Mute, is a lone icon.
 - *The results' hero: the place, the rider in a pose before a cheering crowd, and one primary button.* **Right** on
-  every finish shot (one primary, no look-alike). Missed: on the Trial's results the rider stands behind the right
-  column (`desk-mid-100-results-trial.png`, Sakura; the run was pinned, so a person should check a real one), and the
-  camera beside Home is a lone icon on every results.
-- *The game's type and its vermillion primary.* **Right:** across every shot no other control has the primary's fill.
+  every finish (one primary, no look-alike, desk and phone). Missed: on the Trial's results on desk the rider stands
+  behind the right column (`desk-mid-100-results-trial.png`, Sakura; the run was pinned to the line, so a person
+  should check a ridden one), and the camera beside Home is a lone icon on every results.
+- *The game's type and its vermillion primary.* **Right:** no other control on any shot has the primary's fill.
 
 **What holds them back**
 1. *Every system the game has gained has a seat on the title; the returning title is ten panels and about 100 words.*
-   **Right, and understated.** The returning title is 105 to 124 words at every stage from run 1 (mid-1 111, mid-50
-   115, novice-50 120, novice-100 122; two more once the rivals arrive) and 21 controls. At run 1 it already carries
-   the Almanac card, the album count, The Twelve's card, the Cup's and the Daily's cards and the menu bar; from run 20
-   the hour pick and Mirrored add a row under Ride. About twelve panels at run 50 (`desk-mid-50-title-ready.png`).
-   *Hours, mirrors, Trials, contracts, the league and the Long Night add more as they open:* **half wrong.** Hours and
-   mirrors add the row; Trials add a Cup/Trial switch only when the Cup is picked (`desk-mid-100-title-trial.png`);
-   contracts, the league and the Long Night never reach the title at all (see "nothing lost": they are missing, not
-   crowding). *A scene left a gap in the middle:* **right** on desk. The phone: pending.
-2. *The same thing said twice.* **Right**, all three reproduce where they apply: "Duel Pip Thistle" on Ride and "Next
-   of The Twelve: Pip Thistle" (mid-20; Suki Ember at mid-50); the unlock hint and the locked card (mid-1: "Frostfang
-   Glacier" twice); the best in the pill and on the card (mid-50: 1:52.2). **Missed:** the picked mountain is named
-   three times when the duel is there (heading, its card, The Twelve's card: "Ember Peak" x3 at mid-50; "Pinecrest" x5
-   on novice-1), and Details repeats the first view's lines ("Your first finish here." twice).
-3. *Figures without words.* **Right and wider.** At run 50 the title shows 12: the flame's "13", the wallet's "90"
-   (its word only for a screen reader), "Page 26", "1,281 to go", "115 /212", "Rank N of 87" on four cards, the
-   Twelve count and the missions badge. "A new sled +1" is the fmt.ts `rewardsLine`: 19 of 50 Almanac pages are named
-   that way (novice-50: "Lanternfall, open to ride +1"). "Page 2/3" on the results' cards: right ("Page 1",
-   "Chapter page 9"). **Missed:** every results first view also has 5 to 8 signed figures with no unit: the XP chips'
-   "+110", "+90", "+300" and the gifts' "+68" beside an icon.
-4. *Loading shown as content: "Finding rivals…" three seconds after the title opens, on desk and phone.* **Right** on
-   desk at every returning stage (one or both cards). Missed: until then the Cup's and the Daily's cards take no tap
-   (the crawl has to wait for them), and when the rivals arrive the line becomes "Fresh rivals" (status, still).
-5. *The results' right column is a form, about 70 words and 14 figures.* **Right in kind:** 57 to 79 words on the first
-   view, 5 controls. *Two calls to action compete: Ride It on the unlock card, and the primary:* **overstated.** Ride
-   It is a soft button, not the primary's fill (0 look-alikes measured), and it only exists on a run that opens a
-   mountain; but it is a second action, and on that run it is the one a player wants.
+   **Right, and understated.** On desk the returning title is 105 to 124 words at every stage from run 1 (mid-1 113
+   with its rivals in, mid-50 117, novice-50 122, novice-100 124) with 16 to 20 controls; on phone 57 to 74 words and 14 to 18 controls. Run 1
+   already carries the Almanac card, the album count, The Twelve's card, the Cup's and the Daily's cards and the menu
+   bar; from run 20 the hour pick and Mirrored add a row under Ride. About twelve panels at run 50
+   (`desk-mid-50-title-ready.png`). *Hours, mirrors, Trials, contracts, the league and the Long Night add more as
+   they open:* **half wrong.** Hours and mirrors add that row; Trials add a Cup/Trial switch only while the Cup is
+   picked (`desk-mid-100-title-trial.png`); the league reaches the title only as a news line in a week the division
+   moved (`desk-mid-100-title.png`: "Up to division 3 of the Cup."); contracts and the Long Night never do. *The phone
+   stacks all of it over the rider:* **right** (`phone-mid-50-title-ready.png`). *A scene left a gap in the middle:*
+   **right** on desk.
+2. *The same thing said twice.* **Right**; all three reproduce where they apply: "Duel Pip Thistle" on Ride and "Next
+   of The Twelve: Pip Thistle" (mid-20; Suki Ember at mid-50); the unlock hint and the locked card (mid-1:
+   "Frostfang Glacier" twice); the best in the pill and on the card (mid-50: 1:52.2). **Missed:** the picked mountain
+   is named three times when the duel is there (the heading, its card, The Twelve's card: "Ember Peak" x3 at mid-50;
+   "Pinecrest" up to five times on novice-1), and Details repeats the first view's lines ("Your first finish here."
+   twice).
+3. *Figures without words.* **Right, and wider.** At run 50 the desk title shows ten: the flame's "13", the wallet's
+   "90" (the word only for a screen reader), "Page 26", "1,281 to go", "115 /212", "Rank N of 87" on the cards, the
+   missions badge. "A new sled +1" is fmt.ts `rewardsLine`: 19 of 50 Almanac pages are named that way (novice-50:
+   "Lanternfall, open to ride +1"). "Page 2/3" on the results' cards: **right** ("Page 1", "Chapter page 9").
+   **Missed:** every results first view has 3 to 9 bare figures: the XP chips' "+110", "+90", "+300", the gifts' "+68"
+   beside an icon, "92" and "to go".
+4. *Loading shown as content: "Finding rivals…" three seconds after the title opens, on desk and phone.* **Right**
+   at every returning stage on both. **Missed:** until then the Cup's and the Daily's cards take no tap (the crawl has
+   to wait for them), and when the rivals arrive the line becomes "Fresh rivals", which is status too.
+5. *The results' right column is a form, about 70 words and 14 figures.* **Right in kind:** 57 to 79 words on the desk
+   first view (44 to 64 on phone), 5 controls. *Two calls to action compete: Ride It on the unlock card, and the
+   primary:* **overstated.** Ride It is a soft button, not the primary's fill (no look-alike measured), and it is only
+   there on a run that opens a mountain (`phone-mid-5-results-crash.png`); but on that run it is a second action, and
+   the one a player most wants.
 6. *Copy that does not parse.* **Right, and not a one-off.** "Finish the mission / Pass a ghost: done before, so
-   again" reproduces on a fresh save's first finish (`desk-fresh-results-first.png`) and "Bank a 10,000 point combo:
-   done before, so again" after the mid-20 duels (`desk-mid-20-results-duel-won.png`, `-duel-lost.png`). Source:
-   `src/game/goals.ts:128`, for every mission whose best already meets its target (33 of 33, the vitest bar). The race
-   line floats over the crowd apart from the place: right ("89.2 s clear of Vida Flip"). **Missed:** after a lost duel
-   the one button is "Finish the mission", not the rematch, while the chip says "Pip Thistle held you off by 32.1 s."
+   again" on a fresh save's first finish (`desk-fresh-results-first.png`), "Bank a 10,000 point combo: done before,
+   so again" after both mid-20 duels, "Ride a wall: done before, so again" on the crash, "Finish a mountain: done
+   before, so again" on a fresh save's second run. Source: `src/game/goals.ts:128`, for every mission whose best
+   already meets its target (33 of 33 missions: the vitest bar). The race line floats apart from the place: **right**
+   ("89.2 s clear of Vida Flip"). **Missed:** after a lost duel the one button is "Finish the mission", not the
+   rematch, while the chip says "Pip Thistle held you off by 32.1 s." (`desk-mid-20-results-duel-lost.png`).
 7. *No one design language: about 15,000 lines of CSS in 11 sheets, style.css 9,658; results' render() a chain of
    conditional rows.* **Right on the numbers:** 15,105 lines in 11 sheets, style.css 9,658 (`wc -l src/ui/*.css`);
    `results.ts` render() runs from line 529 to about 760 with 28 conditionals and 10 mentions of the phone. Whether it
-   reads as one family is a critic's call, not this lane's.
-8. *To check: Escape did not close the garage.* **Escape closes no sheet and no popover, by design**
-   (`menus.ts:14`, for CrazyGames' fullscreen); it closes only photo mode and riding home. The pad's B closes every
-   sheet and the pause card but **none of the title's four popovers**. Section 3 has the table.
+   reads as one family is a critic's call.
+8. *To check: Escape did not close the garage.* **Escape closes no sheet and no popover, on purpose** (`menus.ts:14`,
+   for CrazyGames' fullscreen); it closes only photo mode and riding home. The pad's B closes every sheet and the
+   pause card and gives focus back to the opener, but **closes none of the title's four popovers**. Section 3.
 
 **What the review missed**
 - **The day's contracts and the Cup's league are never shown.** The models are built (`spineview.ts` puts
   `contracts`, `form` and `league` with its nineteen rows in `TitleSpine`, and `today` and `formNext` in the results'
-  spine), but no UI file renders them (`grep` of `src/ui`: only `results.ts:1263-1266` writes "Contracts met: ...",
-  "Your form: ..." and "Cup league: 1st in division 5." into Details' notes). A player never sees what today's three
-  contracts ask, nor the league's table; they meet "Daily contracts" as an Almanac page's name and "Up to division 3 of
-  the Cup." as the title's news line in a week the division moved (`desk-mid-100-title.png`). "Nothing lost" fails for
-  both today, and not only for want of a door.
+  spine), but no UI file renders them (`src/ui`: only `results.ts:1263-1266` writes "Contracts met: ...", "Your form:
+  ..." and "Cup league: 1st in division 5." into Details' notes). A player never sees what today's three contracts
+  ask, nor the league's table. "Nothing lost" fails for both, and not only for want of a door.
 - Lone icons on every screen: Mute, the strip's arrows, the camera on the results, Close on every sheet, Close the
   ladder, and photo mode's grid, focus and back.
-- The garage, the books and settings have no primary at all (nothing to buy at mid-50: every shelf owned); the bar
-  says one per screen.
-- The title popovers take no focus when opened and no Escape or B to close.
+- The garage, the books and settings have no primary (at mid-50 every shelf is owned); the bar asks for one a screen.
+- The title's popovers take no focus when opened and no Escape or B to close.
+- The Run Again button names a page's "76 to go" with no unit ("Run Again: Page 7: Charm: Kite String: 76 to go").
+- The dev server shows rewarded-ad offers (Double Gifts, Revive, a midgame ad between runs) that the published build
+  does not: a review on the dev server must leave them out, as these counts do.
 
 ## 6. What the main lane must decide
 
-- **Escape.** U4 says Escape closes every sheet; `menus.ts:14` unbinds it so a CrazyGames player's Escape only leaves
-  fullscreen. Decide whether a sheet closes on Escape as well (one key, two effects in fullscreen), or the bar reads
-  "B and a visible Close" there.
-- **Where contracts and the league live.** Today they have no door from the title; U1 puts them behind "the week's and
-  day's events". Until then "nothing lost" fails for both.
-- **What counts as a lone icon.** The strip's arrows, Close, Mute and the results' camera are conventional icon
-  buttons with names for a screen reader. The bar as written fails every screen on them; keep it strict or name the
-  allowed few.
-- **Primary on a sheet with nothing to do** (the garage when all is owned, the books, settings): accept none, or ask
-  for one (Close as quiet, a "Ride" or "Back to the title" as primary).
-- **Photo and clips are reached from a run, not the title.** "Nothing lost" (two taps from the title) cannot hold for
-  them without a door that makes no sense; say they are judged from pause and the results.
-- **The Trial's results framing** (the rider behind the right column) for a person to check on a real run.
+- **Escape.** U4 says Escape closes every sheet; `menus.ts:14` leaves it unbound so a CrazyGames player's Escape only
+  leaves fullscreen. Decide whether sheets close on Escape as well (in fullscreen one press would do both), or the bar
+  reads "B, a tap outside and a visible Close".
+- **Contracts and the league.** Their screens do not exist, only their models. U1's "events" door needs a contracts
+  list and a league table to be built, not moved; or cut them and say so.
+- **What a lone icon is.** The strip's arrows, Close, Mute and the results' camera are conventional icon buttons named
+  for a screen reader. The bar as written fails every screen on them: keep it strict, or name the allowed few.
+- **A primary on a sheet with nothing to do** (the garage when all is owned, the books, settings): none, or a "Back"
+  or "Ride" as the one.
+- **Photo and clips are reached from a run.** "Two taps from the title" cannot hold for them without a door that makes
+  no sense; judge them from pause and the results.
+- **The word bars on phone and desk.** The phone shows half the desk's words (59 at mid-50 against 117), so the 40 and
+  35 are much nearer on phone; decide whether each holds on both.
+- **The Trial's results framing** (the rider behind the right column on desk) for a person to check on a ridden run.
 
 ## 7. How to re-run everything
 
@@ -314,3 +340,342 @@ Each line of the review, against the captures (desk; phone to follow) and the co
 - **Counting a prototype the same way:** r9-truth.js's `MEASURE` runs on any page (`page.evaluate(MEASURE, { sel:
   '<root>' })`); without the game it counts everything under `.gs-ui` or the body. Its output goes to
   r9-screenbars.ts's `shotFigures`.
+
+## 8. Every shot, counted
+
+Printed by `npx tsx scripts/playtest/r9-screenbars.ts --md` (words; controls; primaries; look-alikes; lone icons; bare
+figures; repeats; loading lines).
+
+**desk** (162 shots)
+
+| shot | words | controls | primaries | look-alikes | lone icons | bare figures | repeats | loading |
+|---|---|---|---|---|---|---|---|---|
+| mid-5-results-crash | 75 | 7 | 1 | 0 | 1 | 7 | 0 | 0 |
+| mid-5-results-crash-details | 113 | 9 | 1 | 0 | 1 | 3 | 1 | 0 |
+| mid-50-results-cup | 57 | 5 | 1 | 0 | 1 | 6 | 0 | 0 |
+| mid-50-results-cup-details | 134 | 9 | 1 | 0 | 1 | 4 | 2 | 0 |
+| mid-20-results-daily | 60 | 5 | 1 | 0 | 1 | 7 | 0 | 0 |
+| mid-20-results-daily-details | 127 | 9 | 1 | 0 | 1 | 4 | 3 | 0 |
+| mid-20-results-duel-lost | 68 | 5 | 1 | 0 | 1 | 7 | 0 | 0 |
+| mid-20-results-duel-lost-details | 178 | 9 | 1 | 0 | 1 | 8 | 6 | 0 |
+| mid-20-results-duel-won | 74 | 5 | 1 | 0 | 1 | 7 | 0 | 0 |
+| mid-20-results-duel-won-details | 207 | 9 | 1 | 0 | 1 | 13 | 8 | 0 |
+| fresh-results-first | 79 | 5 | 1 | 0 | 1 | 9 | 0 | 0 |
+| fresh-results-first-details | 175 | 9 | 1 | 0 | 1 | 11 | 7 | 0 |
+| mid-50-night-between | 27 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| mid-50-results-night | 66 | 5 | 1 | 0 | 1 | 6 | 0 | 0 |
+| mid-50-results-night-details | 166 | 9 | 1 | 0 | 1 | 5 | 6 | 0 |
+| mid-100-results-trial | 60 | 5 | 1 | 0 | 1 | 7 | 0 | 0 |
+| mid-100-results-trial-details | 155 | 9 | 1 | 0 | 1 | 5 | 2 | 0 |
+| mid-1-garage | 70 | 14 | 0 | 0 | 1 | 6 | 0 | 0 |
+| mid-1-garage-Sleds | 70 | 14 | 0 | 0 | 1 | 6 | 0 | 0 |
+| mid-1-garage-Paint | 54 | 16 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-1-garage-Scarves | 54 | 15 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-1-garage-Hats | 53 | 15 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-1-garage-Trails | 47 | 14 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-1-garage-Sounds | 51 | 14 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-1-garage-Lanterns | 31 | 8 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-1-almanac | 137 | 3 | 0 | 0 | 1 | 3 | 6 | 0 |
+| mid-1-missions | 127 (14 in the popover) | 17 | 1 | 0 | 2 | 6 | 4 | 0 |
+| mid-1-medals | 161 (48 in the popover) | 17 | 1 | 0 | 2 | 7 | 6 | 0 |
+| mid-1-flame | 161 (48 in the popover) | 17 | 1 | 0 | 2 | 6 | 5 | 0 |
+| mid-1-twelve | 337 (224 in the popover) | 18 | 1 | 0 | 3 | 6 | 11 | 0 |
+| mid-1-settings | 21 | 10 | 0 | 0 | 1 | 3 | 0 | 0 |
+| mid-1-pause | 41 | 12 | 1 | 0 | 0 | 3 | 0 | 0 |
+| mid-1-photo | 24 | 8 | 1 | 0 | 3 | 0 | 0 | 0 |
+| mid-100-garage | 61 | 14 | 0 | 0 | 1 | 3 | 0 | 0 |
+| mid-100-garage-Sleds | 61 | 14 | 0 | 0 | 1 | 3 | 0 | 0 |
+| mid-100-garage-Paint | 57 | 17 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-100-garage-Scarves | 62 | 17 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-100-garage-Hats | 54 | 15 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-100-garage-Trails | 57 | 16 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-100-garage-Sounds | 53 | 14 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-100-garage-Lanterns | 76 | 8 | 0 | 0 | 1 | 1 | 6 | 0 |
+| mid-100-almanac | 150 | 7 | 0 | 0 | 1 | 1 | 7 | 0 |
+| mid-100-album | 174 | 3 | 0 | 0 | 1 | 0 | 8 | 0 |
+| mid-100-missions | 150 (29 in the popover) | 21 | 1 | 0 | 2 | 10 | 3 | 0 |
+| mid-100-medals | 191 (70 in the popover) | 21 | 1 | 0 | 2 | 15 | 6 | 0 |
+| mid-100-flame | 168 (47 in the popover) | 21 | 1 | 0 | 2 | 10 | 3 | 0 |
+| mid-100-twelve | 350 (229 in the popover) | 22 | 1 | 0 | 3 | 10 | 11 | 0 |
+| mid-100-settings | 21 | 10 | 0 | 0 | 1 | 3 | 0 | 0 |
+| mid-100-pause | 56 | 12 | 1 | 0 | 0 | 3 | 1 | 0 |
+| mid-100-photo | 24 | 8 | 1 | 0 | 3 | 0 | 0 | 0 |
+| mid-20-garage | 67 | 14 | 0 | 0 | 1 | 5 | 0 | 0 |
+| mid-20-garage-Sleds | 67 | 14 | 0 | 0 | 1 | 5 | 0 | 0 |
+| mid-20-garage-Paint | 57 | 17 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-20-garage-Scarves | 59 | 16 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-20-garage-Hats | 54 | 15 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-20-garage-Trails | 54 | 15 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-20-garage-Sounds | 53 | 14 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-20-garage-Lanterns | 66 | 8 | 0 | 0 | 1 | 1 | 3 | 0 |
+| mid-20-almanac | 153 | 4 | 0 | 0 | 1 | 6 | 5 | 0 |
+| mid-20-album | 174 | 3 | 0 | 0 | 1 | 0 | 8 | 0 |
+| mid-20-missions | 146 (26 in the popover) | 21 | 1 | 0 | 2 | 10 | 4 | 0 |
+| mid-20-medals | 180 (60 in the popover) | 21 | 1 | 0 | 2 | 14 | 6 | 0 |
+| mid-20-flame | 168 (48 in the popover) | 21 | 1 | 0 | 2 | 10 | 4 | 0 |
+| mid-20-twelve | 349 (229 in the popover) | 22 | 1 | 0 | 3 | 10 | 11 | 0 |
+| mid-20-settings | 21 | 10 | 0 | 0 | 1 | 3 | 0 | 0 |
+| mid-20-pause | 53 | 12 | 1 | 0 | 0 | 3 | 0 | 0 |
+| mid-20-photo | 24 | 8 | 1 | 0 | 3 | 0 | 0 | 0 |
+| mid-5-garage | 67 | 14 | 0 | 0 | 1 | 5 | 0 | 0 |
+| mid-5-garage-Sleds | 67 | 14 | 0 | 0 | 1 | 5 | 0 | 0 |
+| mid-5-garage-Paint | 53 | 16 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-5-garage-Scarves | 55 | 15 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-5-garage-Hats | 51 | 15 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-5-garage-Trails | 49 | 14 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-5-garage-Sounds | 51 | 14 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-5-garage-Lanterns | 55 | 8 | 0 | 0 | 1 | 1 | 2 | 0 |
+| mid-5-almanac | 138 | 3 | 0 | 0 | 1 | 3 | 6 | 0 |
+| mid-5-album | 255 | 3 | 0 | 0 | 1 | 0 | 10 | 0 |
+| mid-5-missions | 137 (27 in the popover) | 18 | 1 | 0 | 2 | 9 | 4 | 0 |
+| mid-5-medals | 166 (56 in the popover) | 18 | 1 | 0 | 2 | 12 | 5 | 0 |
+| mid-5-flame | 158 (48 in the popover) | 18 | 1 | 0 | 2 | 9 | 4 | 0 |
+| mid-5-twelve | 333 (223 in the popover) | 20 | 1 | 0 | 3 | 9 | 11 | 0 |
+| mid-5-settings | 21 | 10 | 0 | 0 | 1 | 3 | 0 | 0 |
+| mid-5-pause | 54 | 12 | 1 | 0 | 0 | 3 | 0 | 0 |
+| mid-5-photo | 24 | 8 | 1 | 0 | 3 | 0 | 0 | 0 |
+| mid-50-garage | 64 | 14 | 0 | 0 | 1 | 4 | 0 | 0 |
+| mid-50-garage-Sleds | 64 | 14 | 0 | 0 | 1 | 4 | 0 | 0 |
+| mid-50-garage-Paint | 57 | 17 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-50-garage-Scarves | 62 | 17 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-50-garage-Hats | 54 | 15 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-50-garage-Trails | 54 | 15 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-50-garage-Sounds | 53 | 14 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-50-garage-Lanterns | 76 | 8 | 0 | 0 | 1 | 1 | 4 | 0 |
+| mid-50-almanac | 134 | 7 | 0 | 0 | 1 | 1 | 7 | 0 |
+| mid-50-album | 174 | 3 | 0 | 0 | 1 | 0 | 8 | 0 |
+| mid-50-missions | 142 (25 in the popover) | 21 | 1 | 0 | 2 | 10 | 4 | 0 |
+| mid-50-medals | 180 (63 in the popover) | 21 | 1 | 0 | 2 | 14 | 7 | 0 |
+| mid-50-flame | 164 (47 in the popover) | 21 | 1 | 0 | 2 | 10 | 4 | 0 |
+| mid-50-twelve | 351 (234 in the popover) | 22 | 1 | 0 | 3 | 10 | 14 | 0 |
+| mid-50-settings | 21 | 10 | 0 | 0 | 1 | 3 | 0 | 0 |
+| mid-50-pause | 52 | 12 | 1 | 0 | 0 | 3 | 0 | 0 |
+| mid-50-photo | 24 | 8 | 1 | 0 | 3 | 0 | 0 | 0 |
+| novice-50-garage | 67 | 14 | 0 | 0 | 1 | 5 | 0 | 0 |
+| novice-50-garage-Sleds | 67 | 14 | 0 | 0 | 1 | 5 | 0 | 0 |
+| novice-50-garage-Paint | 57 | 17 | 0 | 0 | 1 | 1 | 1 | 0 |
+| novice-50-garage-Scarves | 62 | 17 | 0 | 0 | 1 | 1 | 0 | 0 |
+| novice-50-garage-Hats | 54 | 15 | 0 | 0 | 1 | 1 | 1 | 0 |
+| novice-50-garage-Trails | 54 | 15 | 0 | 0 | 1 | 1 | 1 | 0 |
+| novice-50-garage-Sounds | 53 | 14 | 0 | 0 | 1 | 1 | 1 | 0 |
+| novice-50-garage-Lanterns | 66 | 8 | 0 | 0 | 1 | 1 | 4 | 0 |
+| novice-50-almanac | 168 | 5 | 0 | 0 | 1 | 1 | 8 | 0 |
+| novice-50-album | 213 | 3 | 0 | 0 | 1 | 0 | 8 | 0 |
+| novice-50-missions | 153 (31 in the popover) | 21 | 1 | 0 | 2 | 10 | 4 | 0 |
+| novice-50-medals | 181 (59 in the popover) | 21 | 1 | 0 | 2 | 13 | 8 | 0 |
+| novice-50-flame | 169 (47 in the popover) | 21 | 1 | 0 | 2 | 10 | 4 | 0 |
+| novice-50-twelve | 348 (226 in the popover) | 22 | 1 | 0 | 3 | 10 | 11 | 0 |
+| novice-50-settings | 21 | 10 | 0 | 0 | 1 | 3 | 0 | 0 |
+| novice-50-pause | 58 | 12 | 1 | 0 | 0 | 3 | 1 | 0 |
+| novice-50-photo | 24 | 8 | 1 | 0 | 3 | 0 | 0 | 0 |
+| fresh-title | 18 | 2 | 1 | 0 | 1 | 0 | 0 | 0 |
+| mid-1-title | 111 | 16 | 1 | 0 | 1 | 6 | 4 | 1 |
+| mid-1-title-ready | 113 | 16 | 1 | 0 | 1 | 6 | 4 | 0 |
+| mid-1-title-cup | 111 | 16 | 1 | 0 | 1 | 6 | 2 | 0 |
+| mid-1-title-daily | 110 | 16 | 1 | 0 | 1 | 6 | 3 | 0 |
+| mid-5-title | 108 | 17 | 1 | 0 | 1 | 9 | 3 | 1 |
+| mid-5-title-ready | 110 | 17 | 1 | 0 | 1 | 9 | 3 | 0 |
+| mid-5-title-cup | 106 | 17 | 1 | 0 | 1 | 9 | 1 | 0 |
+| mid-5-title-daily | 105 | 17 | 1 | 0 | 1 | 9 | 2 | 0 |
+| mid-20-title | 118 | 20 | 1 | 0 | 1 | 10 | 3 | 1 |
+| mid-20-title-ready | 120 | 20 | 1 | 0 | 1 | 10 | 3 | 0 |
+| mid-20-title-cup | 117 | 17 | 1 | 0 | 1 | 10 | 1 | 0 |
+| mid-20-title-daily | 116 | 17 | 1 | 0 | 1 | 10 | 2 | 0 |
+| mid-50-title | 115 | 20 | 1 | 0 | 1 | 10 | 3 | 1 |
+| mid-50-title-ready | 117 | 20 | 1 | 0 | 1 | 10 | 3 | 0 |
+| mid-50-title-cup | 114 | 17 | 1 | 0 | 1 | 10 | 2 | 0 |
+| mid-50-title-daily | 113 | 17 | 1 | 0 | 1 | 10 | 3 | 0 |
+| mid-100-title | 119 | 20 | 1 | 0 | 1 | 10 | 2 | 1 |
+| mid-100-title-ready | 121 | 20 | 1 | 0 | 1 | 10 | 2 | 0 |
+| mid-100-title-cup | 118 | 19 | 1 | 0 | 1 | 10 | 0 | 0 |
+| mid-100-title-trial | 119 | 19 | 1 | 0 | 1 | 10 | 2 | 0 |
+| mid-100-title-daily | 115 | 17 | 1 | 0 | 1 | 10 | 1 | 0 |
+| novice-1-title | 105 | 16 | 1 | 0 | 1 | 6 | 3 | 1 |
+| novice-1-title-ready | 107 | 16 | 1 | 0 | 1 | 6 | 3 | 0 |
+| novice-1-title-cup | 104 | 16 | 1 | 0 | 1 | 6 | 1 | 0 |
+| novice-1-title-daily | 103 | 16 | 1 | 0 | 1 | 6 | 2 | 0 |
+| novice-5-title | 109 | 17 | 1 | 0 | 1 | 9 | 3 | 1 |
+| novice-5-title-ready | 111 | 17 | 1 | 0 | 1 | 9 | 3 | 0 |
+| novice-5-title-cup | 109 | 17 | 1 | 0 | 1 | 9 | 1 | 0 |
+| novice-5-title-daily | 108 | 17 | 1 | 0 | 1 | 9 | 2 | 0 |
+| novice-20-title | 111 | 20 | 1 | 0 | 1 | 9 | 3 | 1 |
+| novice-20-title-ready | 113 | 20 | 1 | 0 | 1 | 9 | 3 | 0 |
+| novice-20-title-cup | 111 | 17 | 1 | 0 | 1 | 9 | 1 | 0 |
+| novice-20-title-daily | 110 | 17 | 1 | 0 | 1 | 9 | 2 | 0 |
+| novice-50-title | 120 | 20 | 1 | 0 | 1 | 10 | 3 | 1 |
+| novice-50-title-ready | 122 | 20 | 1 | 0 | 1 | 10 | 3 | 0 |
+| novice-50-title-cup | 121 | 17 | 1 | 0 | 1 | 10 | 1 | 0 |
+| novice-50-title-daily | 120 | 17 | 1 | 0 | 1 | 10 | 2 | 0 |
+| novice-100-title | 122 | 20 | 1 | 0 | 1 | 10 | 3 | 1 |
+| novice-100-title-ready | 124 | 20 | 1 | 0 | 1 | 10 | 3 | 0 |
+| novice-100-title-cup | 119 | 17 | 1 | 0 | 1 | 10 | 1 | 0 |
+| novice-100-title-daily | 118 | 17 | 1 | 0 | 1 | 10 | 2 | 0 |
+| fresh-title-link | 18 | 2 | 1 | 0 | 1 | 0 | 1 | 0 |
+| mid-20-title-link | 113 | 17 | 1 | 0 | 1 | 10 | 3 | 1 |
+
+**phone** (162 shots)
+
+| shot | words | controls | primaries | look-alikes | lone icons | bare figures | repeats | loading |
+|---|---|---|---|---|---|---|---|---|
+| mid-5-results-crash | 53 | 6 | 1 | 0 | 1 | 5 | 0 | 0 |
+| mid-5-results-crash-details | 61 | 7 | 1 | 0 | 1 | 1 | 0 | 0 |
+| mid-50-results-cup | 44 | 5 | 1 | 0 | 1 | 3 | 0 | 0 |
+| mid-50-results-cup-details | 62 | 5 | 1 | 0 | 1 | 1 | 1 | 0 |
+| mid-20-results-daily | 47 | 5 | 1 | 0 | 1 | 4 | 0 | 0 |
+| mid-20-results-daily-details | 63 | 5 | 1 | 0 | 1 | 1 | 1 | 0 |
+| mid-20-results-duel-lost | 51 | 5 | 1 | 0 | 1 | 4 | 0 | 0 |
+| mid-20-results-duel-lost-details | 64 | 5 | 1 | 0 | 1 | 1 | 2 | 0 |
+| mid-20-results-duel-won | 51 | 5 | 1 | 0 | 1 | 4 | 0 | 0 |
+| mid-20-results-duel-won-details | 69 | 5 | 1 | 0 | 1 | 3 | 2 | 0 |
+| fresh-results-first | 64 | 5 | 1 | 0 | 1 | 6 | 0 | 0 |
+| fresh-results-first-details | 68 | 5 | 1 | 0 | 1 | 2 | 1 | 0 |
+| mid-50-night-between | 27 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| mid-50-results-night | 51 | 5 | 1 | 0 | 1 | 3 | 1 | 0 |
+| mid-50-results-night-details | 68 | 5 | 1 | 0 | 1 | 1 | 2 | 0 |
+| mid-100-results-trial | 50 | 5 | 1 | 0 | 1 | 4 | 0 | 0 |
+| mid-100-results-trial-details | 64 | 5 | 1 | 0 | 1 | 2 | 0 | 0 |
+| mid-1-garage | 53 | 12 | 0 | 0 | 1 | 6 | 0 | 0 |
+| mid-1-garage-Sleds | 53 | 12 | 0 | 0 | 1 | 6 | 0 | 0 |
+| mid-1-garage-Paint | 44 | 10 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-1-garage-Scarves | 43 | 10 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-1-garage-Hats | 36 | 10 | 0 | 0 | 3 | 1 | 0 | 0 |
+| mid-1-garage-Trails | 40 | 10 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-1-garage-Sounds | 40 | 11 | 0 | 0 | 3 | 1 | 1 | 0 |
+| mid-1-garage-Lanterns | 29 | 6 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-1-almanac | 90 | 3 | 0 | 0 | 1 | 5 | 3 | 0 |
+| mid-1-missions | 77 (14 in the popover) | 14 | 1 | 0 | 1 | 3 | 2 | 0 |
+| mid-1-medals | 111 (48 in the popover) | 14 | 1 | 0 | 1 | 4 | 3 | 0 |
+| mid-1-flame | 111 (48 in the popover) | 14 | 1 | 0 | 1 | 3 | 3 | 0 |
+| mid-1-twelve | 239 (176 in the popover) | 15 | 1 | 0 | 2 | 3 | 7 | 0 |
+| mid-1-settings | 20 | 9 | 0 | 0 | 1 | 3 | 0 | 0 |
+| mid-1-pause | 37 | 11 | 1 | 0 | 0 | 3 | 0 | 0 |
+| mid-1-photo | 24 | 7 | 1 | 0 | 2 | 0 | 0 | 0 |
+| mid-100-garage | 44 | 12 | 0 | 0 | 2 | 3 | 0 | 0 |
+| mid-100-garage-Sleds | 44 | 12 | 0 | 0 | 2 | 3 | 0 | 0 |
+| mid-100-garage-Paint | 41 | 10 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-100-garage-Scarves | 44 | 10 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-100-garage-Hats | 37 | 10 | 0 | 0 | 3 | 1 | 0 | 0 |
+| mid-100-garage-Trails | 41 | 10 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-100-garage-Sounds | 40 | 11 | 0 | 0 | 3 | 1 | 0 | 0 |
+| mid-100-garage-Lanterns | 69 | 6 | 0 | 0 | 1 | 1 | 7 | 0 |
+| mid-100-almanac | 63 | 4 | 0 | 0 | 1 | 1 | 2 | 0 |
+| mid-100-album | 52 | 3 | 0 | 0 | 1 | 0 | 4 | 0 |
+| mid-100-missions | 101 (29 in the popover) | 18 | 1 | 0 | 1 | 5 | 2 | 0 |
+| mid-100-medals | 142 (70 in the popover) | 18 | 1 | 0 | 1 | 10 | 3 | 0 |
+| mid-100-flame | 119 (47 in the popover) | 18 | 1 | 0 | 1 | 5 | 2 | 0 |
+| mid-100-twelve | 250 (178 in the popover) | 19 | 1 | 0 | 2 | 5 | 7 | 0 |
+| mid-100-settings | 20 | 9 | 0 | 0 | 1 | 3 | 0 | 0 |
+| mid-100-pause | 52 | 11 | 1 | 0 | 0 | 3 | 1 | 0 |
+| mid-100-photo | 24 | 7 | 1 | 0 | 2 | 0 | 0 | 0 |
+| mid-20-garage | 50 | 12 | 0 | 0 | 1 | 5 | 0 | 0 |
+| mid-20-garage-Sleds | 50 | 12 | 0 | 0 | 1 | 5 | 0 | 0 |
+| mid-20-garage-Paint | 41 | 10 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-20-garage-Scarves | 44 | 10 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-20-garage-Hats | 37 | 10 | 0 | 0 | 3 | 1 | 0 | 0 |
+| mid-20-garage-Trails | 41 | 10 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-20-garage-Sounds | 40 | 11 | 0 | 0 | 3 | 1 | 0 | 0 |
+| mid-20-garage-Lanterns | 64 | 6 | 0 | 0 | 1 | 1 | 3 | 0 |
+| mid-20-almanac | 65 | 4 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-20-album | 52 | 3 | 0 | 0 | 1 | 0 | 4 | 0 |
+| mid-20-missions | 84 (26 in the popover) | 18 | 1 | 0 | 1 | 5 | 2 | 0 |
+| mid-20-medals | 118 (60 in the popover) | 18 | 1 | 0 | 1 | 9 | 3 | 0 |
+| mid-20-flame | 106 (48 in the popover) | 18 | 1 | 0 | 1 | 5 | 3 | 0 |
+| mid-20-twelve | 239 (181 in the popover) | 19 | 1 | 0 | 2 | 5 | 7 | 0 |
+| mid-20-settings | 20 | 9 | 0 | 0 | 1 | 3 | 0 | 0 |
+| mid-20-pause | 49 | 11 | 1 | 0 | 0 | 3 | 0 | 0 |
+| mid-20-photo | 24 | 7 | 1 | 0 | 2 | 0 | 0 | 0 |
+| mid-5-garage | 50 | 12 | 0 | 0 | 1 | 5 | 0 | 0 |
+| mid-5-garage-Sleds | 50 | 12 | 0 | 0 | 1 | 5 | 0 | 0 |
+| mid-5-garage-Paint | 43 | 10 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-5-garage-Scarves | 44 | 10 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-5-garage-Hats | 34 | 10 | 0 | 0 | 3 | 1 | 0 | 0 |
+| mid-5-garage-Trails | 42 | 10 | 0 | 0 | 1 | 1 | 1 | 0 |
+| mid-5-garage-Sounds | 40 | 11 | 0 | 0 | 3 | 1 | 1 | 0 |
+| mid-5-garage-Lanterns | 53 | 6 | 0 | 0 | 1 | 1 | 2 | 0 |
+| mid-5-almanac | 97 | 1 | 0 | 0 | 1 | 1 | 2 | 0 |
+| mid-5-album | 49 | 3 | 0 | 0 | 1 | 0 | 2 | 0 |
+| mid-5-missions | 84 (27 in the popover) | 14 | 1 | 0 | 0 | 4 | 1 | 0 |
+| mid-5-medals | 113 (56 in the popover) | 14 | 1 | 0 | 0 | 7 | 3 | 0 |
+| mid-5-flame | 105 (48 in the popover) | 14 | 1 | 0 | 0 | 4 | 2 | 0 |
+| mid-5-twelve | 232 (175 in the popover) | 16 | 1 | 0 | 1 | 4 | 8 | 0 |
+| mid-5-settings | 20 | 9 | 0 | 0 | 1 | 3 | 0 | 0 |
+| mid-5-pause | 50 | 11 | 1 | 0 | 0 | 3 | 0 | 0 |
+| mid-5-photo | 24 | 7 | 1 | 0 | 2 | 0 | 0 | 0 |
+| mid-50-garage | 47 | 12 | 0 | 0 | 1 | 4 | 0 | 0 |
+| mid-50-garage-Sleds | 47 | 12 | 0 | 0 | 1 | 4 | 0 | 0 |
+| mid-50-garage-Paint | 41 | 10 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-50-garage-Scarves | 44 | 10 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-50-garage-Hats | 37 | 10 | 0 | 0 | 3 | 1 | 0 | 0 |
+| mid-50-garage-Trails | 41 | 10 | 0 | 0 | 1 | 1 | 0 | 0 |
+| mid-50-garage-Sounds | 40 | 11 | 0 | 0 | 3 | 1 | 0 | 0 |
+| mid-50-garage-Lanterns | 69 | 6 | 0 | 0 | 1 | 1 | 5 | 0 |
+| mid-50-almanac | 70 | 4 | 0 | 0 | 1 | 1 | 2 | 0 |
+| mid-50-album | 52 | 3 | 0 | 0 | 1 | 0 | 4 | 0 |
+| mid-50-missions | 82 (25 in the popover) | 17 | 1 | 0 | 0 | 5 | 2 | 0 |
+| mid-50-medals | 120 (63 in the popover) | 17 | 1 | 0 | 0 | 9 | 4 | 0 |
+| mid-50-flame | 104 (47 in the popover) | 17 | 1 | 0 | 0 | 5 | 3 | 0 |
+| mid-50-twelve | 240 (183 in the popover) | 18 | 1 | 0 | 1 | 5 | 9 | 0 |
+| mid-50-settings | 20 | 9 | 0 | 0 | 1 | 3 | 0 | 0 |
+| mid-50-pause | 48 | 11 | 1 | 0 | 0 | 3 | 0 | 0 |
+| mid-50-photo | 24 | 7 | 1 | 0 | 2 | 0 | 0 | 0 |
+| novice-50-garage | 50 | 12 | 0 | 0 | 1 | 5 | 0 | 0 |
+| novice-50-garage-Sleds | 50 | 12 | 0 | 0 | 1 | 5 | 0 | 0 |
+| novice-50-garage-Paint | 41 | 10 | 0 | 0 | 1 | 1 | 0 | 0 |
+| novice-50-garage-Scarves | 44 | 10 | 0 | 0 | 1 | 1 | 0 | 0 |
+| novice-50-garage-Hats | 37 | 10 | 0 | 0 | 3 | 1 | 0 | 0 |
+| novice-50-garage-Trails | 41 | 10 | 0 | 0 | 1 | 1 | 0 | 0 |
+| novice-50-garage-Sounds | 40 | 11 | 0 | 0 | 3 | 1 | 0 | 0 |
+| novice-50-garage-Lanterns | 64 | 6 | 0 | 0 | 1 | 1 | 4 | 0 |
+| novice-50-almanac | 73 | 3 | 0 | 0 | 1 | 1 | 2 | 0 |
+| novice-50-album | 45 | 3 | 0 | 0 | 1 | 0 | 2 | 0 |
+| novice-50-missions | 95 (31 in the popover) | 18 | 1 | 0 | 1 | 5 | 3 | 0 |
+| novice-50-medals | 123 (59 in the popover) | 18 | 1 | 0 | 1 | 8 | 4 | 0 |
+| novice-50-flame | 111 (47 in the popover) | 18 | 1 | 0 | 1 | 5 | 3 | 0 |
+| novice-50-twelve | 242 (178 in the popover) | 19 | 1 | 0 | 2 | 5 | 6 | 0 |
+| novice-50-settings | 20 | 9 | 0 | 0 | 1 | 3 | 0 | 0 |
+| novice-50-pause | 54 | 11 | 1 | 0 | 0 | 3 | 1 | 0 |
+| novice-50-photo | 24 | 7 | 1 | 0 | 2 | 0 | 0 | 0 |
+| fresh-title | 17 | 2 | 1 | 0 | 1 | 0 | 0 | 0 |
+| mid-1-title | 61 | 14 | 1 | 0 | 0 | 3 | 2 | 1 |
+| mid-1-title-ready | 63 | 14 | 1 | 0 | 1 | 3 | 2 | 0 |
+| mid-1-title-cup | 63 | 14 | 1 | 0 | 1 | 3 | 1 | 0 |
+| mid-1-title-daily | 62 | 14 | 1 | 0 | 1 | 3 | 2 | 0 |
+| mid-5-title | 57 | 14 | 1 | 0 | 0 | 4 | 1 | 1 |
+| mid-5-title-ready | 57 | 14 | 1 | 0 | 0 | 4 | 1 | 0 |
+| mid-5-title-cup | 55 | 14 | 1 | 0 | 0 | 4 | 0 | 0 |
+| mid-5-title-daily | 54 | 14 | 1 | 0 | 0 | 4 | 1 | 0 |
+| mid-20-title | 58 | 18 | 1 | 0 | 1 | 5 | 2 | 1 |
+| mid-20-title-ready | 58 | 18 | 1 | 0 | 1 | 5 | 2 | 0 |
+| mid-20-title-cup | 57 | 15 | 1 | 0 | 1 | 5 | 1 | 0 |
+| mid-20-title-daily | 56 | 15 | 1 | 0 | 1 | 5 | 2 | 0 |
+| mid-50-title | 59 | 17 | 1 | 0 | 0 | 5 | 2 | 1 |
+| mid-50-title-ready | 57 | 17 | 1 | 0 | 0 | 5 | 2 | 0 |
+| mid-50-title-cup | 56 | 14 | 1 | 0 | 0 | 5 | 1 | 0 |
+| mid-50-title-daily | 55 | 14 | 1 | 0 | 0 | 5 | 2 | 0 |
+| mid-100-title | 74 | 18 | 1 | 0 | 1 | 5 | 1 | 1 |
+| mid-100-title-ready | 72 | 18 | 1 | 0 | 1 | 5 | 1 | 0 |
+| mid-100-title-cup | 68 | 17 | 1 | 0 | 1 | 5 | 0 | 0 |
+| mid-100-title-trial | 69 | 15 | 1 | 0 | 1 | 5 | 2 | 0 |
+| mid-100-title-daily | 65 | 15 | 1 | 0 | 1 | 5 | 1 | 0 |
+| novice-1-title | 59 | 14 | 1 | 0 | 1 | 3 | 2 | 1 |
+| novice-1-title-ready | 59 | 14 | 1 | 0 | 1 | 3 | 2 | 0 |
+| novice-1-title-cup | 59 | 14 | 1 | 0 | 1 | 3 | 1 | 0 |
+| novice-1-title-daily | 58 | 14 | 1 | 0 | 1 | 3 | 2 | 0 |
+| novice-5-title | 61 | 15 | 1 | 0 | 1 | 5 | 3 | 1 |
+| novice-5-title-ready | 61 | 15 | 1 | 0 | 1 | 5 | 3 | 0 |
+| novice-5-title-cup | 56 | 15 | 1 | 0 | 1 | 5 | 1 | 0 |
+| novice-5-title-daily | 55 | 15 | 1 | 0 | 1 | 5 | 2 | 0 |
+| novice-20-title | 59 | 18 | 1 | 0 | 1 | 5 | 2 | 1 |
+| novice-20-title-ready | 59 | 18 | 1 | 0 | 1 | 5 | 2 | 0 |
+| novice-20-title-cup | 56 | 15 | 1 | 0 | 1 | 5 | 1 | 0 |
+| novice-20-title-daily | 55 | 15 | 1 | 0 | 1 | 5 | 2 | 0 |
+| novice-50-title | 66 | 18 | 1 | 0 | 1 | 5 | 2 | 1 |
+| novice-50-title-ready | 64 | 18 | 1 | 0 | 1 | 5 | 2 | 0 |
+| novice-50-title-cup | 61 | 15 | 1 | 0 | 1 | 5 | 1 | 0 |
+| novice-50-title-daily | 60 | 15 | 1 | 0 | 1 | 5 | 2 | 0 |
+| novice-100-title | 66 | 18 | 1 | 0 | 1 | 5 | 2 | 1 |
+| novice-100-title-ready | 64 | 18 | 1 | 0 | 1 | 5 | 2 | 0 |
+| novice-100-title-cup | 61 | 15 | 1 | 0 | 1 | 5 | 1 | 0 |
+| novice-100-title-daily | 60 | 15 | 1 | 0 | 1 | 5 | 2 | 0 |
+| fresh-title-link | 17 | 2 | 1 | 0 | 1 | 0 | 1 | 0 |
+| mid-20-title-link | 62 | 15 | 1 | 0 | 1 | 5 | 2 | 1 |
