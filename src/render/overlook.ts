@@ -1,6 +1,6 @@
 import { BoxGeometry, BufferGeometry, Color, CylinderGeometry, IcosahedronGeometry, InstancedMesh, Matrix4, Mesh, Object3D, Quaternion, ShaderMaterial, Vector3 } from 'three';
 import { MOODS } from '../sim/chaos';
-import { Course, FOREST_LIMIT, RUN_OUT, type Section, type SectionKind } from '../sim/course';
+import { Course, FOREST_LIMIT, type Section, type SectionKind } from '../sim/course';
 import type { BiomeId } from '../sim/mountains';
 import { noise1 } from '../sim/noise';
 import { composeFor, type ComposePlan } from './compose';
@@ -214,7 +214,7 @@ export class OverlookPlan {
   planTo(_z: number): void {
     if (this.done) return;
     this.done = true;
-    const end = this.course.finishZ + RUN_OUT;
+    const end = this.course.finishZ + this.course.runOut;
     while (this.nextZ <= end) this.planNext(end);
     this.close(end);
   }

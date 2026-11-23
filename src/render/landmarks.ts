@@ -1,7 +1,7 @@
 import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, DoubleSide, InstancedBufferAttribute, InstancedMesh, Matrix4, Mesh, Object3D, Quaternion, ShaderMaterial, Vector3, Vector4 } from 'three';
 import type { Beat } from '../game/beats';
 import { MOODS, Mood } from '../sim/chaos';
-import { CHUNK_LEN, Course, RUN_OUT, Section, SectionKind } from '../sim/course';
+import { CHUNK_LEN, Course, Section, SectionKind } from '../sim/course';
 import type { BiomeId } from '../sim/mountains';
 import { CrowdUniforms, FIGURE_H, crowdColors, crowdMaterial, figureGeometry, restyleCrowd } from './crowd';
 import { ENCLOSED, Kind, Piece, Rail, SPANS, SiteCtx, mergePiece, pieceFor } from './landmarkKit';
@@ -498,7 +498,7 @@ export class SitePlan {
   /** Where everything stands (see the class's head). */
   private layout(): Draft[] {
     const c = this.course;
-    const end = c.finishZ + RUN_OUT;
+    const end = c.finishZ + c.runOut;
     const seed = c.seed;
     const secs: Section[] = [];
     for (let z = 0; z < end; ) {
@@ -603,7 +603,7 @@ export class SitePlan {
   private fill(drafts: Draft[]): void {
     const c = this.course;
     const seed = c.seed;
-    const end = c.finishZ + RUN_OUT;
+    const end = c.finishZ + c.runOut;
     probing = true;
     const looks = new OverlookPlan(c);
     looks.planTo(end);
@@ -773,7 +773,7 @@ export function pieceCtx(c: Course, s: Site, p: Palette, night: boolean, low: bo
     rail: s.len > 0 ? siteRail(c, s) : undefined,
     low,
     line: c.finishZ - s.z,
-    lastZ: c.finishZ + RUN_OUT - s.z,
+    lastZ: c.finishZ + c.runOut - s.z,
   };
 }
 
