@@ -840,6 +840,41 @@ a bank or like a rail (only riding shows it); `TRACK_DAMP`, `LIFT` and `ROOF_GRA
 10. **The lab Old Run's seed** `0x9b05688c` lives in `BIOME_BY_SEED` without a `MOUNTAINS` entry until the Old Run's
     lane registers the mountain (it may keep that seed or choose another).
 
+**The main lane's answers** (the word to build Phase 2, after 7bc73d7):
+1. The seam is approved: per-mountain files behind constructor flags; `course.ts`, `sim.ts` and the bot opened once,
+   by this lane.
+2. The track's four changes need no owner's word: mechanics only a new mountain uses, under new ids, never run on the
+   five (the fingerprint proves it). A `SIM_VERSION` 11 break would; this is not one.
+3. **No style change on the Old Run**: scoring stays exactly as it is; glaze time is not a wall ride.
+4. **The four concept changes are confirmed, for the mountain lanes:** the Horseshoe is a 35 degree hook (held about
+   150 m, then turned back), not 60; Gablefall's roofs are never higher than the last; Gablefall opens on the nave then
+   a close, so the start gate has calm ground at 110 m; Gullhaven's chute and fish sheds are kinds of its own
+   (`descent`, `sheds`).
+5. **Home riders:** a new `HOME` list a mountain (names, looks, style and skill, never a duel), the brief's section 8
+   decision 7; The Twelve stays twelve with homes 0 to 4.
+6. **The Long Night:** sixteen legs in the ladder's order, switched once when all three register; Lanternfall stays the
+   finale; a saved best stays a count of legs, no archive.
+7. **Events:** no avalanche or yeti on the Old Run, no yeti on Gullhaven.
+8. **Trials:** a Trial rides its mountain whether or not the player has opened it; `EIGHT_FROM` stays null until the
+   commit that registers the last of the three; the main lane sets the week at release.
+9. **The fingerprint:** measured in step 0 (below): 11.8 s in one file, so it stays one file and runs with every step.
+10. **The lab seed** `0x9b05688c`, in `BIOME_BY_SEED` only, until the Old Run's lane registers the mountain.
+
+---
+
+## 15. Phase 2: the groundwork as built (a log, step by step)
+
+**Step 0: the fingerprint.** `scripts/r9/fivedigest.ts` (the digests), `scripts/r9/five-fingerprint.ts` (prints them
+with their cost) and `tests/five.test.ts` (holds them), captured on the base code (`src` as at 6255b8d) with no other
+change, each digest run twice to the same value. What it holds: eleven course digests (the five and the fairness
+suite's six Dailies, each the whole course as values: sections, stages, ledges, leaps, gates, every chunk to the
+run-out's end, a grid of ground and lines every 2.5 m at eleven x, the set pieces in three variants and under Comet
+Night, the legends, the climax); one chaos digest (6,000 runs' rolls and triggers, 60 weeks' Cups and Trials, 200
+night legs); and the rides (a scripted rider on three rolls, six bot rides of three skills and two styles, the lab's
+mid and clumsy pilots, on each of the five; the bot's six on a Daily). Cost: courses 1.1 s, chaos under 0.1 s, rides
+6.7 to 8.0 s under `tsx`; the test file 11.8 s in vitest on one worker. Under the 20 s line, so it is one file, run
+with every step.
+
 ---
 
 ## Appendix: the read sites as the script counts them (6255b8d)
