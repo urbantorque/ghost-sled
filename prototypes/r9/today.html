@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#121933" />
+    <title>Ghost Sled: today's screen (round 9 screens lane)</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #121933;
+      }
+      .p9-scene {
+        position: fixed;
+        inset: 0;
+        background-position: center;
+        background-size: cover;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="p9-scene"></div>
+    <div id="app"></div>
+    <script type="module" src="./today.ts"></script>
+  </body>
+</html>

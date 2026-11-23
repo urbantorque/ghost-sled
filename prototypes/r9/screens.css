@@ -1,0 +1,1223 @@
+/*
+  Round 9, the screens lane: the title and the results as prototypes, in tokens.css's one system. Desk first, then a
+  phone held upright (under 640 px wide). The scene is the hero: the title keeps to the logo's side of a wide screen
+  and to the top and the thumbs' band of a tall one; the results to a moment at the top and one column at the far
+  edge (the bottom on a phone).
+*/
+
+html {
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--c-ink);
+}
+
+body {
+  font-family: var(--font);
+  font-size: var(--u);
+  line-height: var(--lh-text);
+  color: var(--c-text);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
+  user-select: none;
+  color-scheme: dark;
+}
+
+/* The captured frame of the game the screen stands over. */
+.p9-scene {
+  position: fixed;
+  inset: 0;
+  background-position: center;
+  background-size: cover;
+}
+
+.p9-screen {
+  position: fixed;
+  inset: 0;
+  padding: var(--st) var(--sr) var(--sb) var(--sl);
+}
+
+.p9-screen *:focus-visible,
+.is-pad .p9-screen .gs-pad-focus,
+.is-pad .p9-sheet .gs-pad-focus {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+/* =============================================================== the title */
+
+/* A soft ink pool on the logo's side, so the white words never lean on the snow behind them. */
+.t9-pool {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(120% 90% at 0% 60%, rgba(10, 14, 32, 0.5), rgba(10, 14, 32, 0) 55%);
+}
+
+.t9 {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto auto auto auto;
+  align-content: start;
+  justify-items: start;
+  width: min(46vw, 600px);
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.t9-logo {
+  margin: 0;
+  display: grid;
+  justify-items: start;
+  font-size: var(--fs-logo);
+  font-style: italic;
+  font-weight: var(--fw-display);
+  letter-spacing: -0.055em;
+  line-height: 0.84;
+  text-transform: uppercase;
+  padding: 0 0.14em 0 0;
+}
+
+.t9-logo .l1 {
+  text-shadow: 0.05em 0.045em 0 var(--c-ghost), 0.1em 0.09em 0 rgba(18, 25, 51, 0.55);
+}
+
+.t9-logo .l2 {
+  margin-left: 0.3em;
+  text-shadow: 0.05em 0.045em 0 var(--c-you), 0.1em 0.09em 0 rgba(18, 25, 51, 0.55);
+}
+
+.t9-logo .runner {
+  display: block;
+  width: 2.05em;
+  height: 0.16em;
+  margin: 0.12em 0 0 0.24em;
+  color: var(--c-you);
+}
+
+.t9-logo .runner svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.t9-tagline {
+  margin: var(--sp-4) 0 0;
+  font-weight: var(--fw-label);
+  font-size: var(--fs-l);
+  text-shadow: var(--halo);
+}
+
+/* ---- the picker: where you ride ---- */
+.t9-pick {
+  margin-top: var(--sp-5);
+  display: grid;
+  gap: var(--sp-2);
+  grid-row: 3;
+  align-self: end;
+}
+
+.t9-strip {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: stretch;
+}
+
+.t9-mtn {
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  width: clamp(72px, 6.8vw, 106px);
+  min-height: clamp(76px, 12vmin, 104px);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-card);
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hair), var(--shadow);
+  color: var(--c-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform var(--dur-tap) var(--ease-spring);
+}
+
+@media (hover: hover) {
+  .t9-mtn:not(.is-sel):hover {
+    transform: translateY(-2px);
+  }
+}
+
+.t9-mtn:active {
+  transform: scale(0.97);
+}
+
+.t9-sky {
+  position: relative;
+  min-height: 44px;
+}
+
+.t9-sky svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.b-alpine .t9-sky {
+  background: linear-gradient(180deg, #2b4c9b 0%, #ffb38a 100%);
+}
+.b-glacier .t9-sky {
+  background: linear-gradient(180deg, #2b5fa8 0%, #ffd9c4 100%);
+}
+.b-volcanic .t9-sky {
+  background: linear-gradient(180deg, #2a1e3a 0%, #ff8a50 100%);
+}
+.b-blossom .t9-sky {
+  background: linear-gradient(180deg, #3a5ba8 0%, #ffc4d6 100%);
+}
+.b-lantern .t9-sky {
+  background: linear-gradient(180deg, #0b0a3e 0%, #4a388e 62%, #c88a70 100%);
+}
+
+.t9-mtn-name {
+  padding: 6px 10px 8px;
+  font-size: var(--fs-s);
+  font-weight: var(--fw-label);
+  font-style: italic;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.t9-mtn.is-locked .t9-sky {
+  filter: saturate(0.5) brightness(0.55);
+}
+
+.t9-mtn.is-locked .t9-mtn-name {
+  color: var(--text-dim);
+}
+
+.t9-lock {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-pill);
+  background: rgba(18, 25, 51, 0.8);
+}
+
+.t9-lock .gs9-i {
+  width: 14px;
+  height: 14px;
+}
+
+/* The picked mountain is the larger card: its name, your best there, and how you ride it. */
+.t9-mtn.is-sel {
+  width: clamp(140px, 13vw, 200px);
+  box-shadow: inset 0 0 0 2px var(--c-text), var(--shadow);
+  cursor: default;
+}
+
+.t9-mtn.is-sel .t9-mtn-name {
+  font-size: var(--fs-m);
+  font-weight: var(--fw-display);
+}
+
+.t9-mtn-best {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  background: rgba(18, 25, 51, 0.82);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-label);
+}
+
+.t9-mtn-best .gs9-i {
+  width: 1.1em;
+  height: 1.1em;
+  color: var(--c-best);
+}
+
+/* How you ride the picked mountain: its hour and its mirror, once they are open. */
+.t9-how {
+  grid-row: 5;
+  margin-top: var(--sp-2);
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.t9-seg {
+  display: inline-flex;
+  padding: 3px;
+  gap: 3px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hair-strong);
+}
+
+.t9-seg .gs9-b {
+  min-height: 36px;
+  padding: 0 0.85em;
+  font-size: var(--fs-s);
+  background: transparent;
+  box-shadow: none;
+  color: rgba(245, 243, 255, 0.86);
+}
+
+.t9-tick {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 2px rgba(245, 243, 255, 0.6);
+}
+
+[aria-pressed='true'] > .t9-tick {
+  background: var(--c-text);
+  color: var(--c-ink);
+  box-shadow: none;
+}
+
+.t9-tick .gs9-i {
+  width: 12px;
+  height: 12px;
+}
+
+.t9-seg .gs9-b[aria-pressed='true'] {
+  background: rgba(245, 243, 255, 0.14);
+  color: var(--c-text);
+}
+
+.t9-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(180deg, var(--z), var(--hz));
+  box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.35);
+}
+
+/* ---- Ride, with its reason on it ---- */
+.t9-ride {
+  grid-row: 4;
+  margin-top: var(--sp-3);
+  min-width: clamp(250px, 24vw, 340px);
+  min-height: clamp(62px, 10.5vmin, 84px);
+  padding: 0 clamp(14px, 1.5vw, 22px) 0 clamp(20px, 2.2vw, 30px);
+  justify-content: flex-start;
+  gap: 0.7em;
+  font-size: var(--fs-xl);
+}
+
+.t9-ride > .gs9-i {
+  width: 0.9em;
+  height: 0.9em;
+}
+
+.t9-ride-t {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  text-align: left;
+}
+
+.t9-ride-v {
+  line-height: 1;
+}
+
+.t9-ride-why {
+  font-size: max(12px, 0.52em);
+  font-style: normal;
+  font-weight: var(--fw-label);
+  letter-spacing: 0.01em;
+  text-transform: none;
+  opacity: 0.86;
+}
+
+.t9-key {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.8em;
+  padding: 0 0.6em;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(18, 25, 51, 0.32);
+  font-size: var(--fs-xs);
+  font-style: normal;
+  font-weight: var(--fw-label);
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.is-touch .t9-key {
+  display: none;
+}
+
+/* ---- the one quiet line: what you are working toward ---- */
+.t9-aim {
+  grid-row: 6;
+  margin: var(--sp-3) 0 0 var(--sp-1);
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-weight: var(--fw-label);
+  font-size: var(--fs-m);
+  text-shadow: var(--halo);
+  max-width: 60ch;
+  text-wrap: balance;
+}
+
+.t9-aim .gs9-i {
+  color: var(--c-ghost);
+  filter: drop-shadow(0 0 2px var(--c-ink));
+}
+
+.t9-aim.is-rank .gs9-i {
+  color: var(--c-text);
+}
+
+/* ---- the doors ---- */
+.t9-doors {
+  grid-row: 7;
+  margin-top: var(--sp-4);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.t9-door {
+  position: relative;
+  min-height: 50px;
+  padding: 0 1.05em 0 0.85em;
+  gap: 0.6em;
+}
+
+.t9-door-t {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.t9-door-l {
+  font-weight: var(--fw-label);
+}
+
+.t9-door-s {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-text);
+  color: var(--text-dim);
+}
+
+.t9-door-s .is-flame {
+  color: var(--c-gift);
+}
+
+.t9-new {
+  margin-left: 2px;
+}
+
+.t9-sound {
+  position: fixed;
+  top: var(--st);
+  right: var(--sr);
+}
+
+/* =============================================================== a door's room (a sheet) */
+
+.p9-sheet {
+  position: fixed;
+  z-index: var(--z-door);
+  top: var(--st);
+  bottom: var(--sb);
+  left: var(--sl);
+  width: min(600px, 47vw);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  border-radius: var(--r-card);
+  background: var(--surface-solid);
+  box-shadow: inset 0 0 0 1px var(--hair), var(--shadow);
+  overflow: hidden;
+  animation: gs9-in var(--dur-enter) var(--ease-out) both;
+  --from-x: -24px;
+  --from-y: 0;
+}
+
+.p9-sheet.is-right {
+  left: auto;
+  right: var(--sr);
+  --from-x: 24px;
+}
+
+.p9-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-4) var(--sp-3) var(--sp-5);
+}
+
+.p9-sheet-h {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-style: italic;
+  font-weight: var(--fw-display);
+  line-height: var(--lh-tight);
+}
+
+.p9-sheet-body {
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 var(--sp-5) var(--sp-5);
+  display: grid;
+  gap: var(--sp-4);
+  align-content: start;
+}
+
+.p9-intro {
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-card);
+  background: rgba(255, 211, 77, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 211, 77, 0.35);
+  font-weight: var(--fw-text);
+}
+
+.p9-intro b {
+  color: var(--c-gift);
+}
+
+/* A block in a room: its words on the left, its one action on the right. */
+.p9-block {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+}
+
+.p9-block-h {
+  margin: 0;
+  font-size: var(--fs-l);
+  font-weight: var(--fw-display);
+  font-style: italic;
+  line-height: var(--lh-tight);
+}
+
+.p9-block-p {
+  margin: 2px 0 0;
+  color: var(--text-dim);
+  font-weight: var(--fw-text);
+}
+
+.p9-block > .gs9-b {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+}
+
+.p9-block-x {
+  grid-column: 1 / -1;
+}
+
+.p9-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.p9-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 30px;
+  font-weight: var(--fw-text);
+}
+
+.p9-row .p9-row-t {
+  flex: 1;
+  min-width: 0;
+}
+
+.p9-row .p9-row-v {
+  color: var(--text-dim);
+  font-weight: var(--fw-label);
+  white-space: nowrap;
+}
+
+.p9-row.is-done .p9-row-t {
+  color: var(--text-dim);
+}
+
+.p9-check {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 2px var(--hair-strong);
+}
+
+.p9-row.is-done .p9-check {
+  background: var(--c-gift);
+  color: var(--c-ink);
+  box-shadow: none;
+}
+
+.p9-check .gs9-i {
+  width: 14px;
+  height: 14px;
+}
+
+.p9-bar {
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.12);
+  overflow: hidden;
+}
+
+.p9-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--c-text);
+  transform-origin: left;
+}
+
+.p9-days {
+  display: flex;
+  gap: 6px;
+}
+
+.p9-day {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 40px;
+  padding: 6px 0;
+  border-radius: var(--r-card);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-label);
+  color: var(--text-dim);
+}
+
+.p9-day .gs9-i {
+  width: 18px;
+  height: 18px;
+}
+
+.p9-day.is-done {
+  color: var(--c-gift);
+  box-shadow: inset 0 0 0 1px rgba(255, 211, 77, 0.4);
+}
+
+.p9-day.is-today {
+  box-shadow: inset 0 0 0 2px var(--c-gift);
+  color: var(--c-gift);
+}
+
+.p9-medal {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  border-radius: var(--r-pill);
+  vertical-align: -0.1em;
+  box-shadow: inset 0 0 0 2px rgba(18, 25, 51, 0.35);
+}
+.p9-medal.m-1 {
+  background: var(--c-bronze);
+}
+.p9-medal.m-2 {
+  background: var(--c-silver);
+}
+.p9-medal.m-3 {
+  background: var(--c-gold);
+}
+
+.p9-busts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.p9-bust {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.06);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  overflow: hidden;
+  opacity: 0.45;
+}
+
+.p9-bust svg {
+  width: 100%;
+  height: 100%;
+}
+
+.p9-bust.is-beaten {
+  opacity: 1;
+}
+
+.p9-bust.is-next {
+  opacity: 1;
+  box-shadow: inset 0 0 0 2px var(--rider, var(--c-text));
+}
+
+.p9-sep {
+  height: 1px;
+  background: var(--hair);
+}
+
+/* =============================================================== the results */
+
+.r9 {
+  display: block;
+}
+
+/* Beat one: how you did, in words, over the scene at the top. */
+.r9-mo {
+  position: fixed;
+  top: var(--st);
+  left: var(--sl);
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  max-width: min(46vw, 620px);
+  text-shadow: var(--halo);
+}
+
+.r9-mo-figrow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25em;
+}
+
+.r9-mo-fig {
+  font-size: var(--fs-display);
+  font-style: italic;
+  font-weight: var(--fw-display);
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+  padding-right: 0.08em;
+  color: var(--mo, var(--c-text));
+}
+
+.r9-mo-of {
+  font-size: var(--fs-xl);
+  font-style: italic;
+  font-weight: var(--fw-display);
+}
+
+.r9-mo.is-win {
+  --mo: var(--c-best);
+}
+.r9-mo.is-podium {
+  --mo: var(--c-silver);
+}
+
+.r9-mo-rule {
+  width: min(100%, 300px);
+  height: 5px;
+  margin: 4px 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--mo, var(--c-text));
+  box-shadow: 0 0 0 2px var(--halo-c);
+}
+
+.r9-mo-word {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+  font-size: var(--fs-xl);
+  font-style: italic;
+  font-weight: var(--fw-display);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: var(--lh-tight);
+}
+
+.r9-mo-time {
+  font-size: 0.8em;
+  text-transform: none;
+  font-style: normal;
+  font-weight: var(--fw-label);
+}
+
+.r9-mo-fact {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-top: var(--sp-2);
+  padding: 5px 14px 5px 8px;
+  border-radius: var(--r-pill);
+  background: rgba(18, 25, 51, 0.78);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  text-shadow: none;
+  font-size: var(--fs-l);
+  font-weight: var(--fw-label);
+}
+
+.r9-mo-fact .r9-mo-bust {
+  width: 32px;
+  height: 32px;
+  margin: -2px 0 -2px -4px;
+}
+
+/* A wreck's figure sits a little crooked (ART.md 10). */
+.r9-mo.is-wreck .r9-mo-figrow {
+  transform: rotate(-3deg);
+  transform-origin: left bottom;
+}
+
+.r9-mo-word .p9-medal {
+  align-self: center;
+}
+
+/* On a phone the fact leads the column, above the reward. */
+.r9-col > .r9-mo-fact {
+  justify-self: start;
+  margin: 0;
+}
+
+.r9-again.is-long {
+  font-size: clamp(16px, calc(var(--u) * 1.2), 23px);
+}
+
+.r9-mo-fact .who {
+  color: var(--c-ghost);
+}
+.r9-mo-fact .who.k-grudge {
+  color: var(--c-grudge);
+}
+.r9-mo-fact .who.k-rider {
+  color: var(--rider);
+}
+
+.r9-mo-fact.is-best {
+  color: var(--c-best);
+}
+
+.r9-mo-bust {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  background: rgba(18, 25, 51, 0.7);
+  box-shadow: inset 0 0 0 2px var(--rider, var(--c-text));
+}
+
+.r9-mo-bust svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Beats two and three: the one reward, then the one button, in one column at the far edge. */
+.r9-col {
+  position: fixed;
+  right: var(--sr);
+  bottom: var(--sb);
+  width: min(400px, 34vw);
+  display: grid;
+  gap: var(--sp-3);
+}
+
+.r9-got {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-1) var(--sp-4);
+  align-items: center;
+  padding: var(--sp-4);
+}
+
+.r9-got-art {
+  grid-row: 1 / span 2;
+  position: relative;
+  width: 76px;
+  height: 76px;
+  border-radius: var(--r-card);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: rgba(245, 243, 255, 0.08);
+}
+
+.r9-got-art svg {
+  width: 100%;
+  height: 100%;
+}
+
+.r9-got-art > .gs9-i {
+  width: 36px;
+  height: 36px;
+}
+
+.r9-got-art.is-gift > .gs9-i {
+  color: var(--c-gift);
+}
+
+.r9-got-k {
+  align-self: end;
+  font-size: var(--fs-s);
+  font-weight: var(--fw-label);
+  color: var(--text-dim);
+}
+
+.r9-got-n {
+  align-self: start;
+  font-size: var(--fs-2xl);
+  font-style: italic;
+  font-weight: var(--fw-display);
+  line-height: var(--lh-tight);
+}
+
+.r9-rank {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--hair);
+  font-size: var(--fs-s);
+  font-weight: var(--fw-label);
+}
+
+.r9-rank .p9-bar {
+  height: 6px;
+}
+
+/* The kicker already names the rank: the bar and the gifts only. */
+.r9-rank.is-bare {
+  grid-template-columns: 1fr auto;
+}
+
+.r9-gifts {
+  color: var(--c-gift);
+  white-space: nowrap;
+}
+
+.r9-gifts .gs9-i {
+  width: 1.1em;
+  height: 1.1em;
+  vertical-align: -0.2em;
+}
+
+.r9-again {
+  width: 100%;
+  min-height: clamp(62px, 10vmin, 80px);
+  padding: 0 var(--sp-4) 0 var(--sp-5);
+  justify-content: flex-start;
+  gap: 0.7em;
+  font-size: var(--fs-xl);
+}
+
+.r9-again > .gs9-i {
+  width: 0.9em;
+  height: 0.9em;
+}
+
+.r9-foot {
+  display: flex;
+  gap: var(--sp-2);
+  justify-content: space-between;
+}
+
+.r9-foot .gs9-b {
+  flex: 1;
+}
+
+/* The story: each beat waits, then lands; a tap or a key lands them all. Reduced motion shows the end. */
+.r9.is-playing [data-beat] {
+  opacity: 0;
+}
+
+.r9 [data-beat].is-on {
+  opacity: 1;
+  animation: gs9-in var(--dur-beat) var(--ease-out) both;
+}
+
+.r9 .r9-got.is-on {
+  animation: gs9-turn var(--dur-turn) var(--ease-spring) both;
+}
+
+.r9-mo [data-beat].is-on {
+  --from-x: -18px;
+  --from-y: 0;
+}
+
+.r9.is-done [data-beat] {
+  opacity: 1;
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .r9.is-playing [data-beat] {
+    opacity: 1;
+  }
+  .r9 [data-beat].is-on {
+    animation: none;
+  }
+}
+
+/* Details: one level down, a sheet from the column's side. */
+.r9-det .p9-sheet-body {
+  gap: var(--sp-5);
+}
+
+.r9-sec-h {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-s);
+  font-weight: var(--fw-label);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.r9-order .p9-row {
+  min-height: 28px;
+}
+
+.r9-order .p9-row.is-you {
+  color: var(--c-you);
+  font-weight: var(--fw-display);
+}
+
+.r9-order .p9-row-n {
+  width: 2ch;
+  text-align: right;
+  color: var(--text-dim);
+}
+
+.r9-order .k-grudge .p9-row-t {
+  color: var(--c-grudge);
+}
+
+.r9-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.r9-det-go {
+  position: sticky;
+  bottom: 0;
+  margin: 0 calc(-1 * var(--sp-5)) calc(-1 * var(--sp-5));
+  padding: var(--sp-3) var(--sp-5) var(--sp-5);
+  background: linear-gradient(180deg, rgba(18, 25, 51, 0), var(--surface-solid) 30%);
+}
+
+/* With a sheet up, the screen under it steps out of view: the sheet is the screen until it closes. */
+.has-sheet .r9-col,
+.has-sheet .t9 {
+  visibility: hidden;
+}
+
+/* A run that opened nothing turns over Rider Rank's bar alone. */
+.r9-got.is-bar {
+  grid-template-columns: 1fr;
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.r9-got.is-bar .r9-rank {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* =============================================================== a phone held upright */
+
+@media (max-width: 640px) {
+  .t9-pool {
+    background: linear-gradient(180deg, rgba(10, 14, 32, 0.45), rgba(10, 14, 32, 0) 30%, rgba(10, 14, 32, 0) 52%, rgba(10, 14, 32, 0.62) 80%);
+  }
+
+  .t9 {
+    width: 100%;
+    justify-items: stretch;
+    grid-template-rows: auto 1fr auto auto auto auto auto;
+  }
+
+  .t9-logo {
+    justify-self: center;
+    font-size: clamp(48px, 15vw, 84px);
+  }
+
+  .t9-tagline {
+    text-align: center;
+  }
+
+  .t9-pick {
+    grid-row: 3;
+  }
+
+  /* Five chips are wider than a phone: the strip scrolls, the last one peeking at the edge. */
+  .t9-strip {
+    gap: 6px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    margin: 0 calc(-1 * var(--sr)) 0 0;
+    padding: 2px var(--sr) 2px 2px;
+  }
+
+  .t9-mtn,
+  .t9-mtn.is-sel {
+    width: auto;
+    flex: 1 0 70px;
+    min-width: 70px;
+    min-height: 74px;
+    scroll-snap-align: start;
+  }
+
+  .t9-mtn-name,
+  .t9-mtn.is-sel .t9-mtn-name {
+    padding: 4px 6px 6px;
+    font-size: var(--fs-xs);
+  }
+
+  .t9-mtn .t9-mtn-best {
+    display: none;
+  }
+
+  .t9-how {
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .t9-how-best {
+    display: inline-flex;
+    font-weight: var(--fw-label);
+    font-size: var(--fs-s);
+    text-shadow: var(--halo);
+  }
+
+  .t9-ride {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .t9-aim {
+    justify-self: center;
+    text-align: center;
+    margin: var(--sp-3) 0 0;
+  }
+
+  .t9-doors {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+
+  .t9-door {
+    flex-direction: column;
+    gap: 3px;
+    min-height: 62px;
+    padding: 6px 4px;
+  }
+
+  .t9-door-t {
+    text-align: center;
+    justify-items: center;
+  }
+
+  .t9-door-l {
+    font-size: var(--fs-s);
+    white-space: normal;
+    line-height: 1.05;
+  }
+
+  .t9-door-s {
+    font-size: 11px;
+  }
+
+  .t9-new {
+    position: absolute;
+    top: -6px;
+    right: -2px;
+  }
+
+  .p9-sheet,
+  .p9-sheet.is-right {
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    width: auto;
+    max-height: 86%;
+    border-radius: var(--r-card) var(--r-card) 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --from-x: 0;
+    --from-y: 28px;
+  }
+
+  .r9-mo {
+    max-width: calc(100% - var(--sl) - var(--sr));
+  }
+
+  .r9-mo-fig {
+    font-size: clamp(56px, 19vw, 96px);
+  }
+
+  .r9-mo-rule {
+    width: min(100%, 220px);
+    height: 4px;
+  }
+
+  .r9-mo-word {
+    font-size: var(--fs-l);
+    flex-wrap: wrap;
+  }
+
+  .r9-mo-fact {
+    font-size: var(--fs-m);
+  }
+
+  .r9-col {
+    left: var(--sl);
+    width: auto;
+  }
+
+  .r9-got {
+    padding: var(--sp-3);
+  }
+
+  .r9-got-art {
+    width: 60px;
+    height: 60px;
+  }
+
+  .r9-got-n {
+    font-size: var(--fs-xl);
+  }
+}
+
+/* Wide screens: the same layout, the type a step larger through --u. */
+@media (min-width: 1700px) {
+  .r9-col {
+    width: min(460px, 30vw);
+  }
+}
