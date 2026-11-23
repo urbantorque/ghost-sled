@@ -13,7 +13,7 @@ Scripts (all in `scripts/playtest/`; node only, nothing in the game imports them
 - `r9-stills-plan.ts`, `r9-stills.sh`, `r9-stills-name.mjs`: the greyscale still set. Output: `shots/r9/measure/stills/`.
 
 Re-run:
-- `npx tsx scripts/playtest/r9-courses.ts` (a lab sweep: in the heavy slot; 51 s today, 6 seeds a pilot and 30 for the
+- `npx tsx scripts/playtest/r9-courses.ts` (a lab sweep: in the heavy slot; 72 s today, 6 seeds a pilot and 30 for the
   clumsy pilot, a 900 s cap). `--no-rides` prints the course measures alone in a second, no slot needed.
 - `npx tsx scripts/playtest/r9-profiles.ts` (a second; reads `r9-courses.json` for where the mid pilot flew).
 - `bash scripts/playtest/r9-stills.sh http://127.0.0.1:4910/ "C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r9/measure/stills" r9-measure`
