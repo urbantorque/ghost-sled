@@ -12,13 +12,17 @@
 // were cut off between 4,134 and 4,493 m, still riding, so the cap is well past where any pilot finishes.
 // The clumsy pilot rides more seeds than the rest (30 by default): its finish rate is a bar, and six runs a mountain
 // can only say 0, 17, 33, 50, 67, 83 or 100%.
+// --as-new pinecrest,ember counts those as new mountains against the other three: a check of the bars' own code.
 // --no-rides prints the course measures alone (a second, no slot needed). --json defaults to the main checkout's
 // shots/r9/measure/r9-courses.json, which r9-profiles.ts reads for where the mid pilot flew.
 //
 // The bars, for each new mountain (an id MOUNTAINS registers that is not one of FIVE):
 //   new rides     the mid pilot's six (finish time, mean speed, air share, turns per km of the safe line, mean width,
-//                 hazards per km): outside the five's range (below the least or above the most) on at least two
-//   apart         no two new mountains within 10% of each other on more than half of the six
+//                 hazards per km): outside the five's range (below the least or above the most) on at least two;
+//                 and, the stricter reading the notes argue for, outside it by 15% on at least two (held to the bar
+//                 as written, four of the five pass as new against the other four; by 15%, none does). The script
+//                 prints the five held against each other first, so the bar's own reach is on the page.
+//   apart        no two new mountains within 10% of each other on more than half of the six
 //   fair          the clumsy pilot finishes it at least as often as the five's hardest for it
 //   a mechanic    the share of the run's ticks its signature mechanic is in play (r9-courselib.ts MECHANICS; a
 //                 mountain lane writes its function there; zero until then)
@@ -100,7 +104,9 @@ if (RIDES) {
   for (const pilot of PILOTS) for (const m of LIST) for (let i = 0; i < seedsFor(pilot); i++) rides.push(ride(pilot, m, seedOf(i), MAX));
 }
 const summary = (id: string, pilot: string): Summary => sum(rides.filter((r) => r.id === id && r.pilot === pilot));
-const isNew = (id: string): boolean => !FIVE.includes(id);
+/** --as-new <ids>: count these of the five as new, to check the bars' own code before a new mountain exists. */
+const AS_NEW = opt('as-new', '').split(',').filter((s) => s);
+const isNew = (id: string): boolean => !FIVE.includes(id) || AS_NEW.includes(id);
 const fiveFacts = facts.filter((c) => !isNew(c.id));
 const newFacts = facts.filter((c) => isNew(c.id));
 
@@ -252,6 +258,40 @@ for (const m of MORE) row(m.key, m.of, 2);
 if (RIDES) for (const m of RIDE_MORE) if (PILOTS.includes(m.pilot)) row(m.key, (c) => m.of(summary(c.id, m.pilot)), 2);
 json.spread = rows;
 
+/** How far past the five's range a value must sit to count in the stricter reading of "new rides" (the notes' case for
+ *  it: held to the bar as written, four of the five pass against the other four; with this margin none does). */
+const MARGIN = 0.15;
+const outsideOf = (v: number, lo: number, hi: number, margin: number): boolean => v < lo * (1 - margin) || v > hi * (1 + margin);
+const near = (x: number, y: number): boolean => Math.abs(x - y) <= 0.1 * Math.max(Math.abs(x), Math.abs(y));
+
+// The bar held against the five themselves: each one as if it were new, against the other four. A bar that a mountain
+// of the five's own grammar passes cannot tell a new course from a reskin.
+if (usable && fiveFacts.length >= 3) {
+  console.log('\nTHE BAR AGAINST THE FIVE THEMSELVES (each as if new, against the others)');
+  const loo: Record<string, unknown> = {};
+  for (const c of fiveFacts) {
+    const rest = fiveFacts.filter((q) => q !== c);
+    const count = (margin: number): string[] =>
+      BAR.filter((b) => {
+        const vals = rest.map((q) => b.of(q));
+        return outsideOf(b.of(c), Math.min(...vals), Math.max(...vals), margin);
+      }).map((b) => b.key);
+    const plain = count(0);
+    const strict = count(MARGIN);
+    loo[c.id] = { plain, strict };
+    console.log(`${c.id.padEnd(12)} outside the others on ${plain.length} of ${BAR.length} (${plain.join(', ') || 'none'})${plain.length >= 2 ? ': would pass as new' : ''}; by ${MARGIN * 100}%: ${strict.length}${strict.length >= 2 ? ': would pass as new' : ''}`);
+  }
+  for (let i = 0; i < fiveFacts.length; i++) {
+    for (let j = i + 1; j < fiveFacts.length; j++) {
+      const a = fiveFacts[i];
+      const b = fiveFacts[j];
+      const close = BAR.filter((m) => near(m.of(a), m.of(b))).length;
+      console.log(`${a.id} and ${b.id}: within 10% on ${close} of ${BAR.length}${close > BAR.length / 2 ? ' (too alike, by the bar)' : ''}`);
+    }
+  }
+  json.againstFive = loo;
+}
+
 console.log('\nTHE BARS (each new mountain against the five; section 2, "The three new mountains")');
 if (!newFacts.length) {
   console.log('no new mountains: MOUNTAINS registers only the five. The five\'s baseline is above; every bar is unmet today.');
@@ -266,21 +306,18 @@ if (!newFacts.length) {
   const out: Record<string, unknown>[] = [];
   for (const c of newFacts) {
     const vals = BAR.map((b) => b.of(c));
-    const outside = BAR.filter((_, i) => vals[i] < range[i].lo || vals[i] > range[i].hi).map((b) => b.key);
-    console.log(`${c.id}: outside the five on ${outside.length} of ${BAR.length} (${outside.join(', ') || 'none'}): ${outside.length >= 2 ? 'met' : 'NOT MET'}`);
+    const outside = BAR.filter((_, i) => outsideOf(vals[i], range[i].lo, range[i].hi, 0)).map((b) => b.key);
+    const strict = BAR.filter((_, i) => outsideOf(vals[i], range[i].lo, range[i].hi, MARGIN)).map((b) => b.key);
+    console.log(`${c.id}: outside the five on ${outside.length} of ${BAR.length} (${outside.join(', ') || 'none'}): ${outside.length >= 2 ? 'met' : 'NOT MET'}; by ${MARGIN * 100}% on ${strict.length}: ${strict.length >= 2 ? 'met' : 'NOT MET'}`);
     console.log('  ' + BAR.map((b, i) => `${b.key} ${vals[i].toFixed(2)} [${range[i].lo.toFixed(2)}, ${range[i].hi.toFixed(2)}]`).join('  '));
-    out.push({ id: c.id, vals: Object.fromEntries(BAR.map((b, i) => [b.key, vals[i]])), outside });
+    out.push({ id: c.id, vals: Object.fromEntries(BAR.map((b, i) => [b.key, vals[i]])), outside, strict });
   }
   // No two new mountains within 10% on more than half the six.
   for (let i = 0; i < newFacts.length; i++) {
     for (let j = i + 1; j < newFacts.length; j++) {
       const a = newFacts[i];
       const b = newFacts[j];
-      const close = BAR.filter((m) => {
-        const x = m.of(a);
-        const y = m.of(b);
-        return Math.abs(x - y) <= 0.1 * Math.max(Math.abs(x), Math.abs(y));
-      }).map((m) => m.key);
+      const close = BAR.filter((m) => near(m.of(a), m.of(b))).map((m) => m.key);
       console.log(`${a.id} and ${b.id}: within 10% on ${close.length} of ${BAR.length} (${close.join(', ') || 'none'}): ${close.length > BAR.length / 2 ? 'TOO ALIKE' : 'apart'}`);
     }
   }

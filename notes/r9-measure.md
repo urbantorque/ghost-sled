@@ -193,7 +193,33 @@ It reads `MOUNTAINS`, tells the five (`FIVE`, by id) from any new one, and for e
 six sit outside the five's range (two needed), every pair of new mountains within 10% on more than half the six (not
 allowed), the clumsy pilot's finishes against the five's hardest (27 of 30 today), and the mechanic's share. Today it
 prints the five's baseline and "no new mountains: MOUNTAINS registers only the five ... every bar is unmet today",
-and exits 0. It is a script, not a test, so it does not break the suite.
+and exits 0. It is a script, not a test, so it does not break the suite. `--as-new pinecrest,lanternfall` counts some
+of the five as new against the rest, which is how its bar code was checked before a new mountain exists.
+
+### The bar held against the five themselves: as written it cannot tell a reskin from a new course
+
+Each of the five, held as if it were new against the other four on section 2's six (`r9-courses.ts` prints this):
+
+| as if new | outside the other four on | by 15% or more on |
+|---|---|---|
+| Pinecrest | 4 (finish time, air, width, hazards) | 1 (hazards) |
+| Frostfang | 2 (finish time, speed) | 0 |
+| Ember | 2 (width, hazards) | 0 |
+| Sakura | 1 (speed) | 0 |
+| Lanternfall | 2 (air, turns) | 1 (turns) |
+
+**Four of the five would pass "outside the five's range on at least two" against the other four.** The range of five
+values is narrow, and a mountain that only sits a little past its edge on two measures passes; the bar would let a
+sixth course of the five's own grammar through with different numbers. With a margin, "outside the five's range by
+15% or more on at least two", none of the five passes against the rest, and it still asks nothing a fundamentally
+different course cannot give (a 3 km or 6 km run moves the time far past 15%; a ridden channel or an open face moves
+the width; an open field or a gully moves hazards a km). **For the main lane to decide:** hold the new mountains to the
+15% reading (the script prints both), or add measures the five share exactly (length, the opening's first leap, the
+stage lines, the square), on which the five have no range at all.
+
+The second bar bites already: of the ten pairs of the five, five are "within 10% on more than half the six" (Frostfang
+and Sakura on five of six; Pinecrest and Sakura, Frostfang and Ember, Ember and Sakura, Sakura and Lanternfall on four),
+so the five themselves would fail it as a set of three. The fair bar is 27 of 30 for the clumsy pilot, as above.
 
 ## The profiles
 
