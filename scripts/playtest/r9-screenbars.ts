@@ -116,13 +116,16 @@ export function bareFigures(chunks: readonly Chunk[]): Figure[] {
       if (/\bPage \d+\b/i.test(t)) out.push({ kind: 'page', text: t, box: b.text });
       if (/\bRank \d+ of \d+\b/.test(t)) out.push({ kind: 'rank', text: t, box: b.text });
       if (/\b\d[\d,]* to go\b/.test(t) && !/\d[\d,]* (XP|gifts?|ghosts?|m|s|runs?|pages?) to go/.test(t)) out.push({ kind: 'togo', text: t, box: b.text });
-      if (/^[\d,.:]+$/.test(t) && !hasWord(b.text)) out.push({ kind: 'bare', text: t, box: b.text });
+      // (A clock time, "1:53.0", says it is a time by its form, and is not counted bare.)
+      if (/^[\d,.:]+$/.test(t) && !/^\d+:\d{2}(\.\d+)?$/.test(t) && !hasWord(b.text)) out.push({ kind: 'bare', text: t, box: b.text });
     });
   }
   return out;
 }
 
 const STOP = new Set(['the', 'a', 'an', 'of', 'to', 'in', 'on', 'and', 'or', 'your', 'you', 'for', 'at', 'is', 'it', 'by', 'with', 'from', 'this', 'that', 'more', 'all', 'one']);
+/** A list's field labels: a row of cards each saying "Best 1:48.1, Rank 5 of 87" is a list, not a message said twice. */
+const LABELS = new Set(['best', 'rank', 'go', 'beat', 'page', 'week', 'day', 'days', 'stage', 'gold', 'silver', 'bronze', 'medal', 'medals', 'run', 'runs', 'xp', 'gifts', 's', 'm', 'new', 'locked', 'pass', 'ghost', 'ghosts']);
 
 /**
  * Messages said twice on one screen. What it catches: a known name (a mountain, one of The Twelve) in two boxes; a
@@ -145,13 +148,14 @@ export function repeats(chunks: readonly Chunk[], names: readonly string[] = kno
   });
   for (const [f, bs] of figs) if (bs.length >= 2) out.push({ kind: 'figure', what: f, n: bs.length, boxes: bs.map((b) => b.text.slice(0, 80)) });
   const sh = new Map<string, typeof boxes>();
+  // (A figure is one token, '#': "1 more ghost" and "Pass 1 more ghost" share "# more ghost".)
+  const wordsOf = boxes.map((_, i) => lower[i].replace(/\d[\d:.,]*/g, ' # ').replace(/[^a-z#' ]+/g, ' ').split(/\s+/).filter(Boolean));
   boxes.forEach((b, i) => {
-    // (A figure is one token, '#': "1 more ghost" and "Pass 1 more ghost" share "# more ghost".)
-    const ws = lower[i].replace(/\d[\d:.,]*/g, ' # ').replace(/[^a-z#' ]+/g, ' ').split(/\s+/).filter(Boolean);
+    const ws = wordsOf[i];
     const seen = new Set();
     for (let k = 0; k + 3 <= ws.length; k++) {
       const g = ws.slice(k, k + 3);
-      if (g.every((w) => STOP.has(w) || w === '#')) continue;
+      if (g.every((w) => STOP.has(w) || LABELS.has(w) || w === '#')) continue;
       // Words that are only a name and figures ("frostfang glacier #") are the name's repeat, counted above.
       const real = g.filter((w) => w !== '#');
       if (names.some((n) => real.every((w) => n.toLowerCase().split(/\s+/).includes(w)))) continue;
@@ -161,8 +165,31 @@ export function repeats(chunks: readonly Chunk[], names: readonly string[] = kno
       sh.set(key, [...(sh.get(key) || []), b]);
     }
   });
-  const named = out.filter((r) => r.kind === 'name').map((r) => r.what.toLowerCase());
-  for (const [g, bs] of sh) if (bs.length >= 2 && !named.some((n) => n.includes(g) || g.split(' ').every((w) => n.includes(w)))) out.push({ kind: 'words', what: g, n: bs.length, boxes: bs.map((b) => b.text.slice(0, 80)) });
+  // Overlapping runs of three in the same boxes are one phrase said twice: joined, and reported once.
+  const groups = new Map<string, { grams: string[]; bs: typeof boxes }>();
+  for (const [g, bs] of sh) {
+    if (bs.length < 2) continue;
+    const sig = bs.map((b) => b.box).join(',');
+    const e = groups.get(sig) ?? { grams: [], bs };
+    e.grams.push(g);
+    groups.set(sig, e);
+  }
+  for (const { grams, bs } of groups.values()) {
+    const ws = wordsOf[boxes.indexOf(bs[0])];
+    const cover = new Array(ws.length).fill(false);
+    for (const g of grams) {
+      const p = g.split(' ');
+      for (let k = 0; k + 3 <= ws.length; k++) if (ws[k] === p[0] && ws[k + 1] === p[1] && ws[k + 2] === p[2]) cover.fill(true, k, k + 3);
+    }
+    let run: string[] = [];
+    for (let k = 0; k <= ws.length; k++) {
+      if (k < ws.length && cover[k]) run.push(ws[k]);
+      else if (run.length) {
+        out.push({ kind: 'words', what: run.join(' '), n: bs.length, boxes: bs.map((b) => b.text.slice(0, 80)) });
+        run = [];
+      }
+    }
+  }
   return out;
 }
 

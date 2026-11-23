@@ -31,8 +31,8 @@ describe('the detectors', () => {
     const names = knownNames();
     expect(names).toContain('Old Wren');
     expect(names).toContain('Ember Peak');
-    const r = repeats(at([['1 more ghost opens Ember Peak'], ['DUEL', 'Old Wren'], ['Best', '0:20.9'], ['Pinecrest', '0:20.9', 'best'], ['Ember Peak', 'Pass 1 more ghost'], ['NEXT OF THE TWELVE', 'Old Wren']]), names);
-    expect(r.map((x) => `${x.kind}:${x.what}`).sort()).toEqual(['figure:0:20.9', 'name:Ember Peak', 'name:Old Wren', 'words:# more ghost']);
+    const r = repeats(at([['1 more ghost opens Ember Peak'], ['DUEL', 'Old Wren'], ['Best', '0:20.9'], ['Pinecrest', '0:20.9', 'best'], ['Ember Peak', 'Pass 1 more ghost'], ['NEXT OF THE TWELVE', 'Old Wren', 'Keeps every lantern lit.'], ['Old Wren keeps every lantern lit']]), names);
+    expect(r.map((x) => `${x.kind}:${x.what}`).sort()).toEqual(['figure:0:20.9', 'name:Ember Peak', 'name:Old Wren', 'words:old wren keeps every lantern lit']);
   });
 
   it('find loading shown as content', () => {
