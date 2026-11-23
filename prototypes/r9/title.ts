@@ -17,7 +17,7 @@ import { button, closeTop, device, h, ico, openSheet, reduced } from './proto';
 import { prize } from './words';
 
 /** Short names, as a player says them: the picker's chips carry these. */
-const SHORT: Record<string, string> = { pinecrest: 'Pinecrest', frostfang: 'Frostfang', ember: 'Ember', sakura: 'Sakura', lanternfall: 'Lanternfall', daily: "Today's Daily", cup: "This week's Cup" };
+const SHORT: Record<string, string> = { pinecrest: 'Pinecrest', frostfang: 'Frostfang', ember: 'Ember', sakura: 'Sakura', lanternfall: 'Lanternfall', daily: 'Today’s Daily', cup: 'This week’s Cup' };
 
 /**
  * What a returning player is told once, the first time they have it: one line in the door it lives behind, and a "New"
@@ -59,8 +59,8 @@ sceneEl.style.backgroundImage = `url("${backdrop(dev, titleBackdrop(stage))}")`;
 function rideWords(): { verb: string; why: string; aria: string } {
   const m = st.m;
   if (m.firstVisit) return { verb: 'Ride', why: 'Pinecrest', aria: 'Ride Pinecrest' };
-  if (st.selected === 'daily') return { verb: 'Ride', why: m.daily.medal ? `Today's Daily. Best ${clock(m.daily.time ?? 0)}` : "Today's Daily. Keeps your flame lit", aria: "Ride today's Daily" };
-  if (st.selected === 'cup') return { verb: 'Ride', why: m.cup?.best ? `This week's Cup. Best ${clock(m.cup.best)}` : "This week's Cup", aria: "Ride this week's Cup" };
+  if (st.selected === 'daily') return { verb: 'Ride', why: m.daily.medal ? `Today’s Daily. Best ${clock(m.daily.time ?? 0)}` : 'Today’s Daily. Keeps your flame lit', aria: "Ride today's Daily" };
+  if (st.selected === 'cup') return { verb: 'Ride', why: m.cup?.best ? `This week’s Cup. Best ${clock(m.cup.best)}` : 'This week’s Cup', aria: "Ride this week's Cup" };
   // (A duel only when the next run is one: a save's first two runs hold it back, which today's model does not say.)
   const tw = (m.twelve as { rides?: boolean } | null | undefined)?.rides === false ? null : m.twelve?.next;
   if (tw && tw.mountainId === st.selected && !st.mirrorOn) return { verb: 'Duel', why: `${tw.name}. ${tw.time} to beat`, aria: `Duel ${tw.name} on ${tw.mountain}, ${tw.time} to beat` };
@@ -112,7 +112,8 @@ function chip(c: MountainCard, aboutId: string | null): HTMLElement {
   const sky = h('span', 't9-sky');
   sky.innerHTML = biomeArt(c.biome);
   if (c.locked) sky.append(h('span', 't9-lock', ico('lock')));
-  const best = sel && c.bestTime ? h('span', 't9-mtn-best', ico('trophy'), h('span', 'gs9-num', clock(c.bestTime))) : null;
+  // (Your best in words: a trophy beside a time read as a medal, or as someone else's record.)
+  const best = sel && c.bestTime ? h('span', 't9-mtn-best', 'Best', h('span', 'gs9-num', clock(c.bestTime))) : null;
   if (best) sky.append(best);
   const name = h('span', 't9-mtn-name', SHORT[c.id] ?? c.name);
   name.setAttribute('translate', 'no');
@@ -173,7 +174,7 @@ function how(): HTMLElement | null {
   }
   if (here && m.mirror) {
     const seg = h('div', 't9-seg');
-    const b = button('secondary', [ico('flag'), 'Mirrored'], { fk: 'mirror', onClick: () => ((st.mirrorOn = !st.mirrorOn), render('mirror')) });
+    const b = button('secondary', [h('span', 't9-tick', st.mirrorOn ? ico('check') : null), 'Mirrored'], { fk: 'mirror', onClick: () => ((st.mirrorOn = !st.mirrorOn), render('mirror')) });
     b.setAttribute('aria-pressed', String(st.mirrorOn));
     seg.append(b);
     out.append(seg);
@@ -253,12 +254,13 @@ function render(focus?: string): void {
     strip.setAttribute('role', 'group');
     strip.setAttribute('aria-label', 'Where you ride');
     for (const c of m.mountains) strip.append(chip(c, a.about));
-    const pick = h('div', 't9-pick', strip, how());
+    const pick = h('div', 't9-pick', strip);
     renderAim();
     const doors = h('nav', 't9-doors');
     doors.setAttribute('aria-label', 'More');
     for (const d of ['events', 'progress', 'garage', 'settings'] as Door[]) doors.append(doorButton(d));
-    main.append(pick, rideButton(), aimEl!, doors);
+    const hw = how();
+    main.append(pick, rideButton(), ...(hw ? [hw] : []), aimEl!, doors);
     root.append(h('div', 't9-pool'), main);
   }
   // The column arrives from the logo's side once, top to bottom (ART.md 10: a screen comes and goes the way it is built);
@@ -341,11 +343,11 @@ function openDoor(d: Door, from: HTMLElement): void {
         });
       const dm = m.daily;
       const dailyLine = dm.medal ? h('span', '', h('span', `p9-medal m-${dm.medal}`), ` ${['', 'Bronze', 'Silver', 'Gold'][dm.medal]} today, best ${clock(dm.time ?? 0)}`) : 'A new mountain and a new field every day';
-      body.append(block("Today's Daily", dailyLine, dm.ready ? pick('daily', "today's Daily") : null));
+      body.append(block('Today’s Daily', dailyLine, dm.ready ? pick('daily', "today's Daily") : null));
       if (sp && sp.contracts.length > 0) {
         const list = h('ul', 'p9-list');
         for (const c of sp.contracts) list.append(h('li', `p9-row${c.done ? ' is-done' : ''}`, h('span', 'p9-check', c.done ? ico('check') : null), h('span', 'p9-row-t', c.text), h('span', 'p9-row-v', c.done ? 'Done' : `${c.xp} XP`)));
-        body.append(block("Today's Contracts", `${sp.contracts.filter((c) => c.done).length} of 3 done`, null, list));
+        body.append(block('Today’s Contracts', `${sp.contracts.filter((c) => c.done).length} of 3 done`, null, list));
       }
       body.append(h('div', 'p9-sep'));
       const cup = m.cup;
@@ -353,7 +355,7 @@ function openDoor(d: Door, from: HTMLElement): void {
         const lg = sp?.league;
         const line = h('span', '', `${cup.mood}${cup.event ? `, with a ${cup.event}` : ''}.`, cup.medal ? h('span', '', ' ', h('span', `p9-medal m-${cup.medal}`), ` ${['', 'Bronze', 'Silver', 'Gold'][cup.medal]}, best ${clock(cup.best)}`) : null);
         const league = lg && lg.place ? h('p', 'p9-block-p', `Division ${lg.division} of 5: you are ${ordinal(lg.place)} of 20. The top 4 go up when the week turns.`) : h('p', 'p9-block-p', 'Ride it once to join a league of the week’s records.');
-        body.append(block("This Week's Cup", line, cup.ready ? pick('cup', "this week's Cup") : null, league));
+        body.append(block('This Week’s Cup', line, cup.ready ? pick('cup', "this week's Cup") : null, league));
       }
     });
   } else if (d === 'progress') {

@@ -34,7 +34,9 @@ interface Beat1 {
   of: string;
   word: string;
   time: string | null;
-  fact: { text: string; who?: string; whoCls?: string; tone: string; bust?: { hat: string; accent: string } } | null;
+  fact: { text: string; who?: string; whoCls?: string; tone: string; bust?: { hat: string; accent: string }; medal?: number } | null;
+  /** A Trial's medal, struck as a disc beside its word (ART.md 10). */
+  medal?: number;
 }
 
 function place(): { rank: number; of: number } | null {
@@ -61,7 +63,7 @@ function eventMedal(): { medal: string; next: string | null; where: string } | n
   const l = m.raceLine?.text ?? '';
   const r = /^(Daily|Cup|Trial): (Bronze|Silver|Gold)\.(?: (\w+ at [^.]+(?:\.\d)?)\.)?/.exec(l);
   if (!r) return null;
-  return { medal: r[2], next: r[3] ?? null, where: r[1] === 'Daily' ? "on today's Daily" : r[1] === 'Cup' ? "in this week's Cup" : 'in the Trial' };
+  return { medal: r[2], next: r[3] ?? null, where: r[1] === 'Daily' ? 'on today’s Daily' : r[1] === 'Cup' ? 'in this week’s Cup' : 'in the Trial' };
 }
 
 function beat1(): Beat1 {
@@ -74,9 +76,8 @@ function beat1(): Beat1 {
   // (A Trial's word is its medal, "Silver in the Trial", and the button names the next medal: nothing more to say here.)
   if (m.trial) fact = null;
   else if (tw && (tw.tone === 'fell' || tw.tone === 'crowned')) fact = { text: ` beaten. ${tw.beaten} of ${tw.of} down.`, who: tw.rider?.name, whoCls: 'k-rider', tone: 'twelve', bust: tw.rider ?? undefined };
-  // (The gap is the rematch's reason on the button, so it is said there, once.)
-  else if (tw && tw.tone === 'held') fact = { text: ' held you off', who: tw.rider?.name, whoCls: 'k-rider', tone: 'twelve', bust: tw.rider ?? undefined };
-  else if (em) fact = { text: `${em.medal} ${em.where}`, tone: 'plain' };
+  else if (tw && tw.tone === 'held') fact = { text: ` held you off by ${n ? nb(n.gap) : ''}`.trimEnd(), who: tw.rider?.name, whoCls: 'k-rider', tone: 'twelve', bust: tw.rider ?? undefined };
+  else if (em) fact = { text: `A ${em.medal.toLowerCase()} time ${em.where}`, tone: 'plain', medal: ['Bronze', 'Silver', 'Gold'].indexOf(em.medal) + 1 };
   else if (fin?.newBest) fact = { text: fin.bestTime === null ? 'Your first finish here' : `A new best, ${(fin.bestTime - fin.seconds).toFixed(1)}\u00a0s quicker`, tone: 'best' };
   else if (n) fact = n.side === 'behind' ? { text: `${nb(n.gap)} behind `, who: n.name, whoCls: n.kind === 'grudge' ? 'k-grudge' : '', tone: 'plain' } : { text: `${nb(n.gap)} ahead of `, who: n.name, whoCls: n.kind === 'grudge' ? 'k-grudge' : '', tone: 'plain' };
   if (!fin) {
@@ -85,7 +86,7 @@ function beat1(): Beat1 {
   }
   if (m.trial?.figure) {
     const md = m.trial.medal;
-    return { kind: md >= 3 ? 'win' : md > 0 ? 'podium' : 'finish', figure: m.trial.figure, of: m.trial.unit, word: m.trial.word ?? 'Across the line', time: clock(fin.seconds), fact };
+    return { kind: md >= 3 ? 'win' : md > 0 ? 'podium' : 'finish', figure: m.trial.figure, of: m.trial.unit, word: m.trial.word ?? 'Across the line', time: clock(fin.seconds), fact, medal: md };
   }
   if (!p) return { kind: 'finish', figure: clock(fin.seconds), of: '', word: 'Across the line', time: null, fact };
   const kind = p.rank === 1 ? 'win' : p.rank <= 3 && p.of >= 4 ? 'podium' : 'finish';
@@ -124,7 +125,7 @@ function beat2(): Beat2 | null {
   }
   if (opened.length > 0) {
     const r = opened[0];
-    return { art: h('span', 'r9-got-art is-gift', ico(GLYPH[r.kind] ?? 'gift')), kicker: `Rider Rank ${r.page}`, name: prize(r), line: SAYS[r.name] ?? null, rankInKicker: true };
+    return { art: h('span', 'r9-got-art is-gift', ico(GLYPH[r.kind] ?? 'gift')), kicker: `Reached Rider Rank ${r.page}`, name: prize(r), line: SAYS[r.name] ?? null, rankInKicker: true };
   }
   return null;
 }
@@ -149,10 +150,11 @@ function primary(): { label: string; why: string | null; aria: string } {
     const t = /Time to beat (.+)$/.exec(why ?? '');
     return { label, why: t ? `${t[1]} to beat` : why, aria: p.aria };
   }
-  // A rematch's gap is its reason ("1.2 s to find"); beat one names the rival without it.
-  if (p?.kind === 'rematch' && why) {
-    const g = /^([\d.]+ [ms]) behind$/.exec(why);
-    if (g) return { label, why: nb(`${g[1]} to find`), aria: p.aria };
+  // A rematch's reason is the rival's own time ("2:06.1 to beat"): beat one already says how far behind you were.
+  if (p?.kind === 'rematch') {
+    const name = label.replace(/^Rematch /, '');
+    const rival = m.ghosts.find((g) => g.name === name);
+    if (rival && typeof rival.time === 'number') return { label, why: `${clock(rival.time)} to beat`, aria: p.aria };
   }
   // A medal's mark gets the gap to it: "Silver at 2:28.4: 2.6 s to find".
   const mark = /^(Gold|Silver|Bronze) at (\d+):(\d+\.\d)$/.exec(why ?? '');
@@ -182,7 +184,7 @@ function render(): void {
   figRow.dataset.beat = '0';
   const rule = h('span', 'r9-mo-rule');
   rule.dataset.beat = '0';
-  const word = h('div', 'r9-mo-word', h('span', '', b1.word), b1.time ? h('span', 'r9-mo-time gs9-num', b1.time) : null);
+  const word = h('div', 'r9-mo-word', b1.medal ? h('span', `p9-medal m-${b1.medal}`) : null, h('span', '', b1.word), b1.time ? h('span', 'r9-mo-time gs9-num', b1.time) : null);
   word.dataset.beat = '1';
   mo.append(figRow, rule, word);
   if (b1.fact) {
@@ -200,6 +202,7 @@ function render(): void {
     // The rider's name leads ("Bram Oakhollow beaten") or follows ("0.4 s behind tove_runs").
     const lead = f.text.startsWith(' ');
     fact.append(h('span', '', lead ? who : null, f.text, lead ? null : who));
+    if (f.medal && f.medal > 0) fact.prepend(h('span', `p9-medal m-${f.medal}`));
     fact.dataset.beat = '2';
     mo.append(fact);
   }
@@ -235,7 +238,8 @@ function render(): void {
   const pr = primary();
   const t = h('span', 't9-ride-t', h('span', 't9-ride-v', pr.label), pr.why ? h('span', 't9-ride-why', pr.why) : null);
   t.querySelector('.t9-ride-v')?.setAttribute('translate', 'no');
-  const again = button('primary', [t, h('span', 't9-key', 'Space')], { icon: 'play', fk: 'again', aria: pr.aria, cls: 'r9-again', onClick: () => toast(`${pr.aria}: the next run would start`) });
+  // (A long label steps its type down a size, so it never wraps or pushes the column wider.)
+  const again = button('primary', [t, h('span', 't9-key', 'Space')], { icon: 'play', fk: 'again', aria: pr.aria, cls: `r9-again${[...pr.label].length > 18 ? ' is-long' : ''}`, onClick: () => toast(`${pr.aria}: the next run would start`) });
   again.setAttribute('aria-keyshortcuts', 'Space');
   const go = h('div', '', again);
   go.dataset.beat = '4';
@@ -248,6 +252,9 @@ function render(): void {
   );
   foot.dataset.beat = '5';
   col.append(got, go, foot);
+  // On a phone the fact goes to the column, so the top keeps to the figure and its word and clears the rider's head.
+  const factEl = mo.querySelector('.r9-mo-fact');
+  if (dev === 'phone' && factEl) col.prepend(factEl);
   screen.append(mo, col);
   root.append(screen);
 }

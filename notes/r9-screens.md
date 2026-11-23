@@ -118,11 +118,11 @@ grows a seat for each, and two of the eight (the Long Night and the contracts) h
    it.
 5. **Escape is deliberately unbound** (`menus.ts`: "on CrazyGames it exits fullscreen"), so the review's "Escape did not
    close the garage" is a decision, not a bug. The pad's B goes back on every sheet (`padnav.ts`). See section 6.
-6. **To check against the truth lane's run-1 capture: Ride may promise a duel that does not ride.** After one run,
-   `app.ts twelveModel()` names Bram Oakhollow as next and here (it calls `nextDuel`, which has no run gate), so
-   `title.ts` labels Ride "DUEL Bram Oakhollow"; but `duelHere()` holds the first duel back until the third run
-   (`FIRST_DUEL_RUN`), so run 2 is an ordinary race. Read from the code, not yet seen on screen. The prototype needs one
-   fact for it (`TitleTwelve.rides`), and says Ride.
+6. **Ride promises a duel that does not ride, after run 1.** `app.ts twelveModel()` names Bram Oakhollow as next and
+   here (it calls `nextDuel`, which has no run gate), so `title.ts` labels Ride "DUEL Bram Oakhollow" (seen on the
+   truth lane's capture of the `mid-1` fixture, `shots/r9/truth/desk-mid-1-title-ready.png`); but `duelHere()` holds
+   the first duel back until the third run (`FIRST_DUEL_RUN`), so run 2 is an ordinary race (read from the code, not
+   ridden). The prototype needs one fact for it (`TitleTwelve.rides`), and says Ride.
 
 ## 2. The information plan
 
@@ -317,11 +317,81 @@ which also counts the screen reader's spoken lines; this counter does not, so to
 review's and the two columns are like for like. Today's screens are the game's own UI on the same models over the same
 frames (`today.html`), shot once their story has landed (7 s); the prototype's once its story has (3.2 s).
 
-(The table is filled below from the last capture.)
+Words / controls, from `shots/r9/screens/frames/` (round one's frames; the prototype's figures after round one's fixes
+are in brackets where they moved, from `frames2/`):
+
+| Screen | Desk today | Desk prototype | Wide today | Wide prototype | Phone today | Phone prototype |
+| --- | --- | --- | --- | --- | --- | --- |
+| Title, a first visit | 18 / 2 | 20 / 2 | 18 / 2 | 20 / 2 | 17 / 2 | 19 / 2 |
+| Title, after run 1 | 114 / 17 | 32 / 10 | 114 / 17 | 32 / 10 | 64 / 14 | 32 / 10 |
+| Title, after run 5 | 108 / 18 | 32 / 10 | 108 / 18 | 32 / 10 | 60 / 15 | 32 / 10 |
+| Title, after run 20 | 114 / 21 | 37 / 13 | 114 / 21 | 38 / 13 | 58 / 18 | 37 / 13 |
+| Title, after run 50 | 123 / 21 | 39 / 13 | 123 / 21 | 40 / 13 | 66 / 19 | 39 / 13 |
+| Results, a first finish | 75 / 6 | 34 / 4 | 75 / 6 | 34 / 4 | 60 / 6 | 33 / 4 |
+| Results, a podium that opened a mountain | 68 / 7 | 32 / 4 | 68 / 7 | 32 / 4 | 54 / 7 | 31 / 4 |
+| Results, a wreck | 53 / 5 | 29 / 4 | 53 / 5 | 29 / 4 | 39 / 5 | 28 / 4 |
+| Results, a duel won | 75 / 5 | 34 / 4 | 75 / 5 | 34 / 4 | 59 / 5 | 33 / 4 |
+| Results, a duel lost | 52 / 5 | 28 / 4 | 52 / 5 | 28 / 4 | 35 / 5 | 27 / 4 |
+| Results, the Cup | 52 / 5 | 30 / 4 | 52 / 5 | 30 / 4 | 36 / 5 | 29 / 4 |
+| Results, a Trial | 48 / 5 | 22 / 4 | 48 / 5 | 22 / 4 | 39 / 5 | 21 / 4 |
+| Results, the Daily | 51 / 5 | 29 / 4 | 51 / 5 | 29 / 4 | 36 / 5 | 28 / 4 |
+
+The bars: the returning title at most 40 words at run 50 (today 123 on the desk on these models, 115 on the truth
+lane's live `mid-50` capture; the prototype 39 to 40); the results' first view at most 35 (today 48 to 75; the
+prototype 22 to 34); the fresh title as clean as it is (18 against 20: the prototype adds "Sound On" where today has a
+lone speaker). One primary on every screen, and no control without its words, on every prototype frame (today's
+title and results each carry a lone icon: the first visit's speaker, the results' camera). Rooms one level down
+(Details, a door's room) carry 70 to 115 words, about what today's results card and popovers show on their front.
+
+On the console: clean on every frame, desk, wide and phone, today's and the prototype's.
 
 ## 5. The critics
 
-(Filled below.)
+Fresh critics (general-purpose, `model: opus`, effort high as the owner's brief sets it for critics, where the lane
+brief said xhigh), each given only ART.md and a folder of blind pairs (`scripts/playtest/blind-pairs.mjs`, the new
+frame on a seeded side, the key in `shots/r9/screens/keys/`), told the pairs are the same moment drawn by two designs,
+and asked section 2's questions for each picture on a five-second read, then which is clearer and why, then what is
+broken. Never told which is new or what changed. Answers scored against `shots/r9/screens/keys/truth.md` (1 right, a
+half for a list of competing answers that includes the right one or for a right action read as ambiguous, 0 wrong).
+
+### Round one (`pairs1-title`, `pairs1-results`: the frames of section 4)
+
+| | Title (6 pairs: desk runs 1, 5, 20, 50; phone runs 5, 50) | Results (10 pairs: desk, the eight cases; phone, a podium and a wreck) |
+| --- | --- | --- |
+| Picked as clearer | **the prototype, 6 of 6** | **the prototype, 10 of 10** |
+| Answers right, today | 14 of 18: the button 5 of 6 (after run 1 it read "Duel Bram Oakhollow", which is what today's Ride says and not what the run is), the goal 3 of 6 (every one a list: "unclear at a glance, four goals compete"), the garage 6 of 6 | 26 of 30: the run 28 of 30 less two halves (the Cup and the Daily read as "first finish here", the medal unseen), what it earned 8 of 10 (the Cup's and the Daily's medals missed: "+436 XP, +74 gifts, Day 13"), the button 9 of 10 ("Finish the mission" after a wreck "reads like resuming the run just lost", twice) |
+| Answers right, prototype | 18 of 18 | 30 of 30 |
+
+What the critics said, in their words where it matters:
+- Title, the prototype: "one verb and one goal line, and the button names the race"; "the rider and the volcano are the
+  picture". Today's: "the eye bounces between five calls to action"; "cards on both sides box in the hero"; on a
+  phone "the Daily and Cup cards cover the rider's torso"; the Twelve's card covers a ghost's name pill.
+- Results, the prototype: "one card names the one thing the run opened"; "'Run Again' plus the mission is
+  unambiguous". Today's: "the headline reward is buried among tiles and chips"; "'Ride It' is a second play action
+  competing with the vermillion button"; "'1.2 s' appears three times"; on the Cup and the Daily "it leaves out the
+  medal, which is the one thing that matters".
+
+What they found wrong with the prototype, and what was done, worst first:
+
+| Found | Done |
+| --- | --- |
+| The trophy glyph drawn over the best time on the picked card (every desk title) | The best is words: "Best 2:06.3" |
+| "New" sat on Settings on a phone (it is the Garage's) | The door holds its tag (`position: relative`) |
+| The hour and the mirror above Ride, where ART.md 10 puts them under it; "Mirrored" looked disabled | Under Ride; an unpicked toggle has full-strength words and an empty ring, a picked one a check |
+| The quiet line wrapped leaving "charm" alone | Wider measure and balanced wrapping |
+| Results: "Rider Rank 2" over a part-filled bar read as not reached | "Reached Rider Rank 2" |
+| "0.3 s to find" was cryptic, and "Pip Thistle held you off" dropped the gap (a race gap is a number and a word) | The gap is back on beat one ("held you off by 1.2 s"), and a rematch's reason is the rival's own time ("2:06.1 to beat") |
+| "3rd" beside "Silver" read as a contradiction on the Daily | "A silver time on today's Daily", with the medal's disc |
+| A Trial had no medal disc by its word | The disc stands before "Silver in the Trial" |
+| The wreck's figure was not "a little crooked" | Turned 3 degrees |
+| A rider's name in its pale colour on beat one was weak over the crowd | Beat one's fact sits on an ink chip |
+| On a phone the fact ran into the rider's beanie | On a phone it leads the column at the bottom; the top keeps to the figure and its word |
+| A long button label pushed the column wider | It steps its type down a size |
+| An apostrophe read as a backtick in bold | Curly apostrophes in what a player reads |
+| No mountain name or feeling line under the logo; no corner stack (both ART.md 10 today) | Kept, by design: section 6, decision 2. A critic given today's ART.md will always name it |
+| A ghost's name pill drawn over a chip of the picker (phone, run 50) | The backdrop's pill is baked into the frame; in the game `Title.measure()` gives the ghost tags the panels to keep off, and milestone 1 must give it the new picker and doors |
+
+(Round two below.)
 
 ## web-design-guidelines
 
