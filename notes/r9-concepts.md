@@ -118,8 +118,8 @@ track is bends.
   height, not a heading). Tuned in the lab against the mid pilot's figures before any pool is made.
 - One HUD signal: none new. The world says it (the glaze shines and the runners hiss on it; the slush sprays dull);
   the stage line's one-line card carries each named bend's split against your best.
-- Charms: on an all-ice run the ice charms (Frost Runners, Black Ice) would decide too much; the charm races have
-  to be ridden here before it ships, and the gates may need to keep those two off the Old Run's offers.
+- Charms: on an all-ice run Frost Runners (ice holds and runs fast) and its Black Ice pair would decide too much;
+  the charm races have to be ridden here before it ships, and the gates may keep those two off the Old Run's offers.
 
 **What it takes.**
 - *Sim, all additive.* A new biome id and seed, a `MOUNTAINS` entry, a `BIOME_PARAMS` entry (no trees, kickers,
@@ -339,14 +339,27 @@ its height. Every 25 to 60 m down most of the run.
 - A novice holds the crouch (it is also the tuck) and rides the line, where every lying trunk is broken; it ducks
   every beam by holding and never hops.
 - An expert takes the straighter line over the lying trunks and pops between beams for the lights and the tricks.
-- The bot: hold through a beam's band, release for a hop with its flight model; simple.
-- Fairness needs a new promise: the line is clear of every collider but beams, and a rider holding the button passes
-  every beam; the five's line-follower that never presses would fail here, so the Windfall's own driver holds.
+- The bot learns it from the course: hold through a beam's band (the scene already gives it every collider ahead),
+  release for a hop with the flight model it pops kickers with. The simplest bot work of the seven.
+- One HUD signal: none new. A beam reads as a dark bar across the run at chest height, the hardest silhouette in the
+  frame (ART.md 1: a danger is a dark, hard shape).
 
-**What it takes.** A biome, the `beam` obstacle kind and its clearance band (the rider's height read from the crouch),
-a `slide` opening and a `millpond` finish; trunks are the existing `log`. Cheap on Low (trunks instanced like trees).
-A score of about 9 MB. **Its risk is why it is fourth:** in the five's colours it is a forest corridor with logs, the
-grammar of Pinecrest's tree runs, and a critic may well put it with Pinecrest.
+**What it takes.**
+- *Sim, additive.* A biome, seed and `MOUNTAINS` entry; a new obstacle kind `beam` whose collision reads the rider's
+  height (crouched while the button is held on the ground, upright otherwise, and the sled's own height in the air),
+  entered only for that kind; lying trunks are the existing `log` (a sled over its top already clears it); root plates
+  are a new hard kind. Per mountain: 3,900 m in three stages, an opening down the `slide` (a plank trough, no ramp, no
+  leap) and a `millpond` finish.
+- *Fairness.* A new promise: the line is clear of every collider but beams, every lying trunk across it is broken
+  where it runs, and a rider holding the button passes every beam. The five's line-follower never presses, so Windfall's
+  own driver holds.
+- *Size and Low.* A score of about 9 MB (a woodblock-and-low-strings piece near 140 bpm). Cheap on Low: trunks are
+  instanced like trees; the forest is the five's.
+- *Unlocks* where Gablefall would (at 8 ghosts): the duck is a first-hour lesson.
+- *Risk, and why it is fourth.* In the five's colours it is a forest corridor with logs: the grammar of Pinecrest's
+  tree runs, and a critic may well put it with Pinecrest. Holding the button is also the tuck (faster), so a novice
+  who holds through everything is not punished; the beams bite only on a rider who pops, which is the point, but it
+  makes the duck an expert's problem more than a novice's.
 
 ---
 
@@ -367,11 +380,22 @@ time (about 165 s), speed (about 30 m/s), air (under 15%), turns (under 1 a km),
 button down each swell's face (the tuck, pressing into the trough) and let it go at the trough (the small pop
 unweights you up the next face); a new pump term in the sim pays speed for a hold that spans a face and a release near
 its trough, only on the `swells` kind. Hold through a crest at speed instead and you take off. A novice rides at the
-slope's speed and finishes; an expert pumps to 36 m/s.
+slope's speed and finishes; an expert pumps to 36 m/s. The bot reads each trough and crest from the ground ahead (a
+pure function of the course) and times its holds; the one HUD signal is none new (the swells' long shadows in the low
+sun show every face).
 
-**What it takes.** A `swells` kind, the pump term, crevasses as ground with bridges on the line; very cheap on Low
-(almost nothing stands on it). **Its risk:** the button's release is already a pop, so the pump and the pop share a
-press and the timing is subtle on a keyboard and a phone; five kilometres of one rhythm may be monotonous.
+**What it takes.**
+- *Sim, additive.* A biome; a `swells` kind (the swells in `bareGround` where its new shape field is set); the pump
+  term in the ground step, entered only on that kind; crevasses as ground with snow bridges on the line. Per mountain:
+  5,000 m, an opening at the camp (a flat push onto the first swells), a finish 300 m short of the calving front.
+- *Fairness.* The line crosses every crevasse on a bridge; a rider who never pumps reaches the line at the slope's
+  speed; no swell launches a sled that does not press.
+- *Size and Low.* A score of about 9 MB (a slow drone with bowed metal and a pulse, near 90 bpm, kept lean by few
+  sections). The cheapest world of the seven on Low: almost nothing stands on it.
+- *Unlocks* after Sakura (at 32), if chosen.
+- *Risk.* The button's release is already a pop, so the pump and the pop share a press and the timing is subtle on a
+  keyboard and a phone; five kilometres of one rhythm may be monotonous; and a polar ice cap sits near Frostfang's
+  fiction (the light is the difference: a midnight sun, not a blue hour).
 
 ---
 
@@ -391,13 +415,23 @@ speed, width and hazards.
 
 **Its signature mechanic: read the face.** Every band can be passed at several places: a marked passage (the safe
 line, poles down it), a cut through a lower cliff, a drop off a high one straight down the fall line. A novice follows
-the poles; an expert reads 300 m ahead and takes the fall line over the cliffs.
+the poles; an expert reads 300 m ahead and takes the fall line over the cliffs. The bot needs a route planner: each
+band's passages and drops as a small graph, a rider's nerve choosing among them (as `bold` chooses a fork's channel
+today). The one HUD signal: the next marker pole's bearing on the edge chip.
 
-**What it takes.** The most of any concept: a field kind hundreds of metres wide, cliff bands whose height varies
-across the run (the sim's ledges are across the whole corridor today), a terrain mesh that is fine out to 200 m (it is
-fine out to 12.6 m past the corridor's start width today), and a route planner for the bot. **Its risk:** the chase
-lens is 1.5 m over the snow; from there a 400 m face does not read, and "find your own line" can become "hold the fall
-line" if the bands are weak.
+**What it takes.**
+- *Sim.* The most of any concept: a `face` kind hundreds of metres wide; cliff bands whose height varies across the
+  run (the sim's ledges are across the whole corridor today, so a new x-local ledge in `ground()`, entered only where
+  a zone holds one); per mountain, a drop-in opening and a glacier finish.
+- *Render.* A terrain mesh fine out to 200 m from the line (today it is fine out to 12.6 m past the corridor's start
+  width), and a far plane that is the face itself.
+- *Fairness.* The marked route is the safe line, clear and smooth; every cliff off it lands on a face no steeper than
+  a leap's; a passage at least every 120 m along a band.
+- *Size and Low.* A score of about 10 MB. Few props (rock along the bands), but much more ground in view: about the
+  five's cost if the far face is a coarse mesh.
+- *Unlocks* behind the finale (Almanac page), if chosen: the hardest read.
+- *Risk.* The chase lens is 1.5 m over the snow; from there a 400 m face does not read, and "find your own line" can
+  become "hold the fall line" if the bands are weak.
 
 ---
 
@@ -416,11 +450,22 @@ turns (about 8 a km), width and hazards; inside on time.
 
 **Its signature mechanic: turn on the snow, glide on the ice.** The glare ice holds almost no grip; snow lies in bars
 on the inside of each meander. A sled turns where there is snow and carries its heading over the ice; the drift is the
-tool on the ice.
+tool on the ice. A novice slides wide into the walls (which turn it back, as a ravine's do) and finishes slower; an
+expert sets every turn on a bar and drifts the ice between. The bot reads the surface along its planned line (the
+course says it, a pure function) and plans its turns on the bars. The one HUD signal: none new (snow is white and
+matt, glare ice dark and glossy).
 
-**What it takes.** A `gorge` kind, a grip map (a surface by place), a ceiling the renderer draws. **Its risk is why it
-is last:** in greyscale an ice slot that bursts out into light is Frostfang's ravines and its Ice Cavern, and on an
-all-ice run the ice charms decide too much.
+**What it takes.**
+- *Sim, additive.* A `gorge` kind (vertical walls through its section `limit`), a grip map (a surface by place,
+  entered only on that kind), falls as the terraces' steps; per mountain, an opening at the mouth on the snowfield and
+  a finish on the lake.
+- *Fairness.* The line runs over snow where it turns; the falls are steps a sled at 20 m/s and more clears onto flat
+  ice; columns stand off the line.
+- *Size and Low.* A score of about 9 MB. The ceiling is the cost: a roof the length of half the run, its shafts painted
+  on Low as the five's tunnels' are. About the five's cost.
+- *Unlocks* after Ember (at 18), if chosen.
+- *Risk, and why it is last.* In greyscale an ice slot that bursts out into light is Frostfang's ravines and its Ice
+  Cavern; grip by place is subtle at speed on a keyboard; and on an all-ice run the ice charms decide too much.
 
 ---
 
@@ -511,8 +556,8 @@ seven and cheap to build and draw, but it is a forest corridor, the five's own f
 5. **New verbs.** Nine set pieces need verbs; `race`, `gates` and `steps` are used twice already and `follow`,
    `kindle` and `carry` are Lanternfall's, so the new mountains bring their own, appended to `VERBS` (the music's
    stingers key on its order, which is kept).
-6. **The ice charms** on the Old Run (Frost Runners and Black Ice would decide too much there): race them in the lab,
-   and keep them off its gates if they do.
+6. **The ice charms** on the Old Run (Frost Runners and its Black Ice pair would decide too much there): race them in
+   the lab, and keep them off its gates if they do.
 7. **The size cap.** The three scores are about 30 MB (8.5, 11.5 and 10 MB): the build goes from 60.33 MB to about
    91 MB, inside the proposed 110 MB cap and over today's 80 MB. Each full pack stays under Sakura's (6.0 MB), so the
    initial download does not grow.
