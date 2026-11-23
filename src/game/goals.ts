@@ -147,7 +147,7 @@ export function nextGoals(d: SaveData, ctx: GoalContext): NextGoal[] {
     // slower time beside your faster best read as already beaten, DECISIONS 391.)
     // (Round 9: the duel this run just lost, again, is a rematch, said as one.)
     const again = ctx.lostTo?.kind === 'duel' && ctx.lostTo.name === nd.rider.name;
-    out.push({ kind: 'duel', text: `${again ? 'Rematch' : 'Duel'} ${nd.rider.name}`, short: MOUNTAINS[nd.rider.home].name, reachable: gap <= REACH_DUEL_S, gap: Number.isFinite(gap) ? Math.max(0, gap) / 10 : 1, names: [nd.rider.name] });
+    out.push({ kind: 'duel', text: `${again ? 'Rematch' : 'Duel'} ${nd.rider.name}`, short: MOUNTAINS[nd.rider.home].name.replace(/ (Glacier|Peak|Ridge)$/, ''), reachable: gap <= REACH_DUEL_S, gap: Number.isFinite(gap) ? Math.max(0, gap) / 10 : 1, names: [nd.rider.name] });
   }
   // 4. Today's Daily.
   if (ctx.dailyReady && !ctx.key.startsWith('daily:') && !recentDaily(recent, ctx.day)) out.push({ kind: 'daily', text: "Today's Daily", short: '', reachable: true, gap: 0.05, names: ['Daily'] });
@@ -236,7 +236,7 @@ export function primaryButton(goals: readonly NextGoal[]): PrimaryButton {
   const mission = goals.filter((g) => g.kind === 'mission' && g.reachable && g.gap <= NEAR_MISSION).sort((a, b) => a.gap - b.gap)[0];
   if (mission) return { kind: 'mission', text: 'Run Again', sub: goalWords(mission), aria: `Run again. ${goalWords(mission)}`, goal: said(mission) };
   const duel = pick('duel');
-  if (duel) return { kind: 'duel', text: duel.text.startsWith('Rematch') ? duel.text : `Next Duel: ${duel.names[0]}`, sub: duel.short ? `On ${duel.short}, head to head` : null, aria: `Duel ${duel.names[0]}${duel.short ? ` on ${duel.short}` : ''}`, goal: said(duel) };
+  if (duel) return { kind: 'duel', text: duel.text.startsWith('Rematch') ? duel.text : `Next Duel: ${duel.names[0]}`, sub: duel.short ? `On ${duel.short}` : null, aria: `Duel ${duel.names[0]}${duel.short ? ` on ${duel.short}` : ''}`, goal: said(duel) };
   const daily = pick('daily');
   if (daily) return { kind: 'daily', text: "Today's Daily", sub: 'Keeps your flame lit', aria: "Ride today's Daily", goal: said(daily) };
   // (A goal this mountain serves before one only another can: Run Again rides this one.)

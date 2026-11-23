@@ -86,7 +86,8 @@ export function readable(shot: Shot): Chunk[] {
 }
 
 /** A rewarded ad's offer, which only the dev server's mock platform makes. */
-export const AD_OFFER = /^(Double Gifts|Watch Ad: Double Gifts|Watch Ad|Revive|Watch an ad.*)$/i;
+// (Round 9: an offer's prefix is its own chunk, "Watch Ad:" with its colon.)
+export const AD_OFFER = /^(Double Gifts|Watch Ad: Double Gifts|Watch Ad:?|Revive|Watch an ad.*)$/i;
 
 const boxesOf = (chunks: readonly Chunk[]): { box: number; text: string; chunks: Chunk[] }[] => {
   const m = new Map<number, Chunk[]>();
