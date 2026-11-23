@@ -248,9 +248,10 @@ Each line of the review against the captures (desk and phone) and the code; the 
 **What holds them back**
 1. *Every system the game has gained has a seat on the title; the returning title is ten panels and about 100 words.*
    **Right, and understated.** On desk the returning title is 105 to 124 words at every stage from run 1 (mid-1 113
-   with its rivals in, mid-50 117, novice-50 122, novice-100 124) with 16 to 20 controls; on phone 57 to 74 words and 14 to 18 controls. Run 1
-   already carries the Almanac card, the album count, The Twelve's card, the Cup's and the Daily's cards and the menu
-   bar; from run 20 the hour pick and Mirrored add a row under Ride. About twelve panels at run 50
+   with its rivals in, mid-50 117, novice-50 122, novice-100 124) with 16 to 20 controls; on phone 57 to 74 words
+   and 14 to 18 controls. Run 1 already carries the Almanac card, the album count, The Twelve's card, the Cup's and the
+   Daily's cards and the menu bar; from run 20 the hour pick and Mirrored add a row under Ride. About twelve panels at
+   run 50
    (`desk-mid-50-title-ready.png`). *Hours, mirrors, Trials, contracts, the league and the Long Night add more as
    they open:* **half wrong.** Hours and mirrors add that row; Trials add a Cup/Trial switch only while the Cup is
    picked (`desk-mid-100-title-trial.png`); the league reaches the title only as a news line in a week the division
