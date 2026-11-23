@@ -30,4 +30,4 @@ async (page) => {
     }
   }
   return JSON.stringify({ shots, errors }, null, 1);
-};
+}

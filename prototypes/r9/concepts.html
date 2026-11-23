@@ -2,8 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <link rel="icon" href="data:," />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#121933" />
     <title>Ghost Sled, round 9: three new mountains, seven concepts</title>
     <style>
       /* The game's own UI language (ART.md 10): ink navy, off-white, the system sans at 800 to 900, italic for speed
@@ -23,6 +25,7 @@
         background: var(--ink);
       }
       * { box-sizing: border-box; }
+      html { touch-action: manipulation; -webkit-tap-highlight-color: rgb(143 243 228 / 0.2); }
       body { margin: 0; line-height: 1.55; font-size: 16.5px; }
       a { color: var(--mint); text-underline-offset: 3px; }
       a:focus-visible { outline: 2px solid var(--mint); outline-offset: 3px; border-radius: 4px; }
@@ -31,7 +34,8 @@
       .page { display: grid; grid-template-columns: minmax(0, 1fr); max-width: 1480px; margin: 0 auto; padding: 0 20px 96px; }
       @media (min-width: 1100px) { .page { grid-template-columns: 240px minmax(0, 1fr); gap: 48px; padding: 0 40px 120px; } }
       header { grid-column: 1 / -1; padding: 56px 0 28px; max-width: 72ch; }
-      header h1 { font-weight: 900; font-style: italic; font-size: clamp(30px, 4vw, 46px); line-height: 1.1; letter-spacing: -0.01em; margin: 0 0 14px; padding-bottom: 4px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+      header h1 { text-wrap: balance; font-weight: 900; font-style: italic; font-size: clamp(30px, 4vw, 46px); line-height: 1.1; letter-spacing: -0.01em; margin: 0 0 14px; padding-bottom: 4px; }
       header p { color: var(--soft); margin: 0; }
       nav { display: none; }
       @media (min-width: 1100px) {
@@ -41,15 +45,15 @@
         nav a:hover { color: var(--text); }
       }
       article { min-width: 0; }
-      article h2 { font-weight: 900; font-style: italic; font-size: clamp(24px, 2.6vw, 32px); line-height: 1.15; margin: 64px 0 12px; padding-bottom: 4px; scroll-margin-top: 24px; }
-      article h3 { font-weight: 800; font-size: 19px; margin: 32px 0 8px; }
+      article h2 { text-wrap: balance; font-weight: 900; font-style: italic; font-size: clamp(24px, 2.6vw, 32px); line-height: 1.15; margin: 64px 0 12px; padding-bottom: 4px; scroll-margin-top: 24px; }
+      article h3 { font-weight: 800; font-size: 19px; margin: 32px 0 8px; scroll-margin-top: 24px; }
       article p, article li { max-width: 80ch; color: var(--soft); }
       article p strong, article li strong { color: var(--text); font-weight: 800; }
       article em { color: var(--text); }
       article ul, article ol { padding-left: 22px; }
       article li { margin: 4px 0; }
       article li ul { margin-top: 4px; }
-      code { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 0.88em; color: var(--text); background: rgb(245 243 255 / 0.07); padding: 1px 5px; border-radius: 6px; }
+      code { overflow-wrap: anywhere; font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 0.88em; color: var(--text); background: rgb(245 243 255 / 0.07); padding: 1px 5px; border-radius: 6px; }
       hr { border: 0; height: 1px; background: var(--line); margin: 56px 0 0; }
       .frames { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin: 20px 0 8px; }
       @media (min-width: 900px) { .frames { grid-template-columns: repeat(2, minmax(0, 1fr)); } .frames.three { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -76,7 +80,8 @@
         <p>Round 9's design for the owner: each concept's page, its greybox opening and one place beside three of the five drawn from their real sim courses in the same greys, the three proposed, and all seven ranked. Nothing here has been ridden.</p>
       </header>
       <nav id="toc" aria-label="Contents"></nav>
-      <article id="notes" aria-live="polite"><p>Loading the notes.</p></article>
+      <article id="notes" aria-busy="true"><p>Loading the notes…</p></article>
+      <p id="status" class="sr-only" role="status" aria-live="polite"></p>
     </div>
     <script type="module" src="./concepts-page.ts"></script>
   </body>

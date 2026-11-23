@@ -69,7 +69,7 @@ const oldRun: SceneDef = {
   ahead: 800,
   paint(x, _y, z, ny) {
     const u = Math.abs(x - orCentre(z));
-    if (z > -6 && u < OR_FLOOR) return 0.78;
+    if (z > -6 && u < OR_FLOOR) return 0.84;
     if (z > -6 && u < OR_FLOOR + OR_WALL) {
       // The glaze: the polished band high on the wall that a fast line keeps to.
       const t = (u - OR_FLOOR) / OR_WALL;
@@ -145,7 +145,7 @@ const GH_DROP = 26;
 const GH_DETOUR = 15;
 
 function ghCoast(z: number): number {
-  return 26 * Math.sin(z / 900);
+  return 26 * Math.sin(z / 900) - 0.00007 * Math.max(0, z - 150) ** 2;
 }
 function ghDetour(z: number): number {
   let d = 0;
@@ -188,6 +188,9 @@ function ghGround(x: number, z: number): number {
   // The cliff edge, and a fall of hundreds of metres to the sea.
   const edge = c + 24 + 6 * noise1(13, z / 60);
   if (x > edge) y = Math.max(GH_SEA, y - (x - edge) * 4.2 - 30 * smooth(edge, edge + 40, x));
+  // Across the bay, the next cape: a long ridge out of the sea, its cliff toward the run.
+  const across = x - (ghCoast(z) + 520 + 0.25 * z);
+  if (across > -120) y = Math.max(y, GH_SEA + Math.min(640, 9 * (across + 120)) - 0.3 * Math.max(0, z - 600) + 40 * noise2(14, x / 90, z / 120));
   return y;
 }
 
@@ -197,8 +200,8 @@ const gullhaven: SceneDef = {
   ground: ghGround,
   centre: (z) => ghCoast(z) + 10,
   line: ghLine,
-  half: 230,
-  ahead: 900,
+  half: 900,
+  ahead: 1400,
   paint(_x, y, _z, ny) {
     if (y < GH_SEA + 2) return 0.34;
     return ny < 0.45 ? 0.36 : ny < 0.7 ? 0.55 : 0.9;
@@ -237,13 +240,10 @@ const gullhaven: SceneDef = {
     // The sea to the horizon, stacks standing out of it, headlands receding down the coast, the harbour far below.
     k.sheet(cam.x - 2000, cam.z - 4000, cam.x + 40000, cam.z + 40000, GH_SEA, 0.34);
     for (let i = 0; i < 14; i++) {
-      const x = cam.x + 300 + hash(i, 1) * 2600;
+      const x = cam.x + 260 + hash(i, 1) * 2200;
       const z = cam.z + 200 + hash(i, 2) * 4200;
-      k.peak(x, GH_SEA, z, 30 + hash(i, 3) * 50, 90 + hash(i, 4) * 260, 0.4, 5, hash(i, 5) * 3);
-    }
-    for (let i = 0; i < 6; i++) {
-      const z = cam.z + 2500 + i * 1700;
-      k.peak(cam.x + 260 + i * 210, GH_SEA, z, 900, 600 - i * 70, 0.42, 4, 0.4 + i, 0.6);
+      const r = 25 + hash(i, 3) * 45;
+      k.cyl(x, GH_SEA, z, r * 0.8, r, 120 + hash(i, 4) * 300, 0.4, 6, hash(i, 5) * 3);
     }
     const hz = cam.z + 4600;
     k.cyl(cam.x + 380, GH_SEA, hz, 6, 8, 40, 0.75, 8);
@@ -251,14 +251,12 @@ const gullhaven: SceneDef = {
     // A storm deck over the sea: a ceiling of cloud with the low sun under its edge.
     k.sheet(cam.x - 3000, cam.z + 600, cam.x + 20000, cam.z + 20000, cam.y + 900, 0.42);
   },
-  look: { zenith: 0.3, horizon: 0.86, fog: 0.72, fogNear: 220, fogFar: 9000, sunAz: 38, sunEl: 8, sun: 2.8, ambient: 0.7 },
+  look: { zenith: 0.1, horizon: 0.7, fog: 0.55, fogNear: 260, fogFar: 9000, sunAz: 38, sunEl: 9, sun: 2.8, ambient: 0.6 },
   views: [
-    { key: 'opening', name: 'From the beacon: the first shelf and the sea', z: 40, speed: 24 },
-    { key: 'place', name: 'Lifted over the second gully, the far shelf ahead', z: 800, off: GH_DETOUR + 6, air: 0, speed: 31, back: 6 },
+    { key: 'opening', name: 'From the beacon: the first shelf and the sea', z: 40, off: 9, speed: 24, turn: 24 },
+    { key: 'place', name: 'At the lip of the second gully: the gap, the far shelf, the sea', z: 764, off: GH_DETOUR + 6, speed: 31, back: 7, up: 1.5, turn: 14 },
   ],
 };
-// (The flight over the gully: the rider a few metres under the near shelf's height, the floor far below.)
-gullhaven.views[1].air = -0.16 * 770 - GH_DROP - 2 - ghGround(ghCoast(800) + 6, 800);
 
 // =================================================================== 3. Gablefall: the roofs of a hill town
 
@@ -316,8 +314,9 @@ function gfGround(x: number, z: number): number {
     const r = gfRoof(side, z);
     if (!r.ok) return st;
     const mid = GF_STREET + GF_DEPTH / 2;
+    // A pitched roof under its snow: a rounded ridge, straight pitches down to the eaves.
     const d = Math.abs(a - mid) / (GF_DEPTH / 2);
-    return r.y - 2.3 * d * d;
+    return r.y - (d < 0.12 ? 0.6 * (d / 0.12) ** 2 * 0.12 : 0.072 + 2.9 * (d - 0.12));
   }
   // Behind the row, the hillside: up to the left, down to the right, with the town on it.
   return st + (side < 0 ? 2 + 0.3 * (a - GF_STREET - GF_DEPTH) : -3 - 0.32 * (a - GF_STREET - GF_DEPTH));
@@ -384,13 +383,13 @@ const gablefall: SceneDef = {
   look: { zenith: 0.7, horizon: 0.8, fog: 0.8, fogNear: 40, fogFar: 900, sunAz: -20, sunEl: 40, sun: 1.1, ambient: 1.45 },
   views: [
     { key: 'opening', name: 'On the church roof, the town below', z: -24, speed: 22 },
-    { key: 'place', name: 'Roof to roof: an alley gap and the next roof down', z: 0, speed: 28 },
+    { key: 'place', name: 'Roof to roof: an alley gap and the next roof down', z: 0, speed: 28, back: 6, up: 1.4 },
   ],
 };
 // (The place: just short of the alley at the end of the fourth block down the left row.)
 {
   const b = gfBlocks[-1][4];
-  gablefall.views[1].z = b.z1 - 9;
+  gablefall.views[1].z = b.z1 - 5;
 }
 
 // =================================================================== 4. Windfall: the storm's forest (duck and hop)
@@ -414,7 +413,7 @@ interface Trunk {
   /** Height of its underside over the snow: 0 lying (hop it), about 1.2 hung up (duck it). */
   lift: number;
 }
-const wfTrunks: Trunk[] = [];
+export const wfTrunks: Trunk[] = [];
 {
   let z = 160;
   let n = 0;
@@ -472,7 +471,7 @@ const windfall: SceneDef = {
       if (Math.max(t.z0, t.z1) < z0 || Math.min(t.z0, t.z1) > z1) continue;
       const y0 = wfGround(t.x0, t.z0) + t.r + t.lift;
       const y1 = wfGround(t.x1, t.z1) + t.r + t.lift;
-      k.bar(t.x0, y0, t.z0, t.x1, y1, t.z1, t.r, 0.3, 7);
+      k.bar(t.x0, y0, t.z0, t.x1, y1, t.z1, t.r, t.lift > 0 ? 0.62 : 0.5, 7);
       if (t.lift > 0) {
         k.cyl(t.x0, wfGround(t.x0, t.z0) - 0.4, t.z0, 2.1, 2.1, 0.7, 0.26, 9, 0, Math.PI / 2, 0);
         k.cyl(t.x1, wfGround(t.x1, t.z1) - 0.3, t.z1, 0.35, 0.45, 3.2, 0.3, 6);
@@ -514,12 +513,12 @@ const windfall: SceneDef = {
 // (The place: 14 m short of the first hung-up trunk in the gallery.)
 {
   const t = wfTrunks.find((q) => q.lift > 0 && Math.min(q.z0, q.z1) > 1330)!;
-  windfall.views[1].z = Math.min(t.z0, t.z1) - 14;
+  windfall.views[1].z = Math.min(t.z0, t.z1) - 9;
 }
 
 // =================================================================== 5. Longswell: the ice cap's swells (pump)
 
-const LS_A = 1.6;
+const LS_A = 2.1;
 const LS_L = 45;
 function lsCentre(z: number): number {
   return 14 * Math.sin(z / 700);
@@ -580,7 +579,7 @@ const longswell: SceneDef = {
     k.peak(cam.x - 9000, cam.y - 400, cam.z + 16000, 1300, 520, 0.5, 5, 0.2, 1.8);
     k.peak(cam.x - 6000, cam.y - 400, cam.z + 19000, 900, 380, 0.52, 5, 1.2, 1.4);
   },
-  look: { zenith: 0.5, horizon: 0.96, fog: 0.93, fogNear: 300, fogFar: 14000, sunAz: 104, sunEl: 6, sun: 2.8, ambient: 0.75 },
+  look: { zenith: 0.5, horizon: 0.96, fog: 0.93, fogNear: 300, fogFar: 14000, sunAz: 152, sunEl: 14, sun: 2.8, ambient: 0.6 },
   views: [
     { key: 'opening', name: 'From the camp onto the swells', z: 22, speed: 20 },
     { key: 'place', name: 'A swell set, the crevasse and its bridge ahead', z: 1386, speed: 34 },
@@ -645,6 +644,7 @@ const whitemantle: SceneDef = {
         const h = wmBand(i, x);
         if (h < 2) continue;
         k.box(x + hash(i, x) * 3, wmGround(x, zb + 3) - 0.5, zb + 1, 4 + hash(i, x, 1) * 3, h * 0.8, 2.2, ROCK, hash(i, x, 2) - 0.5);
+        if (h > 4) k.box(x + hash(i, x, 4) * 3, wmGround(x, zb - 3) - 0.6, zb - 3, 3 + hash(i, x, 5) * 3, 1.2 + (h - 4) * 0.35, 3, ROCK, hash(i, x, 6) - 0.5, 0.1, 0.05);
       }
     }
     for (let z = Math.max(0, Math.ceil(z0 / 50) * 50); z < Math.min(z1, 2400); z += 50) {

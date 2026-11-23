@@ -356,8 +356,9 @@ its height. Every 25 to 60 m down most of the run.
 - *Size and Low.* A score of about 9 MB (a woodblock-and-low-strings piece near 140 bpm). Cheap on Low: trunks are
   instanced like trees; the forest is the five's.
 - *Unlocks* where Gablefall would (at 8 ghosts): the duck is a first-hour lesson.
-- *Risk, and why it is fourth.* In the five's colours it is a forest corridor with logs: the grammar of Pinecrest's
-  tree runs, and a critic may well put it with Pinecrest. Holding the button is also the tuck (faster), so a novice
+- *Risk, and why it is last.* In the five's colours it is a forest corridor with logs: the grammar of Pinecrest's
+  tree runs. The blind sort bore it out: the critic put Windfall's frames with the five's alpine family ("in a
+  thumbnail they read as one mountain"). Holding the button is also the tuck (faster), so a novice
   who holds through everything is not punished; the beams bite only on a rider who pops, which is the point, but it
   makes the duck an expert's problem more than a novice's.
 
@@ -464,8 +465,10 @@ matt, glare ice dark and glossy).
 - *Size and Low.* A score of about 9 MB. The ceiling is the cost: a roof the length of half the run, its shafts painted
   on Low as the five's tunnels' are. About the five's cost.
 - *Unlocks* after Ember (at 18), if chosen.
-- *Risk, and why it is last.* In greyscale an ice slot that bursts out into light is Frostfang's ravines and its Ice
-  Cavern; grip by place is subtle at speed on a keyboard; and on an all-ice run the ice charms decide too much.
+- *Risk.* An ice slot that bursts out into light is Frostfang's fiction (its ravines and its Ice Cavern), though the
+  blind sort put the gorge apart from every frame of the five; grip by place is subtle at speed on a keyboard; and on
+  an all-ice run the ice charms decide too much. The ceiling must read as a ceiling: the critic could not tell the
+  mouth's roof from a wall or a bridge, nor which side of a column on the line to take.
 
 ---
 
@@ -504,26 +507,35 @@ storm over the sea, a snowfall).
   with the five's cliffs turned sideways: the lift has to be felt and the storm has to be the light. Gablefall is not
   the five's street stretched: the roofs have to be the fast way.
 
-The swap if the owner wants a cheaper third: **Windfall for Gablefall.** It is the best one-button mechanic of the
-seven and cheap to build and draw, but it is a forest corridor, the five's own frame.
+The swap if the owner wants a cheaper third than Gablefall: **Rimewater Gorge**, which the blind sort set apart from
+the five and which costs about what the five cost on Low; or **Longswell**, the cheapest world of the seven and also
+set apart, if a subtle mechanic and an empty frame are acceptable. Not Windfall: the blind sort put it with the five.
+
+The sort's warning for the set: the Old Run's frames went with Windfall's, beside the five's alpine family, as "a
+lesser outlier" that "rides as a luge or wall ride". The channel was read; the pine forest and the faint peak at its
+vanishing point were the five's. Its world has to be its own: no pine cones, no hero peak at the end of the track (the
+lake and its town instead), and the run's lamps and parapet carrying the place.
 
 ## The ranking, all seven
 
 1. **The Old Run.** The strongest new verb for the least sim: the physics are already there (gravity on a banked
-   cross-section carries a sled up the wall), the danger is time and never a fall, it is cheaper than the five on Low,
-   and its frame is unmistakable. Its risk is a lab question, answered early.
+   cross-section carries a sled up the wall), the danger is time and never a fall, and it is cheaper than the five on
+   Low. Its channel was read blind as a luge; its forest was not new, which the world lane can fix and the sim cannot
+   break. Its risk is a lab question, answered early.
 2. **Gullhaven.** The biggest new feeling (the longest flights in the game, by choice) and the direction the owner
    named that lost in round 7 for a reason this concept answers. Moderate sim (a lift in the air, a notch in the
    ground); its world and its lens are the work.
 3. **Gablefall.** The strongest place and different on every axis, with the game's own air skills as its verb. The
    costliest world of the three and a risk on Low; its fallback street must not become the ride.
-4. **Windfall.** The best use of the one button (hold and let go as a rhythm) and cheap; but its frame is the five's
-   corridor and its forest is Pinecrest's, so it would be the least "new mountain" of the four.
-5. **Longswell.** A place unlike anything (a flat horizon, swells to it) and almost free on Low; its mechanic shares a
-   press with the pop and may be subtle and long.
-6. **Whitemantle.** The freest idea (no corridor), but the most sim and render work, and the low chase lens works
-   against reading a face.
-7. **Rimewater Gorge.** A real mechanic (grip by place) in a frame a critic would put with Frostfang.
+4. **Rimewater Gorge.** A real mechanic (grip by place) and a frame the blind sort set apart from all five, where I had
+   expected it to go with Frostfang; about the five's cost. Its grip is subtle on a keyboard and its ceiling has to
+   read.
+5. **Longswell.** A place unlike anything (the critic: "the most empty frames of the set") and almost free on Low; but
+   its mechanic shares a press with the pop, may be subtle and long, and "nothing to steer round" is a ride's risk too.
+6. **Whitemantle.** The freest idea (no corridor) and set apart blind, but the most sim and render work, the low chase
+   lens works against reading a face, and its far plane (a valley and a saw of ranges) is nearest the five's panorama.
+7. **Windfall.** The best use of the one button (hold and let go as a rhythm) and the cheapest to build; but its frame
+   is the five's corridor and the blind sort put it with them, which is the one thing a new mountain must not be.
 
 ## The directions weighed
 
@@ -540,28 +552,62 @@ seven and cheap to build and draw, but it is a forest corridor, the five's own f
 
 ## The critic's sort
 
-(Pending: the frames, greyscale, unlabelled and shuffled with the five's, to a fresh critic.)
+The twenty frames (the seven concepts' openings and places, and the openings and places of Pinecrest, Frostfang and
+Sakura), greyscale, unlabelled and shuffled under neutral names (`scripts/r9/concepts-blind.mjs`, seed 9091; the
+key in `shots/r9/concepts/blind-key.json`, outside the folder the critic saw), went to a fresh critic (Opus, extra
+high effort) given only ART.md and the frames, asked to sort them into courses, say which are unlike the rest and why,
+and say what it could not read. It was told neither how many courses there were nor that any were new.
+
+What it got, decoded:
+- **The five are one mountain.** All six of the five's frames went into one group, "alpine valley", sure it is one
+  mountain; the three openings it called "literally one opening", wondering only whether it was one course rolled
+  three times. It told Pinecrest, Frostfang and Sakura apart only by which side the sun was on.
+- **Every concept's two frames were put together**, all seven.
+- **Set apart from the rest, with two or more differences that are not colour:** Rimewater Gorge ("walls fill both
+  sides", "a dark wall or roof instead of peaks", columns, no trees, "threading pillars in a tube"), Longswell ("no
+  banks, no corridor", "dead flat to a straight horizon", "a faint low skyline with no hero peak"), Gullhaven ("an
+  exposed, rolling crest with no trees", snow fences, "a vast flat lower plane with pillars", "no mountains at all"),
+  Gablefall ("long gabled houses, chimneys", "the run is a ledge or street above roofs", "a hazy valley floor with a
+  scattered village, not peaks") and Whitemantle ("a flat lake fills the middle distance", "no trees", "a wide open
+  slope falling to a shore"; it read the glacier as a lake).
+- **Not set apart:** Windfall and the Old Run went into one group ("foggy forest luge") beside the five's, which "in a
+  thumbnail read as one mountain" with them; the Old Run singled out within it as "a lesser outlier": "built concave
+  walls with a rounded lip", "it rides as a luge or wall ride".
+- **Kinds it saw shared:** Whitemantle, Gablefall and Gullhaven as "a run on a high shelf with a broad flat plane
+  falling away to one side"; Longswell and Gullhaven's opening as open, bank-less expanses with a line of markers.
+- **What it could not read:** the gorge's roof at the mouth (a wall, a roof or a bridge?) and a column on the line
+  under it; Gullhaven's lip (a leap, a drop or a turn?) and its sea (cloud, water or ground?); Windfall's hung trunk
+  (a log to hop, a rail, or a gate to duck under?); the Old Run's tree shadows across the trough (read as ridges); a
+  kicker's plates in the five's openings; Longswell's way (no edges say where the run goes).
+
+So in greyscale five of the seven pass the round's "not paintings" bar as drawn here, the Old Run half passes on its
+channel alone, and Windfall fails. Of the proposed three, Gablefall and Gullhaven passed; the Old Run's world must be
+drawn as its own. A greybox is a shape, and the critic is not a player.
 
 ## What the main lane must decide (and the owner)
 
-1. **Which three.** The proposal is the Old Run, Gullhaven and Gablefall; Windfall is the cheaper swap for Gablefall.
-2. **What "it only descends" allows.** None of the three climbs on the line. Gullhaven's gullies and Gablefall's
+1. **Which three.** The proposal is the Old Run, Gullhaven and Gablefall; Rimewater Gorge (or Longswell) is the cheaper
+   swap for Gablefall.
+2. **The Old Run's world.** The blind sort read its channel but put its forest with the five's: if it is chosen, its
+   world lane starts from "not pines, no hero peak at the end of the track", and the sorting test is run on its first
+   frames, not its last.
+3. **What "it only descends" allows.** None of the three climbs on the line. Gullhaven's gullies and Gablefall's
    alleys are local drops a flight crosses. If the owner reads the rule as "never a rise at all", nothing changes for
    these three.
-3. **A per-mountain course table.** Every concept needs its own stage lengths, opening and finish. Today those are
+4. **A per-mountain course table.** Every concept needs its own stage lengths, opening and finish. Today those are
    shared constants (`STAGE_LENGTHS`, `opening()`, `FINISH_SQUARE`, `RUN_OUT`, and the first kicker at 286 to 312 m in
    `layKicks`); the groundwork makes them a table whose five rows hold today's values exactly.
-4. **The fairness suite's shared promises** (the first minute, the leaps, the kickers) become the five's; each new
+5. **The fairness suite's shared promises** (the first minute, the leaps, the kickers) become the five's; each new
    mountain brings its own (written above), so the suite proves each on its own terms.
-5. **New verbs.** Nine set pieces need verbs; `race`, `gates` and `steps` are used twice already and `follow`,
+6. **New verbs.** Nine set pieces need verbs; `race`, `gates` and `steps` are used twice already and `follow`,
    `kindle` and `carry` are Lanternfall's, so the new mountains bring their own, appended to `VERBS` (the music's
    stingers key on its order, which is kept).
-6. **The ice charms** on the Old Run (Frost Runners and its Black Ice pair would decide too much there): race them in
+7. **The ice charms** on the Old Run (Frost Runners and its Black Ice pair would decide too much there): race them in
    the lab, and keep them off its gates if they do.
-7. **The size cap.** The three scores are about 30 MB (8.5, 11.5 and 10 MB): the build goes from 60.33 MB to about
+8. **The size cap.** The three scores are about 30 MB (8.5, 11.5 and 10 MB): the build goes from 60.33 MB to about
    91 MB, inside the proposed 110 MB cap and over today's 80 MB. Each full pack stays under Sakura's (6.0 MB), so the
    initial download does not grow.
-8. **Gablefall's cost on Low** is the one estimate I would want measured before it is built: a baked far town is the
+9. **Gablefall's cost on Low** is the one estimate I would want measured before it is built: a baked far town is the
    plan.
 
 ## What only a person can judge
@@ -569,3 +615,40 @@ seven and cheap to build and draw, but it is a forest corridor, the five's own f
 Whether riding a wall feels like the line or like a gutter; whether the lift over a gully feels like flying or like
 floating; whether thirty hops down a town feel like a rhythm or a chore. The greybox frames show shapes from the chase
 lens, not a ride.
+
+## What is short
+
+- Every concept figure (times, speeds, air, turns, widths, hazards, pack sizes, Low's cost) is a design estimate from
+  the sim's physics and the five's measured figures, not a lab run: no concept exists in the sim. The first job of
+  milestone 3 is a prototype section of the chosen mechanic in the lab.
+- The greybox draws shapes, not the game: no colour, no grade, no particles, no crowd. Its frames are a fair comparison
+  of shape (the five are drawn by the same kit from their real courses), not a picture of what a mountain would look
+  like finished.
+- Several greybox frames have readings the critic could not make (above). They are the greybox's, and they are also the
+  first notes for each world: what must read at speed.
+- Only scripts and one critic have seen any of it.
+
+## Frames and files
+
+- Frames: `shots/r9/concepts/<scene>-<opening|place>.png` (twenty, 1280x720), the blind set in `blind/` with its key
+  beside it, and the owner's page as shot on desk and phone in `page/`. The page's console was clean on both; the
+  greybox page's too, once its favicon and its shadow type were fixed.
+- `prototypes/r9/greybox.html` and `prototypes/r9/greybox/` (the kit, the five from the sim, the seven concepts),
+  `prototypes/r9/concepts.html` and `concepts-page.ts` (the owner's page, which renders this file and draws every
+  frame live), `scripts/r9/concepts-frames.js` (the frames), `scripts/r9/concepts-blind.mjs` (the blind set),
+  `scripts/r9/concepts-five.ts` (the five's ground read from the sim). Nothing in the game's boot path; no sim file
+  touched.
+
+## For DECISIONS (the text I would add; the main lane owns the file)
+
+**The three new mountains: seven concepts, three proposed** (`notes/r9-concepts.md`; frames under
+`shots/r9/concepts/`; the owner's page `prototypes/r9/concepts.html`). Seven concepts on the brief's eight axes, each
+with one mechanic on steer and one button: the Old Run (ride the banked wall), Gullhaven (the sea wind lifts you over
+the gullies), Gablefall (roof to roof down a hill town), Windfall (hold to duck, let go to hop), Longswell (pump the ice
+cap's swells), Whitemantle (read an open face) and Rimewater Gorge (turn on the snow, glide on the ice). Proposed: the
+Old Run, Gullhaven, Gablefall, which differ from each other on all eight axes, none above cloud, unlocking at 8, 18
+and 32 ghosts between the five. A greybox tool drew each concept's opening and one place beside Pinecrest, Frostfang
+and Sakura from their real sim courses; a fresh critic, blind, put all six of the five's frames in one mountain, set
+five concepts apart, read the Old Run's channel but put its forest with the five's, and put Windfall with the five.
+*Rejected:* a descent by your own light as a concept of its own (its difference is light, which Lanternfall owns, and
+its mechanic is either empty under the fairness rule or a third lantern use, which 277 rejected).

@@ -60,7 +60,7 @@ function render(md: string, frames: FrameRef[], toc: { id: string; text: string 
         const m = image.exec(lines[i])!;
         const n = frames.length;
         frames.push({ id: m[2], view: m[3], alt: m[1] });
-        row.push(`<figure class="frame"><div class="shot" data-frame="${n}"><span>Drawing the frame</span></div><figcaption>${inline(m[1])}</figcaption></figure>`);
+        row.push(`<figure class="frame"><div class="shot" data-frame="${n}"><span>Drawing the frame…</span></div><figcaption>${inline(m[1])}</figcaption></figure>`);
         i++;
       }
       out.push(`<div class="frames${row.length > 2 ? ' three' : ''}">${row.join('')}</div>`);
@@ -124,10 +124,12 @@ async function main(): Promise<void> {
   const frames: FrameRef[] = [];
   const toc: { id: string; text: string }[] = [];
   // The notes' own title is the page's header.
-  article.innerHTML = render(md.replace(/^# .*\n/, ''), frames, toc);
+  article.innerHTML = render(md.replace(/\r/g, '').replace(/^# [^\n]*\n/, ''), frames, toc);
   nav.innerHTML = `<ol>${toc.map((t) => `<li><a href="#${t.id}">${inline(t.text)}</a></li>`).join('')}</ol>`;
 
   // Every frame, one at a time on one renderer, each set as an image in its place.
+  const status = document.getElementById('status');
+  if (status) status.textContent = `Drawing ${frames.length} greybox frames…`;
   const canvas = document.createElement('canvas');
   const renderer = makeRenderer(canvas);
   for (let n = 0; n < frames.length; n++) {
@@ -150,6 +152,8 @@ async function main(): Promise<void> {
     slot.replaceChildren(img);
   }
   renderer.dispose();
+  article.removeAttribute('aria-busy');
+  if (status) status.textContent = `All ${frames.length} frames drawn.`;
 }
 
 void main();

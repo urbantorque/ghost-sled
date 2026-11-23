@@ -28,6 +28,11 @@ export interface View {
   /** How far behind the rider the lens sits, and how far the lens is moved toward the corridor's middle. */
   back?: number;
   inward?: number;
+  /** Metres the lens stands higher than the chase's own height (the big-air vista), the row the rider sits on (NDC y,
+   *  -0.30 by default), and degrees the lens turns off the line toward a place (+ right). */
+  up?: number;
+  row?: number;
+  turn?: number;
 }
 
 export interface Look {
@@ -380,7 +385,7 @@ export function renderView(renderer: THREE.WebGLRenderer, def: SceneDef, view: V
   const v = view.speed ?? 30;
   const ahead = Math.max(20, v * 1.5);
   const toward = Math.atan2(def.line(z + ahead) + off - rx, ahead);
-  const yaw = dir + (toward - dir) * 0.33;
+  const yaw = dir + (toward - dir) * 0.33 + ((view.turn ?? 0) * Math.PI) / 180;
 
   // The lens: behind the rider, a little to the corridor's middle, 1.5 m over the snow under it (ART.md 8).
   const back = view.back ?? 5;
@@ -388,14 +393,14 @@ export function renderView(renderer: THREE.WebGLRenderer, def: SceneDef, view: V
   const cz = z - Math.cos(dir) * back;
   const towardMid = Math.sign(def.centre(cz) - cx) || 1;
   cx += towardMid * (view.inward ?? 0.35);
-  const cy = Math.max(def.ground(cx, cz) + 1.5, ry + 1.3);
+  const cy = Math.max(def.ground(cx, cz) + 1.5, ry + 1.3) + (view.up ?? 0);
   const fov = chaseFov(v);
   const camera = new THREE.PerspectiveCamera(fov, FRAME_W / FRAME_H, 0.3, 30000);
   camera.position.set(cx, cy, -cz);
   // Aim so the rider's middle sits at the game's row (src/render/speedfeel.ts chaseRow: -0.30 at 30 m/s).
   const horiz = Math.hypot(rx - cx, z - cz);
   const thetaR = Math.atan2(cy - (ry + 0.75), horiz);
-  const pitch = thetaR - Math.atan(0.3 * Math.tan(((fov / 2) * Math.PI) / 180));
+  const pitch = thetaR - Math.atan(-(view.row ?? -0.3) * Math.tan(((fov / 2) * Math.PI) / 180));
   const tx = cx + Math.sin(yaw) * Math.cos(pitch) * 100;
   const tz = cz + Math.cos(yaw) * Math.cos(pitch) * 100;
   const ty = cy - Math.sin(pitch) * 100;
@@ -438,7 +443,7 @@ export function renderView(renderer: THREE.WebGLRenderer, def: SceneDef, view: V
   sc.near = 10;
   sc.far = 1200;
   sun.shadow.bias = -0.0006;
-  sun.shadow.normalBias = 0.04;
+  sun.shadow.normalBias = 0.08;
   scene.add(sun, sun.target);
   scene.add(new THREE.AmbientLight(0xffffff, L.ambient));
 
@@ -475,7 +480,7 @@ export function makeRenderer(canvas?: HTMLCanvasElement): THREE.WebGLRenderer {
   r.setPixelRatio(1);
   r.setSize(FRAME_W, FRAME_H, false);
   r.shadowMap.enabled = true;
-  r.shadowMap.type = THREE.PCFSoftShadowMap;
+  r.shadowMap.type = THREE.PCFShadowMap;
   r.outputColorSpace = THREE.SRGBColorSpace;
   r.toneMapping = THREE.NoToneMapping;
   return r;
