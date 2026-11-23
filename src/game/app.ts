@@ -70,6 +70,7 @@ import { albumModel, almanacModel, lanternRow, resultsSpine, titleSpine } from '
 import { flameNow } from './flame';
 import { type Board, type ClimbOutcome, type Spot, bestStanding, boardOf, climbMoment, decidedLine, goldHook, laps, medalsHeld, nextLine, rungHook, settleClimb, spotOn, stageSeconds } from './ladder';
 import { type BestRun, type Climb, Grudge, SHELF_KEYS, SaveStore, oldBest, retireGrudge, rideableGrudge, shelfState } from './save';
+import { useFixture } from './devsave';
 import { type GrudgeRow, type SettleResult, Settlement, cupMedalNow, dailyMedalNow, dailyStreakNow, isNemesis, medalFor, medalThresholds, settleBest, settleGrudge, settleRun, topScore } from './settle';
 import { inReach } from './pacer';
 import { PLAIN_SHOT, type TitleShot, devShot, titleShot } from './keyart';
@@ -355,6 +356,9 @@ export class App {
     this.root = root;
     this.platform = getPlatform();
     const nameSeed = hashString(String(Date.now()) + Math.random());
+    // (Round 9, dev server only: `?debug&save=<name>` loads a save fixture in a store of its own, devsave.ts. The
+    // release compiles this away and ships no fixture.)
+    if (import.meta.env.DEV && DEV.has('save')) useFixture(this.platform.storage, DEV.get('save') ?? '');
     this.save = new SaveStore(this.platform.storage, ghostName(new Rng(nameSeed)));
     const guess = guessTier();
     const pref = this.save.data.settings.quality;

@@ -623,6 +623,9 @@ export interface CareerOptions {
   follow?: 'roam' | 'stay' | 'button';
   /** Called after each run (progress). */
   onRun?: (r: CareerRun) => void;
+  /** Called after each run with the save itself as the run left it (round 9: r9-fixtures.ts copies it at chosen
+   *  runs). The save is live: copy it before keeping it. */
+  onSave?: (r: CareerRun, save: Any) => void;
 }
 
 const hash = (...xs: number[]): number => {
@@ -914,6 +917,7 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
     out.push(cr);
     cr.goals = nearGoals(M, d, out, { today, week, key, mi, daily: !!o.daily && dayIndex >= 0, cup: !!o.cup });
     o.onRun?.(cr);
+    o.onSave?.(cr, d);
 
     // Where the next run goes: a mountain this run opened, else the next duel's home after a few runs here,
     // else somewhere fresher when this mountain has given nothing durable for five runs.
