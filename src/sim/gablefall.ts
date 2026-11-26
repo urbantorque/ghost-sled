@@ -492,6 +492,13 @@ export const GABLEFALL_KIT: Kit = {
           if (z + gap + HOUSE_MIN > end) break;
           piece('alley', gap);
         }
+        // A row ends on a house: an alley or a drift laid where no house then fitted after it is taken up again (it leads
+        // to nothing, and would stand at no level).
+        while (row.pieces.length > 1 && row.pieces[row.pieces.length - 1].kind !== 'house') {
+          const p = row.pieces.pop()!;
+          z = p.z0;
+          if (p.kind === 'drift') drifts.splice(drifts.findIndex((q) => q.row === row && q.z0 === p.z0), 1);
+        }
         row.z1 = z;
         rows.push(row);
       }
