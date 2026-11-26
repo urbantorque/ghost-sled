@@ -623,12 +623,16 @@ export function medalDots(m: MedalSet, fresh: readonly number[] = [], quiet = fa
 
 /**
  * Round 8, the trials lane: the Trial picked, over Ride. Round 9 (U4): one ink card in the round's language, every
- * figure with its word. Its rule, under the star; then the three targets as the medals they win ("Bronze 13, Silver 16,
+ * figure with its word. Where it rides ("Mirrored Sakura Ridge in the Evening": no chip is picked while it is); its rule,
+ * under the star; then the three targets as the medals they win ("Bronze 13, Silver 16,
  * Gold 18 perfects", each with its disc, a target already won struck through); then your best this week and the days
  * it has left. Until its field is in, the rule alone (nothing loading is shown).
  */
 function trialPanel(t: TitleTrial): HTMLElement {
-  const box = h('div', 'gs9-trial', h('p', 'gs9-trial-rule', ico9('star'), h('span', '', curly(t.rule))));
+  // (Where it rides first: no chip is picked while the Trial is, so the card names the place and its twist.)
+  const where = h('p', 'gs9-trial-where', curly(t.name));
+  where.setAttribute('translate', 'no');
+  const box = h('div', 'gs9-trial', where, h('p', 'gs9-trial-rule', ico9('star'), h('span', '', curly(t.rule))));
   if (t.targets) {
     const goals = h('p', 'gs9-trial-goals');
     t.targets.forEach((v, i) => {

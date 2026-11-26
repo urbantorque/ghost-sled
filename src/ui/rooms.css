@@ -137,6 +137,12 @@
   font-weight: var(--fw-text);
 }
 
+/* (Round 9, U4: who rides now wears their own accent, not the gifts' marigold: it is theirs, never an action.) */
+.gs9-rung .gs9-tag.is-now {
+  color: var(--rider, var(--c-text));
+  box-shadow: inset 0 0 0 1.5px var(--rider, var(--hair-strong));
+}
+
 .gs9-rung.is-locked .gs9-rung-n {
   color: var(--text-dim);
 }

@@ -177,7 +177,7 @@ export class PhotoMode {
     this.gridBtn.setAttribute('aria-pressed', 'false');
     this.focusBtn = opts.canFocus ? rankBtn(ctx, 'quiet', 'Focus', { icon: 'focus', fk: 'ph-focus', aria: 'Focus on the rider', cls: 'gs-ph-tog', onClick: () => this.toggleFocus() }) : null;
     this.focusBtn?.setAttribute('aria-pressed', 'false');
-    const reset = rankBtn(ctx, 'quiet', 'Reset', { icon: 'reset', aria: 'Reset to the first frame', fk: 'ph-reset', sound: 'back', onClick: () => this.reset() });
+    const reset = rankBtn(ctx, 'quiet', 'First Frame', { icon: 'reset', fk: 'ph-reset', sound: 'back', onClick: () => this.reset() });
     const back = rankBtn(ctx, 'quiet', 'Done', { icon: 'back', sound: 'back', fk: 'ph-back', cls: 'gs-ph-back', onClick: () => this.leave() });
     back.setAttribute('aria-keyshortcuts', 'Escape');
     const save = rankBtn(ctx, 'primary', 'Save Photo', { icon: 'camera', sound: 'confirm', fk: 'ph-save', onClick: () => void this.save(false) });

@@ -172,7 +172,7 @@ function eventsRoom(f: Fill): void {
     let league: HTMLElement;
     if (lg && lg.place) {
       const tb = b9(o.ctx, 'secondary', 'League Table', { icon: 'trophy', fk: 'league', aria: `The league table: division ${lg.division}`, onClick: () => f.push('This Week’s League', (b) => leagueTable(b, m), tb) });
-      league = h('div', 'gs9-det-act', h('p', 'gs9-block-p', `Division ${lg.division} of ${DIVISIONS}: you are ${ordinal9(lg.place)} of ${LEAGUE_SIZE}. The top ${LEAGUE_MOVE} go up when the week turns.`), tb);
+      league = h('div', 'gs9-det-act', h('p', 'gs9-block-p', `Division ${lg.division} of ${DIVISIONS}: you are ${ordinal9(lg.place)} of ${LEAGUE_SIZE}. ${leagueMoves(lg.division)}`), tb);
     } else league = h('p', 'gs9-block-p', 'Ride it once to join a league of the week’s records.');
     body.append(block('This Week’s Cup', line, choose(f, 'cup'), league));
   }
@@ -212,18 +212,26 @@ function choose(f: Fill, kind: 'daily' | 'cup' | 'trial'): HTMLElement | null {
   });
 }
 
+/** Who moves at the week's turn, said only for the moves this division has (the top one has none above, the last none
+ *  below). */
+function leagueMoves(division: number): string {
+  const up = division > 1;
+  const down = division < DIVISIONS;
+  return up && down ? `The top ${LEAGUE_MOVE} go up and the bottom ${LEAGUE_MOVE} go down when the week turns.` : up ? `The top ${LEAGUE_MOVE} go up when the week turns.` : `The bottom ${LEAGUE_MOVE} go down when the week turns.`;
+}
+
 /** The league's table: the nineteen records of your division and you among them (records, never live players). */
 function leagueTable(body: HTMLElement, m: TitleModel): void {
   const lg = m.spine?.league ?? null;
   if (!lg) return;
-  body.append(h('p', 'gs9-block-p', `Division ${lg.division} of ${DIVISIONS}. The top ${LEAGUE_MOVE} go up and the bottom ${LEAGUE_MOVE} go down when the week turns. The others are the week’s records, each one a run.`));
+  body.append(h('p', 'gs9-block-p', `Division ${lg.division} of ${DIVISIONS}. ${leagueMoves(lg.division)} The others are this week’s runs on the Cup, each one a ghost.`));
   const list = h('ol', 'gs9-list gs9-order');
   list.setAttribute('aria-label', 'The league table');
   lg.rows.forEach((r, i) => {
     // (Round 9, U4: the others are the week's records, each a ghost's run: their names in the ghosts' mint.)
     const n = h('span', r.you ? '' : 'gs9-who is-ghost', r.you ? 'You' : r.name);
     if (!r.you) n.setAttribute('translate', 'no');
-    const li = row([h('span', 'gs9-order-n gs9-num', String(i + 1)), n], clock(r.time), `${r.you ? 'is-you' : ''}${i === LEAGUE_MOVE - 1 ? ' is-line' : ''}`);
+    const li = row([h('span', 'gs9-order-n gs9-num', String(i + 1)), n], clock(r.time), `${r.you ? 'is-you' : ''}${(i === LEAGUE_MOVE - 1 && lg.division > 1) || (i === lg.rows.length - LEAGUE_MOVE - 1 && lg.division < DIVISIONS) ? ' is-line' : ''}`);
     if (r.you) li.setAttribute('aria-current', 'true');
     list.append(li);
   });
@@ -263,7 +271,7 @@ function progressRoom(f: Fill): void {
     }
     const nx = tw.next;
     const line = tw.crowned ? 'All twelve beaten, and all of them at once.' : nx ? `${nx.name} rides next, on ${nx.mountain}. ${nx.bio}` : tw.final ? `The last race: all twelve at once on ${tw.final.mountain}.` : tw.waiting ? `${tw.waiting.rider.name} waits on ${tw.waiting.rider.mountain}. ${tw.waiting.opens}.` : (tw.hook ?? '');
-    const all = b9(o.ctx, 'secondary', 'All Twelve', { icon: 'trophy', fk: 'twelve', onClick: () => f.push('The Twelve', (b) => ladder(b, m, f), all) });
+    const all = b9(o.ctx, 'secondary', 'All Twelve', { icon: 'rider', fk: 'twelve', onClick: () => f.push('The Twelve', (b) => ladder(b, m, f), all) });
     body.append(block(`The Twelve: ${tw.beaten} of ${tw.of} Beaten`, curly(line), all, busts));
   }
   // The Long Night, once open.
@@ -323,20 +331,22 @@ function ladder(body: HTMLElement, m: TitleModel, f: Fill): void {
     const name = h('span', 'gs9-rung-n', r.name);
     name.setAttribute('translate', 'no');
     name.style.setProperty('--rider', r.accent);
-    const meta = h('span', 'gs9-rung-m', `${r.mountain}${r.time ? `, ${r.time}` : ''}`);
+    // (Their time on their home ground, said as theirs: a bare time beside a name read as anyone's.)
+    const meta = h('span', 'gs9-rung-m', `${r.mountain}${r.time ? `, in ${r.time}` : ''}`);
     meta.setAttribute('translate', 'no');
     let tag: HTMLElement | null = null;
     if (r.state === 'beaten') tag = h('span', 'gs9-tag', ico9('check'), 'Beaten');
     else if (r.state === 'locked') tag = h('span', 'gs9-tag', ico9('lock'), 'Locked');
     else if (r.state === 'next' && tw.next) {
       const n = tw.next;
-      tag = n.here ? h('span', 'gs9-tag is-gift', 'Rides now') : b9(f.o.ctx, 'secondary', 'Go', { icon: 'arrowR', fk: 'twelve-go', aria: `Go to ${n.mountain} to duel ${n.name}`, onClick: () => {
+      tag = n.here ? h('span', 'gs9-tag is-now', 'Rides Now') : b9(f.o.ctx, 'secondary', 'Go', { icon: 'arrowR', fk: 'twelve-go', aria: `Go to ${n.mountain} to duel ${n.name}`, onClick: () => {
         f.close();
         f.o.travel(n.mountainId, n.mountain, () => f.o.hd.onSelectMountain(n.mountainId));
       } });
     }
     // (Round 9, U4: the one who rides next says their line; the rest their name, home and time, so the twelve read as
     // a ladder at a glance and not twelve paragraphs; a reader still hears each one's line.)
+    tag?.style.setProperty('--rider', r.accent);
     const li = h('li', `gs9-rung is-${r.state}`, h('span', 'gs9-order-n gs9-num', String(i + 1)), bust, h('span', 'gs9-rung-t', name, r.state === 'next' ? h('span', 'gs9-rung-b', r.bio) : sr(r.bio), meta), tag);
     list.append(li);
   });
@@ -346,7 +356,7 @@ function ladder(body: HTMLElement, m: TitleModel, f: Fill): void {
 /** The medal wall: every mountain's place on its ladder, its medals and its mastery stars, in the picker's order; the
  *  week's Cup and Trial. Round 9 (U4): an open mountain's row opens its mastery board. */
 function medalWall(body: HTMLElement, m: TitleModel, f: Fill): void {
-  body.append(h('p', 'gs9-block-p', 'Three stages, then the whole run. A mountain’s stars are on its board.'));
+  body.append(h('p', 'gs9-block-p', 'Each mountain’s medals: its three stages, then the whole run, the larger disc. Its stars are on its board.'));
   const list = h('ul', 'gs9-list gs9-wall');
   const place = (c: MountainCard): string => (c.top ? 'Top of its ladder' : typeof c.rank === 'number' ? `${ordinal9(c.rank)} of ${c.rankOf ?? c.rank} on its ladder` : 'No run yet');
   for (const c of pickerOrder(m.mountains)) {

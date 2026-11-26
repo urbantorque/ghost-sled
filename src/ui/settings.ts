@@ -39,13 +39,13 @@ export class SettingsPanel {
     const id = `set9-${++uid}`;
     this.el = h('div', 'gs9-set');
 
-    const sh = h('h3', 'gs9-block-h', 'Sound');
+    const sh = h('h3', 'gs9-cap', 'Sound');
     sh.id = `${id}-snd`;
     const sound = h('div', 'gs9-set-g', sh, this.slider(id, 'master', 'Master'), this.slider(id, 'music', 'Music'), this.slider(id, 'sfx', 'Effects'));
     sound.setAttribute('role', 'group');
     sound.setAttribute('aria-labelledby', sh.id);
 
-    const qh = h('h3', 'gs9-block-h', 'Quality');
+    const qh = h('h3', 'gs9-cap', 'Quality');
     qh.id = `${id}-q`;
     const seg = h('div', 'gs9-seg gs9-set-seg');
     seg.setAttribute('role', 'group');

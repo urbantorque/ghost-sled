@@ -261,6 +261,18 @@
   visibility: hidden;
 }
 
+/* ---- a sheet over the title: the title's own column steps out (its logo, picker, Ride, quiet line and doors), so only
+   the sheet and the scene are left and nothing reads through the sheet's ink (round 9, U4: both critics' worst fault).
+   The column is inert under a room, and the whole title under settings, the books or the garage. ---- */
+.gs9-t {
+  transition: opacity var(--dur-enter) var(--ease-out);
+}
+
+.gs9-t[inert],
+.gs-title[inert] .gs9-t {
+  opacity: 0;
+}
+
 /* ---- a section's head inside a sheet (round 9, U4: the Almanac's ranks, an album page's found and still to find) ---- */
 .gs9-cap {
   margin-bottom: var(--sp-2);
@@ -443,10 +455,6 @@
   gap: var(--sp-1);
 }
 
-.gs9-set-g > .gs9-block-h {
-  margin-bottom: var(--sp-1);
-}
-
 .gs9-set-row {
   display: grid;
   grid-template-columns: 5.2em minmax(0, 1fr) 3.2em;
@@ -488,6 +496,12 @@
 }
 
 /* ---- the pause card (menus.ts): the word set like the wordmark, the run's missions, Resume, then the doors ---- */
+/* The frozen run dims under the card, darkest at the reading edge (the bottom on a phone), so the run reads as stopped
+   and the HUD steps back. */
+.gs9-pause-layer {
+  background: linear-gradient(100deg, rgba(8, 12, 30, 0.72) 0%, rgba(8, 12, 30, 0.5) 46%, rgba(8, 12, 30, 0.34) 100%);
+}
+
 .gs9-pause {
   width: min(440px, 38vw);
 }
@@ -505,6 +519,7 @@
   font-weight: var(--fw-display);
   line-height: 1;
   letter-spacing: -0.035em;
+  text-transform: uppercase;
   text-shadow: 0.05em 0.045em 0 var(--c-ghost), 0.1em 0.09em 0 rgba(18, 25, 51, 0.55);
 }
 
@@ -578,6 +593,10 @@
 
   .gs9-sheet-head {
     padding: var(--sp-3) var(--sp-3) var(--sp-2) var(--sp-4);
+  }
+
+  .gs9-pause-layer {
+    background: linear-gradient(0deg, rgba(8, 12, 30, 0.72) 0%, rgba(8, 12, 30, 0.5) 46%, rgba(8, 12, 30, 0.34) 100%);
   }
 
   .gs9-sheet-body {

@@ -279,7 +279,7 @@ export class Menus {
     // Pause (round 9, U4): one sheet at the reading edge (the bottom on a phone). The word set like the wordmark, what
     // the run is working toward (its missions as they stand), Resume (the one primary, its key on it), then Settings,
     // Photo and Home, each with its word. The settings are one press away, not on the card.
-    const pauseEl = h('div', 'gs9-layer');
+    const pauseEl = h('div', 'gs9-layer gs9-pause-layer');
     // (The way back, in the keys' words and in the pad's: the UI root shows the one in use, .gs-pad-mode.)
     const keys = h('span', 'gs-kbd-only', h('span', 'gs-key-keys', kbd('P')), h('span', 'gs-key-pad', kbd('Start', 'gs-pad-start')));
     keys.setAttribute('aria-hidden', 'true');
@@ -346,7 +346,7 @@ export class Menus {
     // Settings (round 9, U4): a sheet from the logo's side (the bottom on a phone), as a room is: Close from the title's
     // door, Back over the pause card.
     this.sheetPanel = new SettingsPanel(ctx, hd);
-    const sf = sheetFrame(ctx, { cls: 'is-fit gs9-settings', title: 'Settings', close: 'Close', closeIcon: 'close', fk: 'close-settings', onClose: () => this.closeSheet(this.settings) });
+    const sf = sheetFrame(ctx, { cls: 'gs9-settings', title: 'Settings', close: 'Close', closeIcon: 'close', fk: 'close-settings', onClose: () => this.closeSheet(this.settings) });
     sf.body.append(this.sheetPanel.el);
     this.settingsSheet = sf.el;
     const setWrap = h('div', 'gs9-layer', sf.el);

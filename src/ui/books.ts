@@ -6,6 +6,8 @@ import { type IconName } from './icons';
 import { b9, ico9 } from './kit9';
 import { rewardGlyph, type RideMode } from './almanac';
 import { curly, prize, prizesLine } from './words';
+import { pickerOrder } from './title';
+import { MOUNTAINS } from '../sim/mountains';
 import './books.css';
 
 // Round 9 (U4): the two books, in the round's language and loaded on demand (menus.ts imports this module when the
@@ -70,7 +72,7 @@ export function almanacBody(m: AlmanacModel, ctx: Ctx, ride?: (mode: RideMode) =
       else if (p.state === 'next') v = h('span', 'gs9-bk-v gs9-num', `${fmt(m.bar.need)}${NBSP}XP to go`);
       else if (p.state === 'turned') v = h('span', 'gs9-bk-v', 'Opens on your next results');
       const go = p.state === 'opened' && ride ? rideOn(m, p.rewards, ctx, ride) : null;
-      const li = h('li', `gs9-row gs9-bk-rank is-${p.state}`, h('span', 'gs9-row-t', n, h('span', 'gs9-bk-g', ico9(glyph)), prizes), go, v);
+      const li = h('li', `gs9-row gs9-bk-rank is-${p.state}`, h('span', 'gs9-row-t', n, h('span', `gs9-bk-g${glyph === 'gift' ? ' is-gift' : ''}`, ico9(glyph)), prizes), go, v);
       if (p.state === 'next') li.dataset.next = '';
       if (p.state === 'opened') li.setAttribute('aria-label', `Rider Rank ${p.n}, reached: ${prizesLine(p.rewards)}`);
       else if (p.state === 'next') li.setAttribute('aria-label', `Rider Rank ${p.n}, next: ${prizesLine(p.rewards)}. ${fmt(m.bar.need)} XP to go`);
@@ -100,7 +102,12 @@ export function albumContents(m: AlbumModel, ctx: Ctx, open: (id: string, from: 
   const out = h('div', 'gs9-bk gs9-bk-album');
   out.append(h('p', 'gs9-block-p', `${fmt(m.got)} of ${fmt(m.of)} stickers found.`));
   const list = h('ul', 'gs9-list gs9-bk-pages');
-  for (const sec of m.sections) {
+  // (The mountains' pages in the order the title's picker holds them, the unlock path with the finale last; then the rest.)
+  const cards = MOUNTAINS.map((x) => ({ id: x.id as string, biome: mountainBiome(x.id) ?? 'alpine', unlockGhosts: x.unlockGhosts, finale: x.finale === true }));
+  const order = pickerOrder(cards).map((c) => c.id);
+  const rank = (id: string): number => (order.includes(id) ? order.indexOf(id) : order.length);
+  const secs = m.sections.map((sec, i) => ({ sec, i })).sort((a, b) => rank(a.sec.id) - rank(b.sec.id) || a.i - b.i).map((x) => x.sec);
+  for (const sec of secs) {
     if (sec.of === 0) continue;
     const name = h('span', 'gs9-bk-pn', sec.name);
     name.setAttribute('translate', 'no');
@@ -134,7 +141,8 @@ function stickerFound(s: StickerCard): HTMLElement {
     art.append(img);
   } else art.innerHTML = biomeArt(biome ?? 'alpine');
   art.append(h('span', 'gs9-st-g', ico9(GROUP_GLYPH[s.group] ?? 'sticker')));
-  const name = h('span', 'gs9-st-n', curly(s.name));
+  // (A count never breaks: "The First Drop, 1 of 3".)
+  const name = h('span', 'gs9-st-n', curly(s.name).replace(/(\d+) of (\d+)/g, `$1${NBSP}of${NBSP}$2`));
   name.setAttribute('translate', 'no');
   return h('li', `gs9-st${s.img ? ' is-shot' : ''}`, art, name);
 }

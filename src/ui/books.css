@@ -60,6 +60,10 @@
   color: var(--text-dim);
 }
 
+.gs9-bk-g.is-gift {
+  color: var(--c-gift);
+}
+
 .gs9-bk-g .gs9-i {
   width: 16px;
   height: 16px;
@@ -77,9 +81,12 @@
   font-weight: var(--fw-label);
 }
 
+/* The next rank: a lit band with a hairline, never the off-white ring a focused control wears. */
 .gs9-bk-rank.is-next {
   padding-left: var(--sp-3);
-  box-shadow: inset 0 0 0 2px var(--c-text);
+  border-radius: var(--r-card);
+  background: rgba(245, 243, 255, 0.1);
+  box-shadow: inset 0 0 0 1px var(--hair-strong);
 }
 
 .gs9-bk-rank.is-next .gs9-bk-v {
@@ -201,20 +208,36 @@
   object-fit: cover;
 }
 
+/* The sticker's kind (a set piece, a legend, a mood, a rival, a trick) on an ink disc over its sky, as a badge. */
 .gs9-st-g {
   position: absolute;
-  left: 6px;
-  top: 6px;
+  left: 50%;
+  top: 44%;
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
+  transform: translate(-50%, -50%);
   border-radius: var(--r-pill);
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--hair);
 }
 
 .gs9-st-g .gs9-i {
+  width: 20px;
+  height: 20px;
+}
+
+/* A frame from the run keeps its picture clear: its badge small in the corner. */
+.gs9-st.is-shot .gs9-st-g {
+  left: 6px;
+  top: 6px;
+  width: 24px;
+  height: 24px;
+  transform: none;
+}
+
+.gs9-st.is-shot .gs9-st-g .gs9-i {
   width: 14px;
   height: 14px;
 }
@@ -232,10 +255,10 @@
 }
 
 .gs9-st.is-unseen .gs9-st-g {
-  left: 50%;
   top: 50%;
   color: var(--text-dim);
-  transform: translate(-50%, -50%);
+  background: none;
+  box-shadow: none;
 }
 
 .gs9-st.is-unseen .gs9-st-n {
