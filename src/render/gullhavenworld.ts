@@ -76,8 +76,10 @@ const FIRE_LIN = new Color('#FFB27A').convertSRGBToLinear();
 /** Metres between the fence's posts (Low: twice that), and between its pennants. */
 const POST_GAP = 3.2;
 const FLAG_EVERY = 4;
-/** The fence stands this far inside the corridor's seaward edge. */
-const FENCE_IN = 0.25;
+/** The fence's posts stand with their inner face at the run's limit, where the sim turns a sled back (they stood a
+ *  quarter metre inside the edge, and a sled pressed against the fence ran a metre through it), never further out than
+ *  the cliffpath's limit: past it the cliff's fall begins. */
+const FENCE_MAX = 0.8;
 
 const m4 = new Matrix4();
 const q4 = new Quaternion();
@@ -104,6 +106,11 @@ function placed(parts: BufferGeometry[], x: number, y: number, z: number, yaw: n
 /** The corridor's seaward edge at z (sim x), where the fence stands. */
 function edgeX(c: Course, z: number): number {
   return c.centerX(z) + c.halfWidth(z);
+}
+
+/** Where the fence stands at z (sim x). */
+function fenceX(c: Course, z: number): number {
+  return edgeX(c, z) + Math.min(c.edgeLimit(z), FENCE_MAX) + 0.08;
 }
 
 /** The shore at z: the first metre past the seaward edge where the drawn cliff reaches the sea (sim x). */
@@ -552,7 +559,8 @@ export class GullhavenWorld {
   private fence(c: Course, low: boolean): void {
     const gap = POST_GAP * (low ? 2 : 1);
     const z0 = 4;
-    const z1 = placesOf(c).harbour + 30;
+    // (To the slipway's head: past it the run's edge is open onto the basin's ice, and the fence ran across the slip.)
+    const z1 = placesOf(c).harbour + 8;
     const n = Math.ceil((z1 - z0) / gap) + 1;
     const postG = part(new CylinderGeometry(0.06, 0.08, 1.45, low ? 4 : 5, 1), POST_C, { pos: [0, 0.62, 0] });
     const railParts = [part(new CylinderGeometry(0.035, 0.035, 1, 4, 1), RAIL_C, { pos: [0, 1.15, 0.5], rot: [Math.PI / 2, 0, 0] })];
@@ -591,7 +599,7 @@ export class GullhavenWorld {
     let prev: Vector3 | null = null;
     for (let i = 0; i < n; i++) {
       const z = Math.min(z1, z0 + i * gap);
-      const x = edgeX(c, z) - FENCE_IN;
+      const x = fenceX(c, z);
       const y = visualGround(c, x, z);
       v3.set(x, y - 0.06, -z);
       m4.compose(v3, q4.identity(), s3.set(1, 1, 1));
@@ -824,7 +832,8 @@ export class GullhavenWorld {
       [g.zL - 10, 1],
       [g.zL + g.mouth - 1, -1],
     ] as const) {
-      const x0 = edgeX(c, zw) + 0.3;
+      // (From just past the fence: never inside the run's limit.)
+      const x0 = fenceX(c, zw) + 0.15;
       const xs = Math.max(x0 + 20, shoreX(c, zw + face * 14, this.sea) + 8);
       const n = low ? 8 : 16;
       let prevT: V3 | null = null;
@@ -862,7 +871,7 @@ export class GullhavenWorld {
     const z = g.zL;
     const cx = c.centerX(z);
     const x0 = cx + 9.5;
-    const x1 = edgeX(c, z) - FENCE_IN - 0.3;
+    const x1 = fenceX(c, z) - 0.3;
     // (Flush with the shelf, never standing proud of it: a raised bar across the line read to the first critic as a
     // wall to stop at. Its brow overhangs the drop by a metre or so, torn along its edge by the wind, its underside in
     // shade and a darker lip of shadow under that, so the edge reads as the place the shelf ends.)
@@ -901,7 +910,7 @@ export class GullhavenWorld {
    *  end over the column (aSway lets it flutter at its tail). */
   private sock(c: Course, g: Gully, out: BufferGeometry[]): void {
     const z = g.zL - 1;
-    const x = edgeX(c, z) - FENCE_IN;
+    const x = fenceX(c, z);
     const y = visualGround(c, x, z);
     out.push(placedOne(part(new CylinderGeometry(0.035, 0.05, 5.2, 5, 1), LATH, { pos: [0, 2.6, 0] }), x, y, z));
     // The sock: five bands, a cone frustum from the hoop up, leaning a little inland off the vertical.
@@ -1114,8 +1123,10 @@ export class GullhavenWorld {
     // The keeper's cottage, limewashed with a slate roof and a chimney, on the landward side of the tower: a door, two
     // windows on its long side, snow on the roof's ridge.
     parts.push(box(6, 3.4, 9, LIME, [-8, 1.7, 0]));
-    parts.push(part(new CylinderGeometry(0, 4.9, 2.6, 4, 1), SLATE, { pos: [-8, 4.7, 0], rot: [0, Math.PI / 4, 0], scale: [0.95, 1, 1.35] }));
-    parts.push(part(new CylinderGeometry(0, 3.4, 1.0, 4, 1), SNOW, { pos: [-8, 5.55, 0], rot: [0, Math.PI / 4, 0], scale: [0.95, 1, 1.35] }));
+    // (Each roof a pyramid turned square to the walls before it is stretched to them, and its snow the same pyramid smaller
+    // a hand over its top: stretched after turning, the roofs were diamonds reaching past their walls.)
+    parts.push(part(new CylinderGeometry(0, 4.9, 2.6, 4, 1).rotateY(Math.PI / 4), SLATE, { pos: [-8, 4.7, 0], scale: [0.95, 1, 1.35] }));
+    parts.push(part(new CylinderGeometry(0, 3.43, 1.82, 4, 1).rotateY(Math.PI / 4), SNOW, { pos: [-8, 5.17, 0], scale: [0.95, 1, 1.35] }));
     parts.push(box(0.8, 2.2, 0.8, STONE_D, [-8, 5.4, 3.2]));
     parts.push(box(0.12, 2.0, 1.0, GLASS, [-11.03, 1.1, 2.4]));
     this.add(merge(placed(parts, x, top, z, 0)), this.paintMat).name = 'lighthouse';
@@ -1153,14 +1164,15 @@ export class GullhavenWorld {
       const w = 5 + hash(i, 71) * 2;
       const d = 7 + hash(i, 72) * 4;
       const side = hash(i, 73) < 0.7 ? -1 : 1;
-      const e = side < 0 ? 5 + hash(i, 74) * 3 : 1.5;
+      // (Seaward, past the run's limit: they stood inside it.)
+      const e = side < 0 ? 5 + hash(i, 74) * 3 : Math.max(1.5, c.edgeLimit(z) + 0.3);
       const x = c.centerX(z) + side * (c.halfWidth(z) + e + w / 2);
       const y = side < 0 ? visualGround(c, x, z) : c.ground(edgeX(c, z) - 0.5, z);
       const h = 3.2 + hash(i, 75) * 1.2;
       const p: BufferGeometry[] = [];
       p.push(box(w, h, d, hash(i, 76) < 0.5 ? TAR : TAR_L, [0, h / 2, 0]));
-      p.push(part(new CylinderGeometry(0, w * 0.74, w * 0.55, 4, 1), SLATE, { pos: [0, h + w * 0.27, 0], rot: [0, Math.PI / 4, 0], scale: [1, 1, d / w * 1.02] }));
-      p.push(part(new CylinderGeometry(0, w * 0.6, w * 0.4, 4, 1), SNOW, { pos: [0, h + w * 0.36, 0], rot: [0, Math.PI / 4, 0], scale: [1, 1, d / w * 0.98] }));
+      p.push(part(new CylinderGeometry(0, w * 0.74, w * 0.55, 4, 1).rotateY(Math.PI / 4), SLATE, { pos: [0, h + w * 0.27, 0], scale: [1, 1, (d / w) * 1.02] }));
+      p.push(part(new CylinderGeometry(0, w * 0.59, w * 0.44, 4, 1).rotateY(Math.PI / 4), SNOW, { pos: [0, h + w * 0.325 + 0.08, 0], scale: [1, 1, (d / w) * 1.02] }));
       if (side > 0) for (const dz of [-d / 2 + 0.4, d / 2 - 0.4]) for (const dx of [-w / 2 + 0.3, w / 2 - 0.3]) p.push(box(0.25, 18, 0.25, TAR, [dx, -9, dz]));
       // Doors and a window on the gable to the lane.
       const gx = -side * (w / 2 + 0.02);
@@ -1173,7 +1185,7 @@ export class GullhavenWorld {
     }
     // The slipway at the harbour's head: a ramp of dressed stone from the lane down onto the ice, on the seaward side.
     const sz = pl.harbour + 10;
-    const sx = edgeX(c, sz) + 3;
+    const sx = fenceX(c, sz) + 3;
     const slip: BufferGeometry[] = [];
     slip.push(box(6, 1.2, 40, STONE, [0, -0.6, 0], [-0.06, 0, 0]));
     slip.push(box(0.6, 1.6, 40, STONE_D, [3.2, -0.2, 0], [-0.06, 0, 0]));
@@ -1208,31 +1220,41 @@ export class GullhavenWorld {
     // walls with snow on their tops, bollards along the quay, each ending at the line in a pier head and its light.
     const pier: BufferGeometry[] = [];
     const PIER_E = 13;
-    const QUAY_E = 1.6;
+    // (The quay's face stands just past the run's limit, which is three metres out on the harbour: at a metre and a half
+    // its wall and the folk on it stood inside it, where a sled pressed to the edge rode through them. Its top stands over
+    // the bank the sim raises against it there, snow banked to its face.)
+    const quayE = (z: number): number => c.edgeLimit(z) + 0.05;
+    const quayTop = (z: number): number => {
+      const cx = c.centerX(z);
+      return Math.max(c.ground(cx, z) + 1.2, c.ground(cx - c.halfWidth(z) - c.edgeLimit(z), z) + 0.35);
+    };
     for (const side of [-1, 1]) {
       const za = side > 0 ? pl.harbour + 30 : pl.harbour + 60;
-      const e = side > 0 ? PIER_E : QUAY_E;
       const w = side > 0 ? 4.4 : 3;
       for (let z = za; z < fz; z += 8) {
         const cx = c.centerX(z);
         const hw = c.halfWidth(z);
         const y = c.ground(cx, z);
+        const e = side > 0 ? PIER_E : quayE(z + 4);
+        const top = side > 0 ? y + 1.2 : quayTop(z + 4);
         const x = cx + side * (hw + e + w / 2);
-        pier.push(box(w, 3.2, 8.2, z % 16 < 8 ? STONE : STONE_D, [x, y - 0.4, -(z + 4)]));
-        pier.push(box(w - 0.2, 0.25, 8.0, SNOW, [x, y + 1.32, -(z + 4)]));
-        if (side < 0 && !low) pier.push(part(new CylinderGeometry(0.22, 0.28, 0.7, 6, 1), IRON, { pos: [x + w * 0.3, y + 1.6, -(z + 2)] }));
+        pier.push(box(w, top - y + 2, 8.2, z % 16 < 8 ? STONE : STONE_D, [x, (top + y - 2) / 2, -(z + 4)]));
+        pier.push(box(w - 0.2, 0.25, 8.0, SNOW, [x, top + 0.12, -(z + 4)]));
+        if (side < 0 && !low) pier.push(part(new CylinderGeometry(0.22, 0.28, 0.7, 6, 1), IRON, { pos: [x + w * 0.3, top + 0.4, -(z + 2)] }));
       }
-      // The pier head and its light: a round stone head, a short white tower, its lantern.
+      // The pier head and its light: a round stone head, a short white tower, its lantern. (The quay's head stands with
+      // its round face at the limit.)
       const cx = c.centerX(fz);
       const y = c.ground(cx, fz);
-      const hx = cx + side * (c.halfWidth(fz) + e + w / 2);
-      pier.push(part(new CylinderGeometry(3.6, 4.0, 3.4, 12, 1), STONE_D, { pos: [hx, y - 0.3, -fz] }));
-      pier.push(part(new CylinderGeometry(3.4, 3.4, 0.25, 12, 1), SNOW, { pos: [hx, y + 1.45, -fz] }));
-      pier.push(part(new CylinderGeometry(1.1, 1.5, 8, 10, 1), WHITE, { pos: [hx, y + 5.5, -fz] }));
-      pier.push(part(new CylinderGeometry(1.3, 1.3, 0.3, 10, 1), IRON, { pos: [hx, y + 9.6, -fz] }));
-      pier.push(part(new ConeGeometry(1.15, 1.0, 10, 1), IRON, { pos: [hx, y + 11.3, -fz] }));
-      lit.push(part(new CylinderGeometry(0.8, 0.8, 1.3, 8, 1), GLASS, { pos: [hx, y + 10.4, -fz] }));
-      this.lamps.push([hx, y + 10.4, fz, 18]);
+      const top = side > 0 ? y + 1.4 : quayTop(fz) + 0.2;
+      const hx = cx + side * (c.halfWidth(fz) + (side > 0 ? PIER_E + w / 2 : quayE(fz) + 4.05));
+      pier.push(part(new CylinderGeometry(3.6, 4.0, top - y + 1.6, 12, 1), STONE_D, { pos: [hx, (top + y - 1.6) / 2, -fz] }));
+      pier.push(part(new CylinderGeometry(3.4, 3.4, 0.25, 12, 1), SNOW, { pos: [hx, top + 0.05, -fz] }));
+      pier.push(part(new CylinderGeometry(1.1, 1.5, 8, 10, 1), WHITE, { pos: [hx, top + 4.1, -fz] }));
+      pier.push(part(new CylinderGeometry(1.3, 1.3, 0.3, 10, 1), IRON, { pos: [hx, top + 8.2, -fz] }));
+      pier.push(part(new ConeGeometry(1.15, 1.0, 10, 1), IRON, { pos: [hx, top + 9.9, -fz] }));
+      lit.push(part(new CylinderGeometry(0.8, 0.8, 1.3, 8, 1), GLASS, { pos: [hx, top + 9.0, -fz] }));
+      this.lamps.push([hx, top + 9.0, fz, 18]);
     }
     sheds.push(...pier);
     // The boats, frozen into the basin at angles between the corridor and the pier: a hull, a wheelhouse, a mast.
@@ -1240,7 +1262,8 @@ export class GullhavenWorld {
       const z = pl.harbour + 40 + i * 22 + hash(i, 81) * 10;
       if (z > fz - 14) break;
       const cx = c.centerX(z);
-      const x = cx + c.halfWidth(z) + 4 + hash(i, 82) * (PIER_E - 6);
+      // (Their hulls past the fence's line however they lie, and clear of the pier.)
+      const x = cx + c.halfWidth(z) + 5.4 + hash(i, 82) * (PIER_E - 9.8);
       const y = c.ground(cx, z) - 0.3;
       const L = 7 + hash(i, 83) * 4;
       const hull = HULLS[i % HULLS.length];
@@ -1251,7 +1274,7 @@ export class GullhavenWorld {
       b.push(box(1.6, 1.6, 2.0, LIME, [0, 2.1, 1.0]));
       b.push(box(1.8, 0.2, 2.3, SNOW, [0, 3.0, 1.0]));
       b.push(seg([0, 1.4, -1.8], [0, 6.8, -1.8], 0.07, IRON));
-      sheds.push(...placed(b, x, y, z, (hash(i, 84) - 0.5) * 1.1 + 0.3));
+      sheds.push(...placed(b, x, y, z, (hash(i, 84) - 0.5) * 0.7 + 0.15));
     }
     // The line across the harbour's ice between the two pier-head lights: four rows of big ink and cream checks over
     // the whole corridor, long down the run so the lens sees them square (ART.md 12's line).
@@ -1290,8 +1313,8 @@ export class GullhavenWorld {
       const wall = hash(i, 96) < 0.55 ? LIME : hash(i, 96) < 0.8 ? TAR_L : new Color('#C8B6A0');
       const p: BufferGeometry[] = [];
       p.push(box(d, h, w, wall, [0, h / 2, 0]));
-      p.push(part(new CylinderGeometry(0, w * 0.68, w * 0.42, 4, 1), SLATE, { pos: [0, h + w * 0.2, 0], rot: [0, Math.PI / 4, 0], scale: [d / w * 1.05, 1, 1.02] }));
-      p.push(part(new CylinderGeometry(0, w * 0.5, w * 0.28, 4, 1), SNOW, { pos: [0, h + w * 0.28, 0], rot: [0, Math.PI / 4, 0], scale: [d / w * 1.0, 1, 0.98] }));
+      p.push(part(new CylinderGeometry(0, w * 0.68, w * 0.42, 4, 1).rotateY(Math.PI / 4), SLATE, { pos: [0, h + w * 0.2, 0], scale: [(d / w) * 1.05, 1, 1.02] }));
+      p.push(part(new CylinderGeometry(0, w * 0.51, w * 0.315, 4, 1).rotateY(Math.PI / 4), SNOW, { pos: [0, h + w * 0.2525 + 0.08, 0], scale: [(d / w) * 1.05, 1, 1.02] }));
       p.push(box(0.7, 1.8, 0.7, STONE_D, [0.6, h + w * 0.3, w / 2 - 0.6]));
       p.push(box(0.08, 2.0, 0.95, new Color('#4A3E3A'), [d / 2 + 0.02, 1.0, -w / 4]));
       homes.push(...placed(p, x, y, z, 0));
@@ -1315,8 +1338,8 @@ export class GullhavenWorld {
       k++;
       if (low && k % 2) continue;
       const cx = c.centerX(z);
-      const x = cx - c.halfWidth(z) - 1.6 - 0.6 - hash(k, 97) * 1.6;
-      const y = c.ground(cx, z) + 1.25;
+      const x = cx - c.halfWidth(z) - quayE(z) - 0.6 - hash(k, 97) * 1.6;
+      const y = Math.max(quayTop(z), visualGround(c, x, z)) + 0.05;
       folk.push({ x, y, z: -(z + (hash(k, 98) - 0.5) * 1.2), face: 1, coat: coats[k % coats.length], hat: hats[(k * 3) % hats.length] });
     }
     if (folk.length) {

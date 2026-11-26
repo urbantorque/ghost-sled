@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { CHUNK_LEN, FOREST_LIMIT, courseFor, type Course, type Section, type SectionKind } from '../src/sim/course';
 import { MOUNTAINS } from '../src/sim/mountains';
 import { coastOn, rodeHome } from '../src/render/ghosts';
-import { HANDOVER_TO, MID_ROW, crestE, crestGround, facetNoise, groundOf, handoverRow, openFoot, rampart, rockWeight, standable, visualGround, wallK } from '../src/render/ground';
+import { HANDOVER_TO, MID_ROW, cliffGround, crestE, crestGround, facetNoise, groundOf, handoverRow, openFoot, rampart, rockWeight, standable, visualGround, wallK } from '../src/render/ground';
+import { gullhavenClearings } from '../src/render/gullhavenplan';
+import { type Clearing, inClearing } from '../src/render/dressing';
 import { buildTerrainGeometry } from '../src/render/terrain';
 
 // What the ground is: rock where something shaped it, snow everywhere a sled rides, the terrain's edge
@@ -99,6 +101,40 @@ describe('the handover at a ledge', () => {
       // (Round 9: a mountain laid by its own kit has no ledge to hand over at. The Old Run's terrain meets the
       // mid-ground on the ground both draw past its lip instead, the crest of snow (groundOf): its edge stands on it,
       // over it by what the drifts lift the snow, never under.)
+      // (Gullhaven has no ledge either. Its terrain meets the mid-ground on the ground its world draws past the corridor
+      // (groundOf, ground.ts cliffGround): seaward the sea cliff exactly, where no snow drifts; landward the moor, over it
+      // by what the drifts lift the snow, never under.)
+      if (c.kit?.id === 'gullhaven') {
+        expect(c.ledges.length).toBe(0);
+        const drawn = groundOf(c);
+        let sea = 0;
+        let moor = 0;
+        for (const i of [4, 23, 43]) {
+          const g = buildTerrainGeometry(c, i, DETAIL);
+          const pos = g.getAttribute('position');
+          const edge = g.getAttribute('aEdge');
+          for (let v = 0; v < pos.count; v++) {
+            if (edge.getX(v) < HANDOVER_TO + 1) continue;
+            const x = pos.getX(v);
+            const z = -pos.getZ(v);
+            expect(handoverRow(c, z)).toBe(false);
+            expect(drawn(x, z)).toBe(cliffGround(c, x, z));
+            const dy = pos.getY(v) - cliffGround(c, x, z);
+            if (x > c.centerX(z)) {
+              expect(Math.abs(dy), `the cliff at ${z}`).toBeLessThan(0.01);
+              sea++;
+            } else {
+              expect(dy, `the moor at ${z}`).toBeGreaterThan(-0.01);
+              expect(dy, `the moor at ${z}`).toBeLessThan(2.6);
+              moor++;
+            }
+          }
+          g.dispose();
+        }
+        expect(sea).toBeGreaterThan(300);
+        expect(moor).toBeGreaterThan(300);
+        continue;
+      }
       if (c.kit) {
         expect(c.ledges.length).toBe(0);
         const drawn = groundOf(c);
@@ -157,6 +193,26 @@ describe('what can stand', () => {
       // trees stand off them by the treeline (groves.ts: FOREST_LIMIT past its lip, its shape has no wall), out on the
       // crest's far fall where the drawn ground drops away from the lip, never on the wall or the crest's top; and
       // the whole bank past that is ground a tree can stand on.)
+      // (Gullhaven has no wall and no ledge: a fence bounds its run seaward and the moor's bank landward. No tree stands on
+      // it (its moor is its world's own, gullhavenworld.ts, and past the fence is the sea): the five's forest and dressing
+      // keep off both sides from the edge out (gullhavenplan.ts gullhavenClearings). Its drawn ground is the sim's out to
+      // the limit, then falls away to the sea past the fence and rises to the moor's tops landward.)
+      if (c.kit?.id === 'gullhaven') {
+        expect(c.ledges.length).toBe(0);
+        const keep: Clearing[] = [];
+        gullhavenClearings(c, 0, c.finishZ + c.runOut, keep);
+        for (let z = 20; z < c.finishZ; z += 25) {
+          expect(c.shapeAt(z).wall, `${z}`).toBeLessThanOrEqual(0.3);
+          for (const side of [-1, 1]) for (const e of [FOREST_LIMIT, 30, 60, 300]) expect(inClearing(keep, side, e, z), `${z} ${side} ${e}`).toBe(true);
+          const cx = c.centerX(z);
+          const hw = c.halfWidth(z);
+          const lim = c.edgeLimit(z);
+          for (const side of [-1, 1]) for (const e of [0, lim * 0.5, lim]) expect(cliffGround(c, cx + side * (hw + e), z), `${z} ${side} ${e}`).toBe(c.ground(cx + side * (hw + e), z));
+          expect(cliffGround(c, cx + hw + 50, z), `the cliff at ${z}`).toBeLessThan(c.ground(cx + hw, z) - 20);
+          expect(cliffGround(c, cx - hw - 30, z), `the moor at ${z}`).toBeGreaterThan(c.ground(cx - hw, z));
+        }
+        continue;
+      }
       if (c.kit) {
         expect(c.ledges.length).toBe(0);
         for (let z = 20; z < c.finishZ; z += 25) {
@@ -208,6 +264,22 @@ describe('an animal at the treeline', () => {
       // its parapet stands on the crest of snow, so Life stands nothing in front of a treeline there: its watchers are
       // its own, on its crests and its hotel's terrace (oldrunworld.ts, tests/setpieces.test.ts the start). Past its lip
       // the ground is that crest, drawn the same everywhere it is asked, never rock, and nowhere over a gorge.)
+      // (Gullhaven: what bounds its run is its fence, under a metre past the edge on the clifftop and three at the harbour,
+      // so Life stands nothing at a treeline there either; its birds are its world's gulls. Past the edge the ground is
+      // the drawn cliff and moor (cliffGround), the same everywhere it is asked, and nowhere over a gorge.)
+      if (c.kit?.id === 'gullhaven') {
+        for (let z = 80; z < c.finishZ; z += 3) {
+          for (const e of EDGES) {
+            expect(openFoot(c, z, e), `a figure at the fence at ${z}`).toBe(false);
+            for (const side of [-1, 1]) {
+              const x = c.centerX(z) + side * (c.halfWidth(z) + e);
+              expect(visualGround(c, x, z), `the cliff or the moor at ${z}`).toBe(cliffGround(c, x, z));
+            }
+          }
+          expect(c.shapeAt(z).fall, `over a gorge at ${z}`).toBeLessThan(1);
+        }
+        continue;
+      }
       if (c.kit) {
         for (let z = 80; z < c.finishZ; z += 3) {
           for (const e of EDGES) {
@@ -249,6 +321,20 @@ describe('an animal at the treeline', () => {
       // its parapet stands on the crest of snow, so Life stands nothing in front of a treeline there: its watchers are
       // its own, on its crests and its hotel's terrace (oldrunworld.ts, tests/setpieces.test.ts the start). Past its lip
       // the ground is that crest, drawn the same everywhere it is asked, never rock, and nowhere over a gorge.)
+      // (Gullhaven: as above, asked as Life asks, a little further out than each stands.)
+      if (c.kit?.id === 'gullhaven') {
+        for (let z = 80; z < c.finishZ; z += 3) {
+          for (const e of [3.6, 4.6, 6.4, 8.4]) {
+            expect(openFoot(c, z, e + 1), `a figure at the fence at ${z}`).toBe(false);
+            for (const side of [-1, 1]) {
+              const x = c.centerX(z) + side * (c.halfWidth(z) + e);
+              expect(visualGround(c, x, z), `the cliff or the moor at ${z}`).toBe(cliffGround(c, x, z));
+            }
+          }
+          expect(c.shapeAt(z).fall, `over a gorge at ${z}`).toBeLessThan(1);
+        }
+        continue;
+      }
       if (c.kit) {
         for (let z = 80; z < c.finishZ; z += 3) {
           for (const e of [3.6, 4.6, 6.4, 8.4]) {

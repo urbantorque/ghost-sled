@@ -4,6 +4,7 @@ import { getPalette } from '../src/render/palette';
 import { Mood } from '../src/sim/chaos';
 import { courseFor } from '../src/sim/course';
 import { MOUNTAINS } from '../src/sim/mountains';
+import { isGullhaven, seaLevelOf } from '../src/render/gullhavenplan';
 
 // A tree's foot may sink into the ground (each is planted 1.5 m deep) but never hang over it. Trees
 // scatter along z between the mesh's rows and used to take the height of the row they were scattered
@@ -17,6 +18,28 @@ describe('midground forest', () => {
       const course = courseFor(m.seed);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mg = new Midground(course, getPalette(course.biome, Mood.None), 'high', 110) as any;
+      // (Round 9, Gullhaven: no forest stands on its moor or its cliff, so there is no tree to stand. Its mid-ground is
+      // the sea cliff falling under the sea's level seaward, the water drawn over it, and the moor rising landward.)
+      if (isGullhaven(course)) {
+        const sea = seaLevelOf(course);
+        for (let at = 100; at < course.finishZ; at += 300) {
+          mg.update(at, true);
+          for (let q = 0; q < mg.aT.length / 4; q++) expect(mg.aT[q * 4 + 3], `a tree at ${at}`).toBeLessThanOrEqual(0);
+          for (const side of [-1, 1]) {
+            const info = mg.sideG;
+            mg.sideInfo(at, side, info);
+            const foot = course.ground(course.centerX(at) + side * course.halfWidth(at), at);
+            for (let i = 0; i < mg.colU.length; i++) {
+              if (mg.colKind[i] !== 0 || Math.sign(mg.colU[i]) !== side) continue;
+              const e = mg.colE[i];
+              const y = mg.height(info, e, mg.colX(info, e), at);
+              if (side > 0) expect(y, `the cliff's foot at ${at}`).toBeLessThan(sea - 20);
+              else expect(y, `the moor at ${at}`).toBeGreaterThan(foot - 2);
+            }
+          }
+        }
+        return;
+      }
       // The drawn surface: the mesh's own columns either side of e, lerped across, as a row holds them.
       const profile = (z: number, side: number, e: number): number => {
         const info = mg.sideG;

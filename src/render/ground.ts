@@ -196,7 +196,8 @@ export function crestGround(c: Course, x: number, z: number): number {
  *  water, and in a gully's cleft (cleftAt) the back wall falls at once from the fence to the sea, so the geo is a slot in
  *  the cliff with the sea in it. Landward, the moor: the sim's bank where a sled can reach (it turns a sled back within
  *  a few metres), then a long rise in hummocks up to the tops, where the sim's own moor keeps steepening into a wall
- *  no sled meets. Inside the corridor the ground is the sim's to the millimetre. */
+ *  no sled meets. Inside the corridor and out to its limit (where its fence stands) the ground is the sim's to the
+ *  millimetre: a sled pressed against the fence over a cleft rides on what is drawn under it. */
 export const CLIFF_FROM = 0.6;
 /** How far up the moor's bank the drawn ground is the sim's, and where it is wholly the moor's. */
 const MOOR_SIM = 2.5;
@@ -208,28 +209,36 @@ export function cliffGround(c: Course, x: number, z: number): number {
   if (x < cx) {
     const em = cx - hw - x;
     if (em <= MOOR_SIM) return y;
+    // (Out to the limit the sim's: at the harbour it lies three metres out.)
+    const from = Math.max(MOOR_SIM, c.edgeLimit(z));
+    if (em <= from) return y;
     const edge = c.ground(cx - hw, z);
     const moor = edge + moorRise(em, x, z);
-    return em >= MOOR_OWN ? moor : y + (moor - y) * smooth01((em - MOOR_SIM) / (MOOR_OWN - MOOR_SIM));
+    return em >= MOOR_OWN ? moor : y + (moor - y) * smooth01((em - from) / (MOOR_OWN - from));
   }
   const e = x - cx - hw;
   if (e <= CLIFF_FROM) return y;
+  // (Out to the limit the sim's, the fence's foot: over a cleft the cut began inside it, and a sled pressed against the
+  // fence there rode two metres over what was drawn.)
+  const from = Math.max(CLIFF_FROM, c.edgeLimit(z));
+  if (e <= from) return y;
   const floor = seaLevelOf(c) - 30;
   // (A point of the cliff top standing out past the fence, the beacon's knoll or the lighthouse's: its top held at the
-  // cliff top's level a metre down, its sides falling sheer.)
+  // cliff top's level a metre down, its sides falling sheer; it takes over from the sim's ground over its first metre
+  // and a half past the fence.)
   const pt = pointAt(c, e, z);
   if (pt > 0) {
-    const top = c.ground(cx + hw + CLIFF_FROM, z) - 1;
-    const yy = y + (top - y) * pt;
+    const top = c.ground(cx + hw + from, z) - 1;
+    const yy = y + (top - y) * pt * smooth01((e - from) / 1.5);
     return yy > floor ? yy : floor;
   }
   const k = cleftAt(c, z);
   if (k <= 0) return y > floor ? y : floor;
-  const top = c.ground(cx + hw + CLIFF_FROM, z);
+  const top = c.ground(cx + hw + from, z);
   // (A sheer drop of some thirty metres under the fence, then the back wall falling steeply to the sea over the next
   // hundred metres out: drawn sheer all the way it was edge-on from the run and the air, and the path read as a sheet
   // laid on the water, the first critic.)
-  const cut = top - 30 * smooth01((e - CLIFF_FROM) / 2.4) - Math.max(0, top - floor - 30) * smooth01((e - CLIFF_FROM - 2.4) / 105);
+  const cut = top - 30 * smooth01((e - from) / 2.4) - Math.max(0, top - floor - 30) * smooth01((e - from - 2.4) / 105);
   const d = y + (Math.min(y, cut) - y) * k;
   return d > floor ? d : floor;
 }

@@ -2420,7 +2420,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.snowLit = c('#FFF6F2');
         p.snowShade = c('#5E6CBC');
         p.snowDeep = c('#343C8C');
-        p.fog = c('#B4AAC4');
+        // (The sea's haze a cool lilac-grey: warmer, the descent's frame came within a hair of Pinecrest's dusk.)
+        p.fog = c('#A8A4C6');
         p.fogFar = 2200;
         p.rim = c('#FFC49C');
         p.hemiSky = c('#8C8CC2');

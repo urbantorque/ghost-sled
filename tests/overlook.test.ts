@@ -8,7 +8,8 @@ import { mergePiece, pieceFor } from '../src/render/landmarkKit';
 import { LIP, LIP_FROM, Overlook, OverlookPlan, lipDrop } from '../src/render/overlook';
 import { getPalette } from '../src/render/palette';
 import { buildTerrainGeometry } from '../src/render/terrain';
-import { crestGround, visualGround } from '../src/render/ground';
+import { cliffGround, crestGround, visualGround } from '../src/render/ground';
+import { BEACON, pointAt } from '../src/render/gullhavenplan';
 import { HOTEL, START_HOUSE, oldrunClearings } from '../src/render/oldrunplan';
 import type { Clearing } from '../src/render/dressing';
 
@@ -38,6 +39,26 @@ describe('overlook plan', () => {
       // (Round 9: a kit's mountain opens no bank. The Old Run's banks are its parapet's crest of snow the whole way, never
       // lowered for a view; what it looks out at instead is its own: the lake and its town far below, where the five
       // have their sea of cloud, and low wooded hills where they have a hero peak (palette.ts).)
+      // (Gullhaven opens no bank either: its whole seaward side is open already, the cliff falling to the sea at its own
+      // level, the sea to the horizon where the five have their sea of cloud, and its coast where they have a hero peak.)
+      if (c.kit?.id === 'gullhaven') {
+        expect(list).toEqual([]);
+        for (let z = 0; z < c.finishZ; z += 20) {
+          for (const side of [-1, 1]) {
+            expect(plan.fall(z, side)).toBe(0);
+            for (const e of [2, 10, 30]) {
+              expect(plan.drop(z, side, e)).toBe(0);
+              const x = c.centerX(z) + side * (c.halfWidth(z) + e);
+              expect(visualGround(c, x, z)).toBe(cliffGround(c, x, z));
+            }
+          }
+        }
+        const own = getPalette(c.biome, Mood.None).massif;
+        expect(own.seaOcean).toBe(1);
+        expect(own.seaLake).toBe(0);
+        expect(own.peak).toBe('coast');
+        return;
+      }
       if (c.kit) {
         expect(list).toEqual([]);
         for (let z = 0; z < c.finishZ; z += 20) {
@@ -122,6 +143,15 @@ describe('overlook plan', () => {
       const lifts = new SitePlan(c, Mood.None).planned.filter((s) => s.kind === 'lift');
       // (Round 9: a kit's mountain has no lift line over its bowl. The Old Run's riders come down from the grand hotel
       // at its head, beside its start straight, and the forest keeps clear of the hotel and its terrace.)
+      // (Gullhaven has none either: what stands at its head is the old beacon on its knoll past the fence, the cliff top
+      // held out under it, ahead and to the right of the opening's lens.)
+      if (c.kit?.id === 'gullhaven') {
+        expect(lifts).toEqual([]);
+        expect(pointAt(c, BEACON.e, BEACON.z)).toBe(1);
+        const x = c.centerX(BEACON.z) + c.halfWidth(BEACON.z) + BEACON.e;
+        expect(cliffGround(c, x, BEACON.z)).toBeGreaterThan(c.ground(x, BEACON.z) + 50);
+        continue;
+      }
       if (c.kit) {
         expect(lifts).toEqual([]);
         const keep: Clearing[] = [];
