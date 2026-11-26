@@ -483,24 +483,49 @@ Round 7:
 - **The title is the picked mountain's key art.** Each mountain has one composed shot (`game/keyart.ts`):
   where its reel rides, the colour script's time and where the lens sits. The logo and the controls keep the
   left of a wide screen and the top and bottom of a tall one; the hero is held right of centre (54 to 60%
-  of the width) and the mountain's landmark stands in the sky over its shoulder. The mountain's name and
-  its feeling sit under the logo. Moving between mountains is a veil in the new place's own air, never a
-  swap.
+  of the width) and the mountain's landmark stands in the sky over its shoulder. Moving between mountains is a
+  veil in the new place's own air (which says its feeling), never a swap. (Round 9: no name or feeling line under the
+  logo; the picked chip names the place.)
 - **The Twelve wear their own colours.** A signature rider's bust is a glass-pale head and shoulders under
   the hat that names them, trimmed in the rider's accent; that accent is also the hairline of their card
   and the colour of their name. It is theirs alone: it is never used for an action.
-- **The results lead with the moment.** One figure and one line in italic 900 over the scene: gold-white for
-  a win (your best's colour), a silver step for a podium, off-white for a finish, off-white and a little
-  crooked for a wreck. The card beside it is the detail. Vermillion is on the one button the results end on (the
-  run again, whatever the spine names it: "Run Again", "Rematch Ansel", "Finish the mission", "Next Duel: ...").
-- **The results are a story told in about five seconds over the scene, then one button (round 8).** The moment; the
-  place with the nearest rider named in their colour ("0.4 s behind Old Wren"); Rider Rank's bar filling and stopping
-  short of the next page, the page's reward named under it (the first whole, "+1" for the rest); what opened turned
-  over card by card (a mountain in its own sky); the one button, its words whole and its reason under it. One column
-  at the far edge (the bottom on a phone), so the rider stays the picture. A tap or a key lands it; reduced motion
-  shows the end. Everything else is Details, one level down.
-- **The title's corner is one stack:** the pill (the flame first: marigold, the lantern's; hollow until today is
-  ridden), Rider Rank's card, and the day's one line of news. On a phone it is one row and a short pill.
+- **The title has one job at a time (round 9).** The logo; the mountains as a picker of chips, each its sky and its
+  short name ("Frostfang", "Ember"), the picked one larger with your best on it in words ("Best 1:52.2"; on a phone the
+  best stands under Ride, the chips being small, and the strip scrolls so every name is whole); Ride with its reason on
+  it; under Ride, once open, the picked mountain's hour (each half with a swatch of its sky) and its mirror; one quiet
+  line of what you are working toward (a glyph and at most nine words: the next mountain by ghosts, Lanternfall by The
+  Twelve, else the next Rider Rank named as a prize); and four labelled doors: Daily and Cup (wearing the flame, "13-day
+  flame", marigold), Progress, Garage (wearing the gifts, "90 gifts") and Settings. No mountain name or feeling line
+  under the logo: the picked chip names the place and the veil says its feeling while travelling. A first visit keeps
+  the logo, its tagline, Ride, the line "Pass ghosts to unlock new mountains" and a labelled Sound On.
+- **Ride's reason is the next run's purpose**, first that applies: a friend's challenge (Accept); the duel with the next
+  of The Twelve on the picked ground, said as the duel ("Suki Ember, head to head"), never with the rider's time, which
+  set beside a faster best read as already beaten, and only when the next run is the duel; the Daily, the Cup or the
+  Trial when chosen; your grudge waiting there; the rung above you on the mountain's ladder ("valo_rides is 0.1 s
+  ahead"); else how it rides (its hour, mirrored) or what it is like (its tagline), never the name the chip already says.
+- **A door opens a room** from the logo's side (the bottom on a phone): an ink sheet of blocks, each its words and its
+  one action. Daily and Cup holds the flame and its seven days, today's Daily, the day's contracts and the form, this
+  week's Cup with its league place and table, and the week's Trial once open; Progress holds Rider Rank and the next
+  page's prizes (the Almanac), The Twelve (their busts; all twelve a press away), the Long Night once open, the Spirit
+  Album, the medals (each mountain's ladder place and mastery stars) and the missions. Choose picks that run and closes
+  the room; Ride then says what it rides. Something new is introduced once, by a marigold "New" on its door and one line
+  at the top of its room. Nothing loading is shown: a block whose field is not in offers nothing until it is.
+- **The results are three beats over the scene (round 9)**, about 2.5 s: how you did (the place, its word and the time
+  in italic 900 at the top of the logo's side, gold-white for a win, the silver step for a podium, off-white for a
+  finish, off-white and a little crooked for a wreck; then one fact on an
+  ink chip that keeps inside the headline's rule, clear of the rider); the one reward that matters most, turned over,
+  with Rider Rank's bar filling at its foot (bare: the next prize is named on the title's quiet line and in Details) and every gift the run paid as one figure in words ("+124 gifts": a prize
+  of gifts is never a card of its own); and the one button, vermillion, always the run, its reason under its words
+  and served by that run, then Home, Photo and Details, each with its word. A Daily's or a Cup's medal leads with the
+  time it was won on and the medal in words, the race's place its fact, so the two never read as disagreeing; a Trial
+  leads with its figure ("0 perfects / This week's Trial"), a Long Night with its depth ("2 legs / Your deepest
+  night"). A tap or a key lands it; reduced motion shows the end. Everything else is Details, one level down, a sheet from the
+  column's side: the race, your run, what it paid point by point (the XP it lists adds up to the total it says), the
+  missions, and keeping the run (Watch Your Run, Save Clip, Challenge a Friend).
+- **One system (round 9, `tokens.css`, `kit9.css`):** eight type sizes on one unit, three weights, two radii (full pills
+  and 18 px cards), three button ranks with words on every one (primary vermillion, one a screen and always the run;
+  secondary an ink pill with a hairline; quiet a thin ink wash), one ink sheet for a room or Details, four durations and
+  two easings, all zero under reduced motion.
 - **The books** (the Almanac and the Spirit Album) are one sheet drawn like the garage: pages in rows of ten, the next
   outlined; stickers painted in their mountain's sky, silhouettes with where to find them.
 - **A touch lesson sits beside the control it teaches,** never in the thumbs' band (the bottom 22% of a phone held
@@ -509,7 +534,7 @@ Round 7:
   the world is built in mirror writing to meet it (the boards' letters, the medallions' glyphs) and every label is laid
   out as the player sees the screen, so nothing reads backwards and nothing else changes. The title is never mirrored:
   its key art is composed for the logo's side.
-- **Photo mode is the picture and one bar (round 8).** From pause (Photo, beside Home) or the results (a camera beside
+- **Photo mode is the picture and one bar (round 8).** From pause (Photo, beside Home) or the results (Photo, beside
   Home) the run holds exactly where it stood and the lens is the player's: it turns round the rider's chest from 1.3
   to 32 m, its pivot carried up to 12 m off the rider, and never stands in the snow, a rock or a tree. The HUD, the
   cards and the riders' tags leave the picture, and so does what belongs to the chase lens at speed (the streaks, the
@@ -521,8 +546,8 @@ Round 7:
   own type: "GHOST SLED" small, the mountain in italic 900, the time and the place (gold-white for a win), the rider's
   name in vermillion, on ink at 86% with an 18 px corner. Nothing is shared or sent. On a mirror mountain the photo is
   turned over with the picture.
-- **A clip is the reel, short, as the player saw it (round 8).** Save Clip (a soft pill with its words, beside the
-  camera in the results' foot) plays the run's reel cut to its three best shots and saves it: the picture with no HUD
+- **A clip is the reel, short, as the player saw it (round 8).** Save Clip (in the results' Details, beside Watch Your
+  Run) plays the run's reel cut to its three best shots and saves it: the picture with no HUD
   and no tags, turned over with a mirrored page, the letterbox, each shot's card (the small word in 800 caps, the line in
   italic 900 with the scene text's ink halo) for its first moments, a half-second card over ink at each cut, the game
   named on the first shot, and the run's card from the photo over the last frame, above the letterbox. Held upright, the
@@ -534,8 +559,8 @@ Round 7:
 - **The Long Night's beat between legs** is one ink panel low at the reading edge over the finish town: the leg and its
   mountain in the italic of speed words, the night deepening, then what rides in (the lantern in marigold, the get-up
   pips, the charms by name) and a bar draining to the next leg. It is never a menu: it goes on by itself.
-- **A Trial is the week's second race, on the Cup's card (round 8).** Once open the card reads "Cup and Trial"; under
-  Ride the hour's pill holds the week's two ways, the trophy and the Trial's star (or the medal it holds). Picked, the
+- **A Trial is the week's second race (round 8; round 9 moves it into the Daily and Cup room, beside the Cup, and
+  its Choose picks it).** Picked, the
   title travels to its mountain in its sky and hour, the place line reads "Week 50 Trial" over the twist, and over Ride
   the rule wears the star and the three targets are struck as the medals they win, with their unit and the days left; a
   target already won is struck through. A run names the rule once in the HUD's one-line card, and the stage line's words

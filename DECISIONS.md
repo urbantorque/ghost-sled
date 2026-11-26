@@ -4494,3 +4494,40 @@ straight through.
       mostly on the glaze; the novice and a let-go sled safe on the floor; the clumsy 30 of 30; the mid pilot about 85
       to 95 s at 32 to 36 m/s), then gives it a world of its own, its score, its pool and its registration. Gullhaven
       and Gablefall follow it, each on its own lane.
+
+396. **The title and the results, built and merged** (`r9-ui`, c3ecc5f to f47b0e9, 17 commits, merged at 39715da;
+    `notes/r9-ui.md`; frames under `shots/r9/ui/final/`).
+    - *What a player now sees.* The title: the logo, the mountains as a picker of chips (each its sky and short name,
+      the picked one larger with "Best 1:52.2"), Ride with its reason (the duel only when the next run is one, the
+      Daily, Cup or Trial when chosen, the rung above you, else the mountain's tagline), the hour and the mirror under
+      it, one quiet line of what you are working toward, and four labelled doors (Daily and Cup wearing the flame,
+      Progress, Garage wearing the gifts, Settings). The two rooms load on demand and hold the flame, the Daily, the
+      day's contracts and the Cup's league table (both drawn for the first time), the Cup, the Trial, Rider Rank and the
+      Almanac, The Twelve, the Long Night, the album, medals and missions. The picker holds eight in unlock order, the
+      finale last, in two rows of four past six. The results: three beats in about 2.5 s (how you did with one fact;
+      the one reward that matters most with Rider Rank's bar and every gift as one figure; one vermillion button that is
+      always the run, with a reason that run serves), then Home, Photo and Details; everything else one level down.
+      Escape, Backspace and the pad's B close the top sheet and give focus back to its opener.
+    - *The bars, desk and phone:* the title at run 50 39 words on the desk and 37 on the phone (today 115 and 59; the
+      bar 40); every results first view 21 to 33 on the desk and 20 to 32 on the phone (today 57 to 79; the bar 35); the
+      fresh title 20 and 19 (today 18 and 17: the labelled Sound On replaces a lone icon, so the "no worse" bar is
+      missed by those two words, accepted); one primary everywhere, no lone icons, no bare figures, nothing loading; Run
+      Again to riding in 264 ms on the desk and 224 on the phone (the bar 2 s); 14 tab stops on the title (today 22).
+      The style sheets went from 15,395 lines to 10,713; the rooms are an 11 KB chunk outside the first download.
+    - *Judged blind:* three fresh critics (opus, extra-high effort, only ART.md and the frames) picked the new screens
+      in 32 of 32 pairs; scored against the truth, their answers on the new screens 18/18, 29.5/30 and 48/48 against
+      today's 14.5, 18.5 and 33.5. Their faults on the new screens were fixed before the merge.
+    - *The main lane's calls on the lane's questions:* Rider Rank's bar on the results stays bare (its next prize is
+      named on the title's quiet line and in Details; naming it on the bar takes two results views past 35 words, and
+      the critics read what each run earned right every time); "Rematch" without the name the fact above already says
+      (said once); a prize of gifts joins the run's gifts as one figure, never a card; a contract on the Daily makes the
+      results' button Today's Daily; a Daily's or a Cup's medal leads with its time; the Trial lives in the Daily and Cup
+      room; Ride's plain reason is the tagline. Carried to phase C: a save field so a "New" not yet opened survives a
+      reload (today intros last a session), and "Ready in the garage" opening the garage at its piece once the shop
+      lane's path that takes a piece is merged. For a person: Escape on CrazyGames in fullscreen, and whether the
+      tagline reads as a reason.
+    - *A slip, owned by the lane:* a headless browser of its own stayed open, idle, for about 50 minutes while another
+      lane held the one slot (a take raced its own capture script's give under the same lane name); closed at 15:20.
+    - ART.md 10 takes the lane's text: no name or feeling line under the logo, the title's one job at a time, Ride's
+      reason, the rooms, the results' three beats, one system of tokens; photo and Save Clip from the results' Photo and
+      Details; the Trial in the Daily and Cup room.
