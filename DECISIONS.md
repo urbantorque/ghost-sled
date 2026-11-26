@@ -4585,3 +4585,60 @@ straight through.
       Old Run's career changes only moved which goal led on that run. The harness now takes either name
       (`r8career.ts`) and the bar holds 30 of 30; the game is unchanged.
     - Nobody has ridden it by hand, and nobody has listened to its score. ART.md 15 takes the world's text.
+
+398. **The garage built and merged** (`r9-shop`, 35ac329 to deb74e4, 12 commits, merged at 2e6ab26; the seams with the
+    title and results 4539a36; `notes/r9-shop.md`; milestone 2, G1 to G5).
+    - *What a player finds:* the title's Garage door walks into a sled-maker's workshop at dusk drawn by the game's own
+      renderer (`render/garagescene.ts`, loaded on first use, disposed on close, the title's world waiting while it is
+      open): your rider on your sled on a stand, the shelves one column at the reading edge (a sheet on a phone), Sled,
+      Hats, Scarves, Trails, Finishes and Sounds. Every piece goes on before it is bought, the camera on it. Each sled
+      has a card with its signature trick (Watch plays it) and a track of five tiers (Runners, Deck, Crest, Stern post,
+      Spirit inlay) opened by the stage lines ridden on that sled (3, 9, 18, 30, 45, credited in the game layer after
+      the run settles) and fitted for gifts; a track never changes handling. From the fourth tier the stern post
+      carries an ornament. The five mountains' sets open at a third, two thirds and all of each mastery board (a scarf,
+      a trail, an ornament); a month's chapter is on sale in its month; the Whirl Saucer is never sold, it is the
+      Almanac's, and no Almanac page empties (a Saucer already bought gets its first two tiers, a chapter piece already
+      bought its price back). A purchase and a tier are each a moment with a sound of its own, skippable, still under
+      reduced motion. Keyboard, pad and touch reach it all.
+    - *The shelves:* 10 hats, 28 scarves, 29 trails, 9 finishes (round 8's chapter paints kept for the saves that hold
+      them), 18 ornaments, 5 sounds, 6 sleds; five pieces cut by the critics, all new this round so no save holds one
+      (the Crest Knit, the Flop Peak, the Double Wrap, Racing Stripe, Gilt Scroll). Ids never change.
+    - *Judged blind:* five rounds of fresh critics on race-distance sheets, keys hidden. A stock and a built-up sled told
+      apart in a chase still: met (six of six in rounds 4 and 5). What the rider wears named from a chase still: met for
+      hats, trails and the sled's added parts, scarves three of four (end pieces read as something on the sled). Every
+      pair on a shelf told apart: not met; at race size a piece shows one big feature and the shelves hold more pieces
+      than features. A real bug found on the way: the Double Wrap's second pair of tails had never been drawn.
+    - *The economy* (the harness's careers, re-spent after the cuts): something worth having within one to three runs
+      after every one of 100 runs for both pilots (milestone 0's garage: 70 of the mid pilot's runs and 38 of the
+      novice's with only lanterns in reach); garage goals that are not lanterns at run 100, mid 20 and novice 40; the
+      dearest tracks a dedicated player's weeks (the mid pilot's Lodge Toboggan at run 27, the Wisp's at 69).
+    - *Costs:* the place opens in 104 to 206 ms to its first frame (dev server, warmed), 16 to 36 draw calls settled; the
+      scene a 6.6 kB gzipped chunk, the first download 25 kB gzipped heavier (the pieces' looks a run draws). A held Low
+      run with a stock rider costs what it did (447 GL calls a frame against 448); the most dressed rider 21 more (under
+      5%).
+    - *Merged* with one conflict (`tests/progress.test.ts`: the Old Run's unlock lines and the garage's sled prices,
+      both kept). The seams with the round's title and results, found and fixed by the main lane (4539a36): Details'
+      Open the Garage opens it at the ready sled (`nextUnlock`'s piece) and prices it at the garage's figure, not
+      `sim/sleds.ts`'s older one; a mountain's set piece on the results says "Pinecrest's set" over the rank's bar,
+      never "Reached Rider Rank"; Escape and Backspace close the garage alone (`closeTop` knows its layer, and the
+      window's back leaves a key the garage took), where before they would also have closed Details under it; opened
+      over the results the garage takes focus (it fell to the page). Checked headless on a desk and a phone: the run's
+      results, Details, the garage at the Lodge Toboggan, Escape and Backspace back to Details with focus on its button,
+      the title's door and back, no console errors. tsc clean; the full suite 113 files, 2,033 tests.
+    - *The main lane's calls on the lane's questions:* the months' chapter scarves are cut in phase C (G6): a chapter is
+      its trail, its ornament and its title, and page 3's scarf becomes gifts; none is live, so no save holds one (this
+      changes 392's three-piece chapter; four critic rounds could not tell the months' scarves apart at race distance).
+      G6 also settles each base pair still failing (Bobble Hem and Watch Cap, Long Streamer and Fringe Knit, Chunky Rib
+      and Ink Bands) by stopping the sale of one, its owners keeping it, or by a redesign judged blind again; makes
+      Lantern Sparks show at race distance or stops selling it; and takes the finishes, tiers II and V and the small
+      ornaments that fail, with the three new mountains' sets. The twelfth hat is not refilled. The round 6 garage
+      sheet stays for the dev harness. Prices stay in `garage.ts`, `paints.ts` and `tracks.ts`, one table a kind.
+    - *Not the lane's, seen by every critic, carried to phase C's feel pass:* the Wisp's stock paint is the ghosts' mint,
+      a locked role (it changes, render only); the flow rim reads pink-magenta toward the grudge's rose; the Saucer's
+      blue sits near the speed charm's azure; the stock Lodge Toboggan shows no vermillion from behind; a coral smear
+      in the spray beside the rider. And for U4: a garage piece on the results is drawn with the sled's glyph (a scarf
+      under a sled).
+    - *Only scripts have seen:* the two sounds (nobody has heard them), a real run crediting stage lines and opening a
+      set (tests), the Almanac's grants on owned pieces (tests), the pad, a real touch screen, a screen reader, and frame
+      rate. ART.md 5 (hats, scarves, trails), 10 (the garage as a place) and 13 (finishes, a sled's track) take the
+      lane's text.

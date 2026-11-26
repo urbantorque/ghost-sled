@@ -202,15 +202,27 @@ values (`rockforms.ts` builds the forms, the stone material paints them).
   shoes curling up into the cowl, and two steel push bars at its tail.
 - The rider's look is the player's to choose in the garage, inside the signal: the hat and the scarf are
   always vermillion with at most the beanie's cream or an ink accent, so whatever is worn, the rider is the
-  one vermillion figure on the run. Hats are told apart by their outline from behind (the chase lens always
-  sees the back of the head): the cuffed pom beanie, a short watch cap with a thick rolled cuff, a pom over
-  each ear, a trapper with a cream fur brim and long flaps, a ring of bobbles, a pointed chullo with braided
-  ties, a long stocking cap that streams out behind. A scarf varies the tails' length and width, the knit's
-  pattern (deeper stripes, cream bars, a rib, ink bands, cream-dipped ends) and its tassels; the knot and
-  the wrap stay the classic vermillion.
-- A trail is what the sled leaves: the spray warmed toward honey or cream, and motes in the lantern's
-  warm family (marigold sparks, gold glints, cream and gold stardust, a marigold stream), never mint, rose,
-  coral or vermillion (the drift's heat owns coral and vermillion).
+  one vermillion figure on the run. **Hats are told apart by their outline from behind** (the chase lens always
+  sees the back of the head; round 9, ten): the cuffed pom beanie; a low watch cap, plain red, a thick rolled cuff,
+  nothing on top; a plain crown and two big cream poms hung low beside the jaw on cords; a trapper's cream fur band
+  and long flaps; a hem of ink bobbles hanging across the nape; a chullo with a middling point and long
+  cream-and-red braids behind the ears; a long stocking cap streaming back past one shoulder, a pom at its end; a
+  broad knit band over the crown and two big fur muffs; a big quilted dome in fat rings with a cream ring under it;
+  two long knit tails streaming back off the crown, poms at their ends. None is one of The Twelve's (no crown,
+  antlers, horns, fox ears, stovepipe or topknot).
+- **A scarf** (round 9): the knot and the wrap stay the classic vermillion; a scarf varies its form (two tails; one
+  long and one short; four slim ribbons; one thick rope), what weights the ends (a big cream pom, a little paper
+  lamp, a snowball, a drop, a point, flame tongues, a tassel, a long ink fringe, a bow at the throat) and a pattern
+  in cream or ink that runs along and across the knit (bars, bands, a rib, chevrons, a braid, dots, crescents).
+  **Spirit Flow keeps the knit:** each stitch burns at its own value (an ink band stays dark in the flame, a cream
+  bar burns white-gold), and only the far half of the tail glows past the bloom, so the flame's light never spreads
+  over the coat.
+- **A trail** (round 9) is shapes and behaviours in the air behind and beside the sled, never a mark on the snow
+  (section 4's one painted line stands): cut-paper flakes that flutter, petals that sail out flat, gold leaf that
+  spirals up, two ribbons of light that climb off the runners and bend back, strings of paper bows flying from the
+  stern, embers rising in a column, moths of light circling, a paper lantern on a line; in the lantern's warm family
+  only (paper, cream, honey, gold, amber), never mint, rose, coral or vermillion (the drift's heat owns coral and
+  vermillion).
 - In the flow the rider's rim and scarf glow vermillion, building with the shown flow and full at
   3.5; a snuff puts the glow out with a short puff, so the state is visible without reading the HUD.
 - After a crash the rider sits up dazed beside its upside-down sled, both in the results shot, with
@@ -526,7 +538,14 @@ Round 7:
   and 18 px cards), three button ranks with words on every one (primary vermillion, one a screen and always the run;
   secondary an ink pill with a hairline; quiet a thin ink wash), one ink sheet for a room or Details, four durations and
   two easings, all zero under reduced motion.
-- **The books** (the Almanac and the Spirit Album) are one sheet drawn like the garage: pages in rows of ten, the next
+- **The garage is a place, not a sheet (round 9).** A sled-maker's workshop at dusk drawn by the game's own renderer:
+  your rider on your sled on a stand, hats on wooden head blocks, a scarf rail, a door onto a snowy yard, the Lantern
+  Row in the rafters. The UI is one column at the reading edge (a sheet over the thumbs on a phone): the shelves as
+  tabs, one card, a strip of tiles. Every piece goes on your own rider before it is bought, and the camera goes to it
+  (a hat from behind, then its front; a trail out on the yard's loop). The vermillion is spent only on a purchase or a
+  tier being fitted; buying one is a moment (a marigold gift opened on the rug, the piece put on, a cheer), skipped by a
+  tap or a key, still under reduced motion.
+- **The books** (the Almanac and the Spirit Album) are one sheet: pages in rows of ten, the next
   outlined; stickers painted in their mountain's sky, silhouettes with where to find them.
 - **A touch lesson sits beside the control it teaches,** never in the thumbs' band (the bottom 22% of a phone held
   upright).
@@ -819,8 +838,18 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   a giant bobble, a beak hood, a lantern on a headband, curled horns, an aviator cap, fox ears, a crown). Their own
   accent colour appears in three places only: the emblem disc before the name on the tag, a thin inner edge on the
   tag, and a ribbon in the wisp. Their word on the results has a rule in that accent.
-- **Sled paints** recolour a sled's body and wood at their own value, so the grain and the hull's shading stay; the
-  trim stays vermillion, and so do the scarf and beanie. No paint uses a locked role's colour.
+- **A sled's finish** (round 9) is a ground and a motif where the lens sees a sled (a pinstripe round the deck, stars
+  across the tail, a cream frame, burnt scrolls, a dark walnut frame round snow-white slats, a fine hex lattice, ruled
+  lines), painted over the sled and its fitted tiers together at their own value, so the grain and the hull's shading
+  stay; the trim stays vermillion, and so do the scarf and beanie. No ground or line is the coat's ink navy or any
+  locked role's colour (the dark is a warm umber), no motif is the finish line's ink-and-cream check, and no more
+  than one ground is a dark slate.
+- **A sled's track** (round 9): five tiers built where the chase lens sees a sled, each sled its own (runner tails
+  swept up into handles or a skid ring, a quilted pad or a blanket roll, a crest board in one wood, a curled tail, low
+  fins at the tail's corners, swept wings or curled handles); the fourth a post at the stern's right corner, low
+  beside the rider's back, carrying a lit paper lamp (ribbed, palest at the waist, a dark cap and foot, section 14)
+  or another ornament; the fifth a cream inlay that burns with the scarf in the flow. A built-up sled is told from its
+  stock one in a chase still. A track never changes how a sled rides.
 - **Round 7.** Powder's rim takes the key light's colour and is what blooms in a plume. A dash throws a ring as the
   air opens, lays a wake of light off the runners and trails a comet's tail; the lantern's moments (a dash, a ward,
   a gate, a light taken, a lantern filled) each light the snow and the rider for a beat. A burst has a heart inside
