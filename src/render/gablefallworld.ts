@@ -77,6 +77,9 @@ const IRON = C('#262834');
 /** The church's stone: a pale grey-buff ashlar, its buttresses a step darker; its windows' glass amber and a deep blue. */
 const CHURCH = C('#B4AEA6');
 const CHURCH_D = C('#948E8A');
+/** The nave's pinnacles: the palest dressed stone, slim, so they stand beside the run as markers and never as dark
+ *  hazards (ART.md 12, close to the lens: pale and slim). */
+const PINNACLE = C('#DAD4CA');
 const GLASS_BLUE = C('#3E4E86');
 const BELFRY = C('#22243A');
 const CLOCK = C('#E6E0D4');
@@ -239,11 +242,12 @@ interface Piece3 {
 
 /** The far side of the valley (the town's other half, the viaduct) in the snowfall's haze: flat values a face (lit,
  *  shade), leaning into the air's colour with distance on its own long scale (the scene's fog would have taken it whole
- *  from the head of the town), its windows keeping a little of their light through it. Drawn after the sky, before the
+ *  from the head of the town; too little, and the viaduct three kilometres off read as a dotted seam across the run and
+ *  the far terraces as dashes), its windows keeping a little of their light through it. Drawn after the sky, before the
  *  world. */
 function hazeMaterial(): ShaderMaterial {
   return new ShaderMaterial({
-    uniforms: { uHaze: { value: new Color('#CCCAD6') }, uNear: { value: 500 }, uFar: { value: 4200 }, uMax: { value: 0.82 }, uSunDir: shared.uSunDir, uWarm: { value: new Color('#FFB45E') }, uGlowK: { value: 0.7 }, uLight: { value: new Color(1, 1, 1) } },
+    uniforms: { uHaze: { value: new Color('#CCCAD6') }, uNear: { value: 150 }, uFar: { value: 2600 }, uMax: { value: 0.88 }, uSunDir: shared.uSunDir, uWarm: { value: new Color('#FFB45E') }, uGlowK: { value: 0.7 }, uLight: { value: new Color(1, 1, 1) } },
     vertexShader: /* glsl */ `
       attribute vec3 color;
       varying vec3 vCol;
@@ -257,7 +261,7 @@ function hazeMaterial(): ShaderMaterial {
         // (A window is painted in the lamp's colour: its glow keeps through the haze.)
         vGlow = step(0.9, color.r) * step(color.b, 0.35);
         vCol = color;
-        vLit = 0.78 + 0.22 * smoothstep(-0.1, 0.4, dot(normalize(normal), uSunDir)) + 0.06 * normal.y;
+        vLit = 0.86 + 0.14 * smoothstep(-0.1, 0.4, dot(normalize(normal), uSunDir)) + 0.05 * normal.y;
         gl_Position = projectionMatrix * viewMatrix * wp;
       }
     `,
@@ -304,15 +308,17 @@ function smokeMaterial(): ShaderMaterial {
         // aPuff: x its phase, y its stack's height scale, z its size, w which corner (0..3).
         float t = fract(aPuff.x + uTime * 0.07 * uLive);
         vec3 base = (modelMatrix * vec4(position, 1.0)).xyz;
-        vec3 p = base + vec3(1.4 * t * t + 0.4 * t, (0.4 + 5.6 * t) * aPuff.y, 0.6 * t);
-        float s = aPuff.z * (0.45 + 1.5 * t);
+        // (Separate round puffs rising well apart and leaning off on the wind: a column of big overlapping ones read to
+        // the second critic as a translucent slab.)
+        vec3 p = base + vec3(3.2 * t * t + 0.6 * t, (0.3 + 8.5 * t) * aPuff.y, 0.9 * t);
+        float s = aPuff.z * (0.4 + 1.1 * t);
         vec2 corner = vec2(mod(aPuff.w, 2.0), floor(aPuff.w / 2.0)) * 2.0 - 1.0;
         vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
         vec3 up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
         p += (right * corner.x + up * corner.y) * s;
         vUv = corner;
         vA = smoothstep(0.0, 0.08, t) * (1.0 - smoothstep(0.5, 1.0, t));
-        vK = corner.y * 0.5 + 0.5;
+        vK = 0.5 + 0.5 * (corner.y * 0.75 - corner.x * 0.25);
         gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
       }
     `,
@@ -324,11 +330,12 @@ function smokeMaterial(): ShaderMaterial {
       varying float vK;
       void main() {
         float r = length(vUv);
-        float a = (1.0 - smoothstep(0.55, 1.0, r)) * vA * 0.72;
+        float a = (1.0 - smoothstep(0.5, 0.95, r)) * vA * 0.55;
         if (a < 0.01) discard;
-        // Three flat values: the shade under the puff, its body, its lit crown.
-        float v = vK;
-        vec3 c = v < 0.38 ? uShade : v < 0.7 ? mix(uShade, uLit, 0.55) : uLit;
+        // Three values a puff, its shade under it and its crown lit toward the sky, softly stepped round the puff's own
+        // middle (hard bands across a column of puffs read as stripes).
+        float v = vK + 0.12 * (1.0 - r);
+        vec3 c = mix(uShade, uLit, smoothstep(0.3, 0.42, v) * 0.55 + smoothstep(0.62, 0.74, v) * 0.45);
         gl_FragColor = vec4(c, a);
         #include <colorspace_fragment>
       }
@@ -747,13 +754,13 @@ export class GablefallWorld {
         const px = x + sd * 0.8;
         const pb = eave(z) - 1.2;
         const ph = top(z) + 1 - pb;
-        s.box(px, pb, z, 0.66, ph, 0.66, CHURCH, 0);
-        s.box(px, pb + ph, z, 0.76, 0.12, 0.76, SNOW, 0);
+        s.box(px, pb, z, 0.5, ph, 0.5, PINNACLE, 0);
+        s.box(px, pb + ph, z, 0.6, 0.12, 0.6, SNOW, 0);
         for (let j = 0; j < 4; j++) {
-          const a: V3 = [px + (j === 0 || j === 3 ? -0.33 : 0.33), pb + ph + 0.12, z + (j < 2 ? -0.33 : 0.33)];
-          const b: V3 = [px + ((j + 1) % 4 === 0 || (j + 1) % 4 === 3 ? -0.33 : 0.33), pb + ph + 0.12, z + ((j + 1) % 4 < 2 ? -0.33 : 0.33)];
+          const a: V3 = [px + (j === 0 || j === 3 ? -0.27 : 0.27), pb + ph + 0.12, z + (j < 2 ? -0.27 : 0.27)];
+          const b: V3 = [px + ((j + 1) % 4 === 0 || (j + 1) % 4 === 3 ? -0.27 : 0.27), pb + ph + 0.12, z + ((j + 1) % 4 < 2 ? -0.27 : 0.27)];
           // (Pale stone to its point: dark slate points read to the sort's critic as spikes lining the run.)
-          s.tri(a, b, [px, pb + ph + 1.5, z], j % 2 ? CHURCH : CHURCH_D, [(a[0] + b[0]) / 2 - px, 0.3, (a[2] + b[2]) / 2 - z]);
+          s.tri(a, b, [px, pb + ph + 1.3, z], j % 2 ? PINNACLE : SNOW, [(a[0] + b[0]) / 2 - px, 0.3, (a[2] + b[2]) / 2 - z]);
         }
         if (h < 6) continue;
         const wz = z + 3.6;
@@ -964,6 +971,18 @@ export class GablefallWorld {
     const GD = 6;
     s.box(cx, yb, g, span, 0.9, GD + 0.4, TIMBER, 0);
     s.box(cx, yb + 0.9, g, span, 4.6, GD, MARKET, 0, false);
+    // (Its faces framed in timber like the halls', posts between and either side of its three lights: a plain plastered
+    // face read to the second critic as an untextured box.)
+    for (const f of [-1, 1] as const) {
+      const zf = g + f * (GD / 2 + 0.035);
+      for (const px of [-span / 2 + 0.2, -LANE_W * 1.5, -LANE_W * 0.5, LANE_W * 0.5, LANE_W * 1.5, span / 2 - 0.2]) s.quad([cx + px - 0.12, yb + 0.9, zf], [cx + px + 0.12, yb + 0.9, zf], [cx + px + 0.12, yb + 5.5, zf], [cx + px - 0.12, yb + 5.5, zf], TIMBER, [0, 0, f]);
+      s.quad([cx - span / 2, yb + 5.3, zf], [cx + span / 2, yb + 5.3, zf], [cx + span / 2, yb + 5.55, zf], [cx - span / 2, yb + 5.55, zf], TIMBER, [0, 0, f]);
+      for (const sgn of [-1, 1]) {
+        const x0 = cx + sgn * (LANE_W * 1.5 + 0.2);
+        const x1 = cx + sgn * (span / 2 - 0.4);
+        s.quad([x0, yb + 1.2, zf], [x0 + sgn * 0.25, yb + 1.2, zf], [x1, yb + 5.0, zf], [x1 - sgn * 0.25, yb + 5.0, zf], TIMBER, [0, 0, f]);
+      }
+    }
     s.gable(cx, yb + 5.5, g, GD, span + 0.6, 2.8, 0.4, SLATE, MARKET, Math.PI / 2);
     s.gable(cx, yb + 5.64 + 0.3, g, GD * 0.84, span + 0.6, 2.3, 0.38, SNOW, null, Math.PI / 2);
     // The underside, seen from the run: a dark soffit with the beams across it.
@@ -1279,20 +1298,28 @@ export class GablefallWorld {
         s.quad([xa, hill(xa, za), za], [xb, hill(xb, za), za], [xb, hill(xb, zb), zb], [xa, hill(xa, zb), zb], SNOW_FAR, [0, 1, -0.2]);
       }
     }
-    // The town's other half on the hill's lower slopes, densest by the river.
-    const n = low ? 70 : 130;
-    for (let i = 0; i < n; i++) {
-      const z = fz + 560 + Math.pow(hash(i, 111), 1.6) * 760;
-      const x = cx + (hash(i, 112) - 0.5) * 2200 * (0.4 + 0.6 * smooth01((z - fz - 560) / 500));
-      const y = hill(x, z);
-      const w = 10 + hash(i, 113) * 8;
-      const d = 9 + hash(i, 114) * 6;
-      const H = 7 + hash(i, 115) * 5;
-      const wall = WALLS_FAR[Math.floor(hash(i, 116) * WALLS_FAR.length)];
-      s.box(x, y - 2, z, w, H + 2, d, wall, 0, false);
-      const across = hash(i, 117) < 0.5;
-      s.gable(x, y + H, z, across ? d : w, across ? w : d, (across ? d : w) * 0.55, 0.3, SNOW_FAR, wall, across ? Math.PI / 2 : 0);
-      if (hash(i, 118) < 0.6) s.quad([x - 0.6, y + 2, z - d / 2 - 0.05], [x + 0.6, y + 2, z - d / 2 - 0.05], [x + 0.6, y + 3.3, z - d / 2 - 0.05], [x - 0.6, y + 3.3, z - d / 2 - 0.05], LIT, [0, 0, -1]);
+    // The town's other half on the hill's lower slopes: terraces along the contours, each a long block under one roof with
+    // a cross gable here and there, stepping up from the river and breaking as they climb. (House by house at that
+    // distance they read to the second critic as speckle; a terrace is one shape with a roofline.)
+    const rowsN = low ? 4 : 6;
+    for (let j = 0; j < rowsN; j++) {
+      const z = fz + 570 + j * 52 + hash(j, 110) * 10;
+      const span = 700 + j * 120;
+      for (let x = cx - span, i = 0; x < cx + span; i++) {
+        const id = j * 1000 + i;
+        const len = 40 + hash(id, 113) * 70;
+        const xc = x + len / 2;
+        x += len + 10 + hash(id, 119) * (20 + j * 18);
+        const y = Math.min(hill(xc - len / 2, z), hill(xc + len / 2, z));
+        const d = 10 + hash(id, 114) * 3;
+        const H = 7 + hash(id, 115) * 3;
+        const wall = WALLS_FAR[Math.floor(hash(id, 116) * WALLS_FAR.length)];
+        s.box(xc, y - 4, z, len, H + 4, d, wall, 0, false);
+        s.gable(xc, y + H, z, d, len, d * 0.6, 0.3, SNOW_FAR, wall, Math.PI / 2);
+        if (!low && hash(id, 117) < 0.6) s.gable(xc + (hash(id, 118) - 0.5) * len * 0.6, y + H, z - 1, 8, d + 2, 5, 0.3, SNOW_FAR, wall, 0);
+        // A few lit windows along its face toward the run.
+        for (let k = 0; k < len / 9; k++) if (hash(id + k, 123) < 0.3) s.quad([xc - len / 2 + 4 + k * 9, y + 2, z - d / 2 - 0.05], [xc - len / 2 + 5.6 + k * 9, y + 2, z - d / 2 - 0.05], [xc - len / 2 + 5.6 + k * 9, y + 3.6, z - d / 2 - 0.05], [xc - len / 2 + 4 + k * 9, y + 3.6, z - d / 2 - 0.05], LIT, [0, 0, -1]);
+      }
     }
     // Its church, its spire over the roofs.
     {
@@ -1353,7 +1380,7 @@ export class GablefallWorld {
   private smoke(c: Course, low: boolean): void {
     const pos: number[] = [];
     const puff: number[] = [];
-    const per = low ? 3 : 5;
+    const per = low ? 3 : 4;
     const end = placesOf(c).quay;
     for (let k = 0; k * 64 < end; k++) {
       for (const o of c.chunk(k).obstacles) {
@@ -1362,7 +1389,7 @@ export class GablefallWorld {
           const ph = i / per + hash(o.id, i + 122) * 0.15;
           for (let q = 0; q < 4; q++) {
             pos.push(o.x, o.y + o.h + 0.1, -o.z);
-            puff.push(ph, 1, 1.1 + hash(o.id, 123) * 0.5, q);
+            puff.push(ph, 1, 0.75 + hash(o.id, 123) * 0.35, q);
           }
         }
       }
@@ -1402,7 +1429,7 @@ export class GablefallWorld {
     (this.haze.uniforms.uLight.value as Color).copy(p.snowLit);
     this.haze.uniforms.uGlowK.value = 0.45 + 0.4 * lampK;
     // The lamps' light on the snow by them: a street of soft amber pools with the grey between, stronger as the day goes.
-    const pool = 0.12 + 0.28 * Math.max(0, Math.min(1, (lampHour - 0.4) / 1));
+    const pool = 0.12 + 0.16 * Math.max(0, Math.min(1, (lampHour - 0.4) / 1));
     for (const [x, y, z, r] of this.lamps) if (z > s.z - 20 && z < s.z + 120) pushLocalLight(x, y, -z, LAMP_LIN.r, LAMP_LIN.g, LAMP_LIN.b, r * 0.8, pool);
     // (A step under the sky's own grey, so it reads against it: in the clouds' pale it did not show at all.)
     (this.smokeMat.uniforms.uLit.value as Color).copy(p.fog).lerp(p.snowShade, 0.2);

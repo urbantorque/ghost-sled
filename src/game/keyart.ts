@@ -121,6 +121,17 @@ export const TITLE_SHOTS: Readonly<Record<string, TitleShot>> = {
     desk: { r: 6.6, up: 2.6, sweep: 0.45, drift: 0.12, ahead: 40, lift: 0.2, crane: 0.25, hero: [0.08, 0.2] },
     phone: { r: 7.6, up: 2.2, sweep: 0.18, drift: 0.05, ahead: 30, lift: 0.4, crane: 0, hero: [-0.06, -0.06] },
   },
+  // Round 9, Gablefall (notes/r9-gablefall-world.md): a rider on the snowed-in roofs high over the street, the roofs
+  // stepping down toward the river and the viaduct across the valley in the snow. The reel rides the Water Stairs where
+  // the cloud breaks over the river; the lens high and swung to the hero's right, over the street, so the roof run, the
+  // street's canyon below it and the far side of the valley lie past the hero's shoulder.
+  gablefall: {
+    from: 2040,
+    to: 2460,
+    light: 2300,
+    desk: { r: 6.4, up: 2.8, sweep: 0.4, drift: 0.12, ahead: 40, lift: 0.3, crane: 0.2, hero: [0.08, 0.2] },
+    phone: { r: 7.4, up: 2.4, sweep: 0.16, drift: 0.05, ahead: 30, lift: 0.4, crane: 0, hero: [-0.06, -0.06] },
+  },
 };
 
 /** The shot for a mountain id (a Daily, a Cup and anything unknown get the plain reel). */

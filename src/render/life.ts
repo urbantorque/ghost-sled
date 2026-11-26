@@ -1192,6 +1192,9 @@ export class Life {
     if (biome === 'volcanic' && (this.night || !pl.rich)) kind = null;
     // Lanternfall's sky belongs to its lanterns: a flock against them read as more of them, gone wrong.
     if (biome === 'lantern') kind = null;
+    // (Round 9, Gablefall: in its snowfall the crows keep to the eaves; a flock wheeling at the vanishing point read to the
+    // first critic as specks of noise where a hazard would show, notes/r9-gablefall-world.md.)
+    if (biome === 'gablefall' && this.mood === Mood.None) kind = null;
     if (kind) this.setBirdKind(kind);
     this.birdMesh.visible = pl.birds && kind !== null;
     // Motes: diamond dust in the clear, sunny moods; ash on Ember Peak's own dusk, sparse and pale.

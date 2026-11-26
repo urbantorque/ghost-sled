@@ -1072,7 +1072,8 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       // (Soft shadows under the cloud: the form of the roofs and the street's canyon, never the five's hard blue.)
       p.shadowK = 0.7;
       p.bloom = 0.34;
-      p.snowfall = 0.7;
+      // (A steady fall, not a storm: heavier, its big flakes at the lens read to the critics as smudges on the glass.)
+      p.snowfall = 0.52;
       p.sparkle = 0.45;
       return;
     case 'alpine':
@@ -1700,7 +1701,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.fog = c('#C4C2D0');
         p.skyZenith = c('#62667E');
         p.skyMid = c('#9294AE');
-        p.snowfall = 0.85;
+        p.snowfall = 0.66;
         p.lamps = 0.65;
         p.massif.veil = 0.7;
         p.sunGlow = 0.45;
@@ -1719,7 +1720,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyHorizon = c('#E6E2E2');
         p.deck.lit = c('#C8C6D6');
         p.deck.glow = c('#ECE4DE');
-        p.snowfall = 0.5;
+        p.snowfall = 0.4;
         p.lamps = 0.5;
         p.massif.veil = 0.4;
         // (The cloud breaks over the river: a pale silver-gold sun through the gap, the shadows firm, the snow thinning.)

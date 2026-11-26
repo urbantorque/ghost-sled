@@ -1665,7 +1665,7 @@ export function makeSnowMaterial(track = false, street = false): ShaderMaterial 
             // fall line's speed lines, ART.md 4.)
             float wornN = vnoise(vec2(cu * 0.42, cv * 0.11) + 2.3) * 0.6 + vnoise(vec2(cu * 1.1, cv * 0.37) + 7.1) * 0.4;
             // (In scuffed patches only, a sixth of the street: a whole floor of setts read to the first critic as graph paper.)
-            float worn = smoothstep(0.62, 0.86, wornN) * (1.0 - smoothstep(2.0, 3.6, abs(cu)));
+            float worn = smoothstep(0.66, 0.9, wornN) * (1.0 - smoothstep(2.0, 3.6, abs(cu)));
             // (Setts laid by hand in arcs across the street, each row its own depth and stagger, each stone its own width and
             // rounded, the snow lying in wide joints between them: stones, never a ruled grid.)
             cv += 0.55 * (1.0 - cos(clamp(cu, -4.0, 4.0) * 0.55));
@@ -1682,7 +1682,7 @@ export function makeSnowMaterial(track = false, street = false): ShaderMaterial 
             vec3 stoneC = vec3(0.6, 0.58, 0.68) * mix(1.0, tone, fineC);
             // (A thin trodden layer over the whole street: a step cooler than the roofs' fresh snow.)
             col = mix(col, col * mix(vec3(0.92), uSnowShade / max(uSnowLit, vec3(0.05)), 0.35), vPaint.w * 0.32);
-            col = mix(col, col * stoneC, vPaint.w * worn * sett * 0.55);
+            col = mix(col, col * stoneC, vPaint.w * worn * sett * 0.42);
           }
         #endif
         col += uHemi * 0.07 * (0.5 + 0.5 * n.y);
