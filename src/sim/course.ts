@@ -1,19 +1,20 @@
 import { TAU, clamp, dcos, dsin, lerp, smoothstep } from './dmath';
-import { BiomeId, CourseBiome, MountainParams, isNamedSeed, lookOf, paramsForSeed } from './mountains';
+import { BiomeId, CourseBiome, MountainParams, courseBiomeForSeed, isNamedSeed, lookOf, paramsForSeed } from './mountains';
 import { fbm1, noise1, noise2 } from './noise';
 import { Rng, hash32 } from './prng';
 import { momentPlays, setPieceKinds } from './moments';
 import { GATE_PAST_LINE, START_GATE_Z } from './charms';
+import { ALL_EVENTS } from './chaos';
+import type { Kit, KitPlan, KitRider } from './kit';
+import { OLDRUN_KIT, OLDRUN_LAYOUT } from './oldrun';
+import { CHUNK_LEN, FOREST_LIMIT, SAFE_LANE, THRESHOLD_AFTER, THRESHOLD_AFTER_MIN, THRESHOLD_BEFORE, THRESHOLD_BEFORE_MAX, THRESHOLD_HW, bank } from './courseparts';
+
+export { CHUNK_LEN, FOREST_LIMIT, SAFE_LANE, THRESHOLD_AFTER, THRESHOLD_AFTER_MIN, THRESHOLD_BEFORE, THRESHOLD_BEFORE_MAX, THRESHOLD_HW, bank };
 
 // The course is a pure function of its seed. +z is downhill, +x is the rider's right when facing
 // downhill, +y is up. Chunks are generated lazily and cached, but every chunk depends only on
 // (seed, index), so generation order never matters.
 
-export const CHUNK_LEN = 64;
-/** Half-width of the guaranteed obstacle-free lane around the safe line, metres. */
-export const SAFE_LANE = 2.45;
-/** Distance up the bank (past the corridor edge) where the treeline crashes you. */
-export const FOREST_LIMIT = 10;
 export const START_CLEAR_Z = 150;
 /** Extra room (m) obstacles leave beside the safe lane at difficulty 0, shrinking to none at 1. */
 const EARLY_MARGIN = 1.5;
@@ -185,12 +186,81 @@ export interface Stage {
   z1: number;
 }
 
-/** The descent's length: the stages' metres in order (the finish line is at their sum). */
-export const STAGE_LENGTHS: readonly number[] = [1450, 1500, 1550];
-/** Easy ground past the finish line, where a sled coasts to a stop in the town square. */
-export const RUN_OUT = 260;
-/** The last metres before the finish line: the town square. */
-export const FINISH_SQUARE = 300;
+/** A mountain's own descent (round 9): one that lays its ground in its own file (kit.ts). */
+export type KitId = 'oldrun' | 'gullhaven' | 'gablefall';
+
+/** What a descent is made of beyond its BIOME_PARAMS (round 9, notes/r9-ground.md section 1): the stages, who
+ *  composes them, the finish, the threshold a charm gate stands on and the first minute's promises. One row a course
+ *  biome; the five and every Daily and Cup read FIVE, whose values are the constants they read before round 9. */
+export interface Layout {
+  /** The stages' metres in order; the finish line is their sum. Three (DECISIONS 392). */
+  stages: readonly [number, number, number];
+  /** Who lays the descent: the five's acts (compose, pour), or the mountain's own kit. */
+  grammar: 'acts' | KitId;
+  /** The last metres of stage 3 that are the finish place (the five's square), and the easy ground past the line. */
+  square: number;
+  runOut: number;
+  /** The kind the finish is laid as, and laid past the run-out when something reads beyond it. */
+  finish: SectionKind;
+  /** The kind a stage line's threshold is laid as, and its least half-width. */
+  threshold: SectionKind;
+  thresholdHW: number;
+  /** The first kicker on the line: the truest z in [from, to] at 2 m steps, `at` when none is truer; null: none. */
+  firstKick: { from: number; to: number; at: number } | null;
+  /** Nothing scattered launches on the line, no mogul field and no sky gate before this. */
+  kickFrom: number;
+  /** Where the corridor's middle starts to fill (pickets). */
+  picketsFrom: number;
+  /** The run-in's light line (a first run learns to steer on it); null: none. */
+  lightRun: { z: number; len: number; step: number; wave: number } | null;
+  /** The mid-run events a run here may meet, a bit each by ChaosEvent (chaos.ts rollChaos). */
+  events: number;
+}
+
+/** The five's descent, as it stood before round 9. */
+export const FIVE: Layout = {
+  stages: [1450, 1500, 1550],
+  grammar: 'acts',
+  square: 300,
+  runOut: 260,
+  finish: 'finish',
+  threshold: 'cruise',
+  thresholdHW: THRESHOLD_HW,
+  firstKick: { from: 286, to: 312, at: 296 },
+  kickFrom: 800,
+  picketsFrom: 900,
+  lightRun: { z: 130, len: 160, step: 8, wave: 110 },
+  events: ALL_EVENTS,
+};
+
+/** The descent's length: the stages' metres in order (the finish line is at their sum). The five's. */
+export const STAGE_LENGTHS: readonly number[] = FIVE.stages;
+/** Easy ground past the finish line, where a sled coasts to a stop in the town square. The five's. */
+export const RUN_OUT = FIVE.runOut;
+/** The last metres before the finish line: the town square. The five's. */
+export const FINISH_SQUARE = FIVE.square;
+
+/** Each course biome's descent. */
+const LAYOUTS: Record<CourseBiome, Layout> = { alpine: FIVE, glacier: FIVE, volcanic: FIVE, blossom: FIVE, lantern: FIVE, oldrun: OLDRUN_LAYOUT };
+
+/** Each new mountain's own ground (round 9): none for the five, a Daily or a Cup. */
+const KITS: Partial<Record<CourseBiome, Kit>> = { oldrun: OLDRUN_KIT };
+
+/** The descent a seed is laid as, without building its course. */
+export function layoutFor(seed: number): Layout {
+  return LAYOUTS[courseBiomeForSeed(seed)];
+}
+
+/** The finish line of any seed, without building its course (the game layer's records, links and pools). */
+export function finishZFor(seed: number): number {
+  const s = layoutFor(seed).stages;
+  return s[0] + s[1] + s[2];
+}
+
+/** The mid-run events a seed's runs may meet, a bit each by ChaosEvent (chaos.ts rollChaos's `allowed`). */
+export function eventsFor(seed: number): number {
+  return layoutFor(seed).events;
+}
 
 /** A place the ground steps down: a leap's cliff, one of a terrace's steps, or a lake's outlet. It lives
  *  in baseY, so the ground stays down past it. */
@@ -232,6 +302,8 @@ const TALL: Record<CourseBiome, ObstacleKind[]> = {
   volcanic: ['basalt', 'charpine', 'basalt'],
   blossom: ['blossom', 'blossom', 'pine'],
   lantern: ['spire', 'spire', 'basalt'],
+  // (Round 9: the Old Run stands nothing in its track; these rows are never read there.)
+  oldrun: ['pine', 'pine', 'pine'],
 };
 
 const LOW: Record<CourseBiome, ObstacleKind[]> = {
@@ -240,17 +312,8 @@ const LOW: Record<CourseBiome, ObstacleKind[]> = {
   volcanic: ['lavarock', 'lavarock', 'log'],
   blossom: ['lantern', 'rock', 'log'],
   lantern: ['lantern', 'rock', 'iceblock'],
+  oldrun: ['rock', 'rock', 'log'],
 };
-
-/** Corridor bank profile: a rounded rise past the edge that eases into a gentle forest floor. */
-function bank(e: number): number {
-  if (e < 5) return 0.16 * e * e;
-  if (e < 12) {
-    const t = e - 5;
-    return 4 + 1.6 * t - 0.1 * t * t;
-  }
-  return 10.3 + 0.2 * (e - 12);
-}
 
 /**
  * Sections give a course its shape and its places. Each comes from the biome's authored script
@@ -293,7 +356,11 @@ export type SectionKind =
   | 'tunnel'
   | 'terraces'
   | 'leap'
-  | 'finish';
+  | 'finish'
+  // Round 9, the Old Run (oldrun.ts): its channel, its tight S-bends, and the outrun it finishes in.
+  | 'track'
+  | 'labyrinth'
+  | 'outrun';
 export const SECTION_KINDS: readonly SectionKind[] = [
   'cruise',
   'chute',
@@ -313,6 +380,9 @@ export const SECTION_KINDS: readonly SectionKind[] = [
   'terraces',
   'leap',
   'finish',
+  'track',
+  'labyrinth',
+  'outrun',
 ];
 /** What a section does to the course. `slope`, `wander`, `wave`, `span`, `obstacles`, `kickers`,
  *  `moguls`, `drops` and `relief` are multipliers (1 = the plain corridor); the rest are as noted. */
@@ -418,6 +488,11 @@ const SHAPES: Record<SectionKind, SectionShape> = {
   terraces: shaped({ pin: 0.5, width: 8, wander: 0.25, wave: 8, span: 0.05, obstacles: 0.2, relief: 0.2, ...BARE }),
   leap: shaped({ pin: 0.5, width: 8, wander: 0.2, wave: 14, span: 0, obstacles: 0.3, relief: 0.3, ...BARE }),
   finish: shaped({ pin: 1, wander: 0.15, wave: 2, span: 0.15, obstacles: 0, relief: 0.2, limit: 3, ...BARE }),
+  // Round 9, the Old Run: the kit draws its line, its width and its cross-section; these say only that nothing stands
+  // or launches in it, that its line is the floor's middle and that its lip turns a sled back.
+  track: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 0.5, ...BARE }),
+  labyrinth: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 0.5, ...BARE }),
+  outrun: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 0.5, ...BARE }),
 };
 
 /** The ground's real gradient for the kinds that promise one; the rest scale the mountain's own slope. */
@@ -433,6 +508,9 @@ const GRADE: Partial<Record<SectionKind, readonly [number, number]>> = {
   terraces: [0.1, 0.1],
   leap: [0.38, 0.42],
   finish: [0.08, 0.08],
+  track: [0.17, 0.17],
+  labyrinth: [0.17, 0.17],
+  outrun: [0.05, 0.05],
 };
 
 /** The half-width of the kinds that pin it. */
@@ -445,6 +523,9 @@ const WIDTH: Partial<Record<SectionKind, readonly [number, number]>> = {
   bridge: [5.2, 5.8],
   tunnel: [7.2, 8.8],
   finish: [11.6, 12.4],
+  track: [7.5, 7.5],
+  labyrinth: [7.5, 7.5],
+  outrun: [7.5, 7.5],
 };
 
 const BLEND: Record<SectionKind, number> = {
@@ -466,6 +547,9 @@ const BLEND: Record<SectionKind, number> = {
   terraces: 80,
   leap: 100,
   finish: 100,
+  track: 40,
+  labyrinth: 40,
+  outrun: 60,
 };
 
 /** The metres of a section's body past its blend. Terraces and leaps work theirs out from what they hold. */
@@ -488,6 +572,9 @@ const BODY: Record<SectionKind, readonly [number, number]> = {
   terraces: [178, 256],
   leap: [232, 250],
   finish: [0, 0],
+  track: [0, 0],
+  labyrinth: [0, 0],
+  outrun: [0, 0],
 };
 
 /** A slope that steepens is a crest: the blend takes long enough to stay under this curvature (a sled
@@ -528,6 +615,8 @@ const CLIFFS: Record<CourseBiome, { first: readonly [number, number]; plain: rea
   blossom: { first: [14, 16], plain: [13.5, 15], last: [16, 19] },
   // The dive into the cloud, the break out under it (the mountain's great leap), and the leap into Firstlight.
   lantern: { first: [18, 20], plain: [22.5, 24.5], last: [19, 21] },
+  // (Round 9: the Old Run has no leaps; never read there.)
+  oldrun: { first: [15, 17], plain: [13.5, 16], last: [18, 21] },
 };
 
 /** Terraces: the lead to the first lip, the step spacing and the steps' fall. */
@@ -643,6 +732,12 @@ const SCRIPTS: Record<CourseBiome, readonly [Act, Act, Act]> = {
     { name: 'The Lamp Road', blocks: [['leap'], ['fork'], ['street'], ['bridge'], ['treerun'], ['bowl']] },
     { name: 'Firstlight', blocks: [['benches'], ['bridge'], ['street'], ['chute'], ['leap']] },
   ],
+  // The Old Run (round 9): its acts' names; its kit (oldrun.ts) lays their ground, not these blocks.
+  oldrun: [
+    { name: 'The Hotel Straights', blocks: [['track']] },
+    { name: 'The Labyrinth', blocks: [['labyrinth']] },
+    { name: 'The Horseshoe', blocks: [['track']] },
+  ],
 };
 
 /** What each mountain promises to hold, on every seed. */
@@ -652,6 +747,7 @@ const SIGNATURES: Record<CourseBiome, readonly SectionKind[]> = {
   volcanic: ['ravine', 'tunnel', 'bridge', 'fork'],
   blossom: ['terraces', 'tunnel', 'street', 'fork'],
   lantern: ['ravine', 'fork', 'street', 'bridge'],
+  oldrun: [],
 };
 
 /** Lanternfall's avenues: a street there stands between two rows of stone lamps, a pair every LAMP_STEP metres,
@@ -665,14 +761,7 @@ const LAMP_R = 0.6;
 const LAMP_GAP = 0.3;
 
 const ROLLER_WAVE = 80;
-/** Where the corridor's middle starts to fill up. */
-const PICKETS_FROM = 900;
-
-/** The run-in's light line: where it starts, how long, its spacing and its swing. */
-const LIGHT_RUN_Z = 130;
-const LIGHT_RUN_LEN = 160;
-const LIGHT_RUN_STEP = 8;
-const LIGHT_RUN_WAVE = 110;
+/** (Where the corridor's middle starts to fill up, and the run-in's light line, are the layout's: FIVE above.) */
 /** A sky gate's ring: how far past the lip it hangs, the pop it is set for, and its radius. */
 const GATE_REACH = 22;
 const GATE_CHARGE = 0.7;
@@ -763,7 +852,7 @@ function edgeRise(e: number, sh: SectionShape): number {
 }
 
 /** A stretch of z. */
-interface Band {
+export interface Band {
   z0: number;
   z1: number;
   /** A clear band a vent may still stand in. */
@@ -816,17 +905,8 @@ interface Beat {
   gate?: true;
 }
 
-/** The threshold at every stage line (round 8, the charm gates): a plain corridor from THRESHOLD_BEFORE metres above
- *  the line to THRESHOLD_AFTER past it, at least THRESHOLD_HW wide each side, with nothing standing on it, no kicker,
- *  mogul, drop, vent, rail or ice, and no place or set piece. Its kind is 'cruise' (every lane already draws one). The
- *  gate stands GATE_PAST_LINE past the line, 50 m into its body, with the 100 m above it plain and 80 m of it below. */
-export const THRESHOLD_BEFORE = 40;
-/** As far above the line as a threshold may start, where the stage above cannot fill its room exactly without it. */
-export const THRESHOLD_BEFORE_MAX = 220;
-export const THRESHOLD_AFTER = 180;
-export const THRESHOLD_AFTER_MIN = 150;
-export const THRESHOLD_HW = 11;
-/** What may not come before a threshold: a flight lands in what follows a leap, a terrace or a lake's outlet. */
+/** (The threshold at every stage line, THRESHOLD_BEFORE to THRESHOLD_HW, lives in courseparts.ts.) What may not come
+ *  before a threshold: a flight lands in what follows a leap, a terrace or a lake's outlet. */
 const NOT_BEFORE_GATE: ReadonlySet<SectionKind> = new Set<SectionKind>(['terraces', 'lake', 'cruise']);
 
 export class Course {
@@ -860,9 +940,28 @@ export class Course {
   private readonly msafeX: Memo = { a: NaN, va: 0, b: NaN, vb: 0 };
   private readonly mbaseY: Memo = { a: NaN, va: 0, b: NaN, vb: 0 };
 
+  /** The descent this course is laid as (round 9): the five's, or a new mountain's own. */
+  readonly layout: Layout;
+  /** A new mountain's own ground (kit.ts), or null: the five, every Daily and every Cup. */
+  readonly kit: Kit | null;
+  /** Which of the kit's hooks it has, read once here, so the five's paths test a boolean and nothing else. */
+  private readonly ownCentre: boolean;
+  private readonly ownWidth: boolean;
+  private readonly ownGround: boolean;
+  private readonly ownSurface: boolean;
+  /** Air that lifts a sled somewhere on this course (the sim's lift, kit.ts). */
+  readonly hasLift: boolean;
+
   constructor(seed: number) {
     this.seed = seed >>> 0;
     this.params = paramsForSeed(this.seed);
+    this.layout = LAYOUTS[this.params.biome];
+    this.kit = KITS[this.params.biome] ?? null;
+    this.ownCentre = this.kit?.centre !== undefined;
+    this.ownWidth = this.kit?.halfWidth !== undefined;
+    this.ownGround = this.kit?.ground !== undefined;
+    this.ownSurface = this.kit?.surface !== undefined;
+    this.hasLift = this.kit?.lift !== undefined;
     this.sC = hash32(this.seed, 1);
     this.sW = hash32(this.seed, 2);
     this.sS = hash32(this.seed, 3);
@@ -917,7 +1016,7 @@ export class Course {
       const list: Stage[] = [];
       const acts = this.actOrder();
       let z = 0;
-      STAGE_LENGTHS.forEach((len, index) => {
+      this.layout.stages.forEach((len, index) => {
         list.push({ index, name: SCRIPTS[this.params.biome][acts[index]].name, z0: z, z1: z + len });
         z += len;
       });
@@ -930,6 +1029,11 @@ export class Course {
   get finishZ(): number {
     const st = this.stages;
     return st[st.length - 1].z1;
+  }
+
+  /** The easy ground past the finish line (round 9: the course's own; RUN_OUT on the five). */
+  get runOut(): number {
+    return this.layout.runOut;
   }
 
   /** The stage that holds z (past the finish, the last). */
@@ -968,7 +1072,7 @@ export class Course {
   section(z: number): Section {
     const list = this.sections;
     if (list.length === 0) this.lay();
-    while (list[list.length - 1].z1 <= z) this.pushSection('finish', 400, 40);
+    while (list[list.length - 1].z1 <= z) this.pushSection(this.layout.finish, 400, 40);
     let i = this.lastSection;
     if (i >= list.length) i = list.length - 1;
     while (i > 0 && list[i].z0 > z) i--;
@@ -1084,7 +1188,8 @@ export class Course {
     // (Round 8: each stage line's threshold takes its metres from the stages either side of the line: from the stage
     // above THRESHOLD_BEFORE to THRESHOLD_BEFORE_MAX, from the stage below THRESHOLD_AFTER_MIN to THRESHOLD_AFTER,
     // whatever lets each stage's own beats fill the rest exactly.)
-    const room = [STAGE_LENGTHS[0] - openLen, STAGE_LENGTHS[1], STAGE_LENGTHS[2] - FINISH_SQUARE];
+    const L = this.layout;
+    const room = [L.stages[0] - openLen, L.stages[1], L.stages[2] - L.square];
     let threshold: Beat | null = null;
     const slots = acts.map((a) => a.slice());
     // The first place past the first leap comes up to meet it, and what it leaves behind must still meet.
@@ -1170,12 +1275,12 @@ export class Course {
       }
       if (gated) {
         if (NOT_BEFORE_GATE.has(prev)) return null;
-        threshold = { kind: 'cruise', len: left, blend: this.blendOf('cruise', prev), gate: true };
+        threshold = { kind: L.threshold, len: left, blend: this.blendOf(L.threshold, prev), gate: true };
         beats.push(threshold);
-        before = 'cruise';
+        before = L.threshold;
       }
     }
-    beats.push({ kind: 'finish', len: FINISH_SQUARE + RUN_OUT, blend: this.blendOf('finish', before) });
+    beats.push({ kind: L.finish, len: L.square + L.runOut, blend: this.blendOf(L.finish, before) });
     for (let i = 1; i < beats.length; i++) if (!legalPair(beats[i - 1].kind, beats[i].kind)) return null;
     for (const k of must) if (!beats.some((b) => b.kind === k)) return null;
     return beats;
@@ -1235,6 +1340,20 @@ export class Course {
   /** Lays the whole descent out at once, a pure function of the seed: sections first, then what stands
    *  on them. */
   private lay(): void {
+    // (Round 9: a new mountain lays its own descent, kit.ts.)
+    const kit = this.kit;
+    if (kit) {
+      const plan: KitPlan = { clear: this.plan.clear, busy: this.plan.busy, narrow: this.plan.narrow };
+      kit.compose(this, new Rng(hash32(this.seed, 0x5c71)), (k, prev) => this.blendOf(k, prev)).forEach((b, i) => {
+        const sec = this.pushSection(b.kind, b.len, b.blend, b.gate === true);
+        kit.lay(this, sec, new Rng(hash32(this.seed, i, 0xed6e)), plan);
+        this.layBands(sec);
+      });
+      this.layKicks();
+      this.layFields();
+      this.layRails();
+      return;
+    }
     const beats = this.compose();
     let leapsLeft = beats.filter((b) => b.kind === 'leap').length;
     let leapNo = 0;
@@ -1273,7 +1392,7 @@ export class Course {
     const side = rng.chance(0.5) ? 1 : -1;
     // The width this section mostly has: what the safe line's reach and shift are measured against.
     const plain = lerp(this.params.halfWidthStart, this.params.halfWidthEnd, this.difficulty(z0 + len / 2)) * (1 - shape.pin);
-    if (gate && plain + shape.width < THRESHOLD_HW) shape.width = THRESHOLD_HW - plain;
+    if (gate && plain + shape.width < this.layout.thresholdHW) shape.width = this.layout.thresholdHW - plain;
     const wide = plain + shape.width;
     shape.reach = Math.max(0, wide - 4.2) * 0.8 * shape.span;
     shape.shift = shape.split * wide * side;
@@ -1460,20 +1579,25 @@ export class Course {
       plan.kicks.push({ z, big, flight });
       plan.flights.push({ z0: z - 20, z1: z + 10 + flight });
     };
-    let first = 296;
-    let best = Infinity;
-    for (let z = 286; z <= 312; z += 2) {
-      const off = this.trueness(z);
-      if (off < best) {
-        best = off;
-        first = z;
+    // (Round 9: where the layout puts it, and none on a mountain whose opening has none.)
+    const fk = this.layout.firstKick;
+    if (fk) {
+      let first = fk.at;
+      let best = Infinity;
+      for (let z = fk.from; z <= fk.to; z += 2) {
+        const off = this.trueness(z);
+        if (off < best) {
+          best = off;
+          first = z;
+        }
       }
+      add(first, false);
     }
-    add(first, false);
+    const from = this.layout.kickFrom;
     // Lanternfall's cloud sea is ridden blind, behind a guide light: nothing on the line launches a sled there.
     const blind = this.params.biome === 'lantern' && plan.leaps.length >= 2 ? plan.leaps[1].z : 0;
     for (const sec of this.sections) {
-      if (sec.z0 < 800 || sec.z0 >= this.finishZ || !KICK_KINDS.has(sec.kind) || sec.z0 < blind) continue;
+      if (sec.z0 < from || sec.z0 >= this.finishZ || !KICK_KINDS.has(sec.kind) || sec.z0 < blind) continue;
       const body = sec.z0 + sec.blend;
       let made = 0;
       for (let t = 0; t < 24 && made < 2; t++) {
@@ -1485,7 +1609,7 @@ export class Course {
       }
     }
     for (const sec of this.sections) {
-      if (sec.z0 < 800 || !KICK_WITHIN.has(sec.kind) || sec.z0 < blind) continue;
+      if (sec.z0 < from || !KICK_WITHIN.has(sec.kind) || sec.z0 < blind) continue;
       const first = sec.z0 + sec.blend + 8;
       const last = sec.z1 - 12 - KICK_BIG[1] * KICK_OVERRUN;
       const others = [...plan.busy, ...plan.flights];
@@ -1504,8 +1628,9 @@ export class Course {
   private layFields(): void {
     const plan = this.plan;
     const rng = new Rng(hash32(this.seed, 0x3061));
+    const from = this.layout.kickFrom;
     for (const sec of this.sections) {
-      if (sec.z0 < 800 || sec.z0 >= this.finishZ) continue;
+      if (sec.z0 < from || sec.z0 >= this.finishZ) continue;
       const bowl = sec.kind === 'bowl';
       if (!bowl && !(MOGUL_KINDS.has(sec.kind) && rng.chance(0.5))) continue;
       for (let t = 0; t < 16; t++) {
@@ -1520,7 +1645,7 @@ export class Course {
     // section with room has one.
     if (plan.fields.length > 0) return;
     for (const sec of this.sections) {
-      if (sec.z0 < 800 || sec.z0 >= this.finishZ || !(MOGUL_KINDS.has(sec.kind) || sec.kind === 'bowl' || sec.kind === 'chute')) continue;
+      if (sec.z0 < from || sec.z0 >= this.finishZ || !(MOGUL_KINDS.has(sec.kind) || sec.kind === 'bowl' || sec.kind === 'chute')) continue;
       for (let z = sec.z0 + sec.blend * 0.5; z + 36 < sec.z1; z += 4) {
         if (this.busy(z - 8, z + 44) || this.hits(plan.fields, z - 8, z + 44)) continue;
         plan.fields.push({ z0: z, z1: z + 32 });
@@ -1695,6 +1820,8 @@ export class Course {
   }
 
   private centerXAt(z: number): number {
+    // (Round 9: a new mountain's line is its own.)
+    if (this.ownCentre) return this.kit!.centre!(this, z);
     const amp = this.params.wander * (0.35 + 0.65 * this.difficulty(z)) * smoothstep(0, 220, z);
     // Each section bends at its own wavelength. The bend's phase is the integral of its frequency,
     // so a change of wavelength speeds the bends up or slows them down without a kink.
@@ -1716,6 +1843,7 @@ export class Course {
   }
 
   private halfWidthAt(z: number): number {
+    if (this.ownWidth) return this.kit!.halfWidth!(this, z);
     const p = this.params;
     const base = lerp(p.halfWidthStart, p.halfWidthEnd, this.difficulty(z)) + 2.5 * noise1(this.sW, z / 180);
     const sh = this.shapeAt(z);
@@ -1795,6 +1923,8 @@ export class Course {
     const sh = this.shapeAt(z);
     let h = this.baseY(z);
     if (sh.relief > 0) h += 1.1 * sh.relief * noise2(this.sR, x / 36, z / 44);
+    // (Round 9: a new mountain's cross-section is its own, past the edge too.)
+    if (this.ownGround) return this.kit!.ground!(this, x, z, h);
     const e = this.edgeExcess(x, z);
     if (e > 0) h += edgeRise(e, sh);
     if (sh.ridge > 0) {
@@ -1849,6 +1979,11 @@ export class Course {
   }
 
   surface(x: number, z: number): Surface {
+    // (Round 9: a new mountain's surfaces are its own.)
+    if (this.ownSurface) {
+      const k = this.kit!.surface!(this, x, z);
+      if (k) return k;
+    }
     // (A threshold's body is plain snow: the chunk-long patches a fork's strip or a sheet lays reach into it.)
     const sec = this.section(z);
     if (sec.gate && z >= sec.z0 + sec.blend) return SNOW;
@@ -2322,7 +2457,7 @@ export class Course {
 
     // Pickets down the corridor's middle: the safe line weaves past them, so nobody finishes by letting go.
     // Nothing here before the first leap has been ridden: the first minute stays open.
-    if (z0 >= PICKETS_FROM && obsMul >= 0.5) {
+    if (z0 >= this.layout.picketsFrom && obsMul >= 0.5) {
       for (let z = z0 + rng.range(4, 20); z < z1 - 1; z += rng.range(26, 40) - diff * 10) {
         const roll = rng.next();
         placeOne(roll < 0.6 ? rng.pick(tallKinds) : rng.pick(lowKinds), this.centerX(z) + rng.range(-2.6, 2.6), z);
@@ -2382,6 +2517,8 @@ export class Course {
       }
     }
 
+    // (Round 9: what a new mountain stands on its own ground, by the same rule for room.)
+    if (this.kit?.obstacles) this.kit.obstacles(this, chunk, rng, { clearOf, add: (kind, x, z, r, h) => void add(kind, x, z, r, h) }, diff);
     this.placeLights(chunk, rng, diff);
     return chunk;
   }
@@ -2402,7 +2539,7 @@ export class Course {
     for (const st of this.stages) {
       let best: { r: Ramp; room: number } | null = null;
       for (const k of this.plan.kicks) {
-        if (k.z < Math.max(800, st.z0) || k.z >= st.z1 - 80) continue;
+        if (k.z < Math.max(this.layout.kickFrom, st.z0) || k.z >= st.z1 - 80) continue;
         const r = this.zones(Math.floor(k.z / CHUNK_LEN)).ramps.find((q) => q.online && Math.abs(q.z - k.z) < 0.01);
         if (!r) continue;
         const room = k.flight + (k.big ? 20 : 0);
@@ -2482,10 +2619,11 @@ export class Course {
 
     // The run-in's light line swings side to side across the safe line: a first run learns to steer on it,
     // and lights most of its first lantern doing so.
-    for (let k = 0; k * LIGHT_RUN_STEP < LIGHT_RUN_LEN; k++) {
-      const z = LIGHT_RUN_Z + k * LIGHT_RUN_STEP;
+    const run = this.layout.lightRun;
+    for (let k = 0; run && k * run.step < run.len; k++) {
+      const z = run.z + k * run.step;
       if (!inChunk(z)) continue;
-      const u = (k * LIGHT_RUN_STEP) / LIGHT_RUN_WAVE;
+      const u = (k * run.step) / run.wave;
       lights.push({ id: id++, x: this.safeX(z) + 3.6 * dsin(TAU * u), z, hover: 0.8, value: 1 });
     }
 
@@ -2620,6 +2758,40 @@ export class Course {
         if (!blocked(x, z)) lights.push({ id: id++, x, z, hover: 0.9, value: 3 });
       }
     }
+    // (Round 9: a new mountain's own lights, numbered on from the chunk's.)
+    if (this.kit?.lights) this.kit.lights(this, chunk, rng, diff, (x, z, hover, value) => void lights.push({ id: id++, x, z, hover, value }));
+  }
+
+  // ---------------------------------------------------------------- round 9: what a new mountain's kit answers
+
+  /** The centre line's slope dx/dz at z: a new mountain's own (the track's p), 0 on the five (which never ask). */
+  channelSlope(z: number): number {
+    return this.kit?.slope ? this.kit.slope(this, z) : 0;
+  }
+
+  /** Upward acceleration of the air at (x, y, z), m/s^2 at full gravity (0 on a course with no lift). */
+  liftAt(x: number, y: number, z: number): number {
+    return this.kit?.lift ? this.kit.lift(this, x, y, z) : 0;
+  }
+
+  /** A lift column's middle at z, or null. */
+  liftX(z: number): number | null {
+    return this.kit?.liftX ? this.kit.liftX(this, z) : null;
+  }
+
+  /** The line a rider of this kind rides at z here and now: the kit's, or the safe line. */
+  lineFor(z: number, r: KitRider): number {
+    return this.kit?.lineFor ? this.kit.lineFor(this, z, r) : this.safeX(z);
+  }
+
+  /** The track's settling line for a speed (the Old Run), or the safe line. */
+  raceX(z: number, v: number): number {
+    return this.kit?.raceX ? this.kit.raceX(this, z, v) : this.safeX(z);
+  }
+
+  /** Where a pop pays, from z0 to z1 (a kit's; none on the five). */
+  lips(z0: number, z1: number): readonly { z: number; x0: number; x1: number }[] {
+    return this.kit?.lips ? this.kit.lips(this, z0, z1) : [];
   }
 }
 

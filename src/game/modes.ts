@@ -1,4 +1,6 @@
-import { ChaosEvent, type ChaosRoll, Mood, eventInfo, moodInfo } from '../sim/chaos';
+import { ALL_EVENTS, ChaosEvent, type ChaosRoll, Mood, eventInfo, moodInfo, withEvents } from '../sim/chaos';
+import { eventsFor } from '../sim/course';
+import { MOUNTAINS } from '../sim/mountains';
 import { CHARMS } from '../sim/charms';
 import { hash32 } from '../sim/prng';
 import { LANTERN } from '../sim/sim';
@@ -18,7 +20,20 @@ import type { LongNightSave } from './spinesave';
 //
 // Pure: no DOM, render or audio imports.
 
-export const LEGS: readonly { mountain: string; mirror: boolean }[] = ['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall', 'pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall'].map((mountain, i) => ({ mountain, mirror: i >= 5 }));
+/** The night's mountains in the ladder's order (round 9: the three new ones where they unlock, Lanternfall the finale),
+ *  then the same mirrored. The five's ten until all three are registered, then all sixteen, in one change. */
+const NIGHT: readonly string[] = ['pinecrest', 'frostfang', 'gablefall', 'ember', 'oldrun', 'sakura', 'gullhaven', 'lanternfall'];
+const FIVE_NIGHT: readonly string[] = ['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall'];
+const NIGHT_ORDER = NIGHT.every((id) => MOUNTAINS.some((m) => m.id === id)) ? NIGHT : FIVE_NIGHT;
+export const LEGS: readonly { mountain: string; mirror: boolean }[] = [...NIGHT_ORDER, ...NIGHT_ORDER].map((mountain, i) => ({ mountain, mirror: i >= NIGHT_ORDER.length }));
+/** The legs the Almanac's last night page opens ("all ten" when it was written): every leg. */
+const ALL_LEGS_PAGE = 10;
+
+/** The mid-run events a leg's mountain may meet (course.ts eventsFor; every event for an id not registered). */
+function eventsOf(id: string): number {
+  const m = MOUNTAINS.find((q) => q.id === id);
+  return m ? eventsFor(m.seed) : ALL_EVENTS;
+}
 
 /** What one leg hands the next: the names of SimConfig.carry (r8-sim's batch). */
 export interface LongNightCarry {
@@ -97,7 +112,8 @@ export interface NightLeg {
 
 /** A night starts at its first leg, or not at all before the Almanac opens it. */
 export function startNight(seed: number, legsOpen: number): Night | null {
-  const legs = Math.max(0, Math.min(LEGS.length, Math.floor(legsOpen)));
+  // (Round 9: the page that opened all ten legs opens every leg there is.)
+  const legs = Math.max(0, Math.min(LEGS.length, Math.floor(legsOpen >= ALL_LEGS_PAGE ? LEGS.length : legsOpen)));
   return legs > 0 ? { seed: seed >>> 0, leg: 0, legs, carry: null } : null;
 }
 
@@ -118,7 +134,7 @@ export function nightLeg(n: Night): NightLeg {
   return {
     mountain: leg.mountain,
     mirror: leg.mirror,
-    chaos: legChaos(n.seed, n.leg),
+    chaos: withEvents(legChaos(n.seed, n.leg), eventsOf(leg.mountain)),
     carry: c ? { lantern: c.lantern, getUps: c.getUps, charms: [...c.charms] } : undefined,
     key: nightKey(leg.mountain, leg.mirror),
     n: n.leg + 1,
@@ -139,7 +155,7 @@ export function nightDepth(n: Night, finished: boolean, metres: number): LongNig
   return { legs, z: finished ? 0 : Math.max(0, Math.round(metres)) };
 }
 
-const LEG_NAMES: Readonly<Record<string, string>> = { pinecrest: 'Pinecrest', frostfang: 'Frostfang', ember: 'Ember Peak', sakura: 'Sakura Ridge', lanternfall: 'Lanternfall' };
+const LEG_NAMES: Readonly<Record<string, string>> = { pinecrest: 'Pinecrest', frostfang: 'Frostfang', ember: 'Ember Peak', sakura: 'Sakura Ridge', lanternfall: 'Lanternfall', oldrun: 'The Old Run', gullhaven: 'Gullhaven', gablefall: 'Gablefall' };
 
 /** A depth in words: "3 legs", "2 legs and 640 m", "640 m into the first leg". */
 export function depthWords(d: LongNightSave): string {

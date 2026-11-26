@@ -41,7 +41,7 @@ import { STAR_GIFTS, masteryBoard, readMastery, settleMastery } from './mastery'
 import { PAINTS, paintById } from './paints';
 import { SHELVES, type ShelfId, freeItem, hatById, scarfById, soundById, trailById } from './garage';
 import { WARD_CURVE } from './timescale';
-import { courseFor } from '../sim/course';
+import { courseFor, eventsFor } from '../sim/course';
 import { rollForVariant } from '../sim/moments';
 import { HintCoach } from './hints';
 import { intensity } from './intensity';
@@ -75,7 +75,7 @@ import { type GrudgeRow, type SettleResult, Settlement, cupMedalNow, dailyMedalN
 import { inReach } from './pacer';
 import { PLAIN_SHOT, type TitleShot, devShot, titleShot } from './keyart';
 import { CROWN_GIFTS, DUEL_GIFTS, type Duel, KING, TWELVE, type TwelveOutcome, duelMountain, duelOn, duelRecord, duelStartLine, finalField, gateLine, hasBeaten, lockText, mountainOpen, nextDuel, outcomeLine, poolStanding, readTwelve, settleTwelve, tallyLine, waitingRider, withheldRiders } from './twelve';
-import { FINISH_Z, type Standing, aheadOf, byStanding, clock, marginPhrase, placeAtFinish, predictedTime, recordStanding } from './standing';
+import { type Standing, aheadOf, byStanding, clock, finishZOf, marginPhrase, placeAtFinish, predictedTime, recordStanding } from './standing';
 
 // The app: boot, title attract mode, run lifecycle, results, menus, ads and saves. Owns every
 // subsystem and is the only place where they meet.
@@ -369,6 +369,12 @@ export class App {
     this.mountain = this.savedMountain();
     if (DEV_ON && DEV.has('m')) this.mountain = MOUNTAINS[Number(DEV.get('m'))] ?? this.mountain;
     this.daily = dailyMountain(dailyKey(new Date()));
+    // (Round 9, the ground lane: `?debug&seed=<hex>` rides a lab course, the Old Run's among them, in the Daily's place;
+    // the day's own tagline is kept, so the title's daily rollover does not put the day's course back.)
+    if (DEV_ON && DEV.has('seed')) {
+      this.daily = { ...this.daily, seed: parseInt(DEV.get('seed') ?? '', 16) >>> 0 };
+      this.mountain = this.daily;
+    }
     this.cup = cupMountain(this.trialWeek());
     this.trial = trialFor(this.trialWeek());
     // (The hours lane: the world's first light is the hour picked for the mountain it opens on.)
@@ -875,7 +881,7 @@ export class App {
 
   /** Every bundled mountain's graveyards, named once in the mountains' order (graveyards.ts). */
   private bundledGraves(): Map<string, Graveyard[]> {
-    return (this.graveNames ??= bundledGraveyards(MOUNTAINS.map((m) => ({ key: m.id, pool: poolFor(m.id) }))));
+    return (this.graveNames ??= bundledGraveyards(MOUNTAINS.map((m) => ({ key: m.id, pool: poolFor(m.id), finishZ: finishZOf(m.seed) }))));
   }
 
   /** The title's friend line, while Ride would ride it (challenge.ts linkLine). */
@@ -1205,6 +1211,8 @@ export class App {
       // (Round 8: a very first run is laid round its mountain's steady time, and The Hollow King waits for his duel.)
       key,
       withheld: withheldRiders(d.twelve),
+      // (Round 9: the course's own line.)
+      finishZ: finishZOf(this.mountain.seed),
     });
     if (cup && mine) picks.push({ name: mine.name, kind: 'you', score: mine.score, record: mine.record, distance: mine.distance });
     return picks.map((g) => {
@@ -1519,7 +1527,7 @@ export class App {
     // Chaos: the first run of a session is always plain. A friend's challenge replays their
     // conditions from the second attempt on (the rematch).
     const seed = (Math.random() * 4294967296) >>> 0;
-    let chaos = rollChaos(seed, this.sessionRuns, this.lastMood);
+    let chaos = rollChaos(seed, this.sessionRuns, this.lastMood, eventsFor(this.mountain.seed));
     if (!leg && this.challenge && this.challenge.record.seed === this.mountain.seed) {
       chaos = this.challenge.attempts > 0 && this.sessionRuns > 0 ? this.challenge.record.chaos : { ...chaos, mood: Mood.None, event: ChaosEvent.None };
       this.challenge.attempts++;
@@ -2620,6 +2628,7 @@ export class App {
       tumbles: this.tumbles,
       wallRides: this.wallRides,
       grinds: this.grinds,
+      finishZ: sim.course.finishZ,
     };
   }
 
@@ -2898,7 +2907,7 @@ export class App {
       score: sim.score,
       distance: sim.distance,
       finish,
-      finishZ: FINISH_Z,
+      finishZ: sim.course.finishZ,
       best: topScore(d.best[key]) || sim.score,
       newBest: this.newBestThisRun,
       giftsEarned: runPay(sim) + this.passBonus,
@@ -3199,7 +3208,7 @@ export class App {
   private promiseNext(you: Standing, key: string, spot: Spot | null): { name: string; rode: boolean } | null {
     let ahead: GhostManager['tracks'][number] | null = null;
     // A rematch rides a rider's real run: one who read you is promised only if that is a race for you.
-    const pace = you.time ?? predictedTime(you.distance, (this.run?.sim.tick ?? 0) / 60);
+    const pace = you.time ?? predictedTime(you.distance, (this.run?.sim.tick ?? 0) / 60, this.run?.sim.course.finishZ);
     for (const t of this.ghosts.tracks) {
       if (!t.ready || t.entry.kind === 'you' || t.entry.kind === 'friend') continue;
       const real = realStanding(t);
@@ -3693,7 +3702,8 @@ export class App {
     const tick = riding ? sim.tick - 1 + alpha : sim.tick + this.crashTicks;
 
     // Ghost poses and race events.
-    this.ghosts.pace(tick, sim.s.z, this.phase === 'run' && !sim.finished && !sim.s.crashed);
+    const last = sim.course.stages[sim.course.stages.length - 1];
+    this.ghosts.pace(tick, sim.s.z, this.phase === 'run' && !sim.finished && !sim.s.crashed, sim.course.finishZ, last.z1 - last.z0);
     this.ghostPoses.clear();
     for (const t of this.ghosts.tracks) {
       const p = emptyPose();

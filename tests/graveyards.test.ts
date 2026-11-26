@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { GRAVE_APART, GRAVE_MAX, GRAVE_NAMES, bundledGraveyards, graveyards } from '../src/game/graveyards';
+import { GRAVE_APART, GRAVE_MAX, GRAVE_NAMES, bundledGraveyards, graveyards, namesFor } from '../src/game/graveyards';
 import type { PoolGhostData } from '../src/game/ghostdata';
 import { withSlowRiders } from '../src/game/slowriders';
 import { FINISH_Z } from '../src/game/standing';
@@ -166,5 +166,24 @@ describe('graveyards', () => {
     expect(g).toHaveLength(GRAVE_MAX);
     expect(g.map((x) => Math.round(x.z))).toEqual([101, 301, 501, 701]);
     expect(graveyards([], 'k')).toEqual([]);
+  });
+});
+
+describe('the names stand still (round 9)', () => {
+  // The five's places as round 8 named them: the list is frozen at 22, and a new mountain draws from it and GRAVE_MORE
+  // after the five, so adding mountains or names renames none of these.
+  it('names the five exactly as before', () => {
+    const named = bundledGraveyards(['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall'].map((key) => ({ key, pool: withSlowRiders(pool(key), key) })));
+    const names = (key: string) => (named.get(key) ?? []).map((g) => g.name);
+    expect(names('pinecrest')).toEqual(['Tumbler’s Gate', 'Quiet Drop', 'Last Orders', 'Cold Comfort']);
+    expect(names('frostfang')).toEqual(['Hush Hollow', 'Frost Mercy', 'Last Light', 'Wreck Hollow']);
+    expect(names('ember')).toEqual(['Grim Gully', 'Broken Rein', 'Rattle Run', 'Thin Prayer']);
+    expect(names('sakura')).toEqual(['Sorrow Shelf', 'Still Water', 'Snuffed Wick', 'Candle End']);
+    expect(names('lanternfall')).toEqual(['Bonepile Bend', 'Pale Rest', 'Widow’s Bend', 'Long Sleep']);
+  });
+
+  it('the five, the Daily and the Cup draw from the frozen 22', () => {
+    expect(GRAVE_NAMES).toHaveLength(22);
+    for (const key of ['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall', 'daily', 'cup']) expect(namesFor(key)).toBe(GRAVE_NAMES);
   });
 });

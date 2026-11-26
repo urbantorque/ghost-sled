@@ -1,4 +1,4 @@
-import { ChaosEvent, ChaosRoll, Mood, MoodParams, eventTriggerZ, moodInfo } from './chaos';
+import { ChaosEvent, ChaosRoll, Mood, MoodParams, eventAllowed, eventTriggerZ, moodInfo } from './chaos';
 import { CHUNK_LEN, Course, Obstacle, ObstacleKind, Rail, SkyGate, courseFor } from './course';
 import { PI, TAU, angleDiff, approach, clamp, datan2, dcos, dsin, wrapAngle } from './dmath';
 import { MAX_RUN_TICKS, actionOf, draftOf, spiritOf, steerOf } from './input';
@@ -107,6 +107,17 @@ const STUCK_SPEED = 2.5;
 const STUCK_TICKS = 60;
 /** Over the cap after a dash, speed eases back down at this rate (m/s per second), never in a step. */
 const OVERCAP_EASE = 6;
+/** Round 9, the Old Run: how hard its track damps a sled's swing across the channel (rad/s on the heading's difference
+ *  from the channel's direction). About 0.7 of critical on its deepest wall, whose swing has a period of 2.5 s. */
+export const TRACK_DAMP = 1.8;
+
+/** Round 9, the Old Run: how fast a banked surface turns a carving sled, rad/s: the ground's rise toward the channel's
+ *  right (the gradient across the channel's direction `phi`), times gravity, over the speed (8 m/s at least). A sled
+ *  holds a height on a bend's outside wall where this turns it as fast as the channel turns: tan(theta) = v^2 / (g R).
+ *  The bot predicts its heading with it (bot.ts), so the two never drift apart. */
+export function wallYaw(grad: { x: number; z: number }, phi: number, speed: number, g: number): number {
+  return (g * (grad.x * dcos(phi) - grad.z * dsin(phi))) / (speed > 8 ? speed : 8);
+}
 /** A near miss under this edge gap is a whisker (the director's WHISKER_GAP): it lights more. */
 const WHISKER = 0.45;
 /** Set pieces (moments.ts): the lantern a gate threaded and a ring flown light, how near the fall comes before
@@ -474,6 +485,8 @@ export class Sim {
   constructor(config: SimConfig) {
     this.config = config;
     this.course = courseFor(config.seed);
+    // (Round 9: the Old Run's track. Read once here, so the five's paths test a constant false and nothing else.)
+    this.trackOn = this.course.layout.grammar === 'oldrun';
     this.sled = sledById(config.sled);
     this.mood = moodInfo(config.chaos.mood).params;
     this.combo = new Combo(this.sled.comboWindow * this.mood.comboWindow);
@@ -553,7 +566,8 @@ export class Sim {
     this.course.gradient(x0, z0, vec);
     this.s.vy = vec.z * this.s.vz;
     this.dyn = {
-      triggerZ: eventTriggerZ(config.chaos),
+      // (Round 9: an event this course cannot meet never plays, whatever a record says: chaos.ts rollChaos's mask.)
+      triggerZ: eventAllowed(config.chaos.event, this.course.layout.events) ? eventTriggerZ(config.chaos) : Infinity,
       avalanche: { phase: 0, z: 0, speed: 0, ticks: 0 },
       yeti: { phase: 0, x: 0, z: 0, dir: 1, ticks: 0, hopped: false },
       storm: [],
@@ -644,6 +658,9 @@ export class Sim {
   readonly charmGates: CharmGate[];
   /** How close to touchdown a press (or a grab let go) still stomps: wider on a save's very first run. */
   private readonly stompTicks: number;
+  /** The Old Run's track: gravity along the runners, the bank's yaw, the damped swing, the launch off a wall's plane and
+   *  the turn-back square to the channel (round 9). False on every other course. */
+  private readonly trackOn: boolean;
   readonly charms: number[] = [];
   charmMask = 0;
   synergyMask = 0;
@@ -1113,9 +1130,20 @@ export class Sim {
     const surf = c.surface(s.x, s.z);
     s.onIce = surf.ice;
     c.gradient(s.x, s.z, vec);
-    const n2 = 1 + vec.x * vec.x + vec.z * vec.z;
-    s.vx += ((-g * vec.x) / n2) * DT;
-    s.vz += ((-g * vec.z) / n2) * DT;
+    // (Round 9, the Old Run: on its track gravity acts along the sled's own path, as on runners, so a rider holding a
+    // height on a wall keeps the channel's whole grade. The five's step below moves the sled by the slope's gradient,
+    // which on a steep wall leaves it a fifth of the drive: notes/r9-ground.md section 3, A1.)
+    const v0 = this.trackOn ? Math.sqrt(s.vx * s.vx + s.vz * s.vz) : 0;
+    if (v0 > 0.5) {
+      const sv = (vec.x * s.vx + vec.z * s.vz) / v0;
+      const k = Math.max(0, v0 - ((g * sv) / (1 + sv * sv)) * DT) / v0;
+      s.vx *= k;
+      s.vz *= k;
+    } else {
+      const n2 = 1 + vec.x * vec.x + vec.z * vec.z;
+      s.vx += ((-g * vec.x) / n2) * DT;
+      s.vz += ((-g * vec.z) / n2) * DT;
+    }
     s.speed = Math.sqrt(s.vx * s.vx + s.vz * s.vz);
     if (s.speed > 0.01) s.velHeading = datan2(s.vx, s.vz);
 
@@ -1160,9 +1188,16 @@ export class Sim {
     const span = hw - Math.abs(home - cx);
     const off = span > 1 ? (s.x - home) / span : 0;
     const e = Math.abs(s.x - cx) - hw;
+    // (Round 9, the Old Run: the channel's own direction at the sled, not the look-ahead's, which leads a bend.)
+    const phi = this.trackOn ? datan2(c.channelSlope(s.z), 1) : 0;
+    if (this.trackOn) {
+      // The walls turn the sled (below); this damps its swing across the channel, always, so a sled let go into a bend
+      // settles at its height there rather than rocking up to the lip (notes/r9-ground.md section 3, A3).
+      if (!s.drifting) s.heading += clamp(phi - s.heading, -1, 1) * TRACK_DAMP * DT;
+    }
     // Let go and the sled runs out of its turn: the nose eases back to the corridor's direction, and
     // leans toward the middle once it is well off it. Never a pull while the player is steering.
-    if (!s.drifting) {
+    else if (!s.drifting) {
       const free = 1 - Math.abs(s.steer) / 0.3;
       if (free > 0) {
         const near = clamp((Math.abs(off) - 0.68) / 0.32, 0, 1) * 0.36;
@@ -1176,6 +1211,8 @@ export class Sim {
       const k = e >= 6 ? 1 : e / 6;
       s.heading += (off > 0 ? -1 : 1) * k * (1.5 + s.speed / 18) * DT;
     }
+    // (Round 9, the Old Run: the bank turns a carving sled, as a banked track's wall does: notes/r9-ground.md, A2.)
+    if (this.trackOn) s.heading -= wallYaw(vec, phi, s.speed, g) * DT;
     // Wall rides: up the berm at speed and back down, on purpose.
     if (e > WALL_RIDE_E && s.speed > 15 && !s.drifting) {
       s.wallTicks++;
@@ -1256,7 +1293,9 @@ export class Sim {
     const ny = c.ground(nx, nz);
     const vyFollow = (ny - s.y) / DT;
     const stick = action ? 1.7 : 1;
-    const launch = vyFollow < s.vy - g * stick * DT * 1.5;
+    // (Round 9, the Old Run: on a tilted wall a turn moves the follow height by the slope times the sideways change, which
+    // is not the ground falling away; what launches there is the ground below the plane the sled is on: A4.)
+    const launch = this.trackOn ? ny < s.y + (vec.x * s.vx + vec.z * s.vz) * DT - g * stick * DT * DT * 1.5 : vyFollow < s.vy - g * stick * DT * 1.5;
     s.x = nx;
     s.z = nz;
     if (launch) {
@@ -2075,6 +2114,10 @@ export class Sim {
 
   /** Something solid at the corridor's edge turns a sled back: it costs speed and the combo, never the run. */
   private edge(): void {
+    if (this.trackOn) {
+      this.trackEdge();
+      return;
+    }
     const s = this.s;
     const c = this.course;
     const limit = c.edgeLimit(s.z);
@@ -2090,6 +2133,46 @@ export class Sim {
     s.speed = sp;
     s.vx = sp * dsin(s.velHeading);
     s.vz = sp * dcos(s.velHeading);
+    if (out > 3) {
+      s.wobble = 14;
+      this.coolFlow(this.has(CHARM.spirit) ? 2 : 1);
+      this.bumpCombo(false);
+      this.events.push({ type: 'scrape', side, speed: sp });
+    }
+  }
+
+  /** Round 9, the Old Run: the parapet turns a sled back as the five's edge does (the same scrape, never a fall),
+   *  measured square to the channel, which runs at up to 35 degrees off the fall line: the excess across it, and the
+   *  velocity's part along its outward normal (the five's reflection would read a sled running beside a slanted wall as
+   *  heading into it). A sled on the ground is set back on the wall it was turned back onto: notes/r9-ground.md, B. */
+  private trackEdge(): void {
+    const s = this.s;
+    const c = this.course;
+    const p = c.channelSlope(s.z);
+    const q = Math.sqrt(1 + p * p);
+    const limit = c.edgeLimit(s.z);
+    const e = c.edgeExcess(s.x, s.z) / q;
+    if (e <= limit) return;
+    const side: -1 | 1 = s.x > c.centerX(s.z) ? 1 : -1;
+    s.x -= side * (e - limit + 0.02) * q;
+    const nx = side / q;
+    const nz = (-side * p) / q;
+    const out = s.vx * nx + s.vz * nz;
+    if (out > 0) {
+      s.vx -= nx * out * 1.5;
+      s.vz -= nz * out * 1.5;
+    }
+    const sp = Math.sqrt(s.vx * s.vx + s.vz * s.vz) * (out > 3 ? 0.93 : 0.985);
+    s.velHeading = datan2(s.vx, s.vz);
+    s.heading = s.velHeading;
+    s.speed = sp;
+    s.vx = sp * dsin(s.velHeading);
+    s.vz = sp * dcos(s.velHeading);
+    if (s.grounded) {
+      s.y = c.ground(s.x, s.z);
+      c.gradient(s.x, s.z, vec);
+      s.vy = vec.x * s.vx + vec.z * s.vz;
+    }
     if (out > 3) {
       s.wobble = 14;
       this.coolFlow(this.has(CHARM.spirit) ? 2 : 1);

@@ -14,6 +14,7 @@ import { anchorFor, fieldCount, pickField, recentFor, type FieldPick } from '../
 import type { PoolGhostData } from '../../src/game/ghostdata';
 import { paceOf, withSlowRiders } from '../../src/game/slowriders';
 import { MOUNTAINS } from '../../src/sim/mountains';
+import { finishZFor } from '../../src/sim/course';
 import { recordFromString, replayRecord } from '../../src/sim/replay';
 import { RivalWatch } from '../../src/sim/rivals';
 import { riderByName } from '../../src/bot/roster';
@@ -25,7 +26,8 @@ const opt = (k: string, d: string): string => {
 };
 const ORDERS = +opt('orders', '24');
 const PILOTS = opt('pilots', 'mid,expert,stunt').split(',');
-const FINISH = 4500;
+/** The finish line of the mountain being raced (round 9: each its own; the five's 4,500 m), set as each is taken up. */
+let FINISH = 4500;
 const NEAR = 40;
 
 interface Ride {
@@ -150,6 +152,7 @@ const RUNS = [0, 1, 4];
 const byRun: Record<string, Record<number, { a: Raced[]; b: Raced[] }>> = {};
 for (const pilot of PILOTS) {
   for (let m = 0; m < MOUNTAINS.length; m++) {
+    FINISH = finishZFor(MOUNTAINS[m].seed);
     const mine = rides.filter((r) => r.pilot === pilot && r.m === m && r.finished && r.marks.length > FINISH / 10);
     if (mine.length < 3) continue;
     const key = MOUNTAINS[m].id;

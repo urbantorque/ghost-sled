@@ -358,7 +358,7 @@ export function settleRun(d: SaveData, sum: RunSummary, prior: Settlement | null
   const k = key ?? sum.mountain;
   const times = (d.runTimes ??= {});
   const list = times[k] ?? [];
-  const time = Math.round(predictedTime(sum.distance, sum.finished ? sum.finishSeconds : sum.seconds, FINISH_Z) * 10) / 10;
+  const time = Math.round(predictedTime(sum.distance, sum.finished ? sum.finishSeconds : sum.seconds, sum.finishZ ?? FINISH_Z) * 10) / 10;
   if (prior && list.length > 0) list[list.length - 1] = time;
   else if (time > 0) list.push(time);
   times[k] = list.slice(-RUN_TIMES_KEEP);

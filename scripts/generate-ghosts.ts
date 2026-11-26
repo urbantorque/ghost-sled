@@ -22,6 +22,18 @@ import { SIM_VERSION, TICK_RATE } from '../src/sim/sim';
 const COUNT = 30;
 const BUDGET = 110;
 
+/** Round 9: the five's pools are the round's proof that nothing moved, so they are never written here; only the new
+ *  mountains' are generated, one at a time (`--only <id>`, in the heavy slot with nothing else open). A sim break with
+ *  the owner's word (a new SIM_VERSION) passes `--five` to write them again. */
+const FIVE = ['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall'];
+const onlyAt = process.argv.indexOf('--only');
+const ONLY = onlyAt >= 0 ? (process.argv[onlyAt + 1] ?? '').split(',') : null;
+const LIST = MOUNTAINS.filter((m) => (!ONLY || ONLY.includes(m.id)) && (process.argv.includes('--five') || !FIVE.includes(m.id)));
+if (!LIST.length) {
+  console.log(`nothing to write: ${ONLY ? `--only ${ONLY.join(',')} names` : 'MOUNTAINS registers'} no mountain but the five, whose pools are never written without --five`);
+  process.exit(0);
+}
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, 'src', 'data', 'ghosts');
 mkdirSync(outDir, { recursive: true });
@@ -70,7 +82,7 @@ function withSplits<G extends Pick<PoolGhost, 'record'>>(ghosts: readonly G[]): 
 
 if (process.argv.includes('--falls')) {
   // Where each ghost fell, read again off a replay of its record (the records do not change).
-  for (const m of MOUNTAINS) {
+  for (const m of LIST) {
     const path = join(outDir, `${m.id}.json`);
     const pool = JSON.parse(readFileSync(path, 'utf8')) as { ghosts: PoolGhost[] };
     writeFileSync(path, JSON.stringify({ ...pool, ghosts: pool.ghosts.map((g) => ({ ...g, falls: fallsOf(recordFromString(g.record)) })) }));
@@ -80,7 +92,7 @@ if (process.argv.includes('--falls')) {
 }
 
 if (process.argv.includes('--splits')) {
-  for (const m of MOUNTAINS) {
+  for (const m of LIST) {
     const path = join(outDir, `${m.id}.json`);
     const pool = JSON.parse(readFileSync(path, 'utf8')) as { ghosts: PoolGhost[] };
     writeFileSync(path, JSON.stringify({ ...pool, ghosts: withSplits(pool.ghosts) }));
@@ -90,7 +102,7 @@ if (process.argv.includes('--splits')) {
 }
 
 let total = 0;
-for (const m of MOUNTAINS) {
+for (const m of LIST) {
   const t0 = performance.now();
   let runs: PoolRun[] = [];
   const ghosts = withSplits(generatePool(m.seed, COUNT, hashString('bundled/' + m.id), { budgetRuns: BUDGET, mountain: MOUNTAINS.indexOf(m), report: (r) => (runs = r) }));
@@ -126,4 +138,4 @@ for (const m of MOUNTAINS) {
     );
   }
 }
-console.log(`\nwrote ${MOUNTAINS.length} pools, ${(total / 1024).toFixed(1)} KB total, to ${outDir}`);
+console.log(`\nwrote ${LIST.length} pools, ${(total / 1024).toFixed(1)} KB total, to ${outDir}`);

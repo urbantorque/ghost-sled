@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ALL_CHARMS, CHARMS, CHARM_COUNT, LANE_W, STARTER_POOL, laneOf, laneX, offersFor } from '../src/sim/charms';
-import { CHUNK_LEN, Course, THRESHOLD_AFTER, THRESHOLD_AFTER_MIN, THRESHOLD_BEFORE, THRESHOLD_BEFORE_MAX, THRESHOLD_HW } from '../src/sim/course';
+import { CHUNK_LEN, Course, THRESHOLD_AFTER, THRESHOLD_AFTER_MIN, THRESHOLD_BEFORE, THRESHOLD_BEFORE_MAX } from '../src/sim/course';
 import { MOUNTAINS, dailySeed } from '../src/sim/mountains';
 import { momentPlays, planLegends } from '../src/sim/moments';
 import { packInput } from '../src/sim/input';
@@ -46,7 +46,8 @@ describe('charm gates stand on fair ground', () => {
           const cx = c.centerX(z);
           // Every arch's centre is inside the corridor with a metre to spare.
           if (z >= gz - 50) for (const lane of [0, 2]) if (Math.abs(laneX(sx, lane) - cx) > hw - 1) bad.push(`${seed} gate ${gz}: arch ${lane} outside at ${z.toFixed(0)}`);
-          if (gz > 200 && z >= gz - 50 && hw < THRESHOLD_HW - 0.5) bad.push(`${seed} gate ${gz}: half-width ${hw.toFixed(1)} at ${z.toFixed(0)}`);
+          // (Round 9: a new mountain's threshold may be narrower than the five's, as wide as its own layout says.)
+          if (gz > 200 && z >= gz - 50 && hw < c.layout.thresholdHW - 0.5) bad.push(`${seed} gate ${gz}: half-width ${hw.toFixed(1)} at ${z.toFixed(0)}`);
         }
         for (let i = Math.floor(z0 / CHUNK_LEN); i <= Math.floor(z1 / CHUNK_LEN); i++) {
           if (i < 0) continue;

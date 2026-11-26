@@ -1,4 +1,5 @@
-import { ChaosEvent, type ChaosRoll, Mood } from '../sim/chaos';
+import { ChaosEvent, type ChaosRoll, Mood, eventAllowed } from '../sim/chaos';
+import { eventsFor } from '../sim/course';
 import { ALL_CHARMS, CHARMS, type CharmFamily } from '../sim/charms';
 import { MOUNTAINS } from '../sim/mountains';
 import { hash32, hashString } from '../sim/prng';
@@ -102,6 +103,23 @@ const MEASURE_WORDS: Readonly<Record<TrialMeasure, string>> = {
   perfects: 'Most perfect landings',
 };
 const FAMILIES: readonly CharmFamily[] = ['speed', 'style', 'survival'];
+/** The mountains a Trial turns over: the five (round 8), and from EIGHT_FROM all eight, the three new ones after them (round
+ *  9). Written out, not read off MOUNTAINS, so what a build registers never moves a week. */
+export const FIVE_TURN: readonly string[] = ['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall'];
+export const EIGHT_TURN: readonly string[] = [...FIVE_TURN, 'gablefall', 'oldrun', 'gullhaven'];
+/** The ISO week from which the Trial turns over all eight. Null until the commit that registers the last of the three
+ *  new mountains sets it to a week after that build ships (the main lane's, at release): every week before it keeps the
+ *  five's turn, so no Trial already ridden changes. */
+export const EIGHT_FROM: string | null = null;
+/** Where the eight's turn starts, chosen with EIGHT_FROM so its first week is not the last five week's mountain. */
+export const EIGHT_START = 0;
+
+/** The week's mountain, by its week index: the five's turn (2 a week, never the same twice running), then the eight's
+ *  (3 a week, the same). */
+export function trialMountainId(i: number): string {
+  const from = EIGHT_FROM === null ? Infinity : weekIndex(EIGHT_FROM);
+  return i >= from ? EIGHT_TURN[((((i - from) * 3 + EIGHT_START) % 8) + 8) % 8] : FIVE_TURN[(((i * 2) % 5) + 5) % 5];
+}
 const MOODS: readonly Mood[] = [Mood.Blizzard, Mood.Lantern, Mood.GlassIce, Mood.Comet, Mood.Haunted, Mood.Powder];
 const EVENTS: readonly ChaosEvent[] = [ChaosEvent.Avalanche, ChaosEvent.Yeti, ChaosEvent.GiftStorm, ChaosEvent.GhostTrain];
 
@@ -128,8 +146,10 @@ export function familyPool(f: CharmFamily): number {
 export function trialFor(week: string): Trial {
   const seed = trialSeed(week);
   const i = weekIndex(week);
-  const mountain = MOUNTAINS[(((i * 2) % 5) + 5) % 5].id;
-  const measure = MEASURES[((i % 4) + 4) % 4];
+  const mountain = trialMountainId(i);
+  let measure = MEASURES[((i % 4) + 4) % 4];
+  // (Round 9: the Old Run has no landings to stomp, so its perfect-landing week is a style week.)
+  if (measure === 'perfects' && mountain === 'oldrun') measure = 'score';
   const mirror = (hash32(seed, 0x7e01) & 1) === 1;
   const s = hash32(seed, 0x7e02) % 20;
   let sky: TrialSky = s < 9 ? 'mood' : s < 13 ? 'event' : s < 17 ? 'hour' : 'plain';
@@ -147,7 +167,10 @@ export function trialFor(week: string): Trial {
   const cup = cupChaos(week).mood;
   const moods = MOODS.filter((m) => m !== cup && !(clock && m === Mood.GlassIce));
   const mood = sky === 'mood' ? moods[hash32(seed, 0x7e05) % moods.length] : Mood.None;
-  const event = sky === 'event' ? EVENTS[hash32(seed, 0x7e06) % EVENTS.length] : ChaosEvent.None;
+  let event = sky === 'event' ? EVENTS[hash32(seed, 0x7e06) % EVENTS.length] : ChaosEvent.None;
+  // (Round 9: an event the week's mountain cannot meet makes it a plain week.)
+  const def = MOUNTAINS.find((m) => m.id === mountain);
+  if (def && !eventAllowed(event, eventsFor(def.seed))) event = ChaosEvent.None;
   if (sky === 'event' && event === ChaosEvent.None) sky = 'plain';
   const chaos: ChaosRoll = { mood, event, seed: hash32(seed, 0x7e07) };
   const hour = sky === 'hour';

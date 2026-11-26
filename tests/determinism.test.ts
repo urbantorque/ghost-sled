@@ -4,7 +4,7 @@ import { FixedLoop } from '../src/game/loop';
 import { Run } from '../src/game/run';
 import { ChaosEvent, Mood, rollChaos } from '../src/sim/chaos';
 import { InputRecorder, LogEvent, actionOf, decodeLog, draftOf, packInput } from '../src/sim/input';
-import { MOUNTAINS, dailySeed } from '../src/sim/mountains';
+import { MOUNTAINS, OLDRUN_LAB_SEED, dailySeed } from '../src/sim/mountains';
 import { Rng, hash32 } from '../src/sim/prng';
 import { CHUNK_LEN, Course, courseFor } from '../src/sim/course';
 import { RunRecord, recordFromString, recordToString, replayRecord } from '../src/sim/replay';
@@ -87,12 +87,17 @@ function replayThroughLoop(r: RunRecord, frameTimes: () => number): { hashes: nu
   return { hashes, score: run.sim.score, distance: run.sim.distance, tick: run.sim.tick };
 }
 
+// (Round 9: the lab Old Run, not in MOUNTAINS, rides beside the five: its kit and the sim's track replay byte for byte
+// and read the same in any order.)
+const AND_LAB: { id: string; seed: number }[] = [...MOUNTAINS, { id: 'oldrun-lab', seed: OLDRUN_LAB_SEED }];
+
 describe('determinism', () => {
   const cases = [
     { seed: MOUNTAINS[0].seed, chaos: 11, sled: 0 },
     { seed: MOUNTAINS[1].seed, chaos: 2024, sled: 1 },
     { seed: MOUNTAINS[2].seed, chaos: 77, sled: 3 },
     { seed: MOUNTAINS[3].seed, chaos: 5150, sled: 5 },
+    { seed: OLDRUN_LAB_SEED, chaos: 31, sled: 2 },
   ];
 
   for (const c of cases) {
@@ -168,7 +173,7 @@ describe('determinism', () => {
   });
 
   it('a run replays the same however the course is read between ticks', () => {
-    for (const m of MOUNTAINS) {
+    for (const m of AND_LAB) {
       const rec = recordScriptedRun(m.seed, 7, 0, 60 * 60);
       const clean = replayRecord(rec).hash();
       const rng = new Rng(m.seed);
@@ -196,7 +201,7 @@ describe('determinism', () => {
   });
 
   it('a course is the same whatever order its chunks are read in', () => {
-    for (const m of MOUNTAINS) {
+    for (const m of AND_LAB) {
       const a = new Course(m.seed);
       const b = new Course(m.seed);
       const n = Math.ceil(a.finishZ / CHUNK_LEN) + 4;
