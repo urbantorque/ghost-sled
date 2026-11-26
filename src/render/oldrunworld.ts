@@ -350,8 +350,8 @@ export class OldRunWorld {
     parts.push(part(new ConeGeometry(2.1, 1.2, 4, 1), SLATE, { pos: [sx, sg + 3.2, -2], rot: [0, Math.PI / 4, 0] }));
     const win = [box(0.08, 0.9, 1.4, GLASS, [sx - HOTEL.side * 1.22, sg + 1.6, -2])];
     if (!low) parts.push(box(0.1, 0.12, 1.6, CREAM, [sx - HOTEL.side * 1.24, sg + 1.12, -2]));
-    this.add(merge(placed(parts, t.cx, by, zc, -Math.atan(t.p))), false, START_HOUSE.z0, START_HOUSE.z1);
-    this.add(merge(placed(win, t.cx, by, zc, -Math.atan(t.p))), true, START_HOUSE.z0, START_HOUSE.z1);
+    this.add(merge(placed(parts, t.cx, by, zc, -Math.atan(t.p))), false, START_HOUSE.z0, START_HOUSE.z1).name = 'start-house';
+    this.add(merge(placed(win, t.cx, by, zc, -Math.atan(t.p))), true, START_HOUSE.z0, START_HOUSE.z1).name = 'start-house';
   }
 
   // ------------------------------------------------------------------ the grand hotel
@@ -501,8 +501,8 @@ export class OldRunWorld {
         parts.push(box(0.5, 0.16, len, CREAM, [bx, (g + g2) / 2 + 1.05, -(dz + (tz1 - tz0) / n / 2)], [Math.atan2(g2 - g, (tz1 - tz0) / n), 0, 0]));
       }
     }
-    this.add(merge(placed(parts, t.cx, c.baseY(zMid), zMid, 0)), false, HOTEL.from - 10, HOTEL.to);
-    this.add(merge(placed(glass, t.cx, c.baseY(zMid), zMid, 0)), true, HOTEL.from - 10, HOTEL.to);
+    this.add(merge(placed(parts, t.cx, c.baseY(zMid), zMid, 0)), false, HOTEL.from - 10, HOTEL.to).name = 'hotel';
+    this.add(merge(placed(glass, t.cx, c.baseY(zMid), zMid, 0)), true, HOTEL.from - 10, HOTEL.to).name = 'hotel';
     for (let b = 0; b < blocks; b++) {
       const zz = HOTEL.from + (b + 0.5) * blen;
       const x = t.cx + front - side * 4;
@@ -596,8 +596,8 @@ export class OldRunWorld {
     const fg = g(fx, -D / 2);
     parts.push(seg([fx, fg, -D / 2], [fx, fg + 16, -D / 2], 0.08, IRON));
     if (!low) parts.push(box(0.05, 1.3, 2.2, TRIM, [fx, fg + 15.1, -D / 2 + 1.15]));
-    this.add(merge(placed(parts, t.cx, by, zc, -Math.atan(t.p))), false, zc - 8, zc + 8);
-    this.add(merge(placed(glass, t.cx, by, zc, -Math.atan(t.p))), true, zc - 8, zc + 8);
+    this.add(merge(placed(parts, t.cx, by, zc, -Math.atan(t.p))), false, zc - 8, zc + 8).name = 'timing-house';
+    this.add(merge(placed(glass, t.cx, by, zc, -Math.atan(t.p))), true, zc - 8, zc + 8).name = 'timing-house';
     {
       const x = t.cx + x0 - side * (W / 2 + 2.5);
       this.spill.push([x, drawnGround(c, x, zc) + 2.5, zc]);
@@ -631,6 +631,7 @@ export class OldRunWorld {
       }
     }
     const m = this.add(merge([...ink, ...cream]), false, z, z + 2);
+    m.name = 'finish-line';
     m.castShadow = false;
   }
 
@@ -682,6 +683,7 @@ export class OldRunWorld {
     put(-1, c.finishZ - 70, c.finishZ - 16, 12);
     if (!list.length) return;
     const m = this.add(stillCrowd(list, 'oldrun', low ? LOW_BOLD : 1));
+    m.name = 'onlookers';
     m.castShadow = false;
   }
 

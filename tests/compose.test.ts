@@ -10,6 +10,9 @@ import { shapeGround, visualGround } from '../src/render/ground';
 import { OverlookPlan } from '../src/render/overlook';
 import { framingGeometry } from '../src/render/framing';
 import { getPalette } from '../src/render/palette';
+import { START_HOUSE, TIMING, oldrunClearings } from '../src/render/oldrunplan';
+import type { Clearing } from '../src/render/dressing';
+import { Mood } from '../src/sim/chaos';
 
 // Round 8, break the trench: each mountain's opening and stage starts are a place of their own (ART.md 15), drawn
 // past the sim's limits only. The corridor and its banks out to the limit are the sim's to the millimetre; what is
@@ -39,6 +42,19 @@ describe('the composed places', () => {
     const list = plan.planned;
 
     it(`${m.name}: composes its opening and both stage starts`, () => {
+      // (Round 9: a mountain laid by its own kit composes none of the five's places: the Old Run's banks are its
+      // parapet's crest of snow, and its places are its own world's, the start house over its first metres and the
+      // timing house at its line, oldrunplan.ts.)
+      if (c.kit) {
+        expect(list).toEqual([]);
+        expect(START_HOUSE.z0).toBeLessThan(0);
+        expect(START_HOUSE.z1).toBeGreaterThan(0);
+        const fz = c.finishZ;
+        const keep: Clearing[] = [];
+        oldrunClearings(c, fz - 10, fz + 10, keep);
+        expect(keep.some((k) => k.side === TIMING.side && k.z0 < fz && k.z1 > fz)).toBe(true);
+        return;
+      }
       expect(list.map((p) => p.at)).toEqual(['opening', 'stage', 'stage']);
       // The opening runs from the start's stands toward the first leap; each stage start lies on its threshold.
       expect(list[0].z0).toBeGreaterThanOrEqual(c.section(0).z1);
@@ -112,9 +128,18 @@ describe('the composed places', () => {
 
   it('gives each mountain a look of its own', () => {
     const opening = (b: string) => [...looksSeen].find((k) => k.startsWith(b + ':'));
-    const firsts = NAMED.map((m) => planFor(courseFor(m.seed)).plan.planned[0].look);
+    // (The five's: a mountain laid by its own kit composes none, above.)
+    const firsts = NAMED.filter((m) => !courseFor(m.seed).kit).map((m) => planFor(courseFor(m.seed)).plan.planned[0].look);
     expect(new Set(firsts).size).toBe(5);
     expect(opening('alpine')).toBeDefined();
+    // ...and a kit's mountain has a look of its own past its banks instead: the Old Run's low wooded hills with no
+    // hero peak, and its lake far below where the five have a sea of cloud (palette.ts).
+    const peaks = new Set(NAMED.filter((m) => !courseFor(m.seed).kit).map((m) => getPalette(courseFor(m.seed).biome, Mood.None).massif.peak));
+    for (const m of NAMED.filter((q) => courseFor(q.seed).kit)) {
+      const own = getPalette(courseFor(m.seed).biome, Mood.None).massif;
+      expect(peaks.has(own.peak), m.id).toBe(false);
+      expect(own.seaLake, m.id).toBe(1);
+    }
   });
 
   it('plans a Daily mountain without fault, inside its course', () => {
