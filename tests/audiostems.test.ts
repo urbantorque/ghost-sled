@@ -14,7 +14,7 @@ import { OWN_GESTURES } from '../scripts/music/pieces/common';
 // `npm run music`), what the build measured of them (scripts/music/analysis.json), and the riders' motifs.
 
 const manifest = produced as unknown as StemManifest;
-const COURSES = ['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall', 'oldrun', 'gullhaven'] as const;
+const COURSES = ['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall', 'oldrun', 'gullhaven', 'gablefall'] as const;
 /** Every set piece's verb: the five's, then each new mountain's own (OWN_GESTURES). */
 const VERBS = ['race', 'gates', 'rings', 'collapse', 'steps', 'slide', 'shatter', 'surge', 'flourish', 'follow', 'kindle', 'carry', ...Object.values(OWN_GESTURES).flatMap((list) => list.map((x) => x.verb))];
 
@@ -314,7 +314,7 @@ describe('the layers follow the race', () => {
   });
 
   it('each mountain plays its own piece, and one the score does not know plays the live band', () => {
-    expect(['alpine', 'glacier', 'volcanic', 'blossom', 'lantern', 'oldrun', 'gullhaven'].map(pieceFor)).toEqual([...COURSES]);
+    expect(['alpine', 'glacier', 'volcanic', 'blossom', 'lantern', 'oldrun', 'gullhaven', 'gablefall'].map(pieceFor)).toEqual([...COURSES]);
     expect(pieceFor('moon')).toBeNull();
   });
 });

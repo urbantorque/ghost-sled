@@ -507,7 +507,7 @@ export function layerGain(layer: string, g: Gates): number {
 
 /** The piece a mountain plays. A biome this file does not know (a mountain added later) plays none, and
  *  the live band plays as before. */
-const PIECE_OF: Record<string, string> = { alpine: 'pinecrest', glacier: 'frostfang', volcanic: 'ember', blossom: 'sakura', lantern: 'lanternfall', lanternfall: 'lanternfall', summit: 'lanternfall', oldrun: 'oldrun', gullhaven: 'gullhaven' };
+const PIECE_OF: Record<string, string> = { alpine: 'pinecrest', glacier: 'frostfang', volcanic: 'ember', blossom: 'sakura', lantern: 'lanternfall', lanternfall: 'lanternfall', summit: 'lanternfall', oldrun: 'oldrun', gullhaven: 'gullhaven', gablefall: 'gablefall' };
 
 export function pieceFor(biome: string): string | null {
   return PIECE_OF[biome] ?? null;

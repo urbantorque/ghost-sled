@@ -76,6 +76,12 @@ export const OWN_GESTURES: Readonly<Record<string, readonly Gesture[]>> = {
     { verb: 'soar', says: 'a leap off the lip to a note held high on the wind, then set down a step at a time on the octave', voice: 'lead', beats: 5, tune: [[0, 0.25, 3], [0.25, 0.25, 5], [0.5, 2.5, 10], [3, 0.5, 9], [3.5, 1.5, 8]], perc: [[0, 0.7], [3.5, 1]], hold: [0.5, 4.5, [1, 5]] },
     { verb: 'stacks', says: 'a line weaving through the gaps: three quick turns, each round the next note up, then out onto the octave', voice: 'lead', beats: 4.5, tune: [[0, 0.25, 3], [0.25, 0.25, 4], [0.5, 0.5, 3], [1, 0.25, 4], [1.25, 0.25, 5], [1.5, 0.5, 4], [2, 0.25, 5], [2.25, 0.25, 6], [2.5, 0.5, 5], [3, 1.4, 8]], perc: [[0, 0.6], [1, 0.7], [2, 0.8], [3, 1]], hold: [3, 1.5, [1, 5]] },
   ],
+  // Gablefall: roofs landed one after another; awnings stamped down a street; washing lines rung as bells are.
+  gablefall: [
+    { verb: 'chain', says: 'a chain of hops: five quick leaps of a fourth, each off a short note and landing a step over the last, the fifth onto the octave and held', voice: 'lead', beats: 4, tune: [[0, 0.12, 1], [0.12, 0.38, 4], [0.5, 0.12, 2], [0.62, 0.38, 5], [1, 0.12, 3], [1.12, 0.38, 6], [1.5, 0.12, 4], [1.62, 0.38, 7], [2, 0.12, 5], [2.12, 1.6, 8]], perc: [[0.12, 0.55], [0.62, 0.6], [1.12, 0.65], [1.62, 0.75], [2.12, 1]], hold: [2.12, 1.88, [1, 3, 5]] },
+    { verb: 'awnings', says: 'awnings stamped one after another down the market street: three heavy landings, each lower and springing back up a sixth, then up onto the octave', voice: 'lead', beats: 4.5, tune: [[0, 0.45, 8], [0.5, 0.2, 13], [1, 0.45, 6], [1.5, 0.2, 11], [2, 0.45, 4], [2.5, 0.2, 9], [3, 1.4, 8]], perc: [[0, 1], [1, 0.9], [2, 0.85], [3, 1]], hold: [3, 1.5, [1, 3, 5]] },
+    { verb: 'washing', says: 'washing lines rung as hand-bells are: a bell a line, zig-zagging up across the alley, each ringing into the next, and the last one shaken', voice: 'bell', beats: 4.5, tune: [[0, 1, 3], [0.5, 1, 5], [1, 1, 4], [1.5, 1, 6], [2, 0.5, 5], [2.5, 0.12, 8], [2.62, 0.12, 8], [2.75, 0.12, 8], [2.87, 0.12, 8], [3, 1.4, 8]], perc: [[0, 0.35], [1, 0.4], [2, 0.45], [3, 0.7]], hold: [2.5, 2, [1, 3, 5]] },
+  ],
 };
 
 /** Which of a piece's tracks play a gesture's parts, and where. */

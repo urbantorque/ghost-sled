@@ -254,8 +254,27 @@ export const STYLES: Record<Mood, Style> = {
  */
 export const CLEAR: Record<BiomeId, Style> = {
   alpine: STYLES[Mood.None],
-  // (Gablefall, round 9: Pinecrest's until Gablefall's score, notes/r9-gablefall-world.md.)
-  gablefall: STYLES[Mood.None],
+  // Gablefall (round 9): a winter march in F major at 95 for hand-bells, pizzicato strings and a toy piano, the town on
+  // the hill in the snow. The bass on the beat (the root and the fifth, a march's two), a soft kick on the one and the
+  // three, a rim on the two and the four, plucked strings in eighths with a music box's glint over them, a flute lead.
+  gablefall: {
+    tonic: 53,
+    bpm: 95,
+    mode: 'major',
+    penta: MAJOR_PENTA,
+    bright: 0,
+    swing: 0,
+    pad: { cutoff: 1800, attack: 0.5, detune: 5, wobble: 0 },
+    bass: [0, _, _, _, 7, _, _, _, 0, _, _, _, 7, _, _, _],
+    arp: { kind: 'up', rate: 2, timbre: 'pluck', prob: 0.95, oct: 1 },
+    kick: [1, 0, 0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, 0],
+    hat: [0, 0, 0.3, 0, 0, 0, 0.3, 0, 0, 0, 0.3, 0, 0, 0, 0.3, 0.15],
+    clap: [0, 0, 0, 0, 0.75, 0, 0, 0, 0, 0, 0, 0, 0.75, 0, 0, 0],
+    sparkle: { prob: 0.09, timbre: 'box' },
+    lead: 'flute',
+    verb: 1.2,
+    kit: { kick: 'soft', snare: 'rim', pump: 0.1 },
+  },
   // The Old Run (round 9): a quick galop in A major at 152, the hotel's ballroom band out on the ice. An oom-pah bass
   // (the root on the beat, the fifth off it), a kick on every beat and a clap on the off-beat, a bright pluck arp in
   // 16ths and a brass-bright square lead; little reverb, so it stays quick.
@@ -430,8 +449,9 @@ export const ACCENTS: Record<BiomeId, Accent> = {
   blossom: { padCut: 1, pluckBright: 1, sparkleMul: 1.1, sub: false, koto: true, shimmer: false },
   // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
   gullhaven: { padCut: 1, pluckBright: 0.8, sparkleMul: 1, sub: false, koto: false, shimmer: false },
-  // (Gablefall, round 9: Pinecrest's until Gablefall's score, notes/r9-gablefall-world.md.)
-  gablefall: { padCut: 1, pluckBright: 0.8, sparkleMul: 1, sub: false, koto: false, shimmer: false },
+  // Gablefall: a soft pad, a plucked string's bite, more glints than most (the lit windows) and a glass octave over
+  // the arp (the toy piano's).
+  gablefall: { padCut: 0.95, pluckBright: 0.9, sparkleMul: 1.5, sub: false, koto: false, shimmer: true },
 };
 
 export function styleFor(mood: Mood): Style {
