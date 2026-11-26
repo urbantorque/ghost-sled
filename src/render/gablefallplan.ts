@@ -107,7 +107,7 @@ export function pavedAt(c: Course, z: number): number {
  *  20 m into the quay) on, drawn as the frozen lake is (materials.ts), black ice with blown snow lying toward its banks. */
 export function riverAt(c: Course, z: number): number {
   // (Most of it: wholly a mirror, the beams over the line lay long streaks on it toward the lens.)
-  return 0.55 * smooth01((z - placesOf(c).quay - 16) / 14);
+  return 0.72 * smooth01((z - placesOf(c).quay - 16) / 14);
 }
 
 /** The street's share across at `adx` metres from its middle: the cobbles, to a little short of their edge. */

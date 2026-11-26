@@ -1484,7 +1484,9 @@ export class GablefallWorld {
     this.haze.uniforms.uGlowK.value = 0.45 + 0.4 * lampK;
     // The lamps' light on the snow by them: a street of soft amber pools with the grey between, stronger as the day goes.
     const pool = 0.12 + 0.18 * Math.max(0, Math.min(1, (lampHour - 0.4) / 1));
-    for (const [x, y, z, r] of this.lamps) if (z > s.z - 20 && z < s.z + 120) pushLocalLight(x, y, -z, LAMP_LIN.r, LAMP_LIN.g, LAMP_LIN.b, r * 0.7, pool);
+    // (One lamp in three lays its pool, so the street is pools with the blue between: every door's light together washed
+    // both walls peach at Evensong, the fourth and fifth critics.)
+    for (const [x, y, z, r] of this.lamps) if (z > s.z - 20 && z < s.z + 120 && Math.floor(z * 7.3) % 3 === 0) pushLocalLight(x, y, -z, LAMP_LIN.r, LAMP_LIN.g, LAMP_LIN.b, r * 0.7, pool);
     // (A step under the sky's own grey, so it reads against it: in the clouds' pale it did not show at all.)
     (this.smokeMat.uniforms.uLit.value as Color).copy(p.fog).lerp(p.snowShade, 0.2);
     (this.smokeMat.uniforms.uShade.value as Color).copy(p.snowShade).lerp(p.snowDeep, 0.25);

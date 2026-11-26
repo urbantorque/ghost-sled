@@ -11,9 +11,7 @@ import { SLUSH } from '../sim/oldrun';
 // aGroom), and the ruts read rutSurface per sample (trails.ts), so a sled's trench is deep in powder,
 // shallow on a groomed lane and a scratch on ice.
 
-// (Round 9, Gablefall: its nave, its squares and its street between the rows are made places, trodden and swept: the
-// wind's relief heaped on its street read to the fourth critic as hummocks on a lane, notes/r9-gablefall-world.md.)
-const GROOMED: ReadonlySet<SectionKind> = new Set<SectionKind>(['start', 'cruise', 'benches', 'switchbacks', 'street', 'bridge', 'tunnel', 'finish', 'nave', 'square', 'rooftops']);
+const GROOMED: ReadonlySet<SectionKind> = new Set<SectionKind>(['start', 'cruise', 'benches', 'switchbacks', 'street', 'bridge', 'tunnel', 'finish']);
 
 /** Metres over which one section's surface gives way to the next one's. */
 export const GROOM_BLEND = 28;

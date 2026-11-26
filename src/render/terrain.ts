@@ -403,6 +403,10 @@ class ChunkJob {
         // (Gablefall has no tree run: its channel carries the street's cobbles at the street's level, never on a roof or a
         // drift.)
         this.paint[rq + 3] = this.town ? (paved > 0 && y0 - by < 0.25 ? paved * streetShare(Math.abs(off)) : 0) : canopy;
+        // (And its street is a made place, trodden and swept, where its roofs are powder: groomed by the vertex, not the
+        // row. The wind's relief heaped on the street read to the fourth critic as hummocks on a lane; groomed by the row,
+        // the roofs lost the forms the fifth critic read them by.)
+        if (this.town) this.groom[p] = Math.max(this.paint[rq + 3], this.groom[p]);
         p++;
       }
       this.row++;
