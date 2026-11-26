@@ -227,7 +227,7 @@ export const HATS: readonly HatDef[] = [
   { id: 'twinpom', name: 'Twin Pom', blurb: 'Two cream poms hung low over the ears', price: 110, source: SHOP },
   { id: 'trapper', name: 'Trapper', blurb: 'Broad, a cream fur band and two long flaps to the scarf', price: 150, source: SHOP },
   { id: 'bobbles', name: 'Bobble Hem', blurb: 'A hem of cream bobbles hanging round the back of the cuff', price: 200, source: SHOP },
-  { id: 'chullo', name: 'Braided Chullo', blurb: 'A point on top and two braids hanging past the jaw', price: 260, source: SHOP },
+  { id: 'chullo', name: 'Braided Chullo', blurb: 'A short point and two long cream-and-red braids hanging behind the ears', price: 260, source: SHOP },
   { id: 'longcap', name: 'Long Knit Cap', blurb: 'A tail streaming back off one side, a pom at its end', price: 320, source: SHOP },
   { id: 'muffs', name: 'Pom Muffs', blurb: 'A broad knit band over the crown and two big fur muffs', price: 440, source: SHOP },
   { id: 'downcap', name: 'Down Cap', blurb: 'A big puffed dome in fat quilted rings, a real brim', price: 580, source: SHOP },

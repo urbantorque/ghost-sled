@@ -2075,16 +2075,16 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
     case 'chullo': {
       // A pointed crown with a little pom-pom at the tip, a cream band, and pointed ear flaps that end in
       // braided ties hanging past the jaw (a braid: beads of vermillion and cream).
-      out.push(lathe([[0.262, 0.86], [0.27, 0.95], [0.25, 1.05], [0.19, 1.17], [0.11, 1.3], [0.04, 1.42], [0, 1.46]], 14, C.accent, { pos: [0, 0, 0.01] }));
+      out.push(lathe([[0.262, 0.86], [0.27, 0.95], [0.25, 1.04], [0.19, 1.14], [0.11, 1.23], [0.04, 1.3], [0, 1.33]], 14, C.accent, { pos: [0, 0, 0.01] }));
       out.push(part(new CylinderGeometry(0.259, 0.27, 0.035, 18, 1, true), C.pom, { pos: [0, 0.99, 0.01] }));
-      out.push(pom(0, 1.48, 0.01, 0.06, 1));
+      out.push(pom(0, 1.35, 0.01, 0.06, 1));
       for (const sx of [-1, 1]) {
-        out.push(part(new ConeGeometry(0.11, 0.26, 8), cuff, { pos: [sx * 0.245, 0.71, 0.03], rot: [Math.PI, 0, -sx * 0.08], scale: [0.55, 1, 1.05] }));
-        for (let k = 0; k < 7; k++) {
-          const y = 0.58 - k * 0.05;
-          out.push(sway(part(new SphereGeometry(0.034, 6, 5), k % 2 ? C.pom : C.accent, { pos: [sx * (0.26 + 0.005 * k), y, 0.03 + 0.01 * k] }), [0.15 + 0.12 * k, 0]));
+        out.push(part(new ConeGeometry(0.12, 0.28, 8), cuff, { pos: [sx * 0.25, 0.71, 0.08], rot: [Math.PI, 0, -sx * 0.1], scale: [0.55, 1, 1.15] }));
+        for (let k = 0; k < 8; k++) {
+          const y = 0.6 - k * 0.052;
+          out.push(sway(part(new SphereGeometry(0.044, 6, 5), k % 2 ? C.pom : C.accent, { pos: [sx * (0.27 + 0.014 * k), y, 0.1 + 0.018 * k] }), [0.15 + 0.12 * k, 0]));
         }
-        out.push(sway(part(new ConeGeometry(0.045, 0.1, 6), C.pom, { pos: [sx * 0.295, 0.2, 0.1] }), [0.9, 0]));
+        out.push(sway(part(new ConeGeometry(0.055, 0.13, 6), C.pom, { pos: [sx * 0.39, 0.16, 0.25] }), [1.0, 0]));
       }
       goggles(1.0, -0.236);
       break;
