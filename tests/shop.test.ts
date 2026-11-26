@@ -8,6 +8,7 @@ import { SAVE_KEY, SaveStore, defaultSave, ornamentState, type SaveData } from '
 import { FINISH_Z } from '../src/game/standing';
 import { SLED_SHOP, TRACK_LINES, creditLines, fitTier, giveTiers, linesToGo, readTracks, tierState, trackOf, trackPrice } from '../src/game/tracks';
 import type { RunSummary } from '../src/game/missions';
+import { MOUNTAINS } from '../src/sim/mountains';
 
 // Round 9, the shop lane: the garage's model (notes/r9-shop.md). Each sled's track opened by riding and fitted for
 // gifts; the found pieces (the Almanac's, the mountains' sets, the months' chapters) never the shop's; no Almanac page
@@ -112,7 +113,7 @@ describe('the shelves', () => {
     expect(GARAGE_EXTRAS.map((g) => g.page)).toEqual([17, 28, 38, 42, 46, 50]);
   });
 
-  it('gives each mountain a set of three on its own motif (the three new ones too), and each month a trail and an ornament', () => {
+  it('gives each mountain a set of three on its own motif (the three new ones too), and each month an ornament', () => {
     expect(Object.keys(SETS)).toEqual(['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall', 'oldrun', 'gullhaven', 'gablefall']);
     const seen = new Set<string>();
     for (const [m, ids] of Object.entries(SETS)) {
@@ -129,23 +130,26 @@ describe('the shelves', () => {
     }
     expect(sourceLine({ kind: 'set', mountain: 'oldrun', piece: 2 })).toBe("The Old Run's set: all of its mastery board");
     expect(sourceLine({ kind: 'set', mountain: 'gablefall', piece: 0 })).toBe("Gablefall's set: a third of its mastery board");
-    for (let m = 1; m <= 12; m++) {
-      const p = chapterPieces(m);
-      expect([p.trail.id, p.ornament.id]).toEqual([`ch${m}trail`, `ch${m}orn`]);
-    }
+    for (let m = 1; m <= 12; m++) expect(chapterPieces(m).ornament.id).toBe(`ch${m}orn`);
     expect(chapterRewards(4, 8)).toEqual([{ kind: 'garage', shelf: 'ornament', id: 'ch4orn' }]);
-    expect(chapterRewards(4, 6)).toEqual([{ kind: 'garage', shelf: 'trail', id: 'ch4trail' }]);
-    expect(shelfExtras('2026-12-01').map((e) => e.shelf)).toEqual(['trail', 'ornament']);
+    expect(shelfExtras('2026-12-01').map((e) => e.shelf)).toEqual(['ornament']);
   });
 
-  it("cuts the months' scarves: page 3 gives gifts, and none is sold or found, but a save that holds one keeps it", () => {
+  it('gives every mountain a player can ride a set, the new ones on their own boards', () => {
+    // (Gablefall's row waits in SETS for its mountain: a row keyed by a mountain not registered does nothing.)
+    for (const m of MOUNTAINS) expect(SETS[m.id], m.id).toBeDefined();
+  });
+
+  it("cuts the months' scarves and trails: pages 3 and 6 give gifts, and none is sold or found, but a save that holds one keeps it", () => {
     for (let m = 1; m <= 12; m++) {
       expect(chapterRewards(m, 3)).toEqual([{ kind: 'gifts', gifts: CHAPTER_PAGE3_GIFTS }]);
-      const sc = SCARVES.find((s) => s.id === `ch${m}scarf`);
-      expect(sc?.source).toEqual({ kind: 'kept' });
+      expect(chapterRewards(m, 6)).toEqual([{ kind: 'gifts', gifts: CHAPTER_PAGE3_GIFTS }]);
+      expect(SCARVES.find((s) => s.id === `ch${m}scarf`)?.source).toEqual({ kind: 'kept' });
+      expect(TRAILS.find((s) => s.id === `ch${m}trail`)?.source).toEqual({ kind: 'kept' });
       expect(isItem('scarf', `ch${m}scarf`)).toBe(true);
+      expect(isItem('trail', `ch${m}trail`)).toBe(true);
     }
-    for (const e of CHAPTER_EXTRAS) expect(e.shelf === 'scarf', e.id).toBe(false);
+    for (const e of CHAPTER_EXTRAS) expect(e.shelf, e.id).toBe('ornament');
     expect(CHAPTER_PAGE3_GIFTS).toBeGreaterThan(25 + 5 * 9);
   });
 
@@ -237,13 +241,13 @@ describe('no Almanac page is ever silent', () => {
   it('pays a chapter piece bought before its page its price back, and says so', () => {
     const d = atPage(2);
     d.runs = 3;
-    d.chapters = { '2026-12': { xp: 1500 * 6 - 5, claimed: 5 } };
-    d.trails = ['ch12trail'];
+    d.chapters = { '2026-12': { xp: 1500 * 8 - 5, claimed: 7 } };
+    d.ornaments = ['ch12orn'];
     const before = d.gifts;
     const o = settleSpine(d, spineRun({ day: '2026-12-03' }));
-    const card = o.opened.find((x) => x.chapter === '2026-12' && x.page === 6);
-    expect(card?.name).toBe('You had the Star Strings: 380 gifts back');
-    expect(d.gifts - before).toBeGreaterThanOrEqual(380);
+    const card = o.opened.find((x) => x.chapter === '2026-12' && x.page === 8);
+    expect(card?.name).toBe('You had the Lantern Star: 320 gifts back');
+    expect(d.gifts - before).toBeGreaterThanOrEqual(320);
   });
 
   it('puts a chapter\'s ornament in the ornaments held', () => {

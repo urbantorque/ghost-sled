@@ -62,7 +62,7 @@ export type ScarfPattern =
  *  four (two pairs), or one thick rope. */
 export type ScarfForm = 'two' | 'long' | 'four' | 'one';
 /** What weights each tail's end. */
-export type ScarfEnds = 'none' | 'fringe' | 'pom' | 'lamp' | 'ball' | 'drop' | 'point' | 'flame' | 'tassel' | 'bell' | 'fork';
+export type ScarfEnds = 'none' | 'fringe' | 'pom' | 'lamp' | 'ball' | 'drop' | 'point' | 'flame' | 'tassel' | 'bell' | 'fork' | 'valance';
 
 export interface ScarfDef {
   id: string;
@@ -119,7 +119,7 @@ export type FlakeShape =
   | 'frond'
   | 'lantern'
   | 'spark'
-  | 'ring'
+  | 'arcs'
   | 'gull'
   | 'pinwheel';
 /** How a shape moves once it leaves the sled: falls fluttering and turning, sails out flat and spinning, rises,
@@ -220,9 +220,11 @@ export const SCARVES: readonly ScarfDef[] = [
   sc('lamproad', 'Lamp Road', 'One long streamer barred in cream like a row of lamps', 0, { pattern: 'graded', accent: 'cream', form: 'long', width: 0.9 }, { kind: 'set', mountain: 'lanternfall', piece: 0 }),
   // The three new mountains' sets (round 9, G6), each from its own world: the Old Run's bend bells, Gullhaven's fence
   // pennants, Gablefall's market awnings.
-  sc('belltails', 'Bell Tails', 'Two long tails, a cream bell swinging at each tip', 0, { pattern: 'plain', accent: 'cream', length: 1.2, ends: 'bell' }, { kind: 'set', mountain: 'oldrun', piece: 0 }),
+  sc('belltails', 'Bell Tails', 'Two long tails, a red bell with a cream lip swinging at each tip', 0, { pattern: 'plain', accent: 'cream', length: 1.2, ends: 'bell' }, { kind: 'set', mountain: 'oldrun', piece: 0 }),
   sc('pennants', 'Pennant Ribbons', 'Four slim ribbons, each cut to a cream swallowtail like the fence\'s pennants', 0, { pattern: 'tip', accent: 'cream', width: 0.66, length: 1.2, form: 'four', ends: 'fork' }, { kind: 'set', mountain: 'gullhaven', piece: 0 }),
-  sc('awning', 'Market Awning', 'Broad, in even cream and red stripes all down its length', 0, { pattern: 'awning', accent: 'cream', width: 1.4, length: 0.95 }, { kind: 'set', mountain: 'gablefall', piece: 0 }),
+  // (Its stripes read with the Fir Chevron, the Rope Braid and the Petal Hem as one candy-striped tail: the awning is
+  // now its scalloped valance, hung wide across each tip.)
+  sc('awning', 'Market Awning', 'Broad plain tails, each hung at its tip with a wide scalloped cream valance like a market awning\'s', 0, { pattern: 'plain', accent: 'cream', width: 1.3, length: 0.95, ends: 'valance' }, { kind: 'set', mountain: 'gablefall', piece: 0 }),
   // The months' scarves (round 9, G6, DECISIONS 398's call): four critic rounds could not tell them apart at race
   // distance, so a month's chapter is its trail, its ornament and its title, and the page that gave its scarf gives
   // gifts. None was ever on sale (the chapters arrive from ROUND8_START), but a save that somehow holds one keeps it.
@@ -244,7 +246,8 @@ export const SCARVES: readonly ScarfDef[] = [
 
 export const HATS: readonly HatDef[] = [
   { id: 'beanie', name: 'Pom Beanie', blurb: 'A round crown and one big cream pom on top', price: 0, source: FREE },
-  { id: 'watch', name: 'Watch Cap', blurb: 'Low and flat-topped, a thick rolled cuff, nothing on top', price: 80, source: SHOP },
+  // (Round 9, G6: perched high on the crown, the hair showing round it; low and plain it read as the Trapper.)
+  { id: 'watch', name: 'Watch Cap', blurb: 'A short flat-topped cap perched high on the crown, a thick rolled cuff, the hair showing round it', price: 80, source: SHOP },
   { id: 'twinpom', name: 'Twin Pom', blurb: 'A plain red crown and two big cream poms hung low over the ears', price: 110, source: SHOP },
   { id: 'trapper', name: 'Trapper', blurb: 'Broad, a cream fur band and two long flaps to the scarf', price: 150, source: SHOP },
   // (Round 9, G6: the Bobble Hem's bobbles merged with the hood's fur in cream and with the hair in ink, and three
@@ -308,24 +311,25 @@ export const TRAILS: readonly TrailDef[] = [
   tr('skylanterns', 'Sky Lanterns', 'Little paper lanterns that lift off the stern and rise', 0, { form: flakes('lantern', 'rise', 4, 0.26, '#FFF0D0', PAPER, true) }, { kind: 'set', mountain: 'lanternfall', piece: 1 }),
   // The three new mountains' sets (round 9, G6): the Old Run's bells pealing, Gullhaven's gulls hanging in the sea
   // wind, Gablefall's market pinwheels.
-  tr('pealrings', 'Peal Rings', 'Rings of honey light that ring out behind you and widen, the bend bells\' peal', 0, { form: flakes('ring', 'peal', 5, 0.62, HONEY, MARIGOLD, true) }, { kind: 'set', mountain: 'oldrun', piece: 1 }),
-  tr('gulls', 'Gulls', 'Cream gulls that hang in the wind beside you, wings beating, then peel away', 0, { form: flakes('gull', 'hang', 5, 0.52, PAPER, GOLD) }, { kind: 'set', mountain: 'gullhaven', piece: 1 }),
-  tr('pinwheels', 'Pinwheels', 'Paper pinwheels off the market stalls, spinning as they tumble out behind', 0, { form: flakes('pinwheel', 'tumble', 12, 0.4, PAPER, GOLD) }, { kind: 'set', mountain: 'gablefall', piece: 1 }),
-  // The months' chapters: a shape of their own each. (Round 9, G6: each twice the size of the shop's confetti and
-  // fewer, so a month's trail is a few big shapes of its month where the shop's are many small ones; five rounds of
-  // critics found the chapters' small and pale.)
-  tr('ch1trail', 'Dawn Fans', 'Long rays of dawn light flicked off each carve', 380, { form: flakes('ray', 'flick', 26, 0.46, '#FFF0C8', MARIGOLD, true) }, { kind: 'chapter', month: 1 }),
-  tr('ch2trail', 'Icicle Chimes', 'Big icicles that drop off the runners and burst', 380, { form: flakes('icicle', 'drop', 26, 0.62, '#FFF8EC', GOLD) }, { kind: 'chapter', month: 2 }),
-  tr('ch3trail', 'Drip Lights', 'Big drops of light falling from the stern', 380, { form: flakes('drop', 'drop', 24, 0.5, '#FFE6A8', MARIGOLD, true) }, { kind: 'chapter', month: 3 }),
-  tr('ch4trail', 'Blossom Pops', 'Big cream blossoms that pop out and drift', 380, { form: flakes('blossom', 'pop', 12, 0.44, PAPER, GOLD) }, { kind: 'chapter', month: 4 }),
-  tr('ch5trail', 'Ember Tongues', 'Tall flame-shaped tongues licking up off the runners', 380, { form: flakes('tongue', 'rise', 18, 0.46, AMBER, MARIGOLD, true) }, { kind: 'chapter', month: 5 }),
-  tr('ch6trail', 'Sun Motes', 'Big rayed suns that roll beside you and fade', 380, { form: flakes('sun', 'roll', 12, 0.56, MARIGOLD, '#FFF0C8') }, { kind: 'chapter', month: 6 }),
-  tr('ch7trail', 'Market Ribbons', 'Big cream paper bows that tumble off', 380, { form: flakes('bow', 'flutter', 12, 0.44, PAPER, GOLD) }, { kind: 'chapter', month: 7 }),
-  tr('ch8trail', 'Folded Fans', 'Big paper fans that flutter as they fall', 380, { form: flakes('fan', 'flutter', 11, 0.56, PAPER, GOLD) }, { kind: 'chapter', month: 8 }),
-  tr('ch9trail', 'Moon Slivers', 'Big crescents of light tumbling end over end', 380, { form: flakes('crescent', 'tumble', 11, 0.5, '#FFF0C8', GOLD, true) }, { kind: 'chapter', month: 9 }),
-  tr('ch10trail', 'Hollow Lights', 'Round paper lanterns with cut eyes that bob and wink out', 380, { form: flakes('hollow', 'bob', 6, 0.44, CREAMY, '#FFF0C8', true) }, { kind: 'chapter', month: 10 }),
-  tr('ch11trail', 'Snowballs', 'Snowballs that roll off the runners and burst', 380, { form: flakes('ball', 'roll', 10, 0.3, '#FFFDF6', HONEY) }, { kind: 'chapter', month: 11 }),
-  tr('ch12trail', 'Star Strings', 'Strings of paper stars fluttering off the stern', 380, { form: { kind: 'kites', shape: 'star', body: PAPER, alt: GOLD } }, { kind: 'chapter', month: 12 }),
+  tr('pealrings', 'Bell Peals', 'Cream paper arcs that ring out from each side of the sled and widen, the bend bells\' peal', 0, { form: flakes('arcs', 'peal', 6, 0.5, PAPER, AMBER) }, { kind: 'set', mountain: 'oldrun', piece: 1 }),
+  tr('gulls', 'Gulls', 'Cream gulls that hang in the wind beside you, wings beating, then peel away', 0, { form: flakes('gull', 'hang', 4, 0.6, PAPER, GOLD) }, { kind: 'set', mountain: 'gullhaven', piece: 1 }),
+  tr('pinwheels', 'Pinwheels', 'Paper pinwheels off the market stalls, spinning as they tumble out behind', 0, { form: flakes('pinwheel', 'tumble', 8, 0.34, PAPER, HONEY) }, { kind: 'set', mountain: 'gablefall', piece: 1 }),
+  // The months' trails (round 9, G6): cut, as the months' scarves were. Made twice as big they read as gold shards and
+  // stains, and a blind critic matched four of the twelve to their months (the ornaments six), with five of them
+  // paired with the shop's own (stars with Paper Snow and Kite Tails, slips with Paper Streamers). None was ever on
+  // sale; a save that somehow holds one keeps it (the looks as the shop lane left them).
+  tr('ch1trail', 'Dawn Fans', 'Fans of light flicked off each carve', 380, { form: flakes('ray', 'flick', 40, 0.22, '#FFF0C8', MARIGOLD, true) }, KEPT),
+  tr('ch2trail', 'Icicle Chimes', 'Icicles that drop off the runners and burst', 380, { form: flakes('icicle', 'drop', 40, 0.36, '#FFF8EC', HONEY) }, KEPT),
+  tr('ch3trail', 'Drip Lights', 'Drops of light falling from the stern', 380, { form: flakes('drop', 'drop', 40, 0.28, '#FFE6A8', MARIGOLD, true) }, KEPT),
+  tr('ch4trail', 'Blossom Pops', 'Cream blossoms that pop out and drift', 380, { form: flakes('blossom', 'pop', 18, 0.22, PAPER, GOLD) }, KEPT),
+  tr('ch5trail', 'Ember Tongues', 'Flame-shaped tongues licking up off the runners', 380, { form: flakes('tongue', 'rise', 30, 0.22, AMBER, MARIGOLD, true) }, KEPT),
+  tr('ch6trail', 'Sun Motes', 'Rayed suns that roll beside you and fade', 380, { form: flakes('sun', 'roll', 18, 0.3, MARIGOLD, '#FFF0C8') }, KEPT),
+  tr('ch7trail', 'Market Ribbons', 'Cream paper bows that tumble off', 380, { form: flakes('bow', 'flutter', 18, 0.2, PAPER, '#FFF0C8') }, KEPT),
+  tr('ch8trail', 'Folded Fans', 'Paper fans that flutter as they fall', 380, { form: flakes('fan', 'flutter', 16, 0.3, PAPER, GOLD) }, KEPT),
+  tr('ch9trail', 'Moon Slivers', 'Thin crescents of light tumbling end over end', 380, { form: flakes('crescent', 'tumble', 16, 0.24, '#FFF0C8', GOLD, true) }, KEPT),
+  tr('ch10trail', 'Hollow Lights', 'Round paper lanterns with cut eyes that bob and wink out', 380, { form: flakes('hollow', 'bob', 6, 0.22, CREAMY, '#FFF0C8', true) }, KEPT),
+  tr('ch11trail', 'Snowballs', 'Little snowballs that roll off the runners and burst', 380, { form: flakes('ball', 'roll', 14, 0.14, '#FFFDF6', HONEY) }, KEPT),
+  tr('ch12trail', 'Star Strings', 'Strings of paper stars fluttering off the stern', 380, { form: { kind: 'kites', shape: 'star', body: PAPER, alt: GOLD } }, KEPT),
 ];
 
 // ---------------------------------------------------------------- sounds and ornaments
@@ -464,7 +468,7 @@ export function setPiecesFor(done: number, total: number): number {
   return SET_SHARES.filter((s) => k >= s - 1e-9).length;
 }
 
-/** A chapter's pieces (its trail and its ornament), by month. (Round 9, G6: its scarf is kept, no longer a chapter's.) */
-export function chapterPieces(month: number): { trail: TrailDef; ornament: OrnamentDef } {
-  return { trail: trailById(`ch${month}trail`), ornament: ornamentById(`ch${month}orn`) };
+/** A chapter's piece, by month: its ornament. (Round 9, G6: its scarf and its trail are kept, no longer a chapter's.) */
+export function chapterPieces(month: number): { ornament: OrnamentDef } {
+  return { ornament: ornamentById(`ch${month}orn`) };
 }

@@ -148,16 +148,20 @@ function shapeGeometry(shape: FlakeShape, body: Color, edge: Color): BufferGeome
         tri([0, y, 0], [0, y + 0.15, 0], [-w, y + 0.12, 0], body, body, edge);
       }
       break;
-    case 'ring': {
-      // (Round 9, G6, the Old Run's Peal Rings: a hoop of light, its outer edge the brighter.)
-      const n = 24;
-      for (let i = 0; i < n; i++) {
-        const a0 = (i / n) * Math.PI * 2;
-        const a1 = ((i + 1) / n) * Math.PI * 2;
-        const o = (a: number): [number, number, number] => [Math.cos(a) * 0.5, Math.sin(a) * 0.5, 0];
-        const n0 = (a: number): [number, number, number] => [Math.cos(a) * 0.38, Math.sin(a) * 0.38, 0];
-        tri(n0(a0), o(a0), o(a1), body, edge, edge);
-        tri(n0(a0), o(a1), n0(a1), body, edge, body);
+    case 'arcs': {
+      // (Round 9, G6, the Old Run's Bell Peals: three arcs nested round a point at the left, opening to the right as a
+      // bell's ring is drawn; cream paper, the outer edge of each in the edge colour. A whole hoop of light read as a sky
+      // gate.)
+      for (const [r, w] of [[0.2, 0.07], [0.34, 0.07], [0.48, 0.07]] as const) {
+        const n = 10;
+        for (let i = 0; i < n; i++) {
+          const a0 = -0.95 + (i / n) * 1.9;
+          const a1 = -0.95 + ((i + 1) / n) * 1.9;
+          const o = (a: number): [number, number, number] => [Math.cos(a) * r - 0.25, Math.sin(a) * r, 0];
+          const n0 = (a: number): [number, number, number] => [Math.cos(a) * (r - w) - 0.25, Math.sin(a) * (r - w), 0];
+          tri(n0(a0), o(a0), o(a1), body, edge, edge);
+          tri(n0(a0), o(a1), n0(a1), body, edge, body);
+        }
       }
       break;
     }
@@ -189,7 +193,7 @@ function shapeGeometry(shape: FlakeShape, body: Color, edge: Color): BufferGeome
         const s = Math.sin(a);
         const r = (x: number, y: number): [number, number, number] => [x * c - y * s, x * s + y * c, 0];
         tri([0, 0, 0], r(0.5, 0), r(0.5, 0.46), body, body, edge);
-        tri([0, 0, 0], r(0.5, 0.46), r(0.08, 0.16), edge, edge, edge);
+        tri([0, 0, 0], r(0.5, 0.46), r(0.08, 0.16), body, edge, body);
       }
       break;
     }
@@ -536,14 +540,16 @@ export class TrailForms {
         // Beside the stern, low, facing the lens; carried at nearly the sled's speed, so it falls back slowly as it widens.
         f.p.set(p.x - fwd.x * 0.5 + side.x * sd * (0.75 + rnd() * 0.2), p.y + 0.45 + rnd() * 0.2, p.z - fwd.z * 0.5 + side.z * sd * (0.75 + rnd() * 0.2));
         f.v.set(vx * 0.95 + side.x * sd * 0.5, vy * 0.95 + 0.3, vz * 0.95 + side.z * sd * 0.5);
-        f.r.set(0, -Math.atan2(fwd.x, -fwd.z), 0);
+        // (Its arcs open away from the sled: turned over on the left.)
+        f.r.set(0, -Math.atan2(fwd.x, -fwd.z), sd > 0 ? 0 : Math.PI);
         f.w.set(0, 0, 0);
         break;
       case 'hang':
-        // Thrown up and out to one side of the rider (the side kept in its phase, for the peel away).
+        // Thrown up and out to one side of the rider, to hang beside its head where the lens sees it (the side kept in its
+        // phase, for the peel away).
         f.phase = sd > 0 ? 3.5 + rnd() * 2.5 : rnd() * 3;
-        f.p.set(p.x - fwd.x * 0.3 + side.x * sd * 0.5, p.y + 0.6, p.z - fwd.z * 0.3 + side.z * sd * 0.5);
-        f.v.set(vx + side.x * sd * (2.2 + rnd() * 1.2), vy + 2.2 + rnd() * 1.2, vz + side.z * sd * (2.2 + rnd() * 1.2));
+        f.p.set(p.x - fwd.x * 0.2 + side.x * sd * 0.8, p.y + 1.1, p.z - fwd.z * 0.2 + side.z * sd * 0.8);
+        f.v.set(vx + side.x * sd * (1.2 + rnd() * 0.8), vy + 0.9 + rnd() * 0.6, vz + side.z * sd * (1.2 + rnd() * 0.8));
         break;
     }
   }

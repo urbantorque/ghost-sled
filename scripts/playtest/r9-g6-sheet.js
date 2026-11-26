@@ -141,6 +141,9 @@ async (page) => {
         r.setBurn = () => proto.setBurn.call(r, burn);
         r.setFlow = () => proto.setFlow.call(r, flow, 0);
         proto.setBurn.call(r, burn);
+        // (G6: Spirit Flow's own picture, its flame off the scarf's tip, held at the look's flow too: the pilot rides in
+        // the flow, and its flame stood in the spray of every tile that did not ask for it.)
+        w.devFlow = flow;
       };
       // The rider's box on screen: the sled's base and a point over the head, through the chase lens.
       window.__shBox = () => {

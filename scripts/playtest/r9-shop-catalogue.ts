@@ -84,7 +84,6 @@ export function proposedBuyables(): Buyable[] {
   // (Round 9, G6: a chapter is its trail and its ornament; its scarf's page gives gifts, which the career's lifetime
   // already holds.)
   for (const ch of ALMANAC_CHAPTERS) {
-    out.push({ id: `chapter:${ch.month}:trail`, shelf: 'trail', price: CHAPTER_PRICES.trail, month: ch.month });
     out.push({ id: `chapter:${ch.month}:ornament`, shelf: 'ornament', price: CHAPTER_PRICES.ornament, month: ch.month });
   }
   return out;

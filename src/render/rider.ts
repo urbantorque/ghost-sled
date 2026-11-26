@@ -179,6 +179,8 @@ const CREAM_KNIT = new Color('#F3E6D4');
 const BURN_MID = new Color('#FF6A1A').multiplyScalar(1.15);
 const BURN_TIP = new Color('#FFC23A').multiplyScalar(1.1);
 const INK_KNIT = new Color('#1A2140');
+/** The fifth tier's inlay while cold: a warm umber, never the coat's navy (round 9, G6). */
+const INLAY_COLD = new Color('#3A2A20');
 /** A cream stitch burning: a pale gold (the burn keeps the knit's value, round 9). */
 const BURN_CREAM = new Color('#FFF6E2').multiplyScalar(1.1);
 /** Round 9: the ribbon is three vertices across (its edges and its middle), so a pattern can run across it as well as
@@ -204,14 +206,19 @@ interface ScarfShape {
   count: number;
 }
 
-function shapeOf(parts: Array<{ geo: BufferGeometry; color: Color; m?: Matrix4 }>, max: number): ScarfShape {
+function shapeOf(parts: Array<{ geo: BufferGeometry; color: Color; m?: Matrix4; smooth?: boolean }>, max: number): ScarfShape {
   const pos: number[] = [];
   const nrm: number[] = [];
   const col: number[] = [];
   for (const p of parts) {
+    // (A smooth part keeps its indexed geometry's normals: round, never faceted.)
+    if (p.smooth && p.geo.index) {
+      if (p.m) p.geo.applyMatrix4(p.m);
+      p.geo.computeVertexNormals();
+    }
     const g = p.geo.index ? p.geo.toNonIndexed() : p.geo;
-    if (p.m) g.applyMatrix4(p.m);
-    g.computeVertexNormals();
+    if (p.m && !p.smooth) g.applyMatrix4(p.m);
+    if (!p.smooth) g.computeVertexNormals();
     const a = g.getAttribute('position');
     const n = g.getAttribute('normal');
     for (let i = 0; i < a.count && pos.length / 3 < max; i++) {
@@ -269,14 +276,15 @@ function endShape(ends: ScarfEnds, accent: Color, width: number): ScarfShape | n
     case 'bell': {
       // (Round 9, G6, the Old Run's bend bells: a cream bell hung from the tip by its crown, an ink lip and clapper.)
       const S = RIDER_SCALE;
-      // (Within the end's 246 vertices: the bell 126, its lip 42, the clapper 60.)
-      const prof = [new Vector2(0.001, 0), new Vector2(0.032, 0.012), new Vector2(0.046, 0.08), new Vector2(0.078, 0.16)].map((v) => v.multiplyScalar(S));
-      const lip = [new Vector2(0.078, 0.16), new Vector2(0.092, 0.19)].map((v) => v.multiplyScalar(S));
+      // (Smooth, bigger, in the scarf's own vermillion with a cream lip: at snow level a faceted cream bell with an ink lip
+      // read as a grey rock, a hazard's shape, and a cream one as the Pom Tails' pom. Within the end's 246 vertices: the
+      // bell 180, its lip 60.)
+      const prof = [new Vector2(0.001, 0), new Vector2(0.038, 0.014), new Vector2(0.054, 0.09), new Vector2(0.094, 0.2)].map((v) => v.multiplyScalar(S));
+      const lip = [new Vector2(0.094, 0.2), new Vector2(0.108, 0.235)].map((v) => v.multiplyScalar(S));
       return shapeOf(
         [
-          { geo: new LatheGeometry(prof, 7), color: accent, m: mAt(0, 0.01 * S, 0) },
-          { geo: new LatheGeometry(lip, 7), color: INK_KNIT, m: mAt(0, 0.01 * S, 0) },
-          { geo: new IcosahedronGeometry(0.03 * S, 0), color: INK_KNIT, m: mAt(0, 0.19 * S, 0) },
+          { geo: new LatheGeometry(prof, 10), color: RIDER_COLORS.accent.clone().multiplyScalar(0.96), m: mAt(0, 0.01 * S, 0), smooth: true },
+          { geo: new LatheGeometry(lip, 10), color: accent, m: mAt(0, 0.01 * S, 0), smooth: true },
         ],
         END_V,
       );
@@ -285,9 +293,28 @@ function endShape(ends: ScarfEnds, accent: Color, width: number): ScarfShape | n
       // (Gullhaven's pennants: the tip cut to a swallowtail, two cream points spread out of the ribbon's plane.)
       const S = RIDER_SCALE;
       return shapeOf(
-        [-1, 1].map((k) => ({ geo: new ConeGeometry(w * 0.2, 0.2 * S, 4), color: accent, m: mAt(k * w * 0.24, 0.08 * S, 0, 0, 0, -k * 0.42, 1, 1, 0.45) })),
+        [-1, 1].map((k) => ({ geo: new ConeGeometry(w * 0.3, 0.3 * S, 4), color: accent, m: mAt(k * w * 0.32, 0.12 * S, 0, 0, 0, -k * 0.5, 1, 1, 0.45) })),
         END_V,
       );
+    }
+    case 'valance': {
+      // (Gablefall's Market Awning: a wide cream valance across the tip, three scallops hanging past it, wider than the
+      // tail. Flat, as the knit is; 3 scallops of 10 wedges.)
+      const pos: number[] = [];
+      const half = w * 0.85;
+      const r = (2 * half) / 6;
+      pos.push(-half, -0.04, 0, half, -0.04, 0, half, 0.03, 0, -half, -0.04, 0, half, 0.03, 0, -half, 0.03, 0);
+      for (let k = 0; k < 3; k++) {
+        const cx = -half + r + k * 2 * r;
+        for (let i = 0; i < 10; i++) {
+          const a0 = Math.PI + (i / 10) * Math.PI;
+          const a1 = Math.PI + ((i + 1) / 10) * Math.PI;
+          pos.push(cx, 0.03, 0, cx - Math.cos(a1) * r, 0.03 - Math.sin(a1) * r, 0, cx - Math.cos(a0) * r, 0.03 - Math.sin(a0) * r, 0);
+        }
+      }
+      const g = new BufferGeometry();
+      g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+      return shapeOf([{ geo: g, color: accent }], END_V);
     }
     default:
       return null;
@@ -1152,7 +1179,7 @@ export class Rider {
     this.sledGlow = new Mesh(new BufferGeometry(), new MeshBasicMaterial({ vertexColors: true }));
     riderStencil(this.sledGlow.material as Material);
     this.sledGlow.visible = false;
-    this.sledInlay = new Mesh(new BufferGeometry(), new MeshBasicMaterial({ color: CREAM_KNIT.clone() }));
+    this.sledInlay = new Mesh(new BufferGeometry(), new MeshBasicMaterial({ color: INLAY_COLD.clone() }));
     riderStencil(this.sledInlay.material as Material);
     this.sledInlay.visible = false;
     this.sled.add(this.sledGlow, this.sledInlay);
@@ -1350,12 +1377,13 @@ export class Rider {
     }
     col.needsUpdate = true;
     this.burnShown = k;
-    // The fifth tier's inlay burns with the scarf: cream while it is cold. (The constructor paints the scarf before
-    // the sled's inlay is made.)
+    // The fifth tier's inlay burns with the scarf: a dark umber line while it is cold (round 9, G6: the tier's own words,
+    // "ink inlay"; in cream on the honey wood five critics never saw it). (The constructor paints the scarf before the
+    // sled's inlay is made.)
     const im = this.sledInlay?.material as MeshBasicMaterial | undefined;
     if (!im) return;
-    if (k <= 0.01) im.color.copy(CREAM_KNIT);
-    else im.color.copy(CREAM_KNIT).lerp(this.burnHot.copy(BURN_MID).multiplyScalar(1.3), Math.min(1, k * 1.4));
+    if (k <= 0.01) im.color.copy(INLAY_COLD);
+    else im.color.copy(INLAY_COLD).lerp(this.burnHot.copy(BURN_MID).multiplyScalar(1.3), Math.min(1, k * 1.4));
   }
 
   private readonly burnHot = new Color();

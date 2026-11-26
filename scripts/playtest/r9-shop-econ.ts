@@ -135,7 +135,7 @@ function chapterPieces(chapters: Record<string, { xp: number; claimed: number }>
   const month = Number(at.slice(5, 7));
   for (let p = ch.claimed + 1; p <= to; p++) {
     // (Round 9, G6: page 3 gives gifts, no longer the month's scarf; the career's lifetime already holds them.)
-    if (p === 6) out.push({ month, piece: 'trail' });
+    // (Page 6 too: its trail's, now gifts.)
     if (p === 8) out.push({ month, piece: 'third' });
   }
   ch.claimed = Math.max(ch.claimed, to);
