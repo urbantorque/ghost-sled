@@ -808,6 +808,11 @@
     letter-spacing: -0.01em;
   }
 
+  /* (The picked name is heavier and its ring 2 px: two more pixels keep its italic first letter off the ring.) */
+  .gs9-chip.is-sel .gs9-chip-name {
+    padding-left: 7px;
+  }
+
   .gs9-chip-best {
     display: none;
   }
@@ -826,8 +831,11 @@
     justify-content: center;
   }
 
+  /* (Its own line over the hour and the mirror: beside them it read as a toggle's label.) */
   .gs9-how-best {
     display: inline-flex;
+    flex-basis: 100%;
+    justify-content: center;
   }
 
   .gs9-ride {

@@ -86,9 +86,10 @@
   font-weight: var(--fw-display);
 }
 
-/* A wreck's figure sits a little crooked (ART.md 10). */
+/* A wreck's figure sits a little crooked (ART.md 10). (The rotate property, not transform: the beat's animation fills
+   transform and drew it straight, as both critics saw.) */
 .gs9-mo.is-wreck .gs9-mo-figrow {
-  transform: rotate(-3deg);
+  rotate: -3deg;
   transform-origin: left bottom;
 }
 
