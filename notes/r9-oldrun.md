@@ -265,3 +265,34 @@ Written to `shots/r9/oldrun/r9-courses.txt` and `.json` (not the measure lane's 
   grade is set absolutely (0.28, the house 0.36). Only `cruiseSpeed()` (a get-up's push) and some far-terrain render
   reads use it. Changing it now changes the course's float bits and so the pool's replays; left for the main lane (a
   get-up on the Old Run pushes off at 11.1 m/s where 0.28 would give about 14).
+
+## 6. Wired for the mountain, and what waits
+
+- **Its card on the picker:** `MOUNTAINS[5]`'s tagline is its few words of mechanic ("An old ice track: ride high on
+  the glaze"); the card's art (`src/ui/art.ts` RIDGES `oldrun`: a low sun over bare trees and the track's channel) and
+  its sky (`.b-oldrun` in `src/ui/style.css`, deep blue to the amber of a low sun). The ui lane's eight-chip picker
+  reads `MOUNTAINS`; its sheets may want `.b-oldrun` in `screens.css` beside `.b-lantern`'s (not added: the ui lane's).
+- **Its mastery board:** its medals, its three set pieces' stars and its three home riders' stars (`mastery.ts`
+  `[...ROSTER, ...HOME_RIDERS]`, `app.ts` the riders' pool times). No sky gate row (the Old Run has none).
+- **Its missions' biome** is its own look, `'oldrun'` (`biomeForSeed`); no mission names it yet (the five's biome
+  missions are snowmen, spirit gates and the like: nothing of the Old Run's), so it counts for every mission that is
+  not a biome's.
+- **Its other hour, by Lamplight** (the world's `ALT_HOURS.oldrun`), named in `almanac.ts` `HOUR_PHRASES` and the
+  Trials' `HOURS`; **its mirror** draws (the world's captures). *Neither opens yet in a save:* the five's hours open on
+  Almanac pages and their mirrors on a page or on every one of The Twelve who calls the mountain home beaten in a
+  duel; the Old Run has no page and no Twelve at home. **For the main lane:** an Almanac page for the Old Run's hour
+  and mirror, or its mirror opened by its home riders beaten to the line (its mastery board's rider row), as the
+  five's open by The Twelve's duels.
+- **What I would add to the Almanac, the album and The Twelve** (they stay as they are this round): an Almanac page
+  "The Old Run" (hold the glaze through the Horseshoe in each variant; its hour and its mirror as the rewards); an album
+  frame of the Horseshoe at sunset and one of the Bend Bells; a set of three (the brief's G6: a scarf, a trail and an
+  ornament earned at a third, two thirds and all of its board: a bell ornament would suit); no change to The Twelve.
+- **The Trials and the Long Night** are unchanged: `EIGHT_FROM` null, ten legs (the last of the three to register
+  switches both).
+- **Photo mode, Save Clip, the key art:** the world's captures (`notes/r9-oldrun-world.md`).
+
+## 7. Only scripts have seen it
+
+Every figure in sections 1 to 5 is the sim's, ridden by the lab's pilots, the clumsy pilot and the bot. Nobody has
+ridden the Old Run by hand: not the wall, not the glaze, not the set pieces, not the bot's field around a person. The
+score has been rendered, measured and level-checked by the build and the stems test, and listened to by nobody.
