@@ -287,7 +287,8 @@ export function storyButton(m: ResultsModel): StoryButton {
   if (named && fact?.name && named[2] === fact.name) return { ...b, label: named[1] === 'Rematch' ? 'Rematch' : 'Next Duel' };
   const mt = m.unlockedMountains?.[0];
   if (mt && b.label === `Ride ${mt.name}`) return { ...b, label: 'Ride It' };
-  return b;
+  // (Curly apostrophes on what is drawn: "Today’s Daily"; the spine's words keep their own for its tests and harness.)
+  return { ...b, label: curly(b.label) };
 }
 
 function buttonWords(m: ResultsModel): StoryButton {
