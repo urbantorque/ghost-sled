@@ -1785,7 +1785,8 @@ export class App {
       grudgeAtStart: g ? { name: g.name, record: g.record, them: g.them ?? 1, streak: g.streak ?? 1 } : null,
       friend: goal ? { name: goal.name, distance: goal.standing.distance, time: goal.standing.time } : null,
       lifetimePassed: d.ghostsPassed,
-      unlockLadder: MOUNTAINS.filter((m) => !m.finale && m.unlockGhosts > d.ghostsPassed).map((m) => ({ id: m.id, name: m.name, biome: biomeForSeed(m.seed), need: m.unlockGhosts })),
+      // (Round 9: in the order they open, now that the Old Run opens at 18 after Sakura's 24 in MOUNTAINS.)
+      unlockLadder: MOUNTAINS.filter((m) => !m.finale && m.unlockGhosts > d.ghostsPassed).map((m) => ({ id: m.id, name: m.name, biome: biomeForSeed(m.seed), need: m.unlockGhosts })).sort((a, b) => a.need - b.need),
       missionsCrossed: () => this.missionsCrossedNow(),
       graveyards: this.graves,
       // A named mountain's authored set pieces; a Daily's or a Cup's biggest places.
