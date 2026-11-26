@@ -4462,3 +4462,35 @@ straight through.
     - *Next.* The lane builds the groundwork in its order (the fingerprint, the table, `FINISH_Z`, room for eight, the
       fairness suite split, the seam) and a lab-only Old Run to test the wall with the pilots and the bot, before the
       mountain lanes add worlds, scores and pools.
+
+395. **The groundwork built and merged; the Old Run's wall does not pay yet** (`r9-ground`, efede6b to 3c8876f,
+    merged at 5658959; `notes/r9-ground.md` section 15).
+    - *Built, one step a commit, the five's fingerprint holding after every one:* `tests/five.test.ts` (eleven course
+      digests, the five and six Dailies as values; every roll the game makes; scripted, bot and lab-pilot rides; 11.8 s,
+      so it runs with every step); the course table (`Layout`, `FIVE` holding today's values, `finishZFor`,
+      `eventsFor`, the shared helpers in `src/sim/courseparts.ts`); `FINISH_Z` from the course in the game layer (ten
+      small hunks in `app.ts`); room for eight (the Trials turn with `EIGHT_FROM` null, the Long Night's legs,
+      graveyard names frozen at 22 for the five, events masked per mountain, `generate-ghosts --only` refusing the
+      five's pools); the fairness suite split into the five's promises and what every mountain keeps; the kit seam
+      (`src/sim/kit.ts`) with the track's sim behind `trackOn`; a lab-only Old Run (`src/sim/oldrun.ts`, seed
+      0x9b05688c, not in `MOUNTAINS`) with eleven promises in `tests/oldrun.test.ts`, ridden in the determinism suite
+      beside the five; `?debug&seed=<hex>` rides a lab course in the Daily's place. Checked after the merge: `tsc` clean,
+      the fingerprint, the determinism suite and the new tests green; in the lane the full suite (110 files, 1,959
+      passed) and the five's course measures figure for figure milestone 0's.
+    - *Changed from the design in the building:* the wall's curve carried past the lip instead of a steeper parapet
+      (the parapet launched a full-lock rider 70 times a run; now it scrapes and never launches); the track's damping
+      at 1.8, not 3.5; the bot's planner on the track counts only the lip as out.
+    - *A slip, owned:* the pool generator was run once without its guard, outside the heavy slot, for about a minute;
+      it rewrote three of the five's pools byte for byte the same (git saw no change). The guard now refuses them.
+    - *The lab's finding.* Every pilot finishes (the clumsy 30 of 30, the mid pilot in every mood, no falls but one
+      early bot), and a sled let go rides up a bend's outside wall and back without reaching the lip. But **the glaze
+      costs time instead of paying**: one steering hand rides the floor in 128 to 136 s and the glaze in 150 to 154 s,
+      because the wall's yaw (about 0.75 rad/s two thirds up its deepest wall, against the 0.5 a bend needs) makes every
+      correction slip, and the whole run is slow (the mid pilot 127 s at 25 m/s against the concept's about 88 s at 34).
+      This is the risk the concept named ("if the glaze pays too little it rides like the five's gullies"), found in the
+      lab before any world was built, as the plan meant it to be.
+    - *Next:* the Old Run's lane (`notes/r9-briefs/oldrun.md`) makes the wall pay in the lab first, against a bar
+      (the mid pilot's glaze line 10 to 20% faster through the bends than the floor's; the expert and the strong bot
+      mostly on the glaze; the novice and a let-go sled safe on the floor; the clumsy 30 of 30; the mid pilot about 85
+      to 95 s at 32 to 36 m/s), then gives it a world of its own, its score, its pool and its registration. Gullhaven
+      and Gablefall follow it, each on its own lane.
