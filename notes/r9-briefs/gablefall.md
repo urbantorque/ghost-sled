@@ -108,7 +108,9 @@ fix worst first). Low is section 0's design: say its GL calls on a held Low run 
 - **Its ghost pool**, 46 to 50 riders and its home riders, generated alone with `generate-ghosts --only gablefall` in
   the heavy slot, node workers capped, nothing else heavy on the machine, after the bot has been tuned in the lab;
   then `tests/ghostpool.test.ts` and the pool's replays.
-- **Wired for this mountain** as the others were: its card on the title's picker, its key art, its mastery board, its
+- **Wired for this mountain** as the others were (DECISIONS 399: a mountain's card sky now lives beside its ridges in
+  `src/ui/art.ts`, `RIDGES` and `SKY`, with its id in `MountainCard.biome`; the per-biome `.b-<biome>` CSS rules are
+  gone, so add no new one): its card on the title's picker, its key art, its mastery board, its
   missions' biome, photo mode and Save Clip on it, its mirror and other hour; list what you would add to the Almanac,
   the album and The Twelve in your notes.
 

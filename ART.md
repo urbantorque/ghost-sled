@@ -545,8 +545,24 @@ Round 7:
   (a hat from behind, then its front; a trail out on the yard's loop). The vermillion is spent only on a purchase or a
   tier being fitted; buying one is a moment (a marigold gift opened on the rug, the piece put on, a cheer), skipped by a
   tap or a key, still under reduced motion.
-- **The books** (the Almanac and the Spirit Album) are one sheet: pages in rows of ten, the next
-  outlined; stickers painted in their mountain's sky, silhouettes with where to find them.
+- **The other screens are sheets like the rooms (round 9, U4).** Settings, the pause card, the books, the views pushed
+  in a room and a mountain's board are each an ink sheet from the logo's side (the bottom on a phone): the heading in
+  italic 900 Title Case, a quiet Close with its word (Back when it was opened over another sheet, which goes out of
+  sight under it, so no sheet shows another's words through its ink), blocks of words each with its one action. A
+  sheet over the title takes the title's own column out of sight, so the sheet and the scene are all there is. Every
+  figure has its word ("90%", "0 of 4", "1,281 XP to go", "Bronze 13, Silver 16, Gold 18 perfects").
+- **The pause card** is the one of them with a primary: its word set like the wordmark, the run's missions as the
+  Progress room says them, Resume (its key on it, P or Start), then Settings, Photo and Home. The settings are a press
+  away, not on the card.
+- **The books** open one at a time over the Progress room. The Almanac is this month's chapter, then the fifty Rider
+  Ranks a row each (its glyph, its prizes in words a line each, a marigold check once reached), the next lit with the
+  XP it still needs, opening at it. The Spirit Album opens at its contents, a page a row (a mountain's in its sky, the
+  rest their glyph on ink) with how many are found; a page holds the stickers found (a frame from the run, else
+  painted in the mountain's sky, its kind's glyph in the corner) and those still to find (an outline with the glyph,
+  and where to find it).
+- **A mountain's mastery board** opens from the medal wall: every star's goal in its row (medals, sky gates, set pieces,
+  home riders, a clean finish), held ones checked in marigold, and where its set opens in the garage.
+- **A mountain's sky is drawn with its ridges** (`art.ts`), the same on every surface that shows the mountain.
 - **A touch lesson sits beside the control it teaches,** never in the thumbs' band (the bottom 22% of a phone held
   upright).
 - **A mirror mountain is the picture turned over, never a second look.** The canvas is shown flipped; every word in
@@ -559,8 +575,8 @@ Round 7:
   cards and the riders' tags leave the picture, and so does what belongs to the chase lens at speed (the streaks, the
   punch and flash, the corners closing, Spirit Flow's pulse); the grade, the light and the moment stay, and there is
   no filter. The bar is ink at the foot of the screen (the whole width on a phone, in three rows): Done, the lens as a
-  focal length and the tilt, the grid of thirds, focus on the rider (High and Ultra), back to the first frame, With
-  Run Card and Save Photo (vermillion, the one primary). It and the help step back while the view moves.
+  focal length and the tilt, Grid, Focus (High and Ultra), First Frame, With Run Card and Save Photo (vermillion, the
+  one primary), every control with its word. It and the help step back while the view moves.
 - **A photo is the canvas at its size, as a PNG.** With Run Card adds the run's card in the lower left in the game's
   own type: "GHOST SLED" small, the mountain in italic 900, the time and the place (gold-white for a win), the rider's
   name in vermillion, on ink at 86% with an 18 px corner. Nothing is shared or sent. On a mirror mountain the photo is
@@ -581,8 +597,8 @@ Round 7:
 - **A Trial is the week's second race (round 8; round 9 moves it into the Daily and Cup room, beside the Cup, and
   its Choose picks it).** Picked, the
   title travels to its mountain in its sky and hour, the place line reads "Week 50 Trial" over the twist, and over Ride
-  the rule wears the star and the three targets are struck as the medals they win, with their unit and the days left; a
-  target already won is struck through. A run names the rule once in the HUD's one-line card, and the stage line's words
+  one ink card says where it rides, the rule under the star, the three targets as the medals they win in words, each
+  with its disc, your best and the days left (round 9, U4); a target already won is struck through. A run names the rule once in the HUD's one-line card, and the stage line's words
   carry the next medal's target. A Trial's results lead with the run's own figure on the week's measure, lit by its
   medal as a place is (gold-white for gold, the silver step for silver and bronze), "Silver in the Trial" under it and
   the gap to the next medal with the medal's disc. No new colour: the medals' metals are the Daily's and the Cup's.

@@ -4642,3 +4642,51 @@ straight through.
       set (tests), the Almanac's grants on owned pieces (tests), the pad, a real touch screen, a screen reader, and frame
       rate. ART.md 5 (hats, scarves, trails), 10 (the garage as a place) and 13 (finishes, a sled's track) take the
       lane's text.
+
+399. **The other screens in the round's language, built and merged** (`r9-u4`, ae66ebd to 20502e8, 16 commits, merged
+    at 6aee2c3; `notes/r9-u4.md`, frames under `shots/r9/u4/`; milestone 1's U4).
+    - *What a player sees:* the pause card, settings, the Almanac and the Spirit Album, the medal wall, The Twelve, the
+      league, the missions, photo mode's bar and the Trial's card are sheets like the rooms, from the logo's side (the
+      bottom on a phone), every figure with its word and no lone icon left. A sheet opened over another puts it out of
+      sight, and any sheet over the title takes the title's column out of sight. The pause card holds the run's
+      missions and Resume (its key on it), then Settings, Photo and Home: 12 controls to 4. The books load on demand and
+      open one at a time from the Progress room: the Almanac a rank a row with its prizes in words, opening at the next;
+      the album at its contents, a page a row, then a page of Found and Still to Find. Each mountain's mastery board is
+      drawn for the first time, from the medal wall, with where its set opens in the garage. The Twelve keep one
+      rider's line (who rides next, in sight as it opens) and say the rest as "Rides Pinecrest in 2:23.6".
+    - *Carried items:* a "New" survives a reload (`intros` and `introsSeen`, optional and sanitised; the day's news is
+      opened for that day); the contracts say "0 of 4 done" over four rows; a garage piece on the results wears its
+      shelf's glyph; one Escape over the reel skips it and Details comes back as it was, focus on Watch Your Run; a
+      mountain's sky lives beside its ridges in `art.ts` (`skyOf`) and the per-biome CSS rules are gone, so a new
+      mountain adds its ridges and sky there and its id to `MountainCard.biome`; the Long Night is said in words at any
+      count, sixteen included.
+    - *The bars, mid-50, desk and phone:* first-view words down where a screen was a wall (the album 174 to 59 on the
+      desk, The Twelve 178 to 96, the pause card 52 to 33), up a few where a word was missing (settings' "%", photo's
+      Grid, Focus and First Frame); no lone icons or bare figures on any of them; Escape, Backspace and the pad's B close
+      every surface at mid-5, mid-50 and mid-100 on both forms with focus on the opener; the console clean on every
+      capture. The captures found a real fault, fixed (4144fb1): the title drawn again as the rivals came in took a
+      view pushed in a room with it, leaving the scene alone. Style sheets 11,209 to 10,442 lines.
+    - *Judged blind:* today's screen against the lane's, 13 of 15 pairs, then 14 of 15 after the fixes (the one lost was
+      the Daily and Cup room shot before its fields came in); two family tests across the title, results, garage and
+      these screens, "mostly yes", these screens 7 to 9 out of 10. The first round's worst fault, the title reading
+      through every sheet, was fixed and not raised again.
+    - *Merged* clean (the lane was cut after the garage's seams); the garage's Escape, focus and price fixes held. tsc
+      clean; the full suite 114 files, 2,038 tests.
+    - *The main lane's calls on the lane's questions:* the title's column steps out under any sheet, the ui lane's rooms
+      included (both first critics' worst fault, and the second pair did not raise it); settings leave the pause card,
+      a press away (the card is one job and a third of the words); the books open one at a time with no tabs, the
+      Almanac a rank a row (ART.md 10 says so now) and the album at its contents; the mastery board stands as drawn,
+      and G6 gives the Old Run, Gullhaven and Gablefall their sets and so their boards' set line; the medal wall's gold
+      disc is the round's gold-white; the title with the Trial picked stays at 53 words (a run-100 title with a Trial
+      has more to say; the run-50 title's bar of 40 is met); Gullhaven's lane is told of `art.ts`, and Gablefall's
+      brief says it.
+    - *For other lanes, from the critics, carried to phase C:* the garage's kit out of family (an off-white filled tab,
+      regular-weight body copy, a header of mixed pills: G6 brings it into `kit9`); Details' button floating over its
+      last rows; the gift figure drawn three ways (marigold, off-white, grey); the quiet line at ten words against
+      ART.md's nine; the curly apostrophe drawn like an acute accent in italic 900; Lanternfall's chip drawn unlocked on
+      mid-50 while The Twelve says one more opens it (to check); the results' fact chip far from its headline on a
+      phone.
+    - *Only scripts have seen it:* headless Chrome on the fixtures with a scripted pad. No person has opened a book, a
+      board, settings or the pause card in the game; real sticker frames, reduced motion and a real reload were not
+      exercised. ART.md 10 takes the lane's text (the other screens as sheets, the pause card, the books, the board, the
+      skies; the Trial's card; photo mode's words).
