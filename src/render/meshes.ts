@@ -1221,7 +1221,9 @@ export function finishSled(geo: BufferGeometry, f: FinishLook, round: boolean): 
         break;
       }
       case 'twotone':
-        mark = round ? r > 0.74 || !top : !top || w > 0.7 || u < 0.08 || u > 0.9;
+        // (Round 9, G6: an ink frame twice as broad, so the Snowfield's white deck reads framed, not grey; the critics
+        // took it for the Basalt Hex's slate.)
+        mark = f.accent === 'ink' ? (round ? r > 0.62 || !top : !top || w > 0.56 || u < 0.14 || u > 0.84) : round ? r > 0.74 || !top : !top || w > 0.7 || u < 0.08 || u > 0.9;
         break;
       case 'scroll':
         burn = (round ? r > 0.62 : u < 0.16 || u > 0.8 || w > 0.82) && Math.sin(cx * 42 + Math.sin(cz * 31) * 2.4 + cy * 20) > 0.15;
@@ -1234,7 +1236,8 @@ export function finishSled(geo: BufferGeometry, f: FinishLook, round: boolean): 
         const d1 = Math.abs(fract(cx / s + cz / (s * 1.73)) - 0.5);
         const d2 = Math.abs(fract(cx / s - cz / (s * 1.73)) - 0.5);
         const d3 = Math.abs(fract((cz + cy) / (s * 0.87)) - 0.5);
-        mark = (top || back) && (d1 > 0.47 || d2 > 0.47 || d3 > 0.475);
+        // (Round 9, G6: a bolder lattice of bigger cells, so it reads as a cream net on the slate at race distance.)
+        mark = (top || back) && (d1 > 0.4 || d2 > 0.4 || d3 > 0.42);
         break;
       }
       case 'stripes':
@@ -1244,7 +1247,9 @@ export function finishSled(geo: BufferGeometry, f: FinishLook, round: boolean): 
         mark = (round ? r > 0.7 : w > 0.78 || u > 0.86 || u < 0.1 || back) && Math.sin(cz * 36 + cx * 22 + cy * 30) > 0.25;
         break;
       case 'ruled':
-        mark = top && fract(cz / 0.16) < 0.3;
+        // (Round 9, G6: bolder rules on a paler page and an ink margin down each side, so it reads as a ruled page and
+        // not as the natural wood's two browns.)
+        mark = (top && fract(cz / 0.15) < 0.4) || (top && !round && w > 0.86) || (round && top && r > 0.86);
         break;
       default:
         break;
@@ -1464,8 +1469,8 @@ export function sledTrackParts(id: number, tiers: number, lite = false): TrackPa
     }
     case 4: {
       // The Wisp: long thin curls, a pad laced with cords, swept wings, a bent stalk, filigree on the wings.
-      const deck = new Color('#E8FFFB');
-      if (t >= 1) for (const sx of [-0.28, 0.28]) body.push(...tube(scroll(sx, 0.03, 0.78, 0.16, 1.35, lite ? 7 : 14), 0.016, 0.008, new Color('#BFF8EE'), sides));
+      const deck = WISP.deck;
+      if (t >= 1) for (const sx of [-0.28, 0.28]) body.push(...tube(scroll(sx, 0.03, 0.78, 0.16, 1.35, lite ? 7 : 14), 0.016, 0.008, WISP.runner, sides));
       if (t >= 2) {
         body.push(part(new BoxGeometry(0.5, 0.035, 0.52), shade(deck, 0.96), { pos: [0, 0.24, 0.3] }));
         for (const z of [0.12, 0.3, 0.48]) body.push(...tube([new Vector3(-0.27, 0.265, z), new Vector3(0.27, 0.265, z)], 0.016, 0.016, FIN_CREAM, sides));
@@ -1484,7 +1489,7 @@ export function sledTrackParts(id: number, tiers: number, lite = false): TrackPa
           const k = i / steps;
           stalk.push(new Vector3(post[0], 0.22 + (post[1] - 0.24) * Math.sin(k * Math.PI * 0.5), 0.62 + (post[2] - 0.62) * k * k));
         }
-        body.push(...tube(stalk, 0.02, 0.012, new Color('#BFF8EE'), sides));
+        body.push(...tube(stalk, 0.02, 0.012, WISP.runner, sides));
       }
       if (t >= 5) for (const sx of [-1, 1]) inlay.push(...inkLine([new Vector3(sx * 0.34, 0.235, 0.24), new Vector3(sx * 0.5, 0.33, 0.48), new Vector3(sx * 0.6, 0.4, 0.66)], 0.01));
       break;
@@ -1503,12 +1508,22 @@ export function sledTrackParts(id: number, tiers: number, lite = false): TrackPa
         }
         body.push(...tube([new Vector3(-0.375, 0.6, 1.02), new Vector3(0.375, 0.6, 1.02)], 0.032, 0.032, FIN_CREAM, sides));
       }
-      if (t >= 2) body.push(...quilt(0.86, 0.5, 0.23, 0.28, lite ? 2 : 4, lite ? 2 : 3));
+      if (t >= 2) {
+        body.push(...quilt(0.86, 0.5, 0.23, 0.28, lite ? 2 : 4, lite ? 2 : 3));
+        // (Round 9, G6: the pad lies under the rider, and five rounds of critics never saw it from behind. A cream
+        // blanket roll across the tail, wider than the hips, strapped in the dark wood: its ends show either side of
+        // the rider's back, and over the bow.)
+        body.push(part(new CylinderGeometry(0.095, 0.095, 0.92, lite ? 8 : 14), FIN_CREAM, { pos: [0, 0.33, 0.56], rot: [0, 0, Math.PI / 2] }));
+        for (const sx of [-0.3, 0.3]) body.push(part(new TorusGeometry(0.098, 0.018, 4, lite ? 8 : 12), C.woodDark, { pos: [sx, 0.33, 0.56], rot: [0, Math.PI / 2, 0] }));
+      }
       if (t >= 3) body.push(...crestBoard(0.32, 0.2, 0.32, 0.7, lite));
       if (t >= 4) postFrom(0.2, post[2]);
       if (t >= 5) {
-        for (const sx of [-0.3, 0.3]) inlay.push(...inkLine([new Vector3(sx, 0.062, -0.62), new Vector3(sx, 0.062, 0.76)], 0.011));
-        inlay.push(...inkLine(arch(0.27, 0.22, t >= 3 ? 0.34 : 0.11, t >= 3 ? 0.725 : 0.69, lite ? 6 : 12), 0.009));
+        // (Round 9, G6: down the runners' outsides and up their tails, and across the tail board's back, where the lens
+        // behind sees a sled; along the runners' tops it hid under the deck.)
+        for (const sx of [-1, 1]) inlay.push(...inkLine([new Vector3(sx * 0.33, 0.04, -0.62), new Vector3(sx * 0.33, 0.04, 0.74), new Vector3(sx * 0.33, 0.11, 0.87)], 0.013));
+        inlay.push(...inkLine([new Vector3(-0.3, 0.165, 0.558), new Vector3(0.3, 0.165, 0.558)], 0.012));
+        inlay.push(...inkLine(arch(0.27, 0.22, t >= 3 ? 0.34 : 0.11, t >= 3 ? 0.725 : 0.69, lite ? 6 : 12), 0.011));
       }
       break;
     }
@@ -1581,11 +1596,58 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       }
       break;
     }
+    case 'timingclock': {
+      // (Round 9, G6, the Old Run's timing house: a wooden tower, its clock's lit cream dial facing the lens behind, an
+      // ink rim and hands, a low hipped cap with a finial; ART.md 15's timing house, never a pointed spire.)
+      body.push(part(new BoxGeometry(0.17, 0.26, 0.13), C.woodDark, { pos: [0, 0.13, 0] }));
+      body.push(part(new BoxGeometry(0.19, 0.03, 0.15), shade(C.woodDark, 0.8), { pos: [0, 0.275, 0] }));
+      body.push(part(new ConeGeometry(0.15, 0.09, 4), new Color('#5E5A60'), { pos: [0, 0.335, 0], rot: [0, Math.PI / 4, 0] }));
+      body.push(part(new SphereGeometry(0.018, 5, 4), FIN_INK, { pos: [0, 0.39, 0] }));
+      glow.push(part(new CylinderGeometry(0.068, 0.068, 0.012, s + 4), warm(1.45), { pos: [0, 0.17, 0.068], rot: [Math.PI / 2, 0, 0] }));
+      body.push(part(new TorusGeometry(0.07, 0.011, 4, s + 6), FIN_INK, { pos: [0, 0.17, 0.072] }));
+      body.push(part(new BoxGeometry(0.012, 0.055, 0.006), FIN_INK, { pos: [0, 0.192, 0.077] }));
+      body.push(part(new BoxGeometry(0.04, 0.01, 0.006), FIN_INK, { pos: [0.018, 0.17, 0.077] }));
+      break;
+    }
+    case 'lighthouse': {
+      // (Gullhaven's lighthouse: a tapered tower in cream and umber bands, the gallery and its lamp lit at the head.)
+      const bands = 4;
+      for (let i = 0; i < bands; i++) {
+        const y0 = (i / bands) * 0.38;
+        const y1 = ((i + 1) / bands) * 0.38;
+        const r = (y: number) => 0.085 - (y / 0.38) * 0.03;
+        body.push(lathe([[r(y0), y0], [r(y1), y1]], s, i % 2 ? FIN_INK : FIN_CREAM));
+      }
+      body.push(part(new CylinderGeometry(0.075, 0.075, 0.018, s), FIN_INK, { pos: [0, 0.39, 0] }));
+      glow.push(part(new CylinderGeometry(0.045, 0.045, 0.07, s), warm(1.7), { pos: [0, 0.435, 0] }));
+      body.push(part(new ConeGeometry(0.058, 0.06, s), FIN_INK, { pos: [0, 0.5, 0] }));
+      break;
+    }
+    case 'gablehouse': {
+      // (Gablefall's houses: a steep slate roof under snow, its gable end to the lens with a lit window, a stone chimney.)
+      const slate = new Color('#5A5E6A');
+      body.push(part(new BoxGeometry(0.18, 0.15, 0.16), FIN_CREAM, { pos: [0, 0.075, 0] }));
+      // The gable end, front and back: a triangle of wall under the roof.
+      const gable = new BufferGeometry();
+      gable.setAttribute('position', new BufferAttribute(new Float32Array([-0.09, 0, 0, 0.09, 0, 0, 0, 0.14, 0]), 3));
+      for (const z of [0.0805, -0.0805]) body.push(part(gable.clone(), FIN_CREAM, { pos: [0, 0.15, z], rot: [0, z > 0 ? 0 : Math.PI, 0] }));
+      for (const sx of [-1, 1]) {
+        body.push(part(new BoxGeometry(0.15, 0.016, 0.2), slate, { pos: [sx * 0.05, 0.215, 0], rot: [0, 0, -sx * 1.0] }));
+        body.push(part(new BoxGeometry(0.13, 0.02, 0.19), FIN_CREAM, { pos: [sx * 0.046, 0.228, 0], rot: [0, 0, -sx * 1.0] }));
+      }
+      body.push(part(new BoxGeometry(0.04, 0.1, 0.04), new Color('#8A7A6E'), { pos: [0.05, 0.27, -0.03] }));
+      body.push(part(new BoxGeometry(0.05, 0.016, 0.05), FIN_CREAM, { pos: [0.05, 0.325, -0.03] }));
+      glow.push(part(new BoxGeometry(0.05, 0.06, 0.006), warm(1.55), { pos: [0, 0.08, 0.082] }));
+      glow.push(part(new BoxGeometry(0.03, 0.035, 0.006), warm(1.45), { pos: [0, 0.18, 0.082] }));
+      break;
+    }
     case 'ch1orn': {
-      body.push(part(new CylinderGeometry(0.13, 0.13, 0.025, s + 6, 1, false, -Math.PI / 2, Math.PI), FIN_CREAM, { pos: [0, 0.04, 0], rot: [Math.PI / 2, 0, 0] }));
-      for (let i = 0; i < 5; i++) {
-        const a = -Math.PI / 2 + ((i + 0.5) / 5) * Math.PI;
-        body.push(part(new SphereGeometry(0.035, 6, 4), shade(FIN_CREAM, 0.94), { pos: [Math.sin(a) * 0.2, 0.04 + Math.cos(a) * 0.2, 0], scale: [1, 1.6, 0.5], rot: [0, 0, -a] }));
+      // (Round 9, G6: a rising sun in honey gold, its rays long; in cream it read lilac in shade, like the Paper Fan.)
+      const sun = new Color('#E8B24A');
+      body.push(part(new CylinderGeometry(0.13, 0.13, 0.025, s + 6, 1, false, -Math.PI / 2, Math.PI), sun, { pos: [0, 0.04, 0], rot: [Math.PI / 2, 0, 0] }));
+      for (let i = 0; i < 7; i++) {
+        const a = -Math.PI / 2 + ((i + 0.5) / 7) * Math.PI;
+        body.push(part(new ConeGeometry(0.03, 0.12, 4), shade(sun, 0.92), { pos: [Math.sin(a) * 0.2, 0.04 + Math.cos(a) * 0.2, 0], rot: [0, 0, -a] }));
       }
       break;
     }
@@ -1640,7 +1702,8 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       break;
     }
     case 'ch8orn': {
-      for (let i = 0; i < 7; i++) body.push(part(new BoxGeometry(0.04, 0.2, 0.006), shade(FIN_CREAM, i % 2 ? 0.88 : 1), { pos: [Math.sin((i / 6 - 0.5) * 2.2) * 0.1, 0.06 + Math.cos((i / 6 - 0.5) * 2.2) * 0.1, 0], rot: [0, 0, -(i / 6 - 0.5) * 2.2] }));
+      // (Round 9, G6: the pleats alternate cream and umber, so the fan reads as folded paper, not a lilac shape.)
+      for (let i = 0; i < 9; i++) body.push(part(new BoxGeometry(0.04, 0.22, 0.006), i % 2 ? FIN_INK : FIN_CREAM, { pos: [Math.sin((i / 8 - 0.5) * 2.4) * 0.11, 0.06 + Math.cos((i / 8 - 0.5) * 2.4) * 0.11, 0], rot: [0, 0, -(i / 8 - 0.5) * 2.4] }));
       break;
     }
     case 'ch9orn':
@@ -1671,6 +1734,9 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       lantern(0.09, 0.22, 0.17);
       break;
   }
+  // (Round 9, G6: the months' ornaments a third bigger again; five rounds of critics found them small and pale on the
+  // snow at race distance. Grown about the post's top, so what hangs from it hangs lower.)
+  if (/^ch\d+orn$/.test(id)) for (const g of [...body, ...glow]) g.scale(1.35, 1.35, 1.35);
   return { body, glow };
 }
 /** A sled as the garage has it (round 9): its own build, its fitted tiers and, from the fourth, its stern post's
@@ -1699,9 +1765,10 @@ export function sledGeometryFor(id: number, lite = false): BufferGeometry {
   const C = RIDER_COLORS;
   switch (id) {
     case 1: {
-      // Whirl Saucer: a shallow disc with a rim.
+      // Whirl Saucer: a shallow disc with a rim. (Round 9, G6: bentwood walnut; its blue sat by the speed charm's
+      // azure, ART.md 16, in every critic's sheet.)
       return merge([
-        part(new CylinderGeometry(0.62, 0.5, 0.1, 18), new Color('#3E7FD8'), { pos: [0, 0.08, 0.05] }),
+        part(new CylinderGeometry(0.62, 0.5, 0.1, 18), WHIRL_WOOD, { pos: [0, 0.08, 0.05] }),
         part(new TorusGeometry(0.6, 0.045, 6, 22), C.accent, { pos: [0, 0.13, 0.05], rot: [Math.PI / 2, 0, 0] }),
         part(new CylinderGeometry(0.2, 0.2, 0.02, 12), new Color('#FFF4EA'), { pos: [0, 0.14, 0.05] }),
       ]);
@@ -1712,19 +1779,26 @@ export function sledGeometryFor(id: number, lite = false): BufferGeometry {
       for (let i = 0; i < 3; i++) parts.push(part(new BoxGeometry(0.2, 0.05, 1.7), i === 1 ? C.woodDark : C.wood, { pos: [-0.21 + i * 0.21, 0.08, 0.15] }));
       parts.push(part(new TorusGeometry(0.28, 0.05, 6, 14, Math.PI * 1.2), C.wood, { pos: [0, 0.34, -0.72], rot: [0, Math.PI / 2, 0], scale: [1, 1, 3.4] }));
       parts.push(part(new CylinderGeometry(0.02, 0.02, 0.66, 5), C.accent, { pos: [0, 0.18, 0.1], rot: [0, 0, Math.PI / 2] }));
+      // (Round 9, G6: the player's vermillion where the lens behind sees it, rails down both sides and a cap across the
+      // tail; its one red bar lay under the rider, and from behind the stock toboggan showed none.)
+      for (const sx of [-1, 1]) parts.push(part(new BoxGeometry(0.035, 0.045, 1.6), C.accent, { pos: [sx * 0.325, 0.11, 0.15] }));
+      parts.push(part(new BoxGeometry(0.69, 0.05, 0.04), C.accent, { pos: [0, 0.1, 0.98] }));
       return merge(parts);
     }
     case 3:
       return cometBobGeometry(lite);
     case 4: {
-      // Wisp: pale spectral runners and deck.
-      const mint = new Color('#BFF8EE');
+      // Wisp: pale spectral runners and deck. (Round 9, G6: moonlit pearl and silver, not the ghosts' mint, ART.md 1,
+      // and vermillion along the deck's edges and tail like every sled's trim.)
       return merge([
-        part(new BoxGeometry(0.58, 0.05, 1.2), new Color('#E8FFFB'), { pos: [0, 0.2, 0.05] }),
-        part(new BoxGeometry(0.04, 0.04, 1.5), mint, { pos: [-0.28, 0.03, 0.05] }),
-        part(new BoxGeometry(0.04, 0.04, 1.5), mint, { pos: [0.28, 0.03, 0.05] }),
-        part(new TorusGeometry(0.2, 0.024, 5, 10, Math.PI * 1.4), mint, { pos: [-0.28, 0.22, -0.72], rot: [0, Math.PI / 2, 0] }),
-        part(new TorusGeometry(0.2, 0.024, 5, 10, Math.PI * 1.4), mint, { pos: [0.28, 0.22, -0.72], rot: [0, Math.PI / 2, 0] }),
+        part(new BoxGeometry(0.58, 0.05, 1.2), WISP.deck, { pos: [0, 0.2, 0.05] }),
+        part(new BoxGeometry(0.04, 0.04, 1.5), WISP.runner, { pos: [-0.28, 0.03, 0.05] }),
+        part(new BoxGeometry(0.04, 0.04, 1.5), WISP.runner, { pos: [0.28, 0.03, 0.05] }),
+        part(new TorusGeometry(0.2, 0.024, 5, 10, Math.PI * 1.4), WISP.runner, { pos: [-0.28, 0.22, -0.72], rot: [0, Math.PI / 2, 0] }),
+        part(new TorusGeometry(0.2, 0.024, 5, 10, Math.PI * 1.4), WISP.runner, { pos: [0.28, 0.22, -0.72], rot: [0, Math.PI / 2, 0] }),
+        part(new BoxGeometry(0.03, 0.03, 1.18), C.accent, { pos: [-0.3, 0.225, 0.05] }),
+        part(new BoxGeometry(0.03, 0.03, 1.18), C.accent, { pos: [0.3, 0.225, 0.05] }),
+        part(new BoxGeometry(0.63, 0.035, 0.035), C.accent, { pos: [0, 0.215, 0.66] }),
       ]);
     }
     case 5: {
@@ -1752,6 +1826,12 @@ export function sledGeometryFor(id: number, lite = false): BufferGeometry {
       return sledGeometry(RIDER_COLORS.accent, lite);
   }
 }
+
+/** The Wisp's own (round 9, G6): a pale pearl deck and silver runners, a moonlit thing; nothing a role owns (its mint
+ *  was the ghosts', ART.md 1). */
+const WISP = { deck: new Color('#ECE9F1'), runner: new Color('#A9B6CC') };
+/** The Whirl Saucer's bentwood (round 9, G6): a walnut a step darker than the wooden sleds', no role's colour. */
+const WHIRL_WOOD = new Color('#7E4E33');
 
 /** Comet Bob's own paint: a violet lacquer in two values, and the cream of its comet. Nothing a role owns (ART.md 1). */
 export const COMET_BOB = { lacquer: new Color('#5A3E96'), lacquerDark: new Color('#3F2A70'), comet: new Color('#F4E8CF') };

@@ -266,6 +266,29 @@ function endShape(ends: ScarfEnds, accent: Color, width: number): ScarfShape | n
         ],
         END_V,
       );
+    case 'bell': {
+      // (Round 9, G6, the Old Run's bend bells: a cream bell hung from the tip by its crown, an ink lip and clapper.)
+      const S = RIDER_SCALE;
+      // (Within the end's 246 vertices: the bell 126, its lip 42, the clapper 60.)
+      const prof = [new Vector2(0.001, 0), new Vector2(0.032, 0.012), new Vector2(0.046, 0.08), new Vector2(0.078, 0.16)].map((v) => v.multiplyScalar(S));
+      const lip = [new Vector2(0.078, 0.16), new Vector2(0.092, 0.19)].map((v) => v.multiplyScalar(S));
+      return shapeOf(
+        [
+          { geo: new LatheGeometry(prof, 7), color: accent, m: mAt(0, 0.01 * S, 0) },
+          { geo: new LatheGeometry(lip, 7), color: INK_KNIT, m: mAt(0, 0.01 * S, 0) },
+          { geo: new IcosahedronGeometry(0.03 * S, 0), color: INK_KNIT, m: mAt(0, 0.19 * S, 0) },
+        ],
+        END_V,
+      );
+    }
+    case 'fork': {
+      // (Gullhaven's pennants: the tip cut to a swallowtail, two cream points spread out of the ribbon's plane.)
+      const S = RIDER_SCALE;
+      return shapeOf(
+        [-1, 1].map((k) => ({ geo: new ConeGeometry(w * 0.2, 0.2 * S, 4), color: accent, m: mAt(k * w * 0.24, 0.08 * S, 0, 0, 0, -k * 0.42, 1, 1, 0.45) })),
+        END_V,
+      );
+    }
     default:
       return null;
   }
@@ -350,6 +373,10 @@ function knitAt(def: ScarfDef, r: number, c: number, out: Color): Color {
       break;
     case 'teeth':
       accent = r >= R - 9 && edge && r % 2 === 1;
+      break;
+    case 'awning':
+      // (Round 9, G6, Gablefall's market awnings: even stripes, two rows of cream and two of red, all down its length.)
+      accent = Math.floor((r - 4) / 2) % 2 === 0;
       break;
     case 'plain':
       break;
@@ -770,7 +797,11 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
           col *= 1.0 + (0.7 * flowE + 0.35 * uFlow.y) * rimCut;
         #else
           float flowK = 0.55 * flowE + 0.8 * uFlow.y;
-          col += uFlowC * smoothstep(mix(0.72, 0.58, uFlow.x), 0.96, riderEdge) * flowK * 1.45 * rimCut;
+          // (Round 9, G6: laid over the cloth, not added to it. Added to the navy coat's blue, and to a blue or pale
+          // sled, the vermillion summed to a magenta that every critic read toward the grudge's rose; laid over, the
+          // rim is the player's own red at any strength, and past 1 it still blooms.)
+          float flowR = smoothstep(mix(0.72, 0.58, uFlow.x), 0.96, riderEdge) * flowK * 1.45 * rimCut;
+          col = mix(col, uFlowC * (0.85 + 0.85 * flowR), clamp(flowR, 0.0, 1.0));
         #endif
         // A dash (round 6): the rider as a spirit for its 1.4 s. The body goes pale and luminous, a white-gold
         // rim burns round the whole silhouette, and bands of light ripple up through the coat and the scarf
