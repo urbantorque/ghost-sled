@@ -305,6 +305,8 @@ describe('settling a run', () => {
     expect(o.opened).toBe(true);
     expect(lanternfallOpen(t)).toBe(true);
     expect(outcomeLine(o)).toBe('Mila Frost falls. Lanternfall is open.');
+    // (Round 9: Lanternfall already open to ride by its Almanac page, the eleventh opens the King's duel.)
+    expect(outcomeLine(o, true)).toBe('Mila Frost falls. The Hollow King waits on Lanternfall.');
   });
 
   it('the King falls last, and one race is left', () => {
@@ -358,6 +360,10 @@ describe('the card’s lines', () => {
     expect(gateLine(everyoneBut('crown', 'mila'))).toBe('1 more opens Lanternfall');
     expect(gateLine(everyoneBut('crown'))).toBe('The Hollow King waits on Lanternfall');
     expect(gateLine(everyoneBut())).toBeNull();
+    // (Round 9: Lanternfall open to ride by its Almanac page, the line names the King, never a mountain already open.)
+    expect(gateLine(everyoneBut('crown', 'mila'), true)).toBe('1 more before The Hollow King');
+    expect(gateLine(beat('bram', 'rosa', 'pip'), true)).toBe('8 more before The Hollow King');
+    expect(gateLine(everyoneBut('crown'), true)).toBe('The Hollow King waits on Lanternfall');
     expect(tallyLine(everyoneBut())).toBe('The Twelve are beaten');
     expect(tallyLine({ ...everyoneBut(), crowned: true })).toBe('You hold the crown');
   });

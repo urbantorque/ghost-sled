@@ -273,20 +273,24 @@ export function tallyLine(t: TwelveSave | undefined): string {
 }
 
 /** What is left before the King, for the card's hook ("3 more and the King rides"). */
-export function gateLine(t: TwelveSave | undefined): string | null {
+export function gateLine(t: TwelveSave | undefined, ridden = false): string | null {
   const left = TWELVE_GATE - gateCount(t);
   if (left <= 0) return hasBeaten(t, KING.key) ? null : `${KING.name} waits on ${mountainName(KING.home)}`;
+  // (Round 9: Lanternfall already open to ride by its Almanac page, what the eleven open is the King's duel, so the line
+  // names him; "1 more opens Lanternfall" sat under a Lanternfall chip drawn open.)
+  if (ridden) return `${left} more before ${KING.name}`;
   return `${left} more ${left === 1 ? 'opens' : 'open'} ${mountainName(KING.home)}`;
 }
 
 /** The results' line for a duel: who fell and what that leaves, or how close it was. */
-export function outcomeLine(o: TwelveOutcome): string | null {
+export function outcomeLine(o: TwelveOutcome, ridden = false): string | null {
   if (o.crowned) return 'All twelve beaten in one race. The crown is yours.';
   if (!o.duel) return null;
   if (o.duel.kind === 'final') return 'The last race stands. Finish ahead of all twelve.';
   const name = o.duel.rider.name;
   if (o.fell) {
-    if (o.opened) return `${name} falls. ${mountainName(KING.home)} is open.`;
+    // (Lanternfall open to ride by its Almanac page before this duel: the eleventh opens the King's duel, not the mountain.)
+    if (o.opened) return ridden ? `${name} falls. ${KING.name} waits on ${mountainName(KING.home)}.` : `${name} falls. ${mountainName(KING.home)} is open.`;
     if (o.fell === KING) return `${name} falls. One race is left: all twelve at once.`;
     return `${name} falls. ${o.beaten} of ${TWELVE.length} beaten.`;
   }

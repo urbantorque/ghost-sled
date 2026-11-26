@@ -657,7 +657,7 @@ export class App {
       next: next?.kind === 'duel' && at ? { ...rung(next.rider), mountainId: at.id, here: this.mountain === at } : null,
       final: next?.kind === 'final' && at ? { mountainId: at.id, mountain: at.name, here: this.mountain === at } : null,
       waiting: waits ? { rider: rung(waits), opens: lockText(this.save.data, MOUNTAINS[waits.home]).replace(/\s+to unlock$/, '') } : null,
-      hook: gateLine(t),
+      hook: gateLine(t, almanacOpens(this.save.data, 'lanternfall')),
       crowned: t?.crowned === true,
       rungs: TWELVE.map(rung),
       rides,
@@ -3251,7 +3251,7 @@ export class App {
         unlocked.push(m.name);
         unlockedMountains.push({ id: m.id, name: m.name, biome: this.cardArt(m), tagline: m.tagline });
       }
-      const line = outcomeLine(kept);
+      const line = outcomeLine(kept, this.lanternfallPagedAtStart);
       const r = kept.duel?.kind === 'duel' ? kept.duel.rider : null;
       const said = r ? (kept.fell ? r.says.lost : kept.lost ? r.says.won : []) : [];
       if (line && sim.finished)
