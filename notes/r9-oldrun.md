@@ -189,8 +189,14 @@ Ghost Bob* (a runner over the Horseshoe's lead S-bend: "The hotel's first bob ru
   on the glaze', seed: OLDRUN_SEED (0x9b05688c, the lab's: no Daily's or Cup's to 2040), unlockGhosts: 18 }`;
   `MountainId` gains it; its `LAYOUTS` row and kit are the mountain's; out of `BIOMES` (the Daily and Cup); events the
   light storm and the spirit train only; `LEG_NAMES` already had it; `EIGHT_FROM` null and the Long Night at ten legs.
-  `FIRST_RUN_PACE.oldrun` 95 s (the five's are 0.85 to 0.95 of the lab novice's time; the Old Run's novice rides 101.7).
-  `MOUNTAIN_NAMES` (almanac) and the Trials' `NAMES` gain it (the Trials' `HOURS` waits for its other hour's name).
+  `FIRST_RUN_PACE.oldrun` **92 s**: what a steering-only hand rides there on run 1 (the round 8 career harness's
+  `line` pilot, 91.9 s, held within 6% by `tests/r8bars.test.ts`), and the pace at which the race's floor holds: a run
+  that does nothing (93.6 s: the walls carry a sled let go) is fourth, off the podium. 95 put it third; 89 put the
+  steering-only run 9% off. The margin is thin (the third rider 91.1 s against the hands-off run's 93.6), since a sled
+  let go on the Old Run is only about 9% slower than the lab's mid pilot. (The harness itself read every course as
+  4,500 m and paced the riders on the five's last stage, so on the Old Run they read a first-timer to its line; it now
+  takes the course's own line and last stage, as the game does.)
+  `MOUNTAIN_NAMES` (almanac) and the Trials' `NAMES` and `HOURS` gain it ('by Lamplight').
 - **Home riders** (`src/bot/roster.ts` `HOME_RIDERS`; The Twelve stays twelve, homes 0 to 4): *Count Orsolo* (racer,
   0.86, stovepipe and moon, cream), *Gus Fennick* (liner, 0.76, aviator and star, ice grey, the track's old keeper),
   *Lotte Bell* (collector, 0.58, bobble and bell, lilac white, the bellringer's daughter). `riderByName` knows them
@@ -296,3 +302,74 @@ Written to `shots/r9/oldrun/r9-courses.txt` and `.json` (not the measure lane's 
 Every figure in sections 1 to 5 is the sim's, ridden by the lab's pilots, the clumsy pilot and the bot. Nobody has
 ridden the Old Run by hand: not the wall, not the glaze, not the set pieces, not the bot's field around a person. The
 score has been rendered, measured and level-checked by the build and the stems test, and listened to by nobody.
+
+## 8. The world (built beside the lane; `notes/r9-oldrun-world.md` is its full account)
+
+In short: the track drawn as ice (rime, a clear heart, bubbles), the glaze painted exactly where the sim lays it (a
+deep, cool, clear band high on each bend's outside wall, a hairline at its edges), the slush dull in a bend's floor; a
+crest of snow and a timber rail past the lip, iron lamps the length of the run; a bare wood of beeches and birches;
+low wooded ridges round a lake of open water and a lake town far below, no hero peak and no sea of cloud; the grand
+hotel down the start straight, the start house, the timing house with its clock at the line; a low late sun that sets
+over the lake through the Horseshoe and leaves the line in the first blue of evening; its other hour by Lamplight; the
+set pieces' bronze bells, the Labyrinth's dial and the Horseshoe's lanterns; its title's key art; all of it loaded on
+demand. **The greyscale sort:** two fresh critics (the second with a neutral path) both put the Old Run's five frames
+together and unlike the five ("matches none of the five mountains in ART.md"; "the only trees not built from cones or
+puffs"; "one smooth trough whose walls rise over the rider"). **The critic loop:** two rounds; the second's blind pairs
+chose the new frames 11 of 12; no third round. **Low:** on a held Low run 371.7 GL calls a frame on the Hotel
+Straights against Pinecrest's 351.9 (6% over: the onlookers and the bells' uploads) and 376.2 in the Labyrinth against
+Pinecrest's 414.2 (9% under). Short: a pale band on the near wall in a wall ride (the terrain's own shading, not found),
+Low's converging runner lines, photo mode and Save Clip not verified on the Old Run.
+
+## 9. For the main lane
+
+### To decide
+
+1. **The Old Run's pool is compressed** (section 3): p90/p10 1.15 against the five's 1.28 to 1.30; is that its
+   character, or should its weak bots make a person's mistakes?
+2. **Its hour and its mirror have no way to open in a save** (section 6): an Almanac page, or its mirror opened by its
+   three home riders beaten to the line?
+3. **`BIOME_PARAMS.oldrun.slope` reads 0.17** though the track is 0.28: a get-up's push and some far-terrain reads use
+   it; changing it moves the course's float bits, so its pool must be generated again with it (25 s in the heavy slot).
+4. **The mid pilot with lanterns and charms** (`r9-courses.ts`) is 83.7 s at 38.2 m/s, a little quicker than the
+   concept's 85 to 95 s at 32 to 36 (the lab's plain mid pilot is 89.6 s at 35.8): a grade of 0.27 would put both
+   inside, at the cost of the pool, the set pieces' numbers and the bar being ridden again.
+5. **The charm gate at 110 m** stands at the start straight's vanishing point behind the rider's head (the world's
+   first critic): `START_GATE_Z` is a rule every mountain shares.
+6. **The concept's "60% of the run in bends":** 40% is laid (section 1); more would squeeze the Labyrinth tighter.
+7. **The score's whole rebuild** changed every pack's bytes by its stamp (section 4): the five's music, stingers and
+   levels are as they were.
+
+### Shared files (every hunk)
+
+- `src/game/app.ts`: the `HOME_RIDERS` import; the mastery board's rider times read `[...ROSTER, ...HOME_RIDERS]`; the
+  live unlock ladder sorted by when each mountain opens.
+- `src/ui/contract.ts`: `MountainCard['biome']` gains `'oldrun'`.
+- `src/ui/art.ts` (RIDGES `oldrun`) and `src/ui/style.css` (`.b-oldrun`, `.gs-toast-sky.b-oldrun`): the card's art and
+  sky. The ui lane's `screens.css` has no `.b-oldrun` rule yet.
+- `src/game/save.ts`, `spineview.ts`, `src/ui/ui.ts`: untouched. (The world's render hunks: `notes/r9-oldrun-world.md`
+  section 2.)
+
+### Text for ART.md 15
+
+`notes/r9-oldrun-world.md` section 9 ("The Old Run: a winter afternoon on the old ice track").
+
+### Text for DECISIONS
+
+396. **The Old Run built: the wall made to pay in the lab, then a mountain of its own** (`r9-oldrun`, f5a0792 to its
+    last commit; `notes/r9-oldrun.md`, `notes/r9-oldrun-world.md`).
+    - *Why the glaze cost time:* the bank turned the sled's nose and the runners turned its motion after it, so a sled
+      riding the wall at its settling height slipped through a bend as a sled steered round it on the floor did; the
+      groundwork's hand popped at every correction; its bends lasted under a second; the run was slow (0.17); the
+      walls were the wrong height for their radius; the glaze was hardly faster than the wall beneath it.
+    - *What changed, track only:* `TRACK_BANK` (the bank turns the motion as well as the nose); turns that hold their
+      radius through their middle half; a 0.28 grade from a 0.36 start house of its own kind; walls 420 / R m; the
+      glaze's drag 0.25 over 0.4 to 0.9 of the wall, track ice 0.45, slush 1.3; the lab's skilled pilots and the bot
+      hold a height on the wall. The five's fingerprint held at every commit.
+    - *The bar, every line met:* the mid pilot's glaze line 17% faster through the bends than its own floor line; the
+      expert and the strong bot 61% and 62% of their bend time on the glaze; the novice and a sled let go finish
+      unhurt on the slower line; the clumsy pilot 30 of 30; no fall but a pop's flight landed badly; the mid pilot 89.6 s
+      at 35.8 m/s. New against the five on four measures by 15%; its wall in play for 43% of the mid pilot's run.
+    - *A mountain:* `MOUNTAINS[5]` (18 ghosts), its own look, three set pieces on appended verbs (`peal`, `split`,
+      `glaze`), two legends, three home riders (never a duel), a pool of 49, a galop of its own, and its world: an ice
+      track down a bare wood from a grand hotel to a timing house, a lake far below, a low late sun. Two blind critics
+      sorted its frames apart from the five's. Nobody has ridden it by hand.
