@@ -176,7 +176,8 @@ export function resultsMoment(m: ResultsModel): Moment {
   }
   if (m.trial?.figure) {
     const md = Math.max(0, Math.min(3, Math.floor(m.trial.medal)));
-    return { kind: md >= 3 ? 'win' : md > 0 ? 'podium' : 'finish', figure: m.trial.figure, of: m.trial.unit, word: m.trial.word ?? 'Across the line', time: null, medal: md, fact: null };
+    // (No medal: the words still say it was the Trial, which only the button said: "0 perfects / Across the line".)
+    return { kind: md >= 3 ? 'win' : md > 0 ? 'podium' : 'finish', figure: m.trial.figure, of: m.trial.unit, word: m.trial.word ?? 'This week’s Trial', time: null, medal: md, fact: null };
   }
   const place = placeOf(m);
   // (A Long Night ridden through leads with its depth, not the last leg's race: "2 legs / Your deepest night".)
@@ -233,6 +234,11 @@ function momentFact(m: ResultsModel): MomentFact | null {
 /** What opened leads by what changes play most: a mountain, a sled, a feature, a mirror ... gifts last. */
 const RANK_ORDER: readonly RewardCard['kind'][] = ['open', 'sled', 'feature', 'mirror', 'legs', 'hour', 'gate', 'garage', 'charm', 'flourish', 'title', 'gifts'];
 
+/** Every gift this run paid: the run's own and any prize of gifts a page it reached gave ("70 gifts"). */
+export function storyGifts(m: ResultsModel): number {
+  return (m.giftsEarned > 0 ? m.giftsEarned : 0) + (m.spine?.opened ?? []).reduce((s, o) => s + (o.kind === 'gifts' ? Number(/^([\d,]+) gifts$/.exec(o.name)?.[1].replace(/,/g, '') ?? 0) : 0), 0);
+}
+
 /** The one reward the second beat turns over, or null for a run that opened nothing (the bar turns over alone). */
 export type StoryReward =
   | { kind: 'mountain'; mountain: UnlockedMountain }
@@ -243,7 +249,9 @@ export function storyReward(m: ResultsModel): StoryReward | null {
   const mt = m.unlockedMountains?.[0];
   if (mt) return { kind: 'mountain', mountain: mt };
   const sp = m.spine;
-  const opened = [...(sp?.opened ?? [])].sort((a, b) => RANK_ORDER.indexOf(a.kind) - RANK_ORDER.indexOf(b.kind));
+  // (A prize of gifts is not turned over: it joins the run's own on the bar, one figure, "+124 gifts". A card of "70
+  // gifts" over "+54 gifts" read as two hauls that disagree, the bigger one not yours.)
+  const opened = [...(sp?.opened ?? [])].filter((o) => o.kind !== 'gifts').sort((a, b) => RANK_ORDER.indexOf(a.kind) - RANK_ORDER.indexOf(b.kind));
   const r = opened[0];
   if (r) {
     // (The kicker names the rank the bar reached, whichever page gave the prize: "Rider Rank 5" over a part-filled
@@ -408,6 +416,7 @@ export class Story {
       got.append(h('span', 'gs9-got-art is-gift', ico9('sledBold')), h('span', 'gs9-got-k', 'Ready in the garage'), n);
     }
     const sp = m.spine ?? null;
+    const all = storyGifts(m);
     this.segs = sp ? barSegments(sp.before, sp.after) : [];
     if (sp) {
       const a = sp.after;
@@ -417,10 +426,10 @@ export class Story {
       this.fillEl.style.transform = `scaleX(${(reduced() ? barShare(a) : this.segs.length > 0 ? this.segs[0].from : barShare(a)).toFixed(4)})`;
       this.pageEl = h('span', 'gs9-num', String(reduced() || this.segs.length === 0 ? a.page : this.segs[0].page));
       const label = rankInKicker ? null : h('span', 'gs9-rank-l', 'Rider Rank ', this.pageEl);
-      const gifts = m.giftsEarned > 0 ? h('span', 'gs9-gifts', ico9('gift'), h('span', 'gs9-num', `+${fmt(m.giftsEarned)}`), `${NBSP}gifts`) : null;
+      const gifts = all > 0 ? h('span', 'gs9-gifts', ico9('gift'), h('span', 'gs9-num', `+${fmt(all)}`), `${NBSP}gifts`) : null;
       const xp = sp.ticks.reduce((s, t) => s + t.xp, 0);
-      got.append(h('div', `gs9-rank${label ? '' : ' is-bare'}`, label, bar, gifts), sr(`Rider Rank ${a.page}, ${fmt(xp)} XP this run.${m.giftsEarned > 0 ? ` ${fmt(m.giftsEarned)} gifts.` : ''}`));
-    } else if (m.giftsEarned > 0) got.append(h('div', 'gs9-rank is-bare', h('span', 'gs9-gifts', ico9('gift'), h('span', 'gs9-num', `+${fmt(m.giftsEarned)}`), `${NBSP}gifts`)));
+      got.append(h('div', `gs9-rank${label ? '' : ' is-bare'}`, label, bar, gifts), sr(`Rider Rank ${a.page}, ${fmt(xp)} XP this run.${all > 0 ? ` ${fmt(all)} gifts.` : ''}`));
+    } else if (all > 0) got.append(h('div', 'gs9-rank is-bare', h('span', 'gs9-gifts', ico9('gift'), h('span', 'gs9-num', `+${fmt(all)}`), `${NBSP}gifts`)));
     const showCard = got.childElementCount > 0;
 
     // Beat three: the one button with its reason, then Home, Photo and Details.

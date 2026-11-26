@@ -3,7 +3,7 @@ import type { MountainCard, ResultsModel, TitleModel, TitleTwelve, TwelveRung } 
 import { bareFigures } from '../scripts/playtest/r9-screenbars';
 import { type NextGoal, primaryButton } from '../src/game/goals';
 import { rankBar } from '../src/game/spineview';
-import { factText, resultsMoment, storyButton, storyReward } from '../src/ui/sequence';
+import { factText, resultsMoment, storyButton, storyGifts, storyReward } from '../src/ui/sequence';
 import { pickerOrder, shortName, titleAim, titleRide } from '../src/ui/title';
 
 // Round 9 (the ui lane): the words the new title and results say, held to section 2's copy bars without a browser.
@@ -181,6 +181,21 @@ describe("the results' words", () => {
   it('name every prize of a page in words', () => {
     expect(storyReward(cases[0])).toMatchObject({ name: 'A new sled' });
     expect(storyReward(cases[2])).toMatchObject({ name: 'The Kite String charm' });
+  });
+
+  it('say the gifts as one figure: a prize of gifts joins the run’s own and is not turned over', () => {
+    // (A chapter's "70 gifts" on a card over the bar's "+54 gifts" read as two hauls that disagree.)
+    const chapter = base({ giftsEarned: 54, spine: spine({ kind: 'again', text: 'Run Again', sub: null, aria: 'Run Again' }, [{ kind: 'gifts', name: '70 gifts', page: 3, chapter: '2026-11' }]) });
+    expect(storyReward(chapter)).toBeNull();
+    expect(storyGifts(chapter)).toBe(124);
+    const both = base({ giftsEarned: 40, spine: spine({ kind: 'again', text: 'Run Again', sub: null, aria: 'Run Again' }, [{ kind: 'gifts', name: '1,200 gifts', page: 30, chapter: null }, { kind: 'sled', name: 'A new sled', page: 30, chapter: null }]) });
+    expect(storyReward(both)).toMatchObject({ name: 'A new sled' });
+    expect(storyGifts(both)).toBe(1240);
+  });
+
+  it('say a Trial without a medal was the Trial', () => {
+    const trial = base({ trial: { medal: 0, line: '', figure: '0', unit: 'perfects', word: null, fact: '13 short of bronze' } });
+    expect(resultsMoment(trial)).toMatchObject({ figure: '0', of: 'perfects', word: 'This week’s Trial' });
   });
 });
 
