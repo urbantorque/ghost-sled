@@ -557,6 +557,9 @@ export class LandingAid {
       c.gradient(bx, bz, g);
       const n = tmpN.set(-g.x, 1, g.z).normalize();
       this.blob.position.set(bx, gy + 0.03, -bz);
+      // (Round 9: on the Old Run's walls the ground stands steep under a sled, and lifted straight up the shadow sank
+      // into the wall's face: it is lifted off the wall along its own normal there.)
+      if (c.kit) this.blob.position.set(bx + n.x * 0.07, gy + n.y * 0.07, -bz + n.z * 0.07);
       this.blobAt.x = bx;
       this.blobAt.z = bz;
       this.blobAt.on = true;

@@ -1,6 +1,6 @@
 import { Color, DoubleSide, FrontSide, type Material, NormalBlending, NotEqualStencilFunc, ShaderMaterial, type Texture, UniformsLib, UniformsUtils, Vector2, Vector3, Vector4 } from 'three';
 import { BEST_HEX, FRIEND_HEX } from '../game/beats';
-import { GLAZE_HI, GLAZE_LO } from '../sim/oldrun';
+import { CREST_U, GLAZE_HI, GLAZE_LO } from '../sim/oldrun';
 import { FAR_GLSL, farUniforms } from './farshadow';
 import { localUniforms, setLocalLightTier } from './lights';
 import { Palette, setPoster, tierLook } from './palette';
@@ -904,6 +904,8 @@ const TRACK_GLSL = /* glsl */ `
     /** The glaze's band, in shares up the wall (oldrun.ts GLAZE_LO, GLAZE_HI). */
     const float T_GLAZE_LO = ${GLAZE_LO.toFixed(3)};
     const float T_GLAZE_HI = ${GLAZE_HI.toFixed(3)};
+    /** Where the parapet's crest starts to round over, in shares up the wall (oldrun.ts CREST_U). */
+    const float T_CREST = ${CREST_U.toFixed(3)};
   #endif
 `;
 
@@ -1284,8 +1286,11 @@ export function makeSnowMaterial(track = false): ShaderMaterial {
           // work (dunes, ripples, relief, grain, old tracks) is drawn on it. The glaze's band and the slush's floor are
           // the sim's own, their edges cut a pixel wide.
           float tu = vTrack.x;
-          float tAA = min(fwidth(tu), 0.2) * 0.75 + 0.006;
-          float tIn = 1.0 - smoothstep(1.0, 1.0 + max(tAA, 0.035), tu);
+          float tFw = fwidth(tu);
+          float tAA = min(tFw, 0.2) * 0.75 + 0.006;
+          // (The ice runs on over the lip up the parapet's inner face to where its crest rounds over: snow from the lip
+          // up, lit, lay along the top of every wall as a pale band, which a critic read as light lying on the wall.)
+          float tIn = 1.0 - smoothstep(T_CREST - 0.06, T_CREST + max(tAA, 0.04), tu);
           float tGlaze = vTrack.y * smoothstep(T_GLAZE_LO - tAA, T_GLAZE_LO + tAA, tu) * (1.0 - smoothstep(T_GLAZE_HI - tAA, T_GLAZE_HI + tAA, tu));
           float tSlush = smoothstep(0.5, 1.0, vTrack.z) * (1.0 - smoothstep(-0.07 - tAA, 0.02 + tAA, tu));
           ice = max(ice, tIn);
@@ -1568,6 +1573,11 @@ export function makeSnowMaterial(track = false): ShaderMaterial {
           float lobe = max(dot(reflect(-uSunDir, n), v), 0.0);
           float graze = 1.0 - clamp(dot(n, v), 0.0, 1.0);
           float fwd = lobe * lobe * lobe * graze * graze * smoothstep(5.0, 18.0, dist) * (1.0 - smoothstep(70.0, 160.0, dist));
+          #ifdef TRACK
+            // (Ice does not scatter a low light forward as snow does: on the track's walls, seen edge-on toward the sun,
+            // the sheen lay as a pale wedge from the vanishing point to the frame's edge.)
+            fwd *= 1.0 - tIn;
+          #endif
           col += lit * mix(sunSnow, sunN, 0.35) * (fwd * shadowR * t * 0.32 * uLiftK.w);
         }
         // Round 8, second attempt: the light caught on the relief's forms. Where a pillow's flank or a sastrugi's crest
@@ -1836,20 +1846,43 @@ export function makeSnowMaterial(track = false): ShaderMaterial {
             // The glaze's edges, scribed: a thin bright line along its top and its foot where the polish starts, so
             // the band reads as a band at speed and from far down the run, in the light's own colour and the
             // snow's in the shade.
-            float tw = tAA * 1.1 + 0.008;
-            float scribe = vTrack.y * max(1.0 - smoothstep(tw * 0.4, tw, abs(tu - T_GLAZE_HI)), 0.6 * (1.0 - smoothstep(tw * 0.4, tw, abs(tu - T_GLAZE_LO))));
+            // (A hairline in the wall's own shares, a pixel or two, and gone where a pixel spans much of the wall: at
+            // the lens, seen along the wall, it widened with the anti-aliasing into a pale band the width of the frame.)
+            float tw = min(tAA * 1.1 + 0.008, 0.035);
+            float scribe = (1.0 - smoothstep(0.015, 0.05, tFw)) * vTrack.y * max(1.0 - smoothstep(tw * 0.4, tw, abs(tu - T_GLAZE_HI)), 0.6 * (1.0 - smoothstep(tw * 0.4, tw, abs(tu - T_GLAZE_LO))));
             // (A frost-white, cool and a step under the lit snow: never a painted guide line.)
             col = mix(col, mix(lit, uSnowShade, 0.22) * 0.96, scribe * 0.45 * tIn);
+            // The ice in its three values (ART.md 15 rule 3): patches of white rime where the frost has dulled it, a
+            // step paler and matte, over the polished ice, and its darker clear heart between them; bubbles frozen
+            // in it under the lens. Patches lying along the wall, broken, never lines down the run.
+            float rime = smoothstep(0.5, 0.72, vnoise(vec2(vTrack.w * 0.42, vWorldPos.z * 0.05) + 2.0) * 0.65 + vnoise(vec2(vTrack.w * 1.3, vWorldPos.z * 0.16) + 5.0) * 0.35);
+            float clear = 1.0 - smoothstep(0.25, 0.45, vnoise(vec2(vTrack.w * 0.3, vWorldPos.z * 0.035) + 9.0));
+            float plain = tIn * (1.0 - tGlaze) * (1.0 - tSlush);
+            col = mix(col, mix(col, lit * mix(sunSnow, vec3(1.0), 0.5) * mix(0.62, 0.92, t), 0.55), rime * plain * 0.55);
+            col = mix(col, col * mix(vec3(0.88), uSnowShade / max(uSnowLit, vec3(0.05)), 0.5), clear * plain * 0.35);
+            if (uSnowFx > 0.0 && dist < 22.0) {
+              vec2 bq = vec2(vTrack.w, vWorldPos.z) * 2.2;
+              vec2 bc = floor(bq);
+              float bh = hash13(vec3(bc, 21.0));
+              if (bh > 0.88) {
+                float br = length(fract(bq) - 0.5 - (vec2(hash13(vec3(bc, 4.0)), hash13(vec3(bc, 6.0))) - 0.5) * 0.5);
+                float bs = 0.08 + 0.1 * (bh - 0.88) / 0.12;
+                col = mix(col, mix(uSnowShade, uSnowLit, 0.85), (1.0 - smoothstep(bs * 0.7, bs + footprint * 2.4, br)) * 0.4 * (1.0 - tSlush) * (1.0 - smoothstep(8.0, 22.0, dist)));
+              }
+            }
             // The slush in a bend's floor: the snow the sleds scraped off the walls, dull and churned, a step down
-            // from the ice either side and grey in its light, never shining.
+            // from the ice either side and grey in its light, never shining; old runner ruts pressed into it.
             if (tSlush > 0.0) {
               vec2 sq2 = vec2(vTrack.w, vWorldPos.z);
-              float cl = vnoise(sq2 * vec2(2.2, 0.8)) * 0.55 + vnoise(sq2 * vec2(6.0, 2.4) + 3.0) * 0.3 + vnoise(sq2 * vec2(13.0, 5.0) + 7.0) * 0.15;
+              float cl = vnoise(sq2 * vec2(1.3, 0.45)) * 0.65 + vnoise(sq2 * vec2(3.4, 1.3) + 3.0) * 0.35;
               // (Soft lumps in the shade's own blue, darker where it is wet: never a grey tarmac speckle.)
               vec3 sl = mix(mix(shade, uSnowShade, 0.3), lit * sunSnow, t * 0.7);
               float lum = dot(sl, vec3(0.2126, 0.7152, 0.0722));
-              sl = mix(sl, vec3(lum), 0.15) * mix(0.9, 1.0, smoothstep(0.3, 0.72, cl));
-              sl = mix(sl, sl * mix(vec3(0.92), uSnowShade / max(uSnowLit, vec3(0.05)), 0.5), (1.0 - smoothstep(0.2, 0.45, cl)) * 0.32);
+              sl = mix(sl, vec3(lum), 0.12) * mix(0.93, 1.0, smoothstep(0.3, 0.72, cl));
+              sl = mix(sl, sl * mix(vec3(0.92), uSnowShade / max(uSnowLit, vec3(0.05)), 0.5), (1.0 - smoothstep(0.25, 0.5, cl)) * 0.25);
+              float w = 0.08 + fwx * 1.5;
+              float rut = oldTracks(vTrack.w, vWorldPos.z, w) * min(1.0, 0.1 / w) * (1.0 - smoothstep(20.0, 50.0, dist));
+              sl = mix(sl, sl * mix(vec3(0.9), uSnowShade / max(uSnowLit, vec3(0.05)), 0.5), rut * 0.5);
               col = mix(col, sl, tSlush);
             }
           }
@@ -2076,6 +2109,11 @@ export function makeSnowMaterial(track = false): ShaderMaterial {
           // moonlit colour, so a moon shadow inside the pool never tints it pink; past its edge the snow
           // is saturated moonlit periwinkle again, glints and all.
           float pool = lanternPool(vWorldPos.xz, uLanternLow) * uLantern;
+          #ifdef TRACK
+            // (The pool is measured across the ground; up the Old Run's steep walls everything over or under the sled
+            // was in it, a column of lamplight from the lip to the floor. It falls off with height too there.)
+            pool *= 1.0 - smoothstep(0.9, 2.6, abs(vWorldPos.y - uLanternLow.y));
+          #endif
           vec3 lamp = lanternLamp(uLanternColor);
           // The lantern sits low, so it rakes the ripples too: crests facing the sled glow.
           lamp *= (0.55 + 0.45 * clamp(n.y, 0.0, 1.0)) * (1.0 + dot(rip, normalize(uLanternPos.xz - vWorldPos.xz + vec2(0.0001, 0.0))) * 0.55);

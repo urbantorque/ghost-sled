@@ -143,6 +143,7 @@ export class OldRunWorld {
     this.lampN = 0;
     this.litZ = [];
     this.windows = [];
+    this.spill = [];
   }
 
   private keep<T extends { dispose(): void }>(o: T): T {
@@ -152,6 +153,8 @@ export class OldRunWorld {
 
   /** The places' meshes and the stretch of run each is seen from (sim z): drawn only from within reach of it. */
   private windows: Array<{ m: Mesh; z0: number; z1: number }> = [];
+  /** Where the lit windows' light falls on the snow before them (sim x, y, z). */
+  private spill: V3[] = [];
 
   private add(g: BufferGeometry, glow = false, z0 = -Infinity, z1 = Infinity): Mesh {
     const m = new Mesh(this.keep(g), glow ? this.glow : this.mat);
@@ -500,6 +503,11 @@ export class OldRunWorld {
     }
     this.add(merge(placed(parts, t.cx, c.baseY(zMid), zMid, 0)), false, HOTEL.from - 10, HOTEL.to);
     this.add(merge(placed(glass, t.cx, c.baseY(zMid), zMid, 0)), true, HOTEL.from - 10, HOTEL.to);
+    for (let b = 0; b < blocks; b++) {
+      const zz = HOTEL.from + (b + 0.5) * blen;
+      const x = t.cx + front - side * 4;
+      this.spill.push([x, drawnGround(c, x, zz) + 2.5, zz]);
+    }
     this.litZ.push(zMid);
   }
 
@@ -590,6 +598,10 @@ export class OldRunWorld {
     if (!low) parts.push(box(0.05, 1.3, 2.2, TRIM, [fx, fg + 15.1, -D / 2 + 1.15]));
     this.add(merge(placed(parts, t.cx, by, zc, -Math.atan(t.p))), false, zc - 8, zc + 8);
     this.add(merge(placed(glass, t.cx, by, zc, -Math.atan(t.p))), true, zc - 8, zc + 8);
+    {
+      const x = t.cx + x0 - side * (W / 2 + 2.5);
+      this.spill.push([x, drawnGround(c, x, zc) + 2.5, zc]);
+    }
     this.litZ.push(zc);
   }
 
@@ -625,7 +637,7 @@ export class OldRunWorld {
   // ------------------------------------------------------------------ the onlookers
 
   /** The hotel's guests and the town come up to watch: still figures in the resort's coats and hats (crowd.ts
-   *  stillCrowd, one draw, Low fewer and bolder) on the hotel's terrace, by the start house, behind the bells'
+   *  stillCrowd, one draw, Low fewer and bolder) set back on the hotel's terrace, behind the bells'
    *  brackets on the Hotel Straights' crests, at the Labyrinth's board, in two stands at the Horseshoe and lining the
    *  outrun to the timing house. Never on the ice. */
   private onlookers(c: Course, low: boolean): void {
@@ -646,10 +658,9 @@ export class OldRunWorld {
       }
     };
     // The hotel's terrace, along its balustrade.
-    const terrace = LIP + 4.4;
-    put(HOTEL.side, HOTEL.from, HOTEL.to - 10, 26, terrace, 2.2);
-    // By the start house, both crests.
-    put(-HOTEL.side, START_HOUSE.z1 + 3, START_HOUSE.z1 + 14, 6);
+    // (Set back from the balustrade: by the lens, still figures read as stacked boxes.)
+    const terrace = LIP + 9;
+    put(HOTEL.side, HOTEL.from + 6, HOTEL.to - 10, 22, terrace, 3);
     // The Hotel Straights' bends, on their outside crests, where the bells hang (every other one).
     const turns = placeOf(c, 'hotel').turns;
     turns.forEach((tn, i) => {
@@ -689,13 +700,17 @@ export class OldRunWorld {
     const lit = Math.max(0, Math.min(1.6, (lampK - 0.35) / 0.8));
     this.glow.uniforms.uEmissiveStrength.value = Math.min(1.25, lit * 1.3);
     if (lit <= 0.02) return;
+    // The hotel's and the timing house's windows spill their light onto the snow before them once they are lit.
+    if (lit > 0.3) {
+      for (const sp of this.spill) if (Math.abs(sp[2] - s.z) < 160) pushLocalLight(sp[0], sp[1], -sp[2], LAMP_LIN.r, LAMP_LIN.g, LAMP_LIN.b, 14, 0.5 * Math.min(1, lit));
+    }
     // The nearest lamps light the ice under them: from a little behind the rider to 110 m ahead.
     const z = s.z;
     for (let i = 0; i < this.lampN; i++) {
       const lz = this.lamps[i * 3 + 2];
       if (lz < z - 25 || lz > z + 110) continue;
       // (Soft: a lamp over a deep wall lit the wall's face under it, which the lens sees edge-on as a stripe of light.)
-      pushLocalLight(this.lamps[i * 3], this.lamps[i * 3 + 1], -lz, LAMP_LIN.r, LAMP_LIN.g, LAMP_LIN.b, 11, 0.55 * Math.min(1, lit));
+      pushLocalLight(this.lamps[i * 3], this.lamps[i * 3 + 1] + 3, -lz, LAMP_LIN.r, LAMP_LIN.g, LAMP_LIN.b, 15, 0.42 * Math.min(1, lit));
     }
   }
 }

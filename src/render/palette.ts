@@ -925,10 +925,13 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.massif.glowK = 0.45;
       p.massif.glowLine = -150;
       p.massif.veil = 0.12;
-      p.grade = { lift: c('#0C1026'), gain: c('#FFFAF2'), saturation: 1.08, contrast: 1.1, grain: 0.6, foot: 0.34, shafts: 0.65, lens: 0.2, focal: 0.5, gust: 0, glitter: 0.3 };
+      // (Shafts a little only: from a low sun ahead they lay pale wedges down the near walls, and ART.md 12's shafts hang
+      // in the air, never on the near snow.)
+      p.grade = { lift: c('#0C1026'), gain: c('#FFFAF2'), saturation: 1.08, contrast: 1.1, grain: 0.6, foot: 0.34, shafts: 0.3, lens: 0.2, focal: 0.5, gust: 0, glitter: 0.3 };
+      p.poster.shafts = 0.35;
       // (Few banks: a winter afternoon's high cirrus, lit from under by the low sun.)
       // (Banks heaped off the far ridges and a few long wisps: a field of high wisps read as stamped flat ellipses.)
-      p.clouds = { low: 0.4, high: 0.22, top: 0.2, lit: c('#FFF0DC'), shade: c('#ACA6C8'), rim: c('#FFC890'), shadow: 0.14 };
+      p.clouds = { low: 0.58, high: 0.2, top: 0.3, lit: c('#FFF0DC'), shade: c('#ACA6C8'), rim: c('#FFC890'), shadow: 0.14 };
       p.atmo = { rays: 0.7, halo: 0, meteors: 0, banner: 0, slide: 0, sweep: 0.3, valley: 0.85, valleyColor: c('#E6D4CC'), drift: 0.25 };
       p.bloom = 0.36;
       p.snowfall = 0.02;
@@ -1529,7 +1532,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.clouds.lit = c('#FFE2C0');
         p.air.far = c('#7A80B4');
         p.atmo.rays = 0.85;
-        p.grade.shafts = 0.8;
+        p.grade.shafts = 0.38;
         p.grade.saturation = 1.1;
         p.lamps = 0.45;
       },
@@ -2745,10 +2748,11 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.lamps = 1.6;
       // (A lamp's haze in the air near the crest stood through the frame as a warm vertical stripe: a breath of it.)
       p.lampAir = 0.04;
-      p.lanternGlow = 0.6;
+      // (A sled lantern's pool 3.5 to 4 m across under the sled, ART.md 7's Lantern Night: at 0.6 it was a speck.)
+      p.lanternGlow = 0.85;
       p.giftGlow = 0.5;
       p.ghostGlow = 1.5;
-      p.heroRim = 1.3;
+      p.heroRim = 1.45;
       p.bloom = 0.6;
       p.sparkle = 1.2;
       p.grade = { ...p.grade, shafts: 0, saturation: 1.04, contrast: 1.12, exposure: 1.04, glitter: 0.25, hi: c('#FFF0DC'), lo: c('#DCE0FF'), flash: 0.4 };
@@ -3013,7 +3017,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
       nth: 0,
       edit: (p) => {
         p.atmo.rays = 1;
-        p.grade.shafts = 1;
+        p.grade.shafts = 0.45;
         p.lift.sun = 0.6;
         p.grade.hi = c('#FFF4E0');
         p.grade.contrast += 0.03;
