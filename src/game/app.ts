@@ -26,7 +26,7 @@ import { reduced } from '../ui/motion';
 import { REVEAL_TIMING } from '../ui/reveal';
 import { RESULTS_TIMING } from '../ui/results';
 import { forgetSeatedPortraits, prewarmSledPortraits, setSledPortraits } from '../ui/menus';
-import type { AlmanacModel, GarageShelf, GhostKind, HintKind, HudModel, MountainCard, PaintCard, ResultsModel, ResultsSpine, TitleSpine, LanternTownView, SettingsModel, TitleModel, TitleTrial, TitleTwelve, TwelveRung } from '../ui/contract';
+import type { AlmanacModel, GarageShelf, GhostKind, HintKind, HudModel, MountainCard, PaintCard, ResultsModel, ResultsSpine, TitleIntro, TitleSpine, LanternTownView, SettingsModel, TitleModel, TitleTrial, TitleTwelve, TwelveRung } from '../ui/contract';
 import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS, FINISH_RESULTS_MS, FINISH_SKIP_MS, IDLE_FEEL } from './beats';
 import { type OldLink, linkLine, linkMountain, readChallengeLink, targetZ } from './challenge';
 import { Director } from './director';
@@ -164,17 +164,6 @@ function validRecord(r: string | undefined | null): boolean {
  *  long (ms) for it to run (it resumes within a few frames of the unmute). */
 const WAKE_WAIT_MS = 700;
 
-/** How many Beat stamps the results card shows at first (results.ts standings): your row, the two
- *  places above it and the one below in a field over 5 rows (first place shows the three it beat);
- *  a smaller field shows whole. One soft mallet sounds per stamp in view. */
-function beatStampsShown(ghosts: number, ahead: number): number {
-  const n = ghosts + 1;
-  const beaten = ghosts - ahead;
-  if (n <= 5) return beaten;
-  const lo = Math.max(0, Math.min(ahead - 2, n - 4));
-  return Math.max(0, Math.min(beaten, lo + 4 - 1 - ahead));
-}
-
 interface Challenge {
   record: RunRecord;
   attempts: number;
@@ -267,6 +256,10 @@ export class App {
   private lastWallTick = -1e9;
   private grinds = 0;
   private results: ResultsModel | null = null;
+  /** Round 9 (U1): what opened since the title was last up, each said once on its door (titleIntro), and the lines
+   *  whose door has been opened this session. */
+  private intros: TitleIntro[] = [];
+  private readonly introsSeen = new Set<string>();
   /** Counts results cards shown and hidden: a card's first-frame sounds skip a card already gone. */
   private resultsSeq = 0;
   /** Rewards landed on this card (each coin's index). */
@@ -429,6 +422,8 @@ export class App {
       onHour: (on) => this.pickHour(on),
       onRideMode: (mode) => this.rideMode(mode),
       onOpenAlbum: () => this.openAlbum(),
+      // (Round 9: a door's "New" was read: the next thing new may take its door.)
+      onIntroSeen: (line) => this.introsSeen.add(line),
       onResultsBeat: (kind, i) => this.resultsBeat(kind, i),
       // Round 8 (the photo lane): photo mode, from pause and from the results.
       onPhoto: () => this.openPhoto(),
@@ -636,6 +631,9 @@ export class App {
     };
     const waits = waitingRider(t, open);
     const at = next ? MOUNTAINS[duelMountain(next)] : null;
+    // (Round 9: whether the next run on that ground is the duel: the first waits for a save's third run, so Ride never
+    // says "Duel" for a run that is not one.)
+    const rides = at !== null && duelOn(t, MOUNTAINS.indexOf(at), open, this.save.data.runs) !== null;
     return {
       beaten: t?.beaten.length ?? 0,
       of: TWELVE.length,
@@ -646,7 +644,32 @@ export class App {
       hook: gateLine(t),
       crowned: t?.crowned === true,
       rungs: TWELVE.map(rung),
+      rides,
     };
+  }
+
+  /** Round 9 (U1): the title's one thing new, said once: the newest system or piece a run opened, else the day's news
+   *  when it is news (a new month's chapter, the day's contracts, a move in the Cup's league), until its door is opened.
+   *  The flame's days are on the Daily and Cup door already. */
+  private titleIntro(news: string | null): TitleIntro | null {
+    const day: TitleIntro | null = news && /^New this month/.test(news) ? { door: 'progress', line: news } : news && /contracts today|division|Trial:/.test(news) ? { door: 'events', line: news } : null;
+    const all = day ? [...this.intros, day] : this.intros;
+    for (let i = all.length - 1; i >= 0; i--) if (!this.introsSeen.has(all[i].line)) return all[i];
+    return null;
+  }
+
+  /** What a run's opened rewards introduce on the title (ui/words.ts SAYS says the same on the results' card). */
+  private keepIntros(opened: ResultsSpine['opened']): void {
+    const say: Record<string, TitleIntro> = {
+      'Daily contracts': { door: 'events', line: 'New: daily contracts. Three small goals a day, each worth XP.' },
+      'The Spirit Album': { door: 'progress', line: 'New: the Spirit Album. A sticker for all you do.' },
+      'The Long Night': { door: 'progress', line: 'New: the Long Night. Mountains back to back, ridden from here.' },
+      Trials: { door: 'events', line: 'New: Trials. A new rule every week, beside the Cup.' },
+    };
+    for (const r of opened) {
+      const i = say[r.name] ?? (r.kind === 'sled' ? { door: 'garage' as const, line: 'New: a sled of your own, in the garage.' } : r.kind === 'garage' ? { door: 'garage' as const, line: `New: ${r.name}, in the garage.` } : null);
+      if (i && !this.intros.some((x) => x.line === i.line)) this.intros.push(i);
+    }
   }
 
   /** A link opened this Daily or Cup before its rivals were generated: its title stands, Ride waits. */
@@ -909,7 +932,8 @@ export class App {
     const open = (id: string): boolean => MOUNTAINS.some((m) => m.id === id && this.isOpen(m));
     let spine: TitleSpine | undefined;
     // (The trials lane: a week's Trial not yet ridden is the day's news when nothing else is.)
-    const trialNews = this.trialsOpen() && this.trialReady && !tp && !d.trials?.[this.trial.week] ? `This week's Trial: ${this.trial.name}. Pick it on the Cup.` : null;
+    const trialNews = this.trialsOpen() && this.trialReady && !tp && !d.trials?.[this.trial.week] ? `This week's Trial: ${this.trial.name}. Choose it in Daily and Cup.` : null;
+    const intro = (news: string | null): TitleIntro | null => this.titleIntro(news);
     const model: TitleModel = {
       mountains: MOUNTAINS.map((m) => {
         const spot = this.spotFor(m.id);
@@ -928,6 +952,9 @@ export class App {
           unlockText: this.isOpen(m) ? '' : lockText(d, m),
           best: topScore(d.best[m.id]),
           bestTime: d.best[m.id]?.time ?? 0,
+          // (Round 9: the picker's order, by the unlock path with the finale last.)
+          unlockGhosts: m.unlockGhosts,
+          finale: m.finale === true,
           oldBest: oldBest(d, m.id)?.score ?? 0,
           rank: spot.rank,
           rankOf: spot.of,
@@ -976,6 +1003,7 @@ export class App {
         if (!spine) {
           spine = titleSpine(d, today, { week, cupPool: cupPool(), open });
           if (!spine.whatsNew && trialNews) spine.whatsNew = trialNews;
+          spine.intro = intro(spine.whatsNew);
         }
         return spine;
       },
@@ -2835,6 +2863,8 @@ export class App {
     const spineOut = this.settleSpineRun(sim, sum, settled, climb, board, you, mi);
     // (Round 8, the photo lane: the stickers it earned take the frames this run kept of them.)
     this.shots?.settle(spineOut.outcome.stickers);
+    // (Round 9: what it opened is said once on the title's doors.)
+    this.keepIntros(spineOut.view.opened);
     this.keepShots();
     // (A page that opens a mountain shows its unlock card, as the ghosts passed and The Twelve do.)
     for (const { reward: r } of spineOut.outcome.opened) {
@@ -2973,6 +3003,10 @@ export class App {
       stages: this.stageTable(sim, decided?.text ?? null, climb),
       canRideHome: sim.s.crashed && !sim.finished && sim.distance < sim.course.finishZ - 300 && !this.homeRide,
     };
+    // Round 9 (U2): a mountain this run opened is the one button when the spine's choice is a plain Run Again ("Ride
+    // Frostfang Glacier", ui/sequence.ts storyButton), so Run Again, by the button or Space, rides it there.
+    const opened = unlockedMountains[0];
+    if (opened && spineOut.primary.kind === 'again' && this.results.runAgainLabel?.text === 'Run Again') this.againTo = opened.id;
     this.ui.hideHud();
     if (nightGoesOn) {
       this.save.flush();
@@ -3238,22 +3272,19 @@ export class App {
     return fr ? friendLine(fr.name, fr.standing, this.youStanding(sim)) : null;
   }
 
-  /** The results card's sounds on its CSS beats (results.ts RESULTS_TIMING), laid by the engine: the
-   *  count-up ticking up the ladder, the place stamp, the New best chord on its stamp and a mallet per
-   *  Beat stamp in view. Each mission's chime plays as its Done stamp starts on screen (missionStamp)
-   *  and each reward's coin as it lands (rewardLanded), which the card calls whichever path it took: a
-   *  phone's folded list chimes for nothing it does not draw. Reduced motion plays it all at once, the
-   *  one chime and the one coin included. (The only mission sound: settleRun credits, nothing chimes
-   *  twice.) */
+  /** The results' sounds on their timeline (results.ts RESULTS_TIMING), laid by the engine. Round 9's story (ui/
+   *  sequence.ts) counts nothing up and stamps no Beat on a race list, so it keeps only the place's stamp (as the
+   *  place's word lands) and the new best's chord (as its fact does); the bar's ticks, the page's stamp and the card's
+   *  mallet ride its beats (resultsBeat). Each finished mission's chime and coin come as the bar starts to fill
+   *  (missionStamp, rewardLanded). Reduced motion plays it all at once, the one chime and the one coin included.
+   *  (The only mission sound: settleRun credits, nothing chimes twice.) */
   private resultsSounds(m: ResultsModel, lagS = 0): void {
     const rows = (pred: (mv: ResultsModel['missions'][number]) => boolean): number[] => m.missions.flatMap((mv, i) => (pred(mv) ? [i] : []));
-    const youAt: Standing = { time: m.finish?.seconds ?? null, distance: m.distance };
-    const ahead = m.ghosts.filter((g) => aheadOf({ time: g.time ?? null, distance: g.distance ?? 0 }, youAt)).length;
     const still = reduced();
     const show = {
-      count: m.score > 0,
-      newBest: m.newBest,
-      beats: beatStampsShown(m.ghosts.length, ahead),
+      count: false,
+      newBest: m.finish?.newBest === true,
+      beats: 0,
       missions: still ? rows((mv) => mv.justCompleted) : [],
       coins: still ? rows((mv) => mv.justCompleted && mv.reward > 0) : [],
     };

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ChaosEvent } from '../src/sim/chaos';
 import { burstName, DUEL_HOLD_MS, duelRoute, enqueueFlash, EVENT_TINY, FLOW_SNUFF_MS, GAP_DWELL_MS, gapShown, newsKey, OF_STABLE_MS, OF_WAIT_MS, PILL_FADE_MS, pillGap, pillHeld, pillOwner, placeSettled, RANK_SETTLE_MS, rankSettled, releaseBand, RESULT_STALE_MS, resultStale, ScoreHold, shownScore, sideWord, SLUNG_KEY, type Waiting } from '../src/ui/hud';
-import { landAt, MORE_MIN_PX, moreCue, RESULTS_TIMING, stampInView, type MoreBlock } from '../src/ui/results';
 
 // The overlay's small decisions, away from the DOM: who may take the rival pill during a duel, the
-// phone countdown chip's words, and where the results card's More cue goes.
+// phone countdown chip's words. (Round 9 retired the results card's More cue, its stamps and its fly-in: the
+// results are a story and a Details sheet, ui/results.ts.)
 
 describe('duelRoute', () => {
   it('gives every message the pill while no duel is open', () => {
@@ -355,57 +355,5 @@ describe('EVENT_TINY', () => {
       expect(EVENT_TINY[e].length).toBeLessThanOrEqual(9);
     }
     expect(EVENT_TINY[ChaosEvent.GiftStorm]).toBe('Storm');
-  });
-});
-
-describe('moreCue', () => {
-  const view = { top: 17, bottom: 554, right: 1240 };
-  const box = (left: number, top: number, right: number, bottom: number) => ({ left, top, right, bottom });
-  const mis: MoreBlock = { key: 'mis', r: box(562, 287, 864, 400) };
-  const race: MoreBlock = { key: 'race', r: box(898, 287, 1239, 498) };
-  const tipCut: MoreBlock = { key: 'tip', r: box(562, 516, 1238, 571) };
-  const head = box(562, 287, 864, 330);
-
-  it('stays out for a sliver (the desktop revive card cut by 17 px)', () => {
-    expect(moreCue(17, view, [mis, race, tipCut], head, 89)).toBeNull();
-    expect(moreCue(MORE_MIN_PX - 1, view, [mis, race, tipCut], head, 89)).toBeNull();
-  });
-
-  it('sits at the right end of the tip row when only the tip is cut, and says More', () => {
-    const cue = moreCue(60, view, [mis, race, tipCut], head, 89);
-    expect(cue).toEqual({ x: 1240 - 89 / 2, label: 'more' });
-  });
-
-  it('names the missions and sits on their column while their header is below the fold', () => {
-    const low: MoreBlock = { key: 'mis', r: box(562, 560, 864, 700) };
-    const cue = moreCue(200, view, [low, race, tipCut], box(562, 560, 864, 600), 89);
-    expect(cue).toEqual({ x: 713, label: 'missions' });
-  });
-
-  it('says More over the column cut deepest once the missions header is in view', () => {
-    const open: MoreBlock = { key: 'mis', r: box(562, 287, 864, 640) };
-    const cue = moreCue(120, view, [open, race, tipCut], head, 89);
-    expect(cue).toEqual({ x: 713, label: 'more' });
-    const long: MoreBlock = { key: 'race', r: box(898, 287, 1239, 760) };
-    expect(moreCue(220, view, [open, long, tipCut], head, 89)).toEqual({ x: 1068.5, label: 'more' });
-  });
-});
-
-describe('stampInView', () => {
-  const view = { left: 0, right: 390, top: 60, bottom: 700 };
-  it('counts a Done stamp in the results body, and never one folded away or scrolled out', () => {
-    expect(stampInView({ left: 20, right: 80, top: 300, bottom: 320 }, view)).toBe(true);
-    // Folded away: no box at all.
-    expect(stampInView({ left: 0, right: 0, top: 0, bottom: 0 }, view)).toBe(false);
-    // Below the fold, or scrolled up past the top.
-    expect(stampInView({ left: 20, right: 80, top: 760, bottom: 780 }, view)).toBe(false);
-    expect(stampInView({ left: 20, right: 80, top: 40, bottom: 58 }, view)).toBe(false);
-  });
-});
-
-describe('landAt', () => {
-  it('matches the card timeline the sound cues read (a reward leaves at FLY_MS, 140 ms a row)', () => {
-    expect(landAt(0)).toBe(RESULTS_TIMING.FLY_MS);
-    expect(landAt(2) - landAt(0)).toBe(2 * RESULTS_TIMING.FLY_STEP);
   });
 });

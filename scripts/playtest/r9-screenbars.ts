@@ -86,7 +86,8 @@ export function readable(shot: Shot): Chunk[] {
 }
 
 /** A rewarded ad's offer, which only the dev server's mock platform makes. */
-export const AD_OFFER = /^(Double Gifts|Watch Ad: Double Gifts|Watch Ad|Revive|Watch an ad.*)$/i;
+// (Round 9: an offer's prefix is its own chunk, "Watch Ad:" with its colon.)
+export const AD_OFFER = /^(Double Gifts|Watch Ad: Double Gifts|Watch Ad:?|Revive|Watch an ad.*)$/i;
 
 const boxesOf = (chunks: readonly Chunk[]): { box: number; text: string; chunks: Chunk[] }[] => {
   const m = new Map<number, Chunk[]>();
@@ -253,7 +254,8 @@ export const SYSTEMS: Record<string, RegExp> = {
   gifts: /\bgifts?\b/i,
   bests: /\bbest\b/i,
   'The Twelve': /The Twelve/i,
-  'the Cup': /Weekly Cup/i,
+  // (Round 9: the title's door and its room say "Daily and Cup" and "This Week's Cup".)
+  'the Cup': /Weekly Cup|\bCup\b/i,
   'the league': /league|division/i,
   Trials: /\bTrial/i,
   'the Daily': /Daily Mountain|today's Daily|\bDaily\b/i,

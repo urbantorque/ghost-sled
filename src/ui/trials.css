@@ -1,26 +1,3 @@
-/* Round 8, the trials lane: the week's Trial on the title (title.ts). Picked from the Cup's card, it is one more pair of
-   halves in the hour's soft pill under Ride (the Cup and the Trial, hours.css's own pill), and over Ride, where the
-   greeting stands, its rule in the greeting's scene type and the three targets struck as the medals they win. No new
-   panel, no new colour: the medals' metals are the Daily's and the Cup's (meta.css .gs-medal), the flag the greeting's
-   off-white, and nothing moves but the press every button has. */
-
-/* The week's pill: the Cup's trophy and the Trial's medal held sit where the hour's sky swatches do. */
-.gs-t-week .gs-t-week-ico {
-  flex: none;
-  width: 16px;
-  height: 16px;
-}
-
-.gs-t-week .gs-mdot.gs-t-week-ico {
-  width: 14px;
-  height: 14px;
-  margin: 1px;
-}
-
-.gs-t-week .gs-t-week-opt.is-waiting {
-  opacity: 0.55;
-}
-
 /* Over Ride: the rule, then the targets. */
 .gs-t-trial {
   display: grid;
@@ -83,10 +60,6 @@
     justify-content: center;
     padding-left: 0;
     font-size: clamp(14px, 3.7vw, 16px);
-  }
-
-  .gs-title:has(.gs-t-trial) .gs-t12 {
-    display: none;
   }
 
   /* (The phone hides the greeting where The Twelve's row stands; the Trial's rule wears the greeting's type but takes

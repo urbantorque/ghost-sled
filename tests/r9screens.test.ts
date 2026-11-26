@@ -8,9 +8,9 @@ import { rewardsLine } from '../src/ui/fmt';
 
 // Round 9, the truth lane: the screen bars (prompts/round-9-clear-screens-a-garage-worth-it.md section 2) that can be
 // held without a browser. The detectors r9-screenbars.ts runs over the captures are held to known cases here (these
-// pass), and the bars the game's own copy can be read for without a page are written as they will have to pass,
-// marked `it.fails` because they fail on today's build (milestone 0 records the baseline; U2's copy pass turns them
-// over). Each prints today's figure. The browser bars (words, one primary, said once, nothing lost, Run Again) are
+// pass), and the bars the game's own copy can be read for without a page. Milestone 0 wrote those two as `it.fails`
+// (19 of 50 pages, 33 of 33 missions); the ui lane's copy pass (round 9, U2) turned them over, and they are plain
+// tests now. Each prints its figure. The browser bars (words, one primary, said once, nothing lost, Run Again) are
 // scripts/playtest/r9-screenbars.ts over r9-truth.js's captures.
 
 const at = (texts: string[][]): Chunk[] => texts.flatMap((box, b) => box.map((t) => ({ t, box: b })));
@@ -46,26 +46,27 @@ describe('the detectors', () => {
   });
 });
 
-describe('the bars on the game copy (fail today)', () => {
+describe('the bars on the game copy', () => {
   // The title's Rider Rank card and the results' reward cards name a page's rewards with fmt.ts rewardsLine:
-  // "A new sled +1". The bar: no figure without a word.
-  it.fails('plain figures: no Almanac page is named with a bare "+N"', () => {
+  // "A new sled +1" (round 8). The bar: no figure without a word. Round 9 names every prize in words.
+  it('plain figures: no Almanac page is named with a bare "+N"', () => {
     const lines = ALMANAC.map((p) => rewardsLine(p.rewards.map(rewardName)));
     const bad = lines.filter((l) => bareFigures([{ t: l, box: 0 }]).length > 0);
-    console.log(`  today: ${bad.length} of ${lines.length} pages are named with a bare "+N" (e.g. "${bad[0]}")`);
+    console.log(`  ${bad.length} of ${lines.length} pages are named with a bare "+N"${bad.length ? ` (e.g. "${bad[0]}")` : ''}`);
     expect(bad).toEqual([]);
   });
 
   // The results' one button names a mission's progress with goals.ts's short line; a mission met before reads "done
-  // before, so again" (the review's run 1). The bar: every label is something a player says.
-  it.fails('copy: no goal is said as "done before, so again"', () => {
+  // before, so again" (the review's run 1). The bar: every label is something a player says. Round 9: goals.ts no
+  // longer offers a mission whose target was met before it was drawn.
+  it('copy: no goal is said as "done before, so again"', () => {
     const odd: string[] = [];
     for (const m of MISSIONS) {
       const d = defaultSave('Rider');
       d.missions.active = [{ id: m.id, best: m.target }];
       for (const g of nextGoals(d, { key: 'pinecrest', mi: 0, day: '2026-11-23', board: null, lostTo: null, duelWon: false, dailyReady: false })) if (/so again/.test(g.short)) odd.push(`${g.text}: ${g.short}`);
     }
-    console.log(`  today: ${odd.length} of ${MISSIONS.length} missions, once met, are offered as "done before, so again"`);
+    console.log(`  ${odd.length} of ${MISSIONS.length} missions, once met, are offered as "done before, so again"`);
     expect(odd).toEqual([]);
   });
 });

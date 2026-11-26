@@ -304,26 +304,6 @@
   gap: 8px;
 }
 
-/* The results' foot: the lens as an icon beside Home (sequence.ts). */
-.gs-sq-foot > .gs-sq-photo {
-  width: 44px;
-  margin-right: auto;
-  padding: 0;
-}
-
-.gs-sq-foot:has(> .gs-sq-photo) > .gs-sq-home {
-  margin-right: 0;
-}
-
-/* Round 8, G11 (the share lane): the clip sits beside the lens, a pill with its words; the gap opens after the clip. */
-.gs-sq-foot > .gs-sq-photo:has(+ .gs-sq-clip) {
-  margin-right: 0;
-}
-
-.gs-sq-foot > .gs-sq-clip {
-  margin-right: auto;
-}
-
 /* A phone held upright: the bar is the width of the screen, in three rows. */
 @media (max-aspect-ratio: 1/1) {
   .gs-ph-bar {

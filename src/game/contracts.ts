@@ -87,7 +87,7 @@ const SAY: Record<ContractMetric, (n: number) => string> = {
   passes: (n) => `Pass ${n} ${n === 1 ? 'ghost' : 'ghosts'}`,
   perfects: (n) => `Land ${n} perfect ${n === 1 ? 'landing' : 'landings'}`,
   setPieces: (n) => (n === 1 ? 'Win a set piece' : `Win ${n} set pieces`),
-  tricks: (n) => `Land ${n} different tricks`,
+  tricks: (n) => (n === 1 ? 'Land a trick' : `Land ${n} different tricks`),
   lights: (n) => `Take ${n} spirit lights`,
   nearMisses: (n) => `Get ${n} near ${n === 1 ? 'miss' : 'misses'}`,
   dashes: (n) => `Dash ${n} ${n === 1 ? 'time' : 'times'}`,

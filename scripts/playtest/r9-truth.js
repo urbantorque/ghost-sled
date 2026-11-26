@@ -206,6 +206,9 @@ async (page) => {
       if (m.sleds.open) return 'garage';
       if (m.pause.open) return 'pause';
       if (ui.title.popover && ui.title.popover.isConnected) return `popover:${ui.title.popKind}`;
+      // (Round 9: a room over the title, a view pushed in it, or the results' Details.)
+      const sheets = Array.from(document.querySelectorAll('.gs9-sheet'));
+      if (sheets.length) return `sheet:${sheets[sheets.length - 1].getAttribute('aria-label')}`;
       if (ui.results.layer.open) return `results:${ui.results.el ? ui.results.el.dataset.view : ''}`;
       if (ui.title.layer.open) return 'title';
       return window.__gs.phase;
@@ -294,6 +297,13 @@ async (page) => {
       report.shots[`${name}-details`].scrolls = more;
     }
   };
+  /** Round 9: closes the title's rooms (and the views pushed in them) with Escape, as a player would. */
+  const closeRooms = async () => {
+    for (let i = 0; i < 4 && (await page.evaluate(() => !!document.querySelector('.gs9-sheet'))); i++) {
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(350);
+    }
+  };
   const ready = (label) =>
     page.waitForFunction((label) => {
       const b = Array.from(document.querySelectorAll('button')).find((x) => (x.getAttribute('aria-label') || '').startsWith(label));
@@ -314,6 +324,34 @@ async (page) => {
         await shoot(`${st}-title-ready`, { stage: st, screen: 'title', at: 'rivals in' });
       }
       if (st === 'fresh') continue;
+      // Round 9 (the ui lane): the title's doors open rooms. Each room is shot, then the Cup, the Trial (where Trials
+      // are open) and the Daily are chosen in Daily and Cup (a Choose appears once its field is in, up to a minute),
+      // and the title shot with each picked.
+      if (await page.evaluate(() => !!document.querySelector('[data-fk="door-events"]'))) {
+        const room = async (d) => {
+          await closeRooms();
+          if (!(await click(`[data-fk="door-${d}"]`, 3000))) return false;
+          await page.waitForSelector('.gs9-room', { timeout: 8000 }).catch(() => {});
+          await page.waitForTimeout(700);
+          return true;
+        };
+        if (await room('progress')) await shoot(`${st}-room-progress`, { stage: st, screen: 'room-progress' });
+        if (await room('events')) {
+          await page.waitForFunction(() => !!document.querySelector('[data-fk="choose-cup"], [data-fk="choose-daily"]'), null, { timeout: 60000, polling: 250 }).catch(() => {});
+          await page.waitForTimeout(500);
+          await shoot(`${st}-room-events`, { stage: st, screen: 'room-events' });
+        }
+        // (The fields are in by now: a Choose not there in a few seconds is not coming, a Trial before Trials open.)
+        for (const [k, shot] of [['cup', 'title-cup'], ['trial', 'title-trial'], ['daily', 'title-daily']]) {
+          if (!(await room('events'))) break;
+          if (await click(`[data-fk="choose-${k}"]`, k === 'trial' ? 4000 : 15000)) {
+            await page.waitForTimeout(1800);
+            await shoot(`${st}-${shot}`, { stage: st, screen: shot });
+          }
+        }
+        await closeRooms();
+        continue;
+      }
       // The Cup picked, then the Trial (where Trials are open), then the Daily. (Each looked up once its rivals are
       // in: the title is drawn again when they arrive.)
       const cupSel = (await ready('Weekly Cup')) ? await byLabel('Weekly Cup') : null;
@@ -347,7 +385,20 @@ async (page) => {
     const st = c.stages[0];
     await go(st);
     await page.waitForTimeout(3000);
-    const openers = [
+    const r9 = await page.evaluate(() => !!document.querySelector('[data-fk="door-events"]'));
+    const openers = r9
+      ? [
+          ['garage', '[data-fk="door-garage"]'],
+          ['room-events', '[data-fk="door-events"]'],
+          ['room-progress', '[data-fk="door-progress"]'],
+          ['league', '[data-fk="door-events"] > [data-fk="league"]'],
+          ['twelve', '[data-fk="door-progress"] > [data-fk="twelve"]'],
+          ['medals', '[data-fk="door-progress"] > [data-fk="medals"]'],
+          ['almanac', '[data-fk="door-progress"] > [data-fk="almanac"]'],
+          ['album', '[data-fk="door-progress"] > [data-fk="album"]'],
+          ['settings', '[data-fk="door-settings"]'],
+        ]
+      : [
       ['garage', '[data-fk="sleds"]'],
       ['almanac', 'Almanac'],
       ['album', 'Spirit Album'],
@@ -358,6 +409,15 @@ async (page) => {
       ['settings', '[data-fk="settings"]'],
     ];
     const open = async (sel) => {
+      // (Round 9: "a > b" opens a, then presses b in what a opened: a room's control.)
+      if (sel.includes(' > ')) {
+        const [a, b] = sel.split(' > ');
+        if (!(await click(a, 3000))) return false;
+        await page.waitForTimeout(900);
+        const ok = await click(`.gs9-room ${b}`, 3000);
+        await page.waitForTimeout(900);
+        return ok;
+      }
       const s = sel.startsWith('[') ? sel : await byLabel(sel);
       if (!s) return false;
       const ok = await click(s, 3000);
@@ -371,7 +431,7 @@ async (page) => {
         if (sf === 'title') return;
         const closed = await page.evaluate(() => {
           const ui = window.__gs.ui;
-          const top = ui.menus.topEl;
+          const top = ui.menus.topEl ?? Array.from(document.querySelectorAll('.gs9-sheet')).pop() ?? null;
           const x = top && top.querySelector('[data-fk^="close-"]');
           if (x) {
             x.click();
@@ -482,6 +542,13 @@ async (page) => {
     const tag = `${st}-results-${sc}`;
     const pickThenRide = async (label, trial) => {
       await go(st);
+      if (await page.evaluate(() => !!document.querySelector('[data-fk="door-events"]'))) {
+        const k = trial ? 'trial' : label === 'Weekly Cup' ? 'cup' : 'daily';
+        if (!(await click('[data-fk="door-events"]', 4000))) return false;
+        if (!(await click(`[data-fk="choose-${k}"]`, 60000))) return false;
+        await page.waitForTimeout(1800);
+        return click('[data-fk="ride"]', 30000);
+      }
       if (!(await ready(label))) return false;
       await page.waitForTimeout(600);
       const s = await byLabel(label);
@@ -541,11 +608,14 @@ async (page) => {
       const where = await page.evaluate(() => {
         const b = Array.from(document.querySelectorAll('button')).find((x) => /^Next of The Twelve: .*, on /.test(x.getAttribute('aria-label') || ''));
         const m = b && /, on ([^,]+),/.exec(b.getAttribute('aria-label'));
-        return m ? m[1] : null;
+        // (Round 9: the title's model names it; no card does.)
+        const t = window.__gs.ui.title.model;
+        return m ? m[1] : t && t.twelve && t.twelve.next ? t.twelve.next.mountain : null;
       });
       const mi = await page.evaluate((name) => {
         const b = Array.from(document.querySelectorAll('.gs-mtns button')).map((x) => x.getAttribute('aria-label') || '');
-        return b.findIndex((l) => l.startsWith(name + '.'));
+        const t = window.__gs.ui.title.model;
+        return b.length ? b.findIndex((l) => l.startsWith(name + '.')) : t ? t.mountains.findIndex((x) => x.name === name) : -1;
       }, where);
       report.notes.push(`duel on ${where} (mountain ${mi})`);
       ok = mi >= 0 && (await go(st, `&autoride=1&m=${mi}`, 'run'));
@@ -663,6 +733,15 @@ async (page) => {
         await page.waitForTimeout(700);
         const m2 = await page.evaluate(MEASURE, {});
         second.push({ via: t, text: m2.chunks.filter((x) => x.top).map((x) => x.t).join(' | ').slice(0, 6000) });
+      }
+      // (Round 9: a room's views, the league's table, all twelve and the medals, are its second level.)
+      for (const fk of ['league', 'twelve', 'medals']) {
+        if (!(await page.evaluate((fk) => { const b = document.querySelector(`.gs9-room [data-fk="${fk}"]`); if (!b) return false; b.click(); return true; }, fk))) continue;
+        await page.waitForTimeout(800);
+        const m2 = await page.evaluate(MEASURE, {});
+        second.push({ via: fk, text: m2.chunks.filter((x) => !x.inert).map((x) => x.t).join(' | ').slice(0, 6000) });
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(500);
       }
       crawl.doors.push({ from: ctl.name, clicked: hit, opened: sf, text: inSurface.map((x) => x.t).join(' | ').slice(0, 8000), doors, second });
     }

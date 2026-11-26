@@ -1,834 +1,564 @@
-/* ------------------------------------------------------------------ Results, round 8: the directed sequence
+/*
+  Round 9 (U2, U3): the results as three beats over the scene (sequence.ts), and Details one level down
+  (results.ts), on tokens.css and kit9.css. Desk first: the moment at the top of the logo's side, the one column at
+  the far edge, so the rider stays the picture. Then a screen held upright (the moment over the sky, the column in the
+  thumbs' band under the rider: contract C6's band), and a short landscape phone.
+*/
 
-   The run told in about five seconds over the live scene (sequence.ts): the moment (screens.css, top left), then the
-   place with the nearest rider named, Rider Rank's bar filling short of the next page, what opened turning over, and
-   the one button. One column at the screen's far edge (the bottom on a phone held upright), so the scene and the
-   rider stay the hero: the place is scene text, the rank and each card are ink panels, the button stands on its own.
-   Details (the card with everything) is one level down and swaps in for the column. Transform and opacity only; a
-   step arrives from the column's side and the button comes forward; reduced motion lands it all at once. */
-
-.gs-results[data-view='story'] .gs-res-card,
-.gs-results[data-view='story'] .gs-lad.is-band,
-.gs-results[data-view='details'] .gs-story {
-  display: none;
-}
-
-.gs-results[data-view='story'] {
+/* A light scrim where the words stand, the middle left to the scene. */
+.gs9-results {
+  display: block;
+  padding: 0;
   background:
-    radial-gradient(120% 90% at 100% 100%, rgba(8, 12, 30, 0.62) 0%, rgba(8, 12, 30, 0.3) 40%, rgba(8, 12, 30, 0) 70%),
-    linear-gradient(180deg, rgba(8, 12, 30, 0.28) 0%, rgba(8, 12, 30, 0) 34%);
+    radial-gradient(110% 80% at 100% 100%, rgba(8, 12, 30, 0.56) 0%, rgba(8, 12, 30, 0.26) 42%, rgba(8, 12, 30, 0) 70%),
+    radial-gradient(80% 70% at 0% 0%, rgba(8, 12, 30, 0.42) 0%, rgba(8, 12, 30, 0) 60%);
 }
 
-.gs-res-extra:empty {
-  display: none;
-}
-
-/* Details' way back to the sequence: the card's own top corner. */
-.gs-res-card {
-  position: relative;
-}
-
-.gs-res-back {
+.gs9-story {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 2;
-  min-width: 40px;
-  min-height: 40px;
+  inset: 0;
 }
 
-.gs-results[data-view='story'] .gs-res-back {
-  display: none;
-}
-
-.gs-story {
-  position: absolute;
-  right: var(--sr);
-  bottom: var(--sb);
-  z-index: 2;
-  display: grid;
-  gap: 12px;
-  width: clamp(330px, 33vw, 452px);
-  max-height: calc(100% - var(--st) - var(--sb));
-}
-
-/* The section takes focus itself (a container, not a control) until its button arrives: no ring. */
-.gs-story:focus,
-.gs-story:focus-visible {
+.gs9-story:focus,
+.gs9-story:focus-visible {
   outline: none;
   box-shadow: none;
 }
 
-/* A step waits, then arrives from the column's side; the button comes forward. */
-.gs-sq-step {
-  transition:
-    opacity 260ms ease,
-    transform 440ms var(--spring);
-}
-
-.gs-story.is-playing .gs-sq-step:not(.is-on) {
-  opacity: 0;
-  transform: translateX(28px);
-}
-
-.gs-story.is-playing .gs-sq-go:not(.is-on) {
-  transform: scale(0.9);
-}
-
-.gs-story.is-playing .gs-sq-foot:not(.is-on) {
-  transform: translateY(10px);
-}
-
-/* The place: scene text, the nearest rider in their own colour. */
-.gs-sq-place {
-  display: flex;
+/* ---- beat one: how you did ---- */
+/* The figure, and beside it the fact (the third critic: under the headline the fact's chip sat on the rider's pom-pom,
+   whose head stands under the logo's side in the results' shot); the rule under both, the word under the rule. So the
+   whole moment keeps above the rider's head and the fact inside the headline's rule. */
+.gs9-mo {
+  --mo: var(--c-text);
+  position: absolute;
+  top: var(--st);
+  left: var(--sl);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  justify-self: end;
-  gap: 10px;
-  max-width: 100%;
-  padding: 0 4px;
-  color: var(--text);
-  font-size: clamp(17px, calc(var(--u) * 1.22), 23px);
-  font-style: italic;
-  font-weight: 850;
-  line-height: 1.2;
-  text-align: right;
+  justify-items: start;
+  gap: 2px var(--sp-4);
+  width: max-content;
+  max-width: min(48vw, 640px);
+  pointer-events: none;
   text-shadow: var(--halo);
 }
 
-.gs-sq-place-ico {
-  flex: none;
-  width: 1.1em;
-  height: 1.1em;
-  color: var(--ghost);
-  filter: drop-shadow(0 0 2px var(--halo-c)) drop-shadow(0 1px 3px rgba(18, 25, 51, 0.7));
+.gs9-mo > .gs9-mo-rule,
+.gs9-mo > .gs9-mo-word {
+  grid-column: 1 / -1;
 }
 
-.gs-sq-place.is-short .gs-sq-place-ico {
-  color: var(--text);
+.gs9-mo > .gs9-mo-fact {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
 }
 
-.gs-sq-gap {
-  font-weight: 900;
+.gs9-mo.is-win {
+  --mo: var(--c-best);
 }
 
-.gs-sq-who {
-  font-weight: 900;
-  overflow-wrap: anywhere;
+.gs9-mo.is-podium {
+  --mo: var(--c-silver);
 }
 
-.gs-sq-who.k-ghost {
-  color: var(--ghost);
+.gs9-mo-figrow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25em;
 }
 
-.gs-sq-who.k-grudge {
-  color: var(--grudge);
+.gs9-mo-fig {
+  color: var(--mo);
+  font-size: var(--fs-display);
+  font-style: italic;
+  font-weight: var(--fw-display);
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+  padding-right: 0.08em;
 }
 
-.gs-sq-who.k-you {
-  color: var(--you);
+.gs9-mo-of {
+  font-size: var(--fs-xl);
+  font-style: italic;
+  font-weight: var(--fw-display);
 }
 
-/* Rider Rank: the page figure, what the run paid, the bar, and the next page's reward with what it still needs. */
-.gs-sq-rank {
-  display: grid;
-  gap: 9px;
-  padding: 14px 16px 13px;
-  border-radius: var(--r-card);
-  background: var(--panel);
-  box-shadow: inset 0 0 0 1px var(--hair-2), var(--shadow);
+/* A wreck's figure sits a little crooked (ART.md 10). (The rotate property, not transform: the beat's animation fills
+   transform and drew it straight, as both critics saw.) */
+.gs9-mo.is-wreck .gs9-mo-figrow {
+  rotate: -3deg;
+  transform-origin: left bottom;
 }
 
-.gs-sq-rank-head {
+/* The headline's rule: as wide as the headline, and the fact keeps inside it, clear of the rider. */
+.gs9-mo-rule {
+  justify-self: stretch;
+  height: 5px;
+  margin: 4px 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--mo);
+  box-shadow: 0 0 0 2px var(--halo-c);
+}
+
+.gs9-mo-word {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 4px 14px;
+  gap: 0.2em 0.6em;
+  font-size: var(--fs-xl);
+  font-style: italic;
+  font-weight: var(--fw-display);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: var(--lh-tight);
+  padding-bottom: 0.06em;
 }
 
-.gs-sq-page {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
+.gs9-mo-word .gs9-medal {
+  align-self: center;
 }
 
-.gs-sq-page-k {
-  color: var(--dim);
+.gs9-mo-time {
   font-size: 0.8em;
-  font-weight: 800;
-}
-
-.gs-sq-page-n {
-  display: inline-block;
-  min-width: 1.2ch;
-  font-size: clamp(28px, calc(var(--u) * 2), 38px);
-  font-style: italic;
-  font-weight: 900;
-  letter-spacing: -0.03em;
-  line-height: 0.9;
-}
-
-.gs-sq-xp {
-  font-size: 1.08em;
-  font-style: italic;
-  font-weight: 900;
-}
-
-.gs-sq-xp-u {
-  color: var(--dim);
-  font-size: 0.78em;
   font-style: normal;
-  font-weight: 800;
+  font-weight: var(--fw-label);
+  text-transform: none;
 }
 
-.gs-sq-flame,
-.gs-sq-gifts {
-  display: inline-flex;
+.gs9-mo-fact {
+  display: flex;
   align-items: center;
-  gap: 4px;
-  font-weight: 850;
-}
-
-.gs-sq-flame {
-  color: var(--text);
-}
-
-.gs-sq-flame .gs-i {
-  width: 1.05em;
-  height: 1.05em;
-  color: var(--gift);
-}
-
-.gs-sq-gifts {
-  margin-left: auto;
-  color: var(--gift);
-}
-
-.gs-sq-gifts .gs-i {
-  width: 1em;
-  height: 1em;
-}
-
-.gs-sq-bar {
-  position: relative;
-  height: 10px;
-  overflow: hidden;
-  border-radius: var(--r-pill);
-  background: rgba(245, 243, 255, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.07);
-}
-
-.gs-sq-fill {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(90deg, rgba(245, 243, 255, 0.78), var(--text));
-  transform-origin: left center;
-}
-
-.gs-sq-bar::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--text);
-  opacity: 0;
-}
-
-/* A page turned at the top: the bar flashes and the figure kicks. */
-.gs-sq-rank.is-turn .gs-sq-bar::after {
-  animation: gs-sq-flash 520ms ease-out both;
-}
-
-.gs-sq-rank.is-turn .gs-sq-page-n {
-  animation: gs-sq-kick 460ms var(--spring) both;
-}
-
-.gs-sq-next {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-  font-size: 0.92em;
-  font-weight: 800;
-}
-
-.gs-sq-next-k {
-  flex: none;
-  color: var(--dim);
-}
-
-.gs-sq-next-n {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.gs-sq-togo {
-  flex: none;
-  color: var(--dim);
-  font-weight: 750;
-}
-
-.gs-sq-ticks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 0;
-  list-style: none;
-}
-
-.gs-sq-tick {
-  display: inline-flex;
-  gap: 5px;
-  padding: 3px 9px;
-  border-radius: var(--r-pill);
-  background: rgba(245, 243, 255, 0.06);
-  box-shadow: inset 0 0 0 1px var(--hair);
-  color: var(--dim);
-  font-size: max(12px, 0.78em);
-  font-weight: 750;
-  transition:
-    opacity 220ms ease,
-    transform 300ms var(--spring);
-}
-
-.gs-sq-tick .gs-num {
-  color: var(--text);
-  font-weight: 850;
-}
-
-.gs-story.is-playing .gs-sq-tick:not(.is-on) {
-  opacity: 0;
-  transform: translateY(5px) scale(0.94);
-}
-
-/* What opened: cards that turn over, one at a time. */
-.gs-sq-cards {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  padding: 0;
-  list-style: none;
-}
-
-.gs-sq-cards.n-1 {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.gs-sq-cards.n-2 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.gs-sq-card {
-  position: relative;
-  min-height: 104px;
-  perspective: 700px;
-}
-
-.gs-sq-face,
-.gs-sq-back {
-  border-radius: var(--r-card);
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-  transition: transform 520ms var(--spring);
-}
-
-.gs-sq-face {
-  position: relative;
-  display: grid;
-  align-content: end;
-  justify-items: start;
-  gap: 3px;
-  width: 100%;
-  height: 100%;
-  min-height: 104px;
-  padding: 12px 12px 11px;
-  overflow: hidden;
-  background: var(--panel-solid);
-  box-shadow: inset 0 0 0 1px var(--hair-2), var(--shadow);
-  color: var(--text);
-  text-align: left;
-}
-
-.gs-sq-back {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(160deg, #1d2750, var(--ink));
-  box-shadow: inset 0 0 0 1px var(--hair-2), inset 0 0 0 6px rgba(18, 25, 51, 0.6), inset 0 0 0 7px var(--hair);
-  color: rgba(245, 243, 255, 0.36);
-  transform: rotateY(-180deg);
-}
-
-.gs-sq-back .gs-i {
-  width: 30px;
-  height: 30px;
-}
-
-.gs-story.is-playing .gs-sq-card:not(.is-turned) .gs-sq-face {
-  transform: rotateY(180deg);
-}
-
-.gs-story.is-playing .gs-sq-card:not(.is-turned) .gs-sq-back {
-  transform: none;
-}
-
-.gs-sq-card-ico {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  margin-bottom: auto;
-  border-radius: var(--r-pill);
-  background: rgba(245, 243, 255, 0.08);
-}
-
-.gs-sq-card-ico .gs-i {
-  width: 18px;
-  height: 18px;
-}
-
-.gs-sq-face.k-gifts .gs-sq-card-ico {
-  color: var(--gift);
-}
-
-.gs-sq-card-n {
-  display: -webkit-box;
+  gap: 0.5em;
   max-width: 100%;
+  padding: 6px 14px 6px 10px;
+  border-radius: var(--r-card);
+  background: rgba(18, 25, 51, 0.8);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  text-shadow: none;
+  font-size: var(--fs-l);
+  font-weight: var(--fw-label);
+  line-height: var(--lh-text);
+}
+
+.gs9-mo-fact.is-best {
+  color: var(--c-best);
+}
+
+.gs9-mo-bust {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  margin: -2px 0 -2px -4px;
+  border-radius: var(--r-pill);
   overflow: hidden;
-  font-size: 0.98em;
-  font-style: italic;
-  font-weight: 900;
-  line-height: 1.12;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  background: rgba(18, 25, 51, 0.7);
+  box-shadow: inset 0 0 0 2px var(--rider, var(--c-text));
 }
 
-.gs-sq-card-k {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--dim);
-  font-size: max(11px, 0.74em);
-  font-weight: 750;
-}
-
-.gs-sq-card-k .gs-i {
-  width: 1em;
-  height: 1em;
-  color: var(--text);
-}
-
-/* A mountain opened: its own sky on the card, and Ride It. */
-.gs-sq-face.is-mountain {
-  padding-top: 52px;
-}
-
-.gs-sq-card-art {
-  position: absolute;
-  inset: 0 0 auto;
-  height: 50px;
-  overflow: hidden;
-}
-
-.gs-sq-card-art .gs-mtn-sky,
-.gs-sq-card-art svg {
+.gs9-mo-bust svg {
   display: block;
   width: 100%;
   height: 100%;
 }
 
-.gs-sq-card-go {
-  min-height: 32px;
-  margin-top: 4px;
-  padding: 0 12px 0 10px;
-  background: rgba(245, 243, 255, 0.1);
-  box-shadow: inset 0 0 0 1px var(--hair-2);
-  font-size: 0.8em;
+/* ---- beats two and three: the one column at the far edge ---- */
+.gs9-col {
+  position: absolute;
+  right: var(--sr);
+  bottom: var(--sb);
+  display: grid;
+  gap: var(--sp-3);
+  width: clamp(320px, 33vw, 440px);
 }
 
-.gs-sq-card-go .gs-i {
+.gs9-got {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--sp-1) var(--sp-4);
+  align-items: center;
+}
+
+.gs9-got-art {
+  grid-row: 1 / span 2;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--r-card);
+  overflow: hidden;
+  background: rgba(245, 243, 255, 0.08);
+}
+
+.gs9-got-art svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.gs9-got-art > .gs9-i {
+  width: 34px;
+  height: 34px;
+}
+
+.gs9-got-art.is-gift > .gs9-i {
+  color: var(--c-gift);
+}
+
+.gs9-got-k {
+  align-self: end;
+  color: var(--text-dim);
+  font-size: var(--fs-s);
+  font-weight: var(--fw-label);
+}
+
+.gs9-got-n {
+  align-self: start;
+  font-size: var(--fs-2xl);
+  font-style: italic;
+  font-weight: var(--fw-display);
+  line-height: var(--lh-tight);
+  padding-bottom: 0.06em;
+  overflow-wrap: anywhere;
+}
+
+.gs9-got-l {
+  grid-column: 2;
+  color: var(--text-dim);
+  font-weight: var(--fw-text);
+}
+
+/* Rider Rank's bar and the gifts, at the card's foot. */
+.gs9-rank {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--hair);
+  font-size: var(--fs-s);
+  font-weight: var(--fw-label);
+}
+
+.gs9-rank.is-bare {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.gs9-rank .gs9-bar {
+  height: 6px;
+}
+
+.gs9-gifts {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  color: var(--c-gift);
+  white-space: nowrap;
+}
+
+/* A run that opened nothing turns over the bar alone. */
+.gs9-got.is-bar {
+  grid-template-columns: minmax(0, 1fr);
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.gs9-got.is-bar .gs9-rank {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* The one button: the run, its words whole, its reason under them. */
+.gs9-go {
+  width: 100%;
+  min-height: clamp(62px, 10vmin, 80px);
+  padding: 0 var(--sp-4) 0 var(--sp-5);
+  justify-content: flex-start;
+  gap: 0.7em;
+  font-size: var(--fs-xl);
+}
+
+.gs9-go.is-long {
+  font-size: clamp(16px, calc(var(--u) * 1.2), 23px);
+}
+
+.gs9-go > .gs9-i {
   width: 0.9em;
   height: 0.9em;
 }
 
-/* "+2 more": a card that is a button into Details. */
-.gs-sq-face.is-more {
-  align-content: end;
-  white-space: normal;
-  border-radius: var(--r-card);
-  cursor: pointer;
-}
-
-.gs-sq-face.is-more .gs-sq-card-n {
-  font-size: 1.12em;
-}
-
-.gs-sq-more-l {
-  display: -webkit-box;
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--text);
-  font-size: max(12px, 0.8em);
-  font-weight: 750;
-  line-height: 1.2;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-}
-
-/* The one button: vermillion, its words whole, the reason under them. */
-.gs-sq-go {
-  display: grid;
-}
-
-.gs-sq-again {
-  justify-content: flex-start;
-  min-height: clamp(62px, 10vmin, 78px);
-  padding: 8px clamp(16px, 1.8vw, 22px) 8px clamp(20px, 2vw, 26px);
-  font-size: clamp(19px, calc(var(--u) * 1.32), 25px);
-  font-style: italic;
-  font-weight: 900;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.gs-sq-again.is-long {
-  font-size: clamp(17px, calc(var(--u) * 1.12), 21px);
-}
-
-.gs-sq-again.is-xlong {
-  font-size: clamp(15px, calc(var(--u) * 0.98), 18px);
-  letter-spacing: 0;
-}
-
-.gs-sq-again > .gs-i {
-  flex: none;
-  width: 0.95em;
-  height: 0.95em;
-}
-
-.gs-sq-again-t {
+.gs9-go-t {
   display: grid;
   flex: 1;
-  justify-items: start;
-  gap: 3px;
   min-width: 0;
+  gap: 4px;
   text-align: left;
 }
 
-.gs-sq-again-l {
-  max-width: 100%;
-  white-space: nowrap;
-}
-
-.gs-sq-again-sub {
-  max-width: 100%;
+.gs9-go-v {
+  line-height: 1;
   overflow: hidden;
-  font-size: max(13px, 0.56em);
-  font-weight: 850;
-  letter-spacing: 0.01em;
-  line-height: 1.15;
   text-overflow: ellipsis;
+}
+
+.gs9-go-why {
+  font-size: max(12px, 0.52em);
+  font-style: normal;
+  font-weight: var(--fw-label);
+  letter-spacing: 0.01em;
+  line-height: 1.2;
   text-transform: none;
-  white-space: nowrap;
+  white-space: normal;
+  opacity: 0.86;
 }
 
-.gs-sq-again .gs-kbd {
-  flex: none;
-  font-size: max(11px, 0.52em);
-}
-
-.gs-sq-foot {
+.gs9-foot {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 
-.gs-sq-foot > .gs-btn {
-  min-height: 44px;
-  padding: 0 14px 0 12px;
-  font-size: 0.92em;
+.gs9-foot > .gs9-b {
+  flex: 1 1 auto;
 }
 
-.gs-sq-home {
-  margin-right: auto;
+.gs9-opt-pre {
+  font-weight: var(--fw-text);
 }
 
-.gs-sq-foot .gs-res-opt-pre {
-  display: none;
+/* ---- the story: each beat waits, then lands; a tap or a key lands them all; reduced motion shows the end ---- */
+.gs9-story.is-playing [data-beat] {
+  opacity: 0;
 }
 
-/* The way out: the column goes back off its side and the button goes forward (ART.md 10). */
-.gs-results.is-out .gs-story {
-  animation: gs-sq-out 200ms ease-in both;
+.gs9-story [data-beat].is-on {
+  opacity: 1;
+  animation: gs9-in var(--dur-beat) var(--ease-out) both;
 }
 
-.gs-results.is-out .gs-sq-go {
-  animation: gs-sq-forward 200ms ease-in both;
+.gs9-story .gs9-got.is-on {
+  animation: gs9-turn var(--dur-turn) var(--ease-spring) both;
 }
 
-@keyframes gs-sq-out {
-  to {
-    opacity: 0;
-    transform: translateX(36px);
-  }
+.gs9-mo [data-beat].is-on {
+  --from-x: -18px;
+  --from-y: 0px;
 }
 
-@keyframes gs-sq-forward {
-  to {
-    opacity: 0;
-    transform: scale(1.08);
-  }
-}
-
-@keyframes gs-sq-flash {
-  from {
-    opacity: 0.9;
-  }
-  to {
-    opacity: 0;
-  }
-}
-
-@keyframes gs-sq-kick {
-  from {
-    transform: scale(1.4) translateY(-2px);
-  }
-  to {
-    transform: none;
-  }
-}
-
-/* A phone held upright: the column is the bottom of the screen, the button in the thumb's reach, the rider and the
-   moment above it. The place line stands at the left over the rank, as the moment reads. */
-@media (max-aspect-ratio: 1/1) {
-  .gs-results[data-view='story'] {
-    background: linear-gradient(180deg, rgba(8, 12, 30, 0.26) 0%, rgba(8, 12, 30, 0) 18%, rgba(8, 12, 30, 0) 42%, rgba(8, 12, 30, 0.6) 64%, rgba(8, 12, 30, 0.8) 100%);
-  }
-
-  .gs-story {
-    left: var(--sl);
-    right: var(--sr);
-    width: auto;
-    gap: 10px;
-  }
-
-  .gs-story.is-playing .gs-sq-step:not(.is-on) {
-    transform: translateY(18px);
-  }
-
-  .gs-story.is-playing .gs-sq-go:not(.is-on) {
-    transform: scale(0.92);
-  }
-
-  .gs-sq-place {
-    justify-self: start;
-    font-size: 17px;
-    text-align: left;
-  }
-
-  .gs-sq-rank {
-    padding: 12px 14px 11px;
-  }
-
-  .gs-sq-card,
-  .gs-sq-face {
-    min-height: 88px;
-  }
-
-  .gs-sq-face {
-    padding: 10px 10px 9px;
-  }
-
-  .gs-sq-face.is-mountain {
-    padding-top: 44px;
-  }
-
-  .gs-sq-card-art {
-    height: 40px;
-  }
-
-  .gs-sq-card-n {
-    font-size: 14px;
-  }
-
-  .gs-sq-again {
-    min-height: 64px;
-    font-size: 20px;
-  }
-
-  .gs-sq-again.is-long {
-    font-size: 17px;
-  }
-
-  .gs-sq-again.is-xlong {
-    font-size: 15px;
-  }
-
-  @keyframes gs-sq-out {
-    to {
-      opacity: 0;
-      transform: translateY(40px);
-    }
-  }
-}
-
-/* A phone on its side: one compact column at the right, the scene and the moment beside it; the ticks stay in
-   Details. */
-@media (min-aspect-ratio: 1/1) and (max-height: 520px) {
-  .gs-story {
-    width: min(48vw, 400px);
-    gap: 8px;
-  }
-
-  .gs-sq-ticks {
-    display: none;
-  }
-
-  .gs-sq-rank {
-    gap: 6px;
-    padding: 10px 14px;
-  }
-
-  .gs-sq-card,
-  .gs-sq-face {
-    min-height: 72px;
-  }
-
-  .gs-sq-face.is-mountain {
-    padding-top: 34px;
-  }
-
-  .gs-sq-card-art {
-    height: 30px;
-  }
-
-  .gs-sq-card-ico {
-    display: none;
-  }
-
-  .gs-sq-again {
-    min-height: 54px;
-  }
-
-  .gs-results[data-view='story'] .gs-mo {
-    display: grid;
-    width: min(44vw, 360px);
-  }
-
-  .gs-results[data-view='story'] .gs-mo-fact {
-    display: none;
-  }
+.gs9-story.is-done [data-beat] {
+  opacity: 1;
+  animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .gs-sq-step,
-  .gs-sq-tick,
-  .gs-sq-face,
-  .gs-sq-back {
-    transition: none;
+  .gs9-story.is-playing [data-beat] {
+    opacity: 1;
   }
 
-  .gs-sq-rank.is-turn .gs-sq-bar::after,
-  .gs-sq-rank.is-turn .gs-sq-page-n,
-  .gs-results.is-out .gs-story,
-  .gs-results.is-out .gs-sq-go {
+  .gs9-story [data-beat].is-on {
     animation: none;
   }
 }
 
-/* Details: the run's Rider Rank in full (results.ts spineDetails), under the race or the missions. */
-.gs-res-rank {
-  display: grid;
-  gap: 8px;
-  margin-top: 18px;
+/* A mirrored run: the picture is turned over and the rider stands on the far side, so the words change sides. */
+@media (min-aspect-ratio: 1/1) {
+  .gs9-results.is-flipped .gs9-mo {
+    left: auto;
+    right: var(--sr);
+  }
+
+  .gs9-results.is-flipped .gs9-col {
+    right: auto;
+    left: var(--sl);
+  }
+
+  .gs9-results.is-flipped .gs9-det {
+    right: auto;
+    left: var(--sl);
+    --from-x: -24px;
+  }
 }
 
-.gs-res-xp {
+/* With Details up, the column steps out of view: the sheet carries the one button. */
+.gs9-results[data-view='details'] .gs9-col {
+  visibility: hidden;
+}
+
+/* ---- Details ---- */
+.gs9-det .gs9-sheet-body {
+  gap: var(--sp-5);
+  padding-bottom: 0;
+}
+
+.gs9-det-h {
+  margin-bottom: var(--sp-2);
+  color: var(--text-dim);
+  font-size: var(--fs-s);
+  font-weight: var(--fw-label);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+}
+
+.gs9-det-p {
+  margin-top: var(--sp-2);
+  color: var(--text-dim);
+  font-weight: var(--fw-text);
+  line-height: var(--lh-text);
+}
+
+.gs9-det-act {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 0;
-  list-style: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-3);
 }
 
-.gs-res-xp-row {
-  display: inline-flex;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: var(--r-pill);
-  background: rgba(245, 243, 255, 0.06);
-  box-shadow: inset 0 0 0 1px var(--hair);
-  color: var(--dim);
-  font-size: max(12px, 0.82em);
-  font-weight: 750;
+.gs9-det-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
 }
 
-.gs-res-xp-row .gs-num {
-  color: var(--text);
-  font-weight: 850;
+.gs9-order .gs9-row {
+  min-height: 28px;
 }
 
-.gs-res-rank-note {
-  color: var(--dim);
-  font-size: 0.9em;
-  font-weight: 700;
+.gs9-order-n {
+  display: inline-block;
+  min-width: 2ch;
+  text-align: right;
+  color: var(--text-dim);
 }
 
-@media (hover: hover) {
-  .gs-sq-card-go:hover,
-  .gs-sq-face.is-more:hover {
-    background: rgba(30, 40, 80, 0.94);
-  }
-
-  .gs-t-album:hover {
-    background: rgba(245, 243, 255, 0.12);
-  }
+.gs9-order .is-you {
+  color: var(--c-you);
+  font-weight: var(--fw-display);
 }
 
-.gs-sq-card-go,
-.gs-sq-face.is-more,
-.gs-t-album {
-  touch-action: manipulation;
+.gs9-order .is-you .gs9-row-v {
+  color: var(--c-you);
 }
 
-/* The offers (Revive, Double Gifts) sit between Home and Details; on a phone they lead the foot on a row of
-   their own, so Home and Details keep theirs. */
-.gs-story .gs-sq-foot > .gs-res-opt {
-  width: auto;
-  min-width: 0;
-  grid-column: auto;
+.gs9-order .is-ghost .gs9-row-t {
+  color: var(--c-ghost);
 }
 
+.gs9-order .is-grudge .gs9-row-t {
+  color: var(--c-grudge);
+}
+
+.gs9-order .is-best .gs9-row-t {
+  color: var(--c-best);
+}
+
+.gs9-row.is-total {
+  border-top: 1px solid var(--hair);
+  padding-top: 4px;
+}
+
+.gs9-row.is-total .gs9-row-v {
+  color: var(--c-text);
+}
+
+.gs9-det-go {
+  position: sticky;
+  bottom: 0;
+  margin: 0 calc(-1 * var(--sp-5));
+  padding: var(--sp-3) var(--sp-5) var(--sp-5);
+  background: linear-gradient(180deg, rgba(18, 25, 51, 0), var(--surface-solid) 30%);
+}
+
+/* ---- a screen held upright: the moment over the sky, the column in the thumbs' band under the rider ---- */
 @media (max-aspect-ratio: 1/1) {
-  /* A phone keeps the bar, its figure and its next page; the paid ticks are one level down. */
-  .gs-sq-ticks {
-    display: none;
+  .gs9-results {
+    background: linear-gradient(180deg, rgba(8, 12, 30, 0.34) 0%, rgba(8, 12, 30, 0) 22%, rgba(8, 12, 30, 0) 46%, rgba(8, 12, 30, 0.5) 62%, rgba(8, 12, 30, 0.72) 100%);
   }
 
-  .gs-sq-foot > .gs-btn {
-    padding: 0 12px 0 10px;
+  .gs9-mo {
+    left: var(--sl);
+    right: var(--sr);
+    max-width: none;
   }
 
-  .gs-story .gs-sq-foot > .gs-res-opt {
-    order: -1;
-    flex: 1 1 40%;
+  .gs9-mo-fig {
+    font-size: clamp(56px, 19vw, 96px);
+  }
+
+  .gs9-mo-rule {
+    height: 4px;
+  }
+
+  .gs9-mo-word {
+    font-size: var(--fs-l);
+  }
+
+  /* Contract C6 (RESULTS_BAND): the column starts under the band the rider is framed in. */
+  .gs9-col {
+    left: var(--sl);
+    width: auto;
+    max-height: calc(56% - env(safe-area-inset-top, 0px) - var(--sb));
+    align-content: end;
+  }
+
+  .gs9-col > .gs9-mo-fact {
+    justify-self: start;
+    margin: 0;
+    font-size: var(--fs-m);
+  }
+
+  .gs9-got {
+    padding: var(--sp-3);
+  }
+
+  .gs9-got-art {
+    width: 56px;
+    height: 56px;
+  }
+
+  .gs9-got-n {
+    font-size: var(--fs-xl);
+  }
+
+  .gs9-det-go {
+    margin: 0 calc(-1 * var(--sp-4));
+    padding: var(--sp-3) var(--sp-4) var(--sp-4);
   }
 }
 
-/* Details' Run Again with a long label from the spine: whole, a step smaller, no keycap. */
-.gs-again.is-wordy {
-  font-size: clamp(16px, calc(var(--u) * 1.08), 21px);
-  letter-spacing: 0.01em;
+/* A phone on its side: the figure smaller, the column a little narrower. */
+@media (min-aspect-ratio: 1/1) and (max-height: 520px) {
+  .gs9-mo-fig {
+    font-size: clamp(48px, 15vh, 72px);
+  }
+
+  .gs9-mo-word {
+    font-size: var(--fs-l);
+  }
+
+  .gs9-col {
+    width: min(360px, 44vw);
+    gap: var(--sp-2);
+  }
+
+  .gs9-got-art {
+    width: 48px;
+    height: 48px;
+  }
+
+  .gs9-go {
+    min-height: 54px;
+  }
 }
 
-.gs-again.is-wordy .gs-kbd {
-  display: none;
+/* Wide screens: the same layout, the type a step larger through --u. */
+@media (min-width: 1700px) {
+  .gs9-col {
+    width: min(460px, 30vw);
+  }
 }

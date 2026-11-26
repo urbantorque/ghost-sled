@@ -1,0 +1,281 @@
+/*
+  Round 9 (U3): the pieces the title, its rooms and the results share, on tokens.css's one system (kit9.ts builds
+  them). A sheet (a door's room, the results' Details) that comes in from the side its screen is built on; a block, a
+  list and its rows; Rider Rank's bar; a medal's disc; a check. Desk first, then a screen held upright.
+*/
+
+/* ---- buttons: the gs-btn base carries the press and the hit size; these the ranks' words ---- */
+.gs9-b {
+  font-size: var(--fs-m);
+}
+
+.gs9-b .gs9-i {
+  width: 1.15em;
+  height: 1.15em;
+}
+
+.gs9-b-t {
+  white-space: nowrap;
+}
+
+.gs-ui .gs9-b:focus-visible,
+.gs-ui .gs9-b.gs-pad-focus {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.gs-ui .gs9-b-primary:focus-visible,
+.gs-ui .gs9-b-primary.gs-pad-focus {
+  box-shadow: var(--focus), var(--shadow-primary);
+}
+
+.gs9-b-primary .gs-kbd {
+  margin-left: auto;
+}
+
+/* ---- the sheet ---- */
+.gs9-sheet {
+  position: absolute;
+  z-index: var(--z-door);
+  top: var(--st);
+  bottom: var(--sb);
+  left: var(--sl);
+  width: min(600px, 47vw);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-card);
+  background: var(--surface-solid);
+  box-shadow: inset 0 0 0 1px var(--hair), var(--shadow);
+  overflow: hidden;
+  pointer-events: auto;
+  animation: gs9-in var(--dur-enter) var(--ease-out) both;
+  --from-x: -24px;
+  --from-y: 0px;
+}
+
+.gs9-sheet.is-right {
+  left: auto;
+  right: var(--sr);
+  --from-x: 24px;
+}
+
+.gs9-sheet.is-static {
+  animation: none;
+}
+
+.gs9-sheet:focus {
+  outline: none;
+}
+
+.gs9-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-4) var(--sp-3) var(--sp-5);
+}
+
+.gs9-sheet-h {
+  font-size: var(--fs-xl);
+  font-style: italic;
+  font-weight: var(--fw-display);
+  line-height: var(--lh-tight);
+  padding-bottom: 0.06em;
+}
+
+.gs9-sheet-h:focus,
+.gs9-sheet-h:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.gs9-sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 var(--sp-5) var(--sp-5);
+  display: grid;
+  gap: var(--sp-4);
+  align-content: start;
+}
+
+/* ---- a block in a room: its words on the left, its one action on the right ---- */
+.gs9-block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+}
+
+.gs9-block-h {
+  font-size: var(--fs-l);
+  font-weight: var(--fw-display);
+  font-style: italic;
+  line-height: var(--lh-tight);
+  padding-bottom: 0.06em;
+}
+
+.gs9-block-p {
+  margin-top: 2px;
+  color: var(--text-dim);
+  font-weight: var(--fw-text);
+  line-height: var(--lh-text);
+}
+
+.gs9-block > .gs9-b {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+}
+
+.gs9-block-x {
+  grid-column: 1 / -1;
+}
+
+.gs9-sep {
+  height: 1px;
+  background: var(--hair);
+}
+
+/* ---- a list and its rows ---- */
+.gs9-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gs9-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 30px;
+  font-weight: var(--fw-text);
+  line-height: var(--lh-text);
+}
+
+.gs9-row-t {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.gs9-row-v {
+  color: var(--text-dim);
+  font-weight: var(--fw-label);
+  text-align: right;
+}
+
+.gs9-row.is-done .gs9-row-t {
+  color: var(--text-dim);
+}
+
+.gs9-check {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 2px var(--hair-strong);
+}
+
+.gs9-row.is-done .gs9-check {
+  background: var(--c-gift);
+  color: var(--c-ink);
+  box-shadow: none;
+}
+
+.gs9-check .gs9-i {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---- Rider Rank's bar ---- */
+.gs9-bar {
+  display: block;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.12);
+  overflow: hidden;
+}
+
+.gs9-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--c-text);
+  transform-origin: left center;
+}
+
+/* ---- a medal's disc, in its metal ---- */
+.gs9-medal {
+  display: inline-block;
+  flex: none;
+  width: 0.9em;
+  height: 0.9em;
+  border-radius: var(--r-pill);
+  vertical-align: -0.1em;
+  box-shadow: inset 0 0 0 2px rgba(18, 25, 51, 0.35);
+}
+
+.gs9-medal.m-0 {
+  box-shadow: inset 0 0 0 2px var(--hair-strong);
+}
+
+.gs9-medal.m-1 {
+  background: var(--c-bronze);
+}
+
+.gs9-medal.m-2 {
+  background: var(--c-silver);
+}
+
+.gs9-medal.m-3 {
+  background: var(--c-gold);
+}
+
+/* ---- a name in its role's colour ---- */
+.gs9-who.is-ghost {
+  color: var(--c-ghost);
+}
+
+.gs9-who.is-grudge {
+  color: var(--c-grudge);
+}
+
+.gs9-who.is-you {
+  color: var(--c-best);
+}
+
+.gs9-who.is-rider {
+  color: var(--rider, var(--c-text));
+}
+
+/* ---- a screen held upright: a sheet comes up from the bottom, the whole width ---- */
+@media (max-aspect-ratio: 1/1) {
+  .gs9-sheet,
+  .gs9-sheet.is-right {
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    width: auto;
+    max-height: 86%;
+    border-radius: var(--r-card) var(--r-card) 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --from-x: 0px;
+    --from-y: 28px;
+  }
+
+  .gs9-sheet-head {
+    padding: var(--sp-3) var(--sp-3) var(--sp-2) var(--sp-4);
+  }
+
+  .gs9-sheet-body {
+    padding: 0 var(--sp-4) var(--sp-4);
+  }
+}

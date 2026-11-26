@@ -3,7 +3,7 @@
 // URL params: s=<scenario> (see SCENARIOS), mode=keyboard|mouse|touch,
 // bg=alpine|blizzard|night|ember|powder|glass, bare=1 hides the control panel (for screenshots).
 
-import type { GarageShelf, GarageShelfId, GhostKind, HudModel, MissionView, PaintCard, PrimaryButtonView, ResultsModel, ResultsSpine, RewardCard, SettingsModel, SledCard, StickerCard, TitleModel, TitleSpine, TitleTwelve, TwelveRung, UIHandlers } from './contract';
+import type { GarageShelf, GarageShelfId, GhostKind, HudModel, MissionView, MountainCard, PaintCard, PrimaryButtonView, ResultsModel, ResultsSpine, RewardCard, SettingsModel, SledCard, StickerCard, TitleModel, TitleSpine, TitleTwelve, TwelveRung, UIHandlers } from './contract';
 import { albumModel, almanacModel, lanternRow, rankBar, titleSpine } from '../game/spineview';
 import { albumCatalogue } from '../game/album';
 import { chapterKey } from '../game/almanac';
@@ -127,6 +127,27 @@ function titleModel(over: Partial<TitleModel> = {}): TitleModel {
     twelve: over.firstVisit ? null : twelveNow && { ...twelveNow, next: twelveNow.next && { ...twelveNow.next, here: twelveNow.next.mountainId === selected } },
     ...over,
   };
+}
+
+/**
+ * Round 9: eight mountains as phase B registers them (MOUNTAINS' order: the five, then Gablefall, the Old Run and
+ * Gullhaven appended at 5 to 7), for the picker to show on the unlock path with the finale last. 18 ghosts passed: the
+ * Old Run just open, Sakura six away, Gullhaven fourteen, Lanternfall behind The Twelve.
+ */
+function eightTitle(): Partial<TitleModel> {
+  const [pine, frost, ember, sakura, lantern] = titleModel().mountains;
+  const open = (c: MountainCard, over: Partial<MountainCard>): MountainCard => ({ ...c, locked: false, unlockText: '', ...over });
+  const mountains: MountainCard[] = [
+    open(pine, { unlockGhosts: 0, bestTime: 124.6 }),
+    open(frost, { unlockGhosts: 4, bestTime: 118.2 }),
+    open(ember, { unlockGhosts: 12, bestTime: 121.9 }),
+    { ...sakura, unlockGhosts: 24, unlockText: 'Pass 6 more ghosts to unlock' },
+    { ...lantern, unlockGhosts: 48, finale: true },
+    { id: 'gablefall', name: 'Gablefall', tagline: 'A snowed-in hill town, ridden on its roofs', biome: 'alpine', locked: false, unlockText: '', best: 0, bestTime: 96.4, unlockGhosts: 8 },
+    { id: 'oldrun', name: 'The Old Run', tagline: 'An old banked ice track through the forest', biome: 'glacier', locked: false, unlockText: '', best: 0, unlockGhosts: 18 },
+    { id: 'gullhaven', name: 'Gullhaven', tagline: 'From the beacon to the harbour, on the wind', biome: 'blossom', locked: true, unlockText: 'Pass 14 more ghosts to unlock', best: 0, unlockGhosts: 32 },
+  ];
+  return { mountains, selected: 'frostfang', nextRung: null, twelve: null, ghostsPassed: 18 };
 }
 
 /** A returning player's title: ranks, medals, the name above you and the week's Cup. */
@@ -634,6 +655,8 @@ const SCENARIOS: Record<string, () => void> = {
   'title-twelve-crowned': () => goTitle(ladderTitle({ twelve: twelve(12, [0, 1, 2, 3, 4], true) })),
   // A returning player: ranks and medals on the cards, the name above you on Ride, the Cup by the Daily.
   'title-ladder': () => goTitle(ladderTitle()),
+  // Round 9: the picker holding eight, three of them locked with what opens them.
+  'title-eight': () => goTitle(eightTitle()),
   'title-cup-waiting': () => goTitle(ladderTitle({ cup: { key: '2026-W45', week: 45, ready: false, mood: 'Blizzard', event: null, best: 0, medal: 0 } })),
   'title-cup-picked': () => goTitle(ladderTitle({ selected: 'cup', nextRung: null, cup: { key: '2026-W45', week: 45, ready: true, mood: 'Glass Ice', event: 'Spirit Train', best: 0, medal: 0 } })),
   // The medal wall, opened.
@@ -1636,7 +1659,7 @@ panel.append(head);
 const groups = document.createElement('div');
 groups.className = 'groups';
 const GROUPS: Record<string, string[]> = {
-  title: ['title', 'title-first', 'title-twelve', 'title-twelve-wait', 'title-twelve-king', 'title-twelve-final', 'title-twelve-crowned', 'title-ladder', 'title-medals', 'title-cup-waiting', 'title-cup-picked', 'title-zero', 'title-challenge', 'title-challenge-cup', 'title-challenge-cup-waiting', 'title-missions', 'title-touch', 'title-long', 'loading'],
+  title: ['title', 'title-eight', 'title-first', 'title-twelve', 'title-twelve-wait', 'title-twelve-king', 'title-twelve-final', 'title-twelve-crowned', 'title-ladder', 'title-medals', 'title-cup-waiting', 'title-cup-picked', 'title-zero', 'title-challenge', 'title-challenge-cup', 'title-challenge-cup-waiting', 'title-missions', 'title-touch', 'title-long', 'loading'],
   hud: ['hud', 'hud-live', 'hud-grudge', 'hud-you', 'hud-you-named', 'hud-even', 'hud-behind', 'hud-long', 'rank-gain', 'rank-swing', 'rank-first', 'rank-first-you', 'combo-single', 'draft-pill', 'night-pills', 'touch', 'danger-far', 'danger-mid', 'danger-near', 'danger-urgent', 'danger-chase'],
   fx: ['callouts', 'callouts-merge', 'callouts-landing', 'callouts-landing-big', 'callouts-late-stomp', 'callouts-perfect', 'callouts-chase', 'callouts-chase-band', 'callouts-band', 'callouts-pass', 'overtake-frame', 'lost', 'bank', 'toasts', 'toasts-2', 'pass', 'pass-you', 'pass-landing', 'landing-pass', 'pass-grudge', 'pass-grudge-settled', 'passed-by', 'passed-by-grudge', 'passed-by-you', 'queue'],
   chaos: ['reveal', 'reveal-lantern', 'reveal-comet', 'reveal-haunted', 'reveal-event', 'reveal-plain', 'warn-avalanche', 'warn-yeti', 'warn-gifts', 'warn-train'],
