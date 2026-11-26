@@ -362,7 +362,7 @@ function medalWall(body: HTMLElement, m: TitleModel, f: Fill): void {
     const words = h('span', 'gs9-row-t', name, h('span', 'gs9-wall-p', `${place(c)}${stars ? `, ${stars}` : ''}`));
     const dots = c.medals ? medalDots(c.medals, [], true) : null;
     const aria = `${c.name}. ${place(c)}${stars ? `, ${stars}` : ''}. ${c.medals ? medalWords(c.medals) : 'No medals yet'}. Its board`;
-    const b: HTMLButtonElement = b9(f.o.ctx, 'quiet', [words, dots ?? '', ico9('chevR', 'gs9-wall-chev')], { fk: `board-${c.id}`, aria, cls: 'gs9-wall-b', onClick: () => f.push(`${c.name}’s Board`, (bb) => masteryBoard(bb, c, st), b) });
+    const b: HTMLButtonElement = b9(f.o.ctx, 'quiet', [words, dots, ico9('chevR', 'gs9-wall-chev')], { fk: `board-${c.id}`, aria, cls: 'gs9-wall-b', onClick: () => f.push(`${c.name}’s Board`, (bb) => masteryBoard(bb, c, st), b) });
     list.append(h('li', '', b));
   }
   // (A week's medal with no figure kept for it says the medal, not "No run yet" beside a disc.)
