@@ -33,6 +33,7 @@ import { Hint } from './hint';
 import { Hud, pushRect } from './hud';
 import { closeTopSheet, sheetOpen, topSheet } from './kit9';
 import { Menus } from './menus';
+import type { GarageAct, GarageView } from './garageview';
 import { Notices } from './notices';
 import { PadNav } from './padnav';
 import { Results } from './results';
@@ -47,7 +48,8 @@ import { TouchViz } from './touch';
  * Without them, the UI reopens the last data it was given.
  */
 export interface UIMenuHandlers {
-  onOpenSleds?(): void;
+  /** Opens the garage (round 9: at a piece when given, the results' "Ready in the shop": 'sled:3', 'hat:muffs'). */
+  onOpenSleds?(piece?: string): void;
   onOpenSettings?(): void;
 }
 
@@ -175,7 +177,7 @@ export class UI implements GameUI {
     // (Round 9: Details' "Open the Garage" takes the title's own way into the garage.)
     this.results = new Results(this.el, ctx, hd, { openGarage: () => this.openGarage() });
     // Menus are created before title/results for module wiring; keep them stacked on top.
-    this.el.append(this.menus.pause.el, this.menus.sleds.el, this.menus.settings.el, this.menus.books.el);
+    this.el.append(this.menus.pause.el, this.menus.sleds.el, this.menus.garage.el, this.menus.settings.el, this.menus.books.el);
 
     this.loadEl = h('div', 'gs-load');
     this.loadEl.setAttribute('role', 'progressbar');
@@ -475,6 +477,20 @@ export class UI implements GameUI {
 
   hidePause(): void {
     this.menus.hidePause();
+  }
+
+  /** Round 9 (the shop lane): the garage over its place (menus.ts showGarage). */
+  showGarage(v: GarageView, act: (a: GarageAct) => void): Promise<void> {
+    return this.menus.showGarage(v, act);
+  }
+
+  /** Round 9: the purchase's line over the place, or none. */
+  garageMoment(text: string | null): void {
+    this.menus.garageMoment(text);
+  }
+
+  closeGarage(): void {
+    this.menus.closeGarage();
   }
 
   showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[], shelves?: GarageShelf[], lanterns?: LanternTownView[]): void {

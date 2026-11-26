@@ -562,6 +562,33 @@ export class Sfx {
         this.shimmer(t + 0.5, 16, 9, 0.045);
         break;
       }
+      case 'gift-open': {
+        // Round 9 (the shop lane): a gift opened in the garage. Paper torn (a band of noise sweeping up), then two soft
+        // bells a fifth apart in the key and a breath of shimmer as the piece goes on.
+        const v = this.voice(t, 0.3, 0, 1, PRIO.payoff);
+        const g = v.gain(0, v.out);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.11, t + 0.04);
+        g.gain.setTargetAtTime(0, t + 0.2, 0.05);
+        const f = v.filter('bandpass', 900, 1.3, g);
+        f.frequency.setValueAtTime(900, t);
+        f.frequency.exponentialRampToValueAtTime(4400, t + 0.24);
+        v.buffer(v.bank.white, t, t + 0.4, f);
+        const r = brightRoot(this.key(), 72);
+        fmBell(v, t + 0.32, mtof(r), 0.07, 0.9, 3.5, 1.1);
+        fmBell(v, t + 0.46, mtof(r + 7), 0.06, 1.1, 3.5, 1.1);
+        this.shimmer(t + 0.5, 10, 6, 0.03);
+        break;
+      }
+      case 'tier-fit': {
+        // A tier fitted to a sled: a mallet's two knocks on the wood, and a bell as it lands.
+        const v = this.voice(t, 0.25, 0, 1, PRIO.payoff);
+        const r = brightRoot(this.key(), 52);
+        mallet(v, t, mtof(r), 0.2, 0.14);
+        mallet(v, t + 0.16, mtof(r + 5), 0.18, 0.16);
+        fmBell(v, t + 0.42, mtof(r + 24), 0.06, 1.0, 3.5, 1.2);
+        break;
+      }
       case 'go': {
         const v = this.voice(t, 0.2);
         whoosh(v, t, 0.35, 400, 3000, 0.12, 1);

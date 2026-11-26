@@ -20,9 +20,10 @@ import { prevDay } from './settle';
 //
 // Pure: no DOM, render or audio imports.
 
-function card(r: Reward, page: number, chapter: string | null = null): RewardCard {
+function card(r: Reward, page: number, chapter: string | null = null, name: string = rewardName(r)): RewardCard {
   // (A mirror's card names its mountain's id too: its Almanac page rides it, the modes lane.)
-  return r.kind === 'mirror' ? { kind: r.kind, name: rewardName(r), page, chapter, mountain: r.mountain } : { kind: r.kind, name: rewardName(r), page, chapter };
+  // (Round 9, the shop lane: a reward the save already held says what it gave instead, rank.ts grant.)
+  return r.kind === 'mirror' ? { kind: r.kind, name, page, chapter, mountain: r.mountain } : { kind: r.kind, name, page, chapter };
 }
 
 /** The rank bar at an amount of XP. */
@@ -59,7 +60,7 @@ export function resultsSpine(o: SpineOutcome, d: SaveData, day: string): Results
     ticks: o.ticks.map((t) => ({ ...t })),
     before: rankBar(o.xpBefore, d.title ?? null),
     after: rankBar(o.xpAfter, d.title ?? null),
-    opened: o.opened.map((x) => card(x.reward, x.page, x.chapter ?? null)),
+    opened: o.opened.map((x) => ({ ...card(x.reward, x.page, x.chapter ?? null, x.name), ...(x.from ? { from: x.from } : {}) })),
     stickers,
     flame: { lit: o.flame.lit, streak: o.flame.streak, calendarDay: o.flame.calendar, embered: o.flame.embered, emberEarned: o.flame.emberEarned },
     contracts: { met: o.contracts.met, bonus: o.contracts.bonus, form: o.contracts.form, today: todaysContracts(d, day), formNext: d.contracts?.form ? contractView(d.contracts.form, false, FORM_XP) : null },

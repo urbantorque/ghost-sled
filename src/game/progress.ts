@@ -1,12 +1,12 @@
 import type { ResultsNextUnlock } from '../ui/contract';
 import { ChaosEvent } from '../sim/chaos';
 import { MOUNTAINS, biomeForSeed, type BiomeId } from '../sim/mountains';
-import { SLEDS } from '../sim/sleds';
 import { MissionCtx, MissionResult, MissionState, RunSummary, missionDef, missionProgressText, missionTier } from './missions';
 import { isNemesis } from './settle';
 import type { SaveData } from './save';
 import { type Standing, aheadOf, figure, marginPhrase } from './standing';
 
+import { SLED_SHOP } from './tracks';
 // Progress lines: mid-run mission pops and the pause card's live missions, the next unlock, the title
 // greeting, the Run Again label, the results race line, the crash line, the friend line, the reveal's
 // goal line and the challenge share title.
@@ -74,8 +74,9 @@ export function liveMissionViews(s: MissionState, sum: RunSummary, ctx: MissionC
 export function nextUnlock(d: SaveData): ResultsNextUnlock | null {
   const mtn = GHOST_LADDER.find((x) => x.unlockGhosts > d.ghostsPassed);
   if (mtn) return { kind: 'mountain', name: mtn.name, biome: biomeForSeed(mtn.seed), have: Math.max(0, d.ghostsPassed), need: mtn.unlockGhosts };
-  const sled = SLEDS.filter((s) => !d.ownedSleds.includes(s.id) && s.price > 0).sort((a, b) => a.price - b.price)[0];
-  if (sled) return { kind: 'sled', name: sled.name, gifts: Math.max(0, sled.price - d.gifts) };
+  // (Round 9, the shop lane: the garage's prices, tracks.ts SLED_SHOP; the Saucer is found on Almanac page 5.)
+  const sled = SLED_SHOP.filter((s) => s.from === 'shop' && !d.ownedSleds.includes(s.index)).sort((a, b) => a.price - b.price)[0];
+  if (sled) return { kind: 'sled', name: sled.name, gifts: Math.max(0, sled.price - d.gifts), price: sled.price, piece: `sled:${sled.index}` };
   return null;
 }
 

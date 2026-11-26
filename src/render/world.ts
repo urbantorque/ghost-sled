@@ -63,6 +63,8 @@ import { isOldRun, oldrunClearings } from './oldrunplan';
 import { LanternRow } from './lanternrow';
 import type { Fireworks } from './fireworks';
 import type { TrailDef } from '../game/garage';
+import { TrailForms } from './trailforms';
+import { pushLocalLight } from './lights';
 import { Terrain, TerrainDetail } from './terrain';
 import { Trail } from './trails';
 
@@ -280,6 +282,8 @@ export class World {
   readonly sky: Sky;
   readonly rider = new Rider();
   readonly particles: Particles;
+  /** Round 9: the garage trail's own shapes in the air (trailforms.ts). */
+  readonly trailForms = new TrailForms();
   readonly weather: Weather;
   readonly trail: Trail;
   readonly ghosts: GhostVisuals;
@@ -328,6 +332,10 @@ export class World {
   private trailMote: Color | null = null;
   private trailRate = 0;
   private trailStyle: TrailDef['moteStyle'] = 'flick';
+  private readonly feedTrail = { pos: new Vector3(), vel: new Vector3(), heading: 0, speed: 0, grounded: true, active: false, time: 0, eye: new Vector3() };
+  private readonly postV = new Vector3();
+  /** The spray thrown up, against plain snow's (Honey Plume's rooster tail is twice as tall). */
+  private trailPlume = 1;
   private trailAcc = 0;
   private wasGrounded = true;
   private width = 1;
@@ -508,6 +516,7 @@ export class World {
       oldrunClearings(this.course, z0, z1, out);
     };
     this.spirit.setQuality(quality.particleBudget, quality.bloom);
+    this.trailForms.setLow(quality.detail === 'low');
     this.charmGates.setCourse(this.course);
     this.charmGates.setLow(quality.detail === 'low');
     this.charmGates.host = { renderer: this.renderer, scene: this.scene, camera: this.cam.camera };
@@ -525,6 +534,7 @@ export class World {
       this.props.root,
       this.setPieces.root,
       this.trail.mesh,
+      this.trailForms.root,
       this.landing.root,
       this.ghosts.root,
       this.chaos.root,
@@ -734,6 +744,7 @@ export class World {
     this.post.setMsaa(q.msaa);
     this.post.configure(q.passes);
     this.spirit.setQuality(q.particleBudget, q.bloom);
+    this.trailForms.setLow(q.detail === 'low');
     this.post.shaftTaps = q.detail === 'high' ? 14 : 8;
     this.sky.setDetail(q.detail);
     this.poster.setTier(q.detail === 'low');
@@ -1020,6 +1031,28 @@ export class World {
     this.rider.setFlow(0, 0);
   }
 
+  /** Round 9 (the shop lane): the garage's place (render/garagescene.ts) drawn in the world's stead while it is open,
+   *  by this renderer through the pipeline's plain path (post.ts renderPlain); the world's own frame waits. */
+  drawPlace(scene: Scene, camera: PerspectiveCamera, time: number, grade: Palette | null): void {
+    if (grade && grade !== this.placeGrade) {
+      this.placeGrade = grade;
+      this.post.setGrade({ ...grade.grade, bloom: grade.bloom });
+    }
+    this.post.renderPlain(scene, camera, time);
+  }
+
+  private placeGrade: Palette | null = null;
+
+  /** Takes the world's own light back after the place had the shared uniforms: the next frame applies the journey's
+   *  palette and grade afresh. */
+  restoreLight(): void {
+    this.placeGrade = null;
+    this.journeyKey = -1;
+    this.journeyAt0 = -Infinity;
+    applyPalette(this.palette);
+    this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
+  }
+
   /** The sled shop's previews (src/render/portrait.ts): the real sled mesh, with the rider seated
    *  for the large preview, drawn once by this renderer through a small offscreen scene in the toon
    *  lighting, as an image URL. Null when it cannot draw (a lost context). Loaded on first use. */
@@ -1052,6 +1085,8 @@ export class World {
     this.trailRate = t.motes;
     this.trailStyle = t.moteStyle;
     this.trailAcc = 0;
+    this.trailPlume = t.plume ?? 1;
+    this.trailForms.set(t.form);
   }
 
   /** The shells over the square and the street (spirit.ts owns them; moments.ts sends the finish's up). */
@@ -1063,6 +1098,7 @@ export class World {
   beginRun(snap: Snap, event: ChaosEvent, sled = 0): void {
     this.rider.setSled(sled);
     this.trail.clear();
+    this.trailForms.clear();
     this.particles.clear();
     this.sloughs.clear();
     this.moments.reset();
@@ -1093,6 +1129,7 @@ export class World {
    *  ground are made fresh there and the chase lens is put behind the sled. */
   reelCut(snap: Snap): void {
     this.trail.clear();
+    this.trailForms.clear();
     this.particles.clear();
     this.wasGrounded = true;
     this.updateChunks(snap.z, true);
@@ -1269,6 +1306,8 @@ export class World {
         // From about 16 m/s the runners kick fine snow up off their tails, and it goes on building to the cap.
         const kick = kickK(s.speed);
         if (kick > 0) this.particles.kick(pos, s.heading, this.landV.set(s.vx, g.x * s.vx + g.z * s.vz, -s.vz), kick * Math.min(2, dt * 60), s.onIce);
+        // (Honey Plume: a rooster tail of honey billows thrown up all the way down, twice plain snow's.)
+        if (v.mode === 'run' && this.trailPlume > 1 && s.speed > 8) sprayAmt = Math.max(sprayAmt, 0.42) * this.trailPlume;
         this.sprayAcc += sprayAmt * dt * 60 * 1.6;
         if (this.sprayAcc >= 1) {
           // Spray rides the slope: its carrier follows the ground under the sled (the title reel's
@@ -1294,6 +1333,19 @@ export class World {
       this.wasGrounded = s.grounded;
     }
     this.trail.flush();
+    // Round 9: the garage trail's shapes in the air, and the light of a lantern that rides behind or the lamp on the
+    // sled's stern post (Medium and High light the snow with it; Low paints its pool).
+    this.feedTrail.pos.copy(pos);
+    this.feedTrail.vel.set(s.vx, g.x * s.vx + g.z * s.vz, -s.vz);
+    this.feedTrail.heading = s.heading;
+    this.feedTrail.speed = s.speed;
+    this.feedTrail.grounded = s.grounded;
+    this.feedTrail.active = v.mode === 'run' && showRider && !s.crashed && !this.moments.tumbling;
+    this.feedTrail.time = v.time;
+    this.feedTrail.eye.copy(this.cam.camera.position);
+    this.trailForms.update(dt, this.feedTrail);
+    if (this.trailForms.lightOn) pushLocalLight(this.trailForms.light.x, this.trailForms.light.y, this.trailForms.light.z, 1.0, 0.8, 0.5, 3.2, 0.9);
+    if (showRider && this.rider.postLight(this.postV)) pushLocalLight(this.postV.x, this.postV.y, this.postV.z, 1.0, 0.82, 0.52, 2.6, 0.75);
 
     // Gifts ahead twinkle: every few frames a marigold glint flashes on one of the gifts 5 to 45 m down
     // the line, so a line of gifts reads as a trail of lights to follow (Medium and High).
@@ -1573,6 +1625,7 @@ export class World {
       this.rider.heroRoots((o, on) => after.hero(o, on));
       for (const o of this.life.movers) after.adopt(o);
       for (const o of this.setPieces.movers) after.adopt(o);
+      for (const o of this.trailForms.movers) after.adopt(o);
     }
     let n = 0;
     this.rider.motionParts((id, frame, c, h) => {

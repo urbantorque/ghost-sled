@@ -216,8 +216,10 @@ describe('next unlock', () => {
     // (Round 9: the Old Run opens at 18, before Sakura's 24.)
     expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 13 })).toEqual({ kind: 'mountain', name: 'The Old Run', biome: 'oldrun', have: 13, need: 18 });
     expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 19 })).toEqual({ kind: 'mountain', name: 'Sakura Ridge', biome: 'blossom', have: 19, need: 24 });
-    expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 60, gifts: 50 })).toEqual({ kind: 'sled', name: 'Whirl Saucer', gifts: 70 });
-    expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 60, gifts: 500, ownedSleds: [0, 1] })).toEqual({ kind: 'sled', name: 'Lodge Toboggan', gifts: 0 });
+    // (Round 9: the garage's prices, and the Whirl Saucer is the Almanac's, never the shop's.)
+    expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 60, gifts: 50 })).toEqual({ kind: 'sled', name: 'Lodge Toboggan', gifts: 250, price: 300, piece: 'sled:2' });
+    expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 60, gifts: 500, ownedSleds: [0, 1] })).toEqual({ kind: 'sled', name: 'Lodge Toboggan', gifts: 0, price: 300, piece: 'sled:2' });
+    expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 60, gifts: 500, ownedSleds: [0, 2] })).toEqual({ kind: 'sled', name: 'Comet Bob', gifts: 100, price: 600, piece: 'sled:3' });
     expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 60, ownedSleds: [0, 1, 2, 3, 4, 5] })).toBeNull();
   });
 });

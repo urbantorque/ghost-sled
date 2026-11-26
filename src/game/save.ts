@@ -2,7 +2,8 @@ import { weekOfDay } from './cup';
 import { MissionState, missionDef, missionSlots, newMissionState, topUp, unlockedBiomes } from './missions';
 import { type MasteryRecord, readMastery } from './mastery';
 import { type TwelveSave, readTwelve } from './twelve';
-import { type ShelfId, freeItem, isItem } from './garage';
+import { type ShelfId, freeItem, isItem, isOrnament } from './garage';
+import { type TrackSave, readTracks } from './tracks';
 import { isPaint } from './paints';
 import { type AlbumSave, type ChapterSave, type ContractsSave, type FlameSave, type LeagueSave, type LongNightSave, type RankSave, type RecentRun, readAlbum, readChapters, readContracts, readFlame, readLeague, readLongNight, readRank, readRecent, seedXp } from './spinesave';
 import { xpToPage } from './almanac';
@@ -173,6 +174,15 @@ export interface SaveData {
   /** Round 8, the trials lane: each week's Trial ridden, by its ISO week: the medal held (never lowered) and the best
    *  figure on its measure (trial.ts). The latest year kept; written only once a Trial has been ridden. */
   trials?: Record<string, TrialSave>;
+  /** Round 9, the shop lane: each sled's track (tracks.ts), by its key: the stage lines ridden on it and the tiers
+   *  fitted. Written only once a sled has ridden a line. */
+  tracks?: Record<string, TrackSave>;
+  /** The ornaments held (garage.ts ORNAMENTS: the sets', the chapters' and the Almanac's; the stern lamp is every
+   *  rider's and never stored) and the one on the stern post. */
+  ornaments?: string[];
+  ornament?: string;
+  /** The mountains' sets: how many of each mountain's three pieces its mastery board has opened (0 to 3). */
+  sets?: Record<string, number>;
 }
 
 /** Where each garage shelf keeps what is owned, and what is worn, in the save. */
@@ -566,8 +576,33 @@ export function merge(base: SaveData, p: Partial<SaveData>, today: string): Save
   const trials = readTrials(p.trials);
   if (trials) d.trials = trials;
   else delete d.trials;
+  loadShop(d, p);
   pruneDaily(d, today);
   return d;
+}
+
+/** Round 9, the shop lane: the tracks, the ornaments and the sets, each through its reader and written only when it
+ *  holds something (an old save keeps its shape). The ornament worn must be held, or the post wears its lamp. */
+function loadShop(d: SaveData, p: Partial<SaveData>): void {
+  const tracks = readTracks(p.tracks);
+  if (tracks) d.tracks = tracks;
+  else delete d.tracks;
+  const orns: string[] = [];
+  if (Array.isArray(p.ornaments)) for (const x of p.ornaments as unknown[]) if (isOrnament(x) && x !== 'lamp' && !orns.includes(x)) orns.push(x);
+  if (orns.length) d.ornaments = orns;
+  else delete d.ornaments;
+  if (typeof p.ornament === 'string' && orns.includes(p.ornament)) d.ornament = p.ornament;
+  else delete d.ornament;
+  const sets: Record<string, number> = {};
+  if (isObj(p.sets)) for (const [k, v] of Object.entries(p.sets as Record<string, unknown>)) if (/^[a-z]{1,24}$/.test(k) && isNum(v) && v >= 1) sets[k] = Math.min(3, Math.floor(v));
+  if (Object.keys(sets).length) d.sets = sets;
+  else delete d.sets;
+}
+
+/** The ornaments a save holds (the stern lamp first, every rider's) and the one on the post. */
+export function ornamentState(d: Pick<SaveData, 'ornaments' | 'ornament'>): { owned: string[]; on: string } {
+  const owned = ['lamp', ...(d.ornaments ?? []).filter((x) => x !== 'lamp')];
+  return { owned, on: d.ornament && owned.includes(d.ornament) ? d.ornament : 'lamp' };
 }
 
 /** The mountains picked at their other hour, as a save holds them: ids only (a strange value is dropped), once each. */

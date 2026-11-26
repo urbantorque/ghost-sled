@@ -1,4 +1,5 @@
-import { ALMANAC, CHAPTER_PAGES, CHAPTER_PAGE_XP, PAGES, type Reward, chapterKey, chapterOf, chapterRewards, featureOpen, pageAt, rewardName } from './almanac';
+import { ALMANAC, CHAPTER_EXTRAS, CHAPTER_PAGES, CHAPTER_PAGE_XP, GARAGE_EXTRAS, PAGES, type Reward, chapterKey, chapterOf, chapterRewards, featureOpen, pageAt, rewardName } from './almanac';
+import { giveTiers, setFitted, sledShop, trackOf, trackPrice } from './tracks';
 import { type AlbumRun, awardStickers, stickersFor } from './album';
 import { type ContractRun, settleContracts } from './contracts';
 import { lightDay } from './flame';
@@ -125,7 +126,10 @@ export interface SpineGain {
 }
 
 export interface OpenedReward {
+  /** The Almanac's page (or the chapter's), 0 for a piece that is not a page's (a mountain's set, round 9). */
   page: number;
+  /** Round 9: where a piece that is not a page's came from ("Pinecrest's set"). */
+  from?: string;
   /** The chapter's month key for a chapter page. */
   chapter?: string;
   reward: Reward;
@@ -154,8 +158,10 @@ export interface SpineOutcome {
 export interface SpineSettlement {
   snapshot: string;
   gifts: number;
-  items: Array<{ list: 'scarves' | 'trails' | 'paints'; id: string }>;
+  items: Array<{ list: 'scarves' | 'trails' | 'paints' | 'ornaments'; id: string }>;
   sleds: number[];
+  /** Round 9: tiers a sled was given (the Almanac's sled on a save that had bought it), and what it had before. */
+  tiers?: Array<{ sled: number; was: number }>;
 }
 
 const SPINE_KEYS = ['rank', 'chapters', 'album', 'flame', 'contracts', 'league', 'longNight', 'recent'] as const;
@@ -198,23 +204,49 @@ function recentOf(run: SpineRun, xp: number): RecentRun {
   return { k: run.key, t: run.time, ss: run.stageSeconds.slice(0, 3).map((x) => Math.round(x * 10) / 10), s, won: run.moments.filter((m) => m.won).length, tricks: new Set(run.tricks.map((k) => k.key)).size, xp };
 }
 
-/** Applies a reward to the save (what is not implied by the pages opened), recording what it granted. */
-function grant(d: SaveData, r: Reward, st: SpineSettlement): void {
+/** Applies a reward to the save (what is not implied by the pages opened), recording what it granted. Round 9: a reward
+ *  the save already holds is never silent (DECISIONS 392): a sled bought before its page gets its first two tiers
+ *  fitted, and a chapter piece bought before its page pays its price back. Returns what the card says instead of the
+ *  reward's own name, or null. */
+function grant(d: SaveData, r: Reward, st: SpineSettlement): string | null {
   if (r.kind === 'gifts') {
     d.gifts += r.gifts;
     d.lifetimeGifts += r.gifts;
     st.gifts += r.gifts;
-  } else if (r.kind === 'sled' && !d.ownedSleds.includes(r.sled)) {
-    d.ownedSleds = [...d.ownedSleds, r.sled];
-    st.sleds.push(r.sled);
+  } else if (r.kind === 'sled') {
+    if (!d.ownedSleds.includes(r.sled)) {
+      d.ownedSleds = [...d.ownedSleds, r.sled];
+      st.sleds.push(r.sled);
+      return null;
+    }
+    const name = sledShop(r.sled).name;
+    const was = trackOf(d, r.sled).fitted;
+    if (giveTiers(d, r.sled, 2) > 0) {
+      (st.tiers ??= []).push({ sled: r.sled, was });
+      return `Your ${name}: its runners and deck fitted`;
+    }
+    const back = trackPrice(r.sled, 0) + trackPrice(r.sled, 1);
+    d.gifts += back;
+    d.lifetimeGifts += back;
+    st.gifts += back;
+    return `You had the ${name}: ${back} gifts back`;
   } else if (r.kind === 'garage') {
-    const list = r.shelf === 'scarf' ? 'scarves' : r.shelf === 'trail' ? 'trails' : 'paints';
+    const list = r.shelf === 'scarf' ? 'scarves' : r.shelf === 'trail' ? 'trails' : r.shelf === 'ornament' ? 'ornaments' : 'paints';
     const have = d[list] ?? [];
     if (!have.includes(r.id)) {
       d[list] = [...have, r.id];
       st.items.push({ list, id: r.id });
+      return null;
+    }
+    const piece = [...GARAGE_EXTRAS, ...CHAPTER_EXTRAS].find((g) => g.id === r.id);
+    if (piece && piece.price > 0) {
+      d.gifts += piece.price;
+      d.lifetimeGifts += piece.price;
+      st.gifts += piece.price;
+      return `You had the ${piece.name}: ${piece.price} gifts back`;
     }
   }
+  return null;
 }
 
 /** Takes back what an earlier settle of this same run paid and granted, and restores the spine's fields. */
@@ -228,6 +260,7 @@ function undo(d: SaveData, prior: SpineSettlement): void {
   d.lifetimeGifts -= prior.gifts;
   for (const it of prior.items) d[it.list] = (d[it.list] ?? []).filter((x) => x !== it.id);
   d.ownedSleds = d.ownedSleds.filter((s) => !prior.sleds.includes(s));
+  for (const t of prior.tiers ?? []) setFitted(d, t.sled, t.was);
 }
 
 /**
@@ -311,8 +344,8 @@ export function settleSpine(d: SaveData, run: SpineRun, prior: SpineSettlement |
   const opened: OpenedReward[] = [];
   for (let n = claimedBefore + 1; n <= claimed; n++) {
     for (const r of ALMANAC[n - 1].rewards) {
-      grant(d, r, st);
-      opened.push({ page: n, reward: r, name: rewardName(r) });
+      const said = grant(d, r, st);
+      opened.push({ page: n, reward: r, name: said ?? rewardName(r) });
       if (r.kind === 'open') gains.push({ kind: 'unlock', text: MOUNTAIN_NAME[r.mountain] ?? r.mountain, durable: true });
     }
     gains.push({ kind: 'page', text: `Page ${n}`, durable: true });
@@ -335,8 +368,8 @@ export function settleSpine(d: SaveData, run: SpineRun, prior: SpineSettlement |
     const month = chapterOf(key)!.month;
     for (let n = ch.claimed + 1; n <= to; n++) {
       for (const r of chapterRewards(month, n)) {
-        grant(d, r, st);
-        opened.push({ page: n, chapter: key, reward: r, name: rewardName(r) });
+        const said = grant(d, r, st);
+        opened.push({ page: n, chapter: key, reward: r, name: said ?? rewardName(r) });
       }
       gains.push({ kind: 'chapter', text: `${chapterOf(key)!.name}, page ${n}`, durable: true });
     }

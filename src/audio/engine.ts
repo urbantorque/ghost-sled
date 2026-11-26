@@ -189,7 +189,10 @@ export type UiSound =
   | 'results-stamp'
   | 'coin'
   | 'results-tick'
-  | 'results-mallet';
+  | 'results-mallet'
+  /** Round 9, the shop lane: a gift opened in the garage, and a tier fitted to a sled. */
+  | 'gift-open'
+  | 'tier-fit';
 
 type MuteReason = 'sdk' | 'ad' | 'hidden' | 'user';
 

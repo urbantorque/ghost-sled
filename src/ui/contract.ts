@@ -447,7 +447,10 @@ export interface ResultsStages {
 }
 
 /** The next unlock on the results card: a mountain by ghosts passed, else a sled by gifts. */
-export type ResultsNextUnlock = { kind: 'mountain'; name: string; biome: MountainCard['biome']; have: number; need: number } | { kind: 'sled'; name: string; gifts: number };
+export type ResultsNextUnlock =
+  | { kind: 'mountain'; name: string; biome: MountainCard['biome']; have: number; need: number }
+  /** Round 9 (the shop lane): the garage's price, and the piece to open the garage at ('sled:2'). */
+  | { kind: 'sled'; name: string; gifts: number; price?: number; piece?: string };
 
 export interface SettingsModel {
   master: number;
@@ -639,6 +642,8 @@ export interface RewardCard {
   chapter: string | null;
   /** A mirror's mountain id (its page rides it). */
   mountain?: string;
+  /** Round 9, the shop lane: where a piece that is no page's came from ("Pinecrest's set"); shown instead of the page. */
+  from?: string;
 }
 
 /** Rider Rank's bar: the page turned, the XP into the next and what it still needs, and the next page's rewards. */
