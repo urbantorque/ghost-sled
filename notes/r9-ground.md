@@ -873,7 +873,162 @@ Night, the legends, the climax); one chaos digest (6,000 runs' rolls and trigger
 night legs); and the rides (a scripted rider on three rolls, six bot rides of three skills and two styles, the lab's
 mid and clumsy pilots, on each of the five; the bot's six on a Daily). Cost: courses 1.1 s, chaos under 0.1 s, rides
 6.7 to 8.0 s under `tsx`; the test file 11.8 s in vitest on one worker. Under the 20 s line, so it is one file, run
-with every step.
+with every step. Since step 5 it also asserts that no course of the five or the six Dailies has a kit, that each reads
+the layout `FIVE`, has no lift, and that its `Sim` has `trackOn` false. **It held after every step, 0 to 7.**
+
+**Step 1: the course table** (fb88cf0). `Layout`, `FIVE` (today's values), `LAYOUTS`, `layoutFor`, `finishZFor`,
+`eventsFor`, `Course.layout`, `Course.runOut`; every `src/sim` read site of section 1 reads the row; `STAGE_LENGTHS`,
+`RUN_OUT`, `FINISH_SQUARE` defined from `FIVE`; `bank`, `CHUNK_LEN`, `SAFE_LANE`, `FOREST_LIMIT` and the `THRESHOLD_*`
+bounds moved to `src/sim/courseparts.ts` and re-exported by `course.ts` under the same names; the render's four
+`RUN_OUT` reads (`landmarks.ts` 501, 606, 776, `overlook.ts` 217) read `c.runOut`.
+
+**Step 2: `FINISH_Z` from the course** (b6d02af). Every site of section 9, and `tests/finishz.test.ts` (eight
+promises). `field.ts` gained `finishZOfKey` (a save key's course length through its night and mirror prefixes; a
+Trial's key names a week, so it reads the five's: a Trial on a new mountain gets the five's anchor bounds, for the
+mountain lanes to refine), and `fieldPace` and a first run's default anchor scale with the course's length as
+`anchorFor` does.
+
+**Step 3: room for eight** (06ee25b). The Trials turn (`FIVE_TURN`, `EIGHT_TURN`, `EIGHT_FROM` null, `EIGHT_START`,
+`trialMountainId`; a perfect-landing week on the Old Run is a style week; a week's event the mountain cannot meet makes
+it plain); `LEGS` from `NIGHT` once all three are registered, `LEG_NAMES` for all eight, the "all ten legs" page opening
+every leg; `GRAVE_NAMES` frozen at 22 with `GRAVE_MORE` and `namesFor`; `rollChaos`'s `allowed` mask (`ALL_EVENTS`,
+`eventAllowed`, `withEvents`) passed by the run's roll (`app.ts`) and the pool generator (`bot/pool.ts`), the Trial and
+the Long Night filtering theirs; `generate-ghosts.ts --only <id>`, refusing to write the five's pools without `--five`.
+`tests/eight.test.ts` and a frozen-names test in `tests/graveyards.test.ts`. *A slip, owned:* while wiring the guard I ran
+the generator once, unguarded and outside the heavy slot, for about 60 s before its timeout stopped it; it rewrote
+Pinecrest's, Frostfang's and Ember's pools, which came out byte for byte the stored ones (git saw no change), which is
+itself a second proof that the bot and the sim had not moved. Nothing else ran beside it.
+
+**Step 4: the fairness suite split** (58efe11). `SEEDS` is the acts-grammar mountains and the six Dailies (the five's
+promises); `EVERY` holds what every mountain keeps (a clear lane, ground launching only where meant, the line-following
+driver to its own course's line, the avalanche where it runs); the line's curvature is the five's alone; the charm
+gates' width and the set pieces' spacing read the course's layout.
+
+**Step 5: the kit seam** (1c52c75). `src/sim/kit.ts`; `CourseBiome` widened by `'oldrun'`, `lookOf` borrowing
+`'alpine'`, `biomeForSeed` returning the look; the Old Run's rows in `BIOME_PARAMS`, `TALL`, `LOW`, `CLIFFS`, `SCRIPTS`,
+`SIGNATURES`, `LAYOUTS`; the kinds `track`, `labyrinth`, `outrun` in `SHAPES`, `GRADE`, `WIDTH`, `BLEND`, `BODY` and in
+`src/audio/listen.ts` `OPEN` and `src/render/landmarks.ts` `SPAN_CHANCE` (neutral values); the hooks in `course.ts`
+(construction, `lay`, `centerXAt`, `halfWidthAt`, `bareGround`, `surface`, `buildChunk`, `placeLights`, and
+`channelSlope`, `liftAt`, `liftX`, `lineFor`, `raceX`, `lips`); the sim's track (A1 to A4 and B of section 3; the
+disallowed event's trigger at infinity); the bot's per-thought line and the track's yaw and damping in its heading.
+The kit's `street` hook (D) and the lift (C) are not built: they are Gablefall's and Gullhaven's lanes', to this design.
+
+**Step 6: the lab Old Run** (7936c64). `src/sim/oldrun.ts` (the kit: compose, the turns, the cross-section, the wall
+profiles, the surfaces, `raceX`, `lineFor`, the glaze lights), `OLDRUN_LAB_SEED` `0x9b05688c` in `BIOME_BY_SEED` only,
+`tests/oldrun.test.ts` (eleven promises), the lab's pilots riding a kit's line (`labpilots.ts`, behind `c.kit`, so the
+five's pilot rides are unchanged), and a dev switch `?debug&seed=<hex>` that rides a lab course in the Daily's place.
+Three things changed from the design on the way, each found by a test or the lab:
+- *The parapet is the wall's own curve carried on past the lip*, not a steeper one. A rider throwing the sled at the
+  walls at full lock left the ground 70 times on a run: the steeper parapet's curvature (6 against the wall's 0.2) sits
+  inside the sim's 0.2 m central-difference gradient at the lip, which then predicts the ground higher than it is and
+  reads a fall of a centimetre a tick. With the curve carried on, the same rider is scraped and never launched.
+- *`TRACK_DAMP` is 1.8, not 3.5.* At 3.5 the damping turned the sled with the channel so firmly that a sled let go
+  climbed nowhere near its settling height (0.00 to 0.34 of the wall where it should settle at 0.19 to 0.42); at 1.0 it
+  rode past it (to 0.85). At 1.8 it rides up to about its height, and in the Labyrinth's tightest bends overshoots it
+  (0.69 against 0.37), never to the lip. (The design's claim that damping toward the channel's direction leaves the
+  settling height alone holds only once there: getting there takes a lag the damping eats.)
+- *The bot's planner on the track* counts only the lip as out (a line within 0.5 m of it), not the five's 1.5 m from the
+  corridor's edge, and lets a line leave the floor's middle at up to about 31 degrees (the five's 17 would reject every
+  racing line at a bend's entry). Both behind `onTrack`.
+
+**Step 7: the lab** (`scripts/r9/oldrun-lab.ts`, `scripts/r9/oldrun-hand.ts`; raw output
+`C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r9/ground/oldrun-lab.txt`, `.json`, `oldrun-hand.txt`). Every figure
+is the sim's, ridden by scripts; nobody has ridden it.
+
+| Pilot (lab course, plain day) | Finished | Median time | Mean speed | Share of bend time on the glaze | Scrapes | Falls |
+| --- | --- | --- | --- | --- | --- | --- |
+| a sled let go (no hands) | 1/1 | 138.0 s | 22.7 m/s | 5% | 0 | 0 |
+| careful line | 6/6 | 144.8 s | 21.6 | 0% | 0 | 0 |
+| novice | 6/6 | 141.7 s | 22.2 | 1% | 0 | 0 |
+| mid | 6/6 | 126.9 s | 25.0 | 13% | 0 | 0 |
+| expert | 6/6 | 123.6 s | 25.7 | 36% | 0 | 0 |
+| bot 0.25 / 0.55 / 0.9 | 3/3 each | 131.2 / 124.6 / 111.9 s | 23.9 / 25.2 / 28.0 | 0 / 0 / 3% | 0 | 0 |
+| bot 0.9, racer | 3/3 | 107.0 s | 29.4 | 4% | 1 | 0 |
+| clumsy (30 seeds) | **30/30** | 261.8 s | | | 48 a run | 0.4 a run |
+
+The mid pilot finished in every mood (122.0 to 138.2 s). The careful riders and the bot never left the ground off a wall
+(launches off a wall: 0 for every pilot but the clumsy one, 1 in 30 runs).
+- **Does a sled ride up the bank and sink to the slush?** Yes, as built: a sled let go rides up a bend's outside wall to
+  about the height its speed settles at and comes back down; the slush lies in a bend's floor (a careful rider spends
+  most of every bend in it), the glaze high on the outside wall. *Worked* per surface, measured on the rides: the glaze
+  speeds a sled up (+1.5 to +4.4 m/s per s at 20 to 28 m/s, part of it the descent), the slush slows it (-0.3 to -0.6
+  at 20 to 28), track ice settles where the arithmetic says (+0.5 at 24 to 28).
+- **At the concept's speeds (about 36 on the glaze, 18 in the slush)?** No. Those are the speeds a sled settles at on
+  each surface over a long stretch; a bend lasts one to three seconds, so on each surface a rider goes about as fast as
+  it came in: 20 to 31 m/s everywhere. On 0.17 a sled gathers speed slowly (track ice, tucked, settles at 33 m/s, and
+  from 25 gains about half a metre a second each second), so the whole run is slow: the mid pilot at 25 m/s and 127 s,
+  against the concept's "about 34 m/s, 85 to 90 s".
+- **Does the glaze pay?** **Not yet: it costs.** One steering hand riding three lines (`oldrun-hand.txt`): the floor's
+  middle 128 to 136 s, the glaze line 150 to 154 s, a mid line 159 to 163 s. A rider holding the glaze has to steer
+  into a wall whose yaw grows with its slope (about 0.75 rad/s two thirds up the deepest wall, against the 0.5 the bend
+  needs), and every correction is slip, which costs speed; riders on the glaze run at about 17 to 20 m/s. A what-if
+  at a 0.24 grade (reverted, not committed) made every line faster and the floor faster still (the floor line 117 to
+  120 s, the glaze line about 146 s). The
+  wall's physics are the design's; the balance is not there.
+- **What the Old Run's lane starts from** (its first lab work, before any world): (1) the wall's strength: a softer yaw
+  (`wallYaw` times a factor under 1 on the track, or a wall that steepens less fast) so the glaze can be held without
+  fighting it; (2) a controller that holds a height, not a heading (the bot's, and the lab pilots'): today's re-plan
+  each thought from where the sled is and lag a turn behind, so the bot rides the glaze under 5% of a bend; (3) the
+  economy: longer bends (the concept's 60% of the run, against about 38% laid), a faster track (the ice's drag, or the
+  grade, or a steeper start house: on 0.17 the start at 14 m/s takes most of the first stage to reach speed), and the
+  glaze's band; (4) the bar it must meet: the glaze line 10 to 20% under the floor line for the mid pilot.
+- **What Gullhaven's and Gablefall's lanes start from:** a `LAYOUTS` row each (the Old Run's shows the shape);
+  `kit.ts` and a file of their own beside `oldrun.ts`, `CourseBiome` widened and a look borrowed through `lookOf` until
+  their world lands; the course's own `finishZ` everywhere in the game (Gablefall's 2,800 m reads its own line); their
+  events masked by their row; `GRAVE_MORE`'s names, `LEG_NAMES`, `generate-ghosts.ts --only`; `tests/five.test.ts` as
+  the gate and the fairness suite's `EVERY` promises; the determinism suite's lab-seed pattern. Not built, theirs to
+  this design: the lift's sim step (hook C; `Course.liftAt`, `liftX` and `hasLift` exist and read the kit's
+  `lift`/`liftX`, but `sim.ts` does not call them yet), the street over the roofs (hook D; `kit.ts` has no `street`
+  hook yet), the
+  bot's `lip` goal (`Course.lips` exists, empty without a kit hook), their promises' tests. The last of the three to
+  register sets `EIGHT_FROM` and switches the Long Night to sixteen legs.
+
+**The chase camera** (`scripts/r9/oldrun-frames.js`, run with `playwright-cli run-code` on the headless config against
+`npm run dev` at `?debug&seed=9b05688c`; it waits for the Daily's rivals, starts the run with `__gs.ride()`, holds the
+sled on a line at a speed from 45 m before each spot, as `descent.js` does, so these are staged frames, not a ride, and
+grabs a frame as it passes). Eleven frames at 1280x720 on High, the HUD hidden, the alpine look borrowed, the console clean, in
+`C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r9/ground/frames/`: `01-start-house-straight-z70`,
+`02-hotel-bend-glaze-z232`, `03-hotel-bend-floor-z380`, `04-threshold-charm-gate-z1040`, `05-labyrinth-glaze-z1278`,
+`06-labyrinth-slush-z1346`, `07-labyrinth-glaze-2-z1504`, `08-horseshoe-glaze-z2618`, `09-horseshoe-hold-z2720`,
+`10-horseshoe-out-glaze-z2822`, `11-outrun-z2960` (`.png`). The Daily's 61 rivals were ridden by the bot on the lab
+course in the worker without an error. What they show, for the Old Run's lane:
+- The channel reads as a channel: a deep U, the sled high on the outside wall in a bend (02, 05, 08) and back in the
+  floor between them (06, 09), the glaze lights a dotted line along the band high on the wall.
+- The ice, the glaze and the slush look the same: one snow material, the glaze told only by its lights. The world is
+  the lane's (ART.md), but a rider has to see where the glaze is.
+- Past the lip the wall's carried curve climbs into tall faces drawn as rock (02, 05, 08, 09 show them towering over
+  the track's inside). That is the sim's answer to the launches at the lip; the world will want a crest there (a
+  snow bank, a fence) rather than a cliff.
+- The start (01) is the borrowed alpine start, grandstands and all, and the outrun (11) ends under the alpine finish
+  gantry: the alpine look, not the Old Run's.
+
+*Found while shooting:* the dev switch's seed was lost when the title's daily rollover rebuilt the Daily from the
+date; the switch now keeps the day's tagline and only swaps the seed (the switch's own hunk in `app.ts`).
+
+**The suites at the end, in the heavy slot.** `tests/determinism.test.ts` gains the lab Old Run as section 11 promised (a
+fifth 60/144/37 Hz case, and the lab seed beside `MOUNTAINS` in "read between ticks" and "chunks in any order"); it
+passes, 13 tests. `npx tsc --noEmit -p .` clean. The full suite (`npx vitest run --maxWorkers=3`): **110 files, 1,959
+passed and 2 expected failures, 147.6 s** (`shots/r9/ground/full-suite.txt`). `npx tsx scripts/playtest/r9-courses.ts`
+(49 s, written to `shots/r9/ground/r9-courses.txt` and `.json`, not the measure lane's file): **the five's table is
+milestone 0's `shots/r9/measure/r9-courses.txt` figure for figure**; the two files differ only in the line naming the
+JSON's path and the elapsed time.
+
+*One thing of step 6 not built as written:* `lab.ts` and `r9-courselib.ts` do not take `--seed`. The lab course is
+ridden by `scripts/r9/oldrun-lab.ts` with `labpilots.ts`'s own pilots (and the bot), which was all step 7 asked for;
+`r9-courses.ts` reads `MOUNTAINS`, so a mountain gets its bars there when its lane registers it.
+
+**Every hunk in a shared game file** (against 6255b8d): `src/game/save.ts`, `src/render/spineview.ts`,
+`src/ui/contract.ts` and `src/ui/ui.ts` are untouched. `src/game/app.ts` has ten:
+1. 44: `courseFor` imported with `eventsFor`.
+2. 78: the `standing` import trades `FINISH_Z` for `finishZOf`.
+3. 372 to 377 (new): the dev switch `?debug&seed=<hex>` (behind `DEV_ON`), the Daily's seed swapped, its tagline kept.
+4. 884: `bundledGraveyards` given each mountain's `finishZ: finishZOf(m.seed)`.
+5. 1214 to 1215 (new): the field's input given `finishZ: finishZOf(this.mountain.seed)`.
+6. 1530: the run's roll `rollChaos(seed, this.sessionRuns, this.lastMood, eventsFor(this.mountain.seed))`.
+7. 2631 (new): the `RunSummary` given `finishZ: sim.course.finishZ`.
+8. 2910: the results' `finishZ: FINISH_Z` read as `sim.course.finishZ`.
+9. 3211: `predictedTime(...)` given the run's `sim.course.finishZ`.
+10. 3705 to 3706: `ghosts.pace(...)` given the course's `finishZ` and its last stage's length.
 
 ---
 

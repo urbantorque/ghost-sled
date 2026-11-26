@@ -369,9 +369,10 @@ export class App {
     this.mountain = this.savedMountain();
     if (DEV_ON && DEV.has('m')) this.mountain = MOUNTAINS[Number(DEV.get('m'))] ?? this.mountain;
     this.daily = dailyMountain(dailyKey(new Date()));
-    // (Round 9, the ground lane: `?debug&seed=<hex>` rides a lab course, the Old Run's among them, in the Daily's place.)
+    // (Round 9, the ground lane: `?debug&seed=<hex>` rides a lab course, the Old Run's among them, in the Daily's place;
+    // the day's own tagline is kept, so the title's daily rollover does not put the day's course back.)
     if (DEV_ON && DEV.has('seed')) {
-      this.daily = { ...this.daily, seed: parseInt(DEV.get('seed') ?? '', 16) >>> 0, tagline: 'lab' };
+      this.daily = { ...this.daily, seed: parseInt(DEV.get('seed') ?? '', 16) >>> 0 };
       this.mountain = this.daily;
     }
     this.cup = cupMountain(this.trialWeek());
