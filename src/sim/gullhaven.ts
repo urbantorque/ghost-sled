@@ -10,7 +10,9 @@
 // comes down on the gully's face or the far shelf and stomps it; a rider who keeps to the path goes round the head,
 // through the drift the wind leaves there. The corridor's centre is the path (the safe line, the let-go's line); the
 // shelf, the lip and the mouth lie seaward of it inside a corridor that widens to hold them, so a rider not steering
-// stays on the path (the review's finding 5). Nothing the five lay (ledges, kickers, fields, rails) is laid here.
+// stays on the path (the review's finding 5). Nothing the five lay (ledges, kickers, fields, rails) is laid here, and
+// nothing stands on it: what floors a rider here is a long flight landed wrong, nothing else (its rocks and huts are
+// the world's, out past where any sled goes).
 //
 // Pure: no DOM, render or audio imports. Values only from chaos.ts, courseparts.ts and dmath.ts; course.ts and kit.ts for
 // types.
@@ -19,7 +21,7 @@ import { ChaosEvent } from './chaos';
 import { bank } from './courseparts';
 import { smoothstep } from './dmath';
 import type { Chunk, Course, Layout, Section, SectionKind, Surface } from './course';
-import type { Kit, KitBeat, KitPlan, KitRider, Placer } from './kit';
+import type { Kit, KitBeat, KitPlan, KitRider } from './kit';
 import type { Rng } from './prng';
 
 /** The grades (course.ts's GRADE reads them): the beacon's slope off the cape's head, the clifftop shelves, a gully's head
@@ -28,7 +30,7 @@ import type { Rng } from './prng';
 export const BEACON_GRADE = 0.3;
 export const BEACON_LEN = 200;
 export const SHELF_GRADE = 0.2;
-export const HEAD_EXTRA = 0.2;
+export const HEAD_EXTRA = 0.1;
 export const DESCENT_GRADE = 0.38;
 export const SHEDS_GRADE = 0.2;
 export const HARBOUR_GRADE = 0.025;
@@ -66,31 +68,34 @@ export const COLUMN_HW = 2.5;
 export const COLUMN_SOFT = 1.2;
 export const SHELF_W0 = 5;
 export const SHELF_W1 = 13;
-export const CLIFF = 6;
-export const DROP = 26;
+export const CLIFF = 5;
+export const DROP = 20;
 export const MOUTH = 100;
-const GREAT = { cliff: 7.5, drop: 34, mouth: 140, detour: 12 };
-/** The lift over a gully's mouth, a share of gravity (always under it: the air slows a fall, never carries a sled up). */
-export const LIFT = 0.65;
-/** The column is whole up to LIFT_TOP0 m over the rim (the shelf's line held on over the mouth) and gone by LIFT_TOP1. */
-const LIFT_TOP0 = 0;
-const LIFT_TOP1 = 6;
+const GREAT = { cliff: 7, drop: 26, mouth: 140, detour: 12, lift: 0.62, column: 115 };
+/** The lift over a gully's mouth, a share of gravity (always under it: the air slows a fall, never carries a sled up);
+ *  the Great Geo's is stronger (GREAT.lift), its flights the longest in the game. */
+export const LIFT = 0.45;
+/** How far over the mouth the column reaches from the lip: a sled is held three seconds or so, then drops to the face or
+ *  the far shelf (the Great Geo's longer). */
+export const COLUMN = 65;
 /** How far the column reaches back over the shelf before the lip (a pop a beat early is still caught), and how far its
  *  far end takes to fade. */
 const COLUMN_BACK = 4;
 const COLUMN_FADE = 12;
 /** The path swings inland over DETOUR_IN m, ending DETOUR_AT before the lip, and back over DETOUR_OUT once past the
  *  mouth's last DETOUR_HOLD m. */
-const DETOUR_IN = 70;
+const DETOUR_IN = 60;
 const DETOUR_AT = 55;
-const DETOUR_OUT = 70;
+const DETOUR_OUT = 60;
 const DETOUR_HOLD = 10;
 /** The cliff at the lip falls over this many metres (a corniced edge: it leaves a sled in the air at any speed). */
 const CLIFF_RUN = 3;
 /** A rider decides a gully this far before its lip: by its speed before it, and once past by where it is. */
 export const DECIDE = 60;
-/** The bold line comes back to the path over this far past the mouth. */
-const REJOIN = 80;
+/** The bold line leaves the path over BOLD_LEAD m before the path swings inland, and comes back to it over REJOIN m past
+ *  the mouth. */
+const BOLD_LEAD = 40;
+const REJOIN = 60;
 /** The moor inside the corridor: rising from MOOR_FROM inland of the path's middle. */
 const MOOR_FROM = 6;
 const MOOR_K = 0.02;
@@ -99,15 +104,18 @@ export const SEA_DROP = 120;
 
 /** The surfaces (round 9). The shelf is wind-packed, quick; the head of a gully holds the drift the wind leaves there,
  *  slow; the gully's face is plain snow; the harbour is sea ice, where the ice charms bite. */
-export const PACKED: Surface = { grip: 0.85, drag: 0.72, ice: false };
-export const DRIFT: Surface = { grip: 1, drag: 2.4, ice: false };
+export const PACKED: Surface = { grip: 0.85, drag: 0.8, ice: false };
+export const DRIFT: Surface = { grip: 1, drag: 1.5, ice: false };
 export const FACE: Surface = { grip: 1, drag: 1, ice: false };
 export const HARBOUR_ICE: Surface = { grip: 0.6, drag: 0.45, ice: true };
 
 /** The soaring choice: a rider takes the bold line into a gully when its speed DECIDE m before the lip is at least
- *  SOAR_V less SOAR_DARE times its daring (skill and nerve). */
+ *  SOAR_V less SOAR_DARE times its daring (skill and nerve); a rider not yet daring that much (a first-timer, a timid
+ *  rider) only when it comes in faster than SOAR_TIMID. */
 const SOAR_V = 31;
 const SOAR_DARE = 14;
+const SOAR_FROM = 0.3;
+const SOAR_TIMID = 36;
 
 /** One gully as the kit laid it. */
 export interface Gully {
@@ -129,6 +137,9 @@ export interface Gully {
   detour: number;
   /** The Great Geo, the widest crossing. */
   great: boolean;
+  /** Its column's lift, a share of gravity, and its length from the lip. */
+  lift: number;
+  column: number;
 }
 
 /** A wiggle of the path on a shelf between gullies: x moves by `a` and back from z0 to z1. */
@@ -179,9 +190,10 @@ function detourOf(g: Gully, z: number): number {
   return 1 - smoother((z - out0) / DETOUR_OUT);
 }
 
-/** The first and last metre a gully reaches along the run (its path's swing). */
+/** The first and last metre of a gully along the run: from where its bold line leaves the path to where it is back on
+ *  it (the path's swing round the head lies inside). */
 export function gullySpan(g: Gully): { z0: number; z1: number } {
-  return { z0: g.zL - DETOUR_AT - DETOUR_IN, z1: g.zL + g.mouth - DETOUR_HOLD + DETOUR_OUT };
+  return { z0: g.zL - DETOUR_AT - DETOUR_IN - BOLD_LEAD, z1: g.zL + g.mouth + REJOIN };
 }
 
 /** The extra metres the path has fallen below the shelf's line through gully g by z: the integral of the head's extra
@@ -297,7 +309,8 @@ export function shelfShare(c: Course, x: number, z: number): number {
 /** The bold line into gully g at z: straight on at its x to the mouth's end, then back to the path. */
 export function boldX(c: Course, g: Gully, z: number): number {
   const cx = at(c, z).cx;
-  return cx + (g.bx - cx) * (1 - smoothstep(g.zL + g.mouth, g.zL + g.mouth + REJOIN, z));
+  const z0 = g.zL - DETOUR_AT - DETOUR_IN - BOLD_LEAD;
+  return cx + (g.bx - cx) * smoothstep(z0, z0 + BOLD_LEAD, z) * (1 - smoothstep(g.zL + g.mouth, g.zL + g.mouth + REJOIN, z));
 }
 
 /** Gullhaven's places (moments.ts lays its set pieces on them): its gullies, the Great Geo, the shore road (the last
@@ -312,7 +325,7 @@ export function placesOf(c: Course): { great: Gully; descent: number; sheds: num
 function soars(c: Course, g: Gully, r: KitRider): boolean {
   if (r.z < g.zL - DECIDE) {
     const dare = 0.7 * (r.skill > 1 ? 1 : r.skill < 0 ? 0 : r.skill) + 0.3 * (r.nerve > 1 ? 1 : r.nerve < 0 ? 0 : r.nerve);
-    return r.v >= SOAR_V - SOAR_DARE * dare;
+    return r.v >= (dare < SOAR_FROM ? SOAR_TIMID : SOAR_V - SOAR_DARE * dare);
   }
   if (r.z > g.zL + g.mouth + REJOIN) return false;
   const cx = at(c, r.z).cx;
@@ -340,12 +353,13 @@ export const GULLHAVEN_KIT: Kit = {
     const harbour = fin - L.square;
     const sheds = harbour - 340;
     const descent = sheds - 160;
-    // The lips: four over the Cape, four over the Geos (the second of them the Great Geo), two on the Harbour Road.
+    // The lips: three over the Cape, four over the Geos (the second of them the Great Geo), two on the Harbour Road, each
+    // gully clear of the next and of the thresholds' approaches.
     const plan: { z: number; great: boolean }[] = [];
-    const jit = (): number => rng.range(-15, 15);
-    for (const z of [385, 730, 1060, 1300]) plan.push({ z: z + jit(), great: false });
-    for (const z of [1880, 2220, 2600, 2900]) plan.push({ z: z + jit(), great: z === 2220 });
-    for (const z of [3480, 3830]) plan.push({ z: z + jit(), great: false });
+    const jit = (): number => rng.range(-5, 5);
+    for (const z of [400, 870, 1340]) plan.push({ z: z + jit(), great: false });
+    for (const z of [1885, 2225, 2590, 2910]) plan.push({ z: z + jit(), great: z === 2225 });
+    for (const z of [3490, 3850]) plan.push({ z: z + jit(), great: false });
     const b1 = blendOf('geo', 'cliffpath');
     const b2 = blendOf('cliffpath', 'geo');
     const gullies: Gully[] = plan.map((p, index) => {
@@ -356,7 +370,7 @@ export const GULLHAVEN_KIT: Kit = {
       const pre = cliff / HEAD_EXTRA + b1 / 2;
       const len = drop / HEAD_EXTRA + b1 / 2 - b2 / 2;
       const z0 = Math.round(p.z - pre);
-      return { index, zL: z0 + pre, bx: 0, z0, z1: z0 + Math.round(len), b1, b2, cliff, drop, mouth: p.great ? GREAT.mouth : MOUTH, detour: p.great ? GREAT.detour : DETOUR, great: p.great };
+      return { index, zL: z0 + pre, bx: 0, z0, z1: z0 + Math.round(len), b1, b2, cliff, drop, mouth: p.great ? GREAT.mouth : MOUTH, detour: p.great ? GREAT.detour : DETOUR, great: p.great, lift: p.great ? GREAT.lift : LIFT, column: p.great ? GREAT.column : COLUMN };
     });
     // The path's wiggles on the shelves between gullies, away from the thresholds and the start's gate.
     const wiggles: Wiggle[] = [];
@@ -462,21 +476,18 @@ export const GULLHAVEN_KIT: Kit = {
 
   lift(c: Course, x: number, y: number, z: number): number {
     const g = at(c, z).g;
-    if (!g || z < g.zL - COLUMN_BACK || z > g.zL + g.mouth + COLUMN_FADE) return 0;
+    if (!g || z < g.zL - COLUMN_BACK || z > g.zL + g.column + COLUMN_FADE) return 0;
     const ax = x - g.bx < 0 ? g.bx - x : x - g.bx;
     if (ax >= COLUMN_HW + COLUMN_SOFT) return 0;
     const wx = ax <= COLUMN_HW ? 1 : 1 - smoothstep(COLUMN_HW, COLUMN_HW + COLUMN_SOFT, ax);
-    const wz = z <= g.zL + g.mouth ? 1 : 1 - smoothstep(g.zL + g.mouth, g.zL + g.mouth + COLUMN_FADE, z);
-    // (Strongest at the rim and below it, where the wind climbs out of the gully; it spills over the rim and is gone a
-    // few metres above it, so a pop rises as it would anywhere and the column catches the sled as it sinks back.)
-    const over = y - rimY(c, g, z);
-    const wy = over <= LIFT_TOP0 ? 1 : 1 - smoothstep(LIFT_TOP0, LIFT_TOP1, over);
-    return LIFT * 9.81 * wx * wz * wy;
+    void y;
+    const wz = z <= g.zL + g.column ? 1 : 1 - smoothstep(g.zL + g.column, g.zL + g.column + COLUMN_FADE, z);
+    return g.lift * 9.81 * wx * wz;
   },
 
   liftX(c: Course, z: number): number | null {
     const g = at(c, z).g;
-    if (!g || z < g.zL - COLUMN_BACK || z > g.zL + g.mouth + COLUMN_FADE) return null;
+    if (!g || z < g.zL - COLUMN_BACK || z > g.zL + g.column + COLUMN_FADE) return null;
     return g.bx;
   },
 
@@ -491,30 +502,6 @@ export const GULLHAVEN_KIT: Kit = {
     const out: { z: number; x0: number; x1: number }[] = [];
     for (const g of laid(c).gullies) if (g.zL >= z0 && g.zL <= z1) out.push({ z: g.zL, x0: g.bx - COLUMN_HW, x1: g.bx + COLUMN_HW });
     return out;
-  },
-
-  obstacles(c: Course, chunk: Chunk, rng: Rng, p: Placer, diff: number): void {
-    void diff;
-    const d = laid(c);
-    if (chunk.z1 <= BEACON_LEN || chunk.z0 >= d.descent) return;
-    // Rocks off the path, about twenty a kilometre: on the moor and, between gullies, on the shelf toward the fence.
-    // Never in a gully (its shelf, lip, mouth and far shelf are the bold line's) or a threshold's approach.
-    const n = rng.int(0, 3);
-    for (let k = 0; k < n; k++) {
-      const z = rng.range(chunk.z0 + 2, chunk.z1 - 2);
-      const a = at(c, z);
-      const seaward = rng.chance(0.35);
-      const off = seaward ? rng.range(6.5, PATH_HW - 1.6) : -rng.range(7, a.hw - 1.4);
-      const r = rng.range(0.6, 1.2);
-      const h = rng.range(0.9, 1.8);
-      if (d.gullies.some((g) => {
-        const sp = gullySpan(g);
-        return z > sp.z0 - 30 && z < sp.z1 + 30;
-      }) && seaward) continue;
-      if (d.gates.some((t) => z > t.z0 - 130 && z < t.z1 + 30)) continue;
-      const x = a.cx + off;
-      if (p.clearOf(x, z, r)) p.add('rock', x, z, r, h);
-    }
   },
 
   lights(c: Course, chunk: Chunk, rng: Rng, diff: number, push: (x: number, z: number, hover: number, value: number) => void): void {

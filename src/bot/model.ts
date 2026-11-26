@@ -19,7 +19,8 @@ export interface Flight {
 
 /**
  * Integrates the sim's air step without steering until the sled meets the ground. A flight whose
- * clearance drops below `giveUp` is abandoned early, since the caller will reject it anyway.
+ * clearance drops below `giveUp` is abandoned early, since the caller will reject it anyway. Round 9: `lift` is the
+ * course's air (Course.liftAt) where it lifts, scaled by `liftScale` (the mood's gravity); left out, none.
  */
 export function predictFlight(
   course: Course,
@@ -33,6 +34,8 @@ export function predictFlight(
   vz: number,
   giveUp = -Infinity,
   maxTicks = 480,
+  lift?: (x: number, y: number, z: number) => number,
+  liftScale = 1,
 ): Flight {
   let clearance = Infinity;
   let gy = course.ground(x, z);
@@ -40,6 +43,11 @@ export function predictFlight(
   const drag = 1 - 0.015 * DT;
   for (let t = 1; t <= maxTicks; t++) {
     vy -= gravity * DT;
+    // (Round 9, Gullhaven: air that lifts, as the sim adds it, right after gravity: course.liftAt, scaled by the mood.)
+    if (lift) {
+      const a = lift(x, y, z);
+      if (a > 0) vy += a * liftScale * DT;
+    }
     vx *= drag;
     vz *= drag;
     x += vx * DT;

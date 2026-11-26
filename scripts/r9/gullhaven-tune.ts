@@ -43,7 +43,7 @@ export function landing(sim: Sim): { t: number; x: number; z: number } {
 
 /** A steady hand: on the snow it steers to a line (and tucks while it runs straight); on the bold line it crouches into
  *  each lip and springs at it; in the air it holds the column (a nudge inside the dead zone) and stomps the landing. */
-function hand(sim: Sim, bold: boolean): () => number {
+export function hand(sim: Sim, bold: boolean): () => number {
   const c = sim.course;
   const gs = gulliesOf(c);
   let crouch = false;
@@ -148,6 +148,8 @@ function ride(who: string, input: (sim: Sim) => () => number): { who: string; do
   return { who, done: sim.finished, t: sim.finished ? sim.s.finishTick / 60 : sim.tick / 60, mean: sum / Math.max(1, n), air: air / Math.max(1, n), falls, scrapes, rows };
 }
 
+if (process.argv[1]?.includes("gullhaven-tune")) main();
+function main(): void {
 const letGo = ride('let go', () => () => packInput(4, false, false));
 const path = ride('path', (sim) => hand(sim, false));
 const bold = ride('bold', (sim) => hand(sim, true));
@@ -170,3 +172,4 @@ for (let i = 0; i < path.rows.length; i++) {
 out.push(`  all gullies: path ${f1(tp)} s, bold ${f1(tb)} s, gain ${Math.round(((tp - tb) / tp) * 100)}%`);
 console.log(out.join('\n'));
 if (process.argv.includes('--json')) console.log(JSON.stringify({ letGo, path, bold }));
+}
