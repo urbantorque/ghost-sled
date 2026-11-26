@@ -50,13 +50,15 @@ async (page) => {
   out.cost = await page.evaluate(() => ({ ...window.__gs.garageCost, heapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null }));
   await wait(1500);
   await shot('home');
+  // (By now the place has drawn its fortieth frame: what one settled frame costs.)
+  out.settled = await page.evaluate(() => (window.__gs.garageCost ? window.__gs.garageCost.settled || null : null));
   // Hats: a hat tried on, from behind, then the same tile again, from the front.
   await click('[data-fk="g-tab-hat"]');
   await wait(400);
   await nth('[data-fk^="g-tile-hat-"]', 3);
   await wait(1300);
   await shot('hat-back');
-  await nth('.gs-gar-tile.is-on', 0);
+  await nth('.gs-gar-tile[aria-pressed="true"]', 0);
   await wait(1300);
   await shot('hat-front');
   await click('[data-fk="g-tab-scarf"]');

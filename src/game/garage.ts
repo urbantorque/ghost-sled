@@ -375,6 +375,11 @@ export function onSale(src: Source, months: ReadonlySet<number>): boolean {
 }
 
 /** A piece's chapter, set or Almanac source in a few words, for its card ("Almanac page 42", "Frostfang's set"). */
+/** "First Light's", "Thaw Lanterns'". */
+function possessive(name: string): string {
+  return name.endsWith('s') ? `${name}'` : `${name}'s`;
+}
+
 export function sourceLine(src: Source): string {
   switch (src.kind) {
     case 'almanac':
@@ -382,7 +387,7 @@ export function sourceLine(src: Source): string {
     case 'set':
       return `${SET_MOUNTAIN_NAMES[src.mountain] ?? src.mountain}'s set: ${['a third', 'two thirds', 'all'][src.piece]} of its mastery board`;
     case 'chapter':
-      return `${MONTH_NAMES[src.month - 1]}'s chapter`;
+      return `${possessive(MONTH_NAMES[src.month - 1] ?? String(src.month))} chapter`;
     default:
       return '';
   }

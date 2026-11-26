@@ -31,7 +31,7 @@ const SHELVES: ReadonlyArray<{ key: GarageShelfKey; label: string }> = [
 /** What the shelf's pieces are for, in one line under the card (a look only, never an edge). */
 const NOTE: Record<GarageShelfKey, string> = {
   sled: 'Each sled rides its own way. Its track only changes how it looks.',
-  hat: 'Seen from behind, as on the run. A look only.',
+  hat: 'Seen from behind, as on the run; pick it again to see its front. A look only.',
   scarf: 'Your scarf stays vermillion, so you always know which rider is you.',
   trail: 'What your sled leaves in the air behind it. A look only.',
   finish: 'Every sled rides the same in any finish.',

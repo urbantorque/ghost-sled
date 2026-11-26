@@ -590,7 +590,18 @@ export class GarageScene {
     this.camT = Math.min(1, this.camT + dt / 0.9);
     const e = this.camT * this.camT * (3 - 2 * this.camT);
     const to = set[this.shot];
-    this.camera.position.lerpVectors(this.from.pos, to.pos, e);
+    // Round the stand's axis (the rider stands at the origin): the angle the short way round, the distance and the
+    // height eased, so a move from behind to the front swings round the rider and never through it.
+    const a0 = Math.atan2(this.from.pos.x, this.from.pos.z);
+    let da = Math.atan2(to.pos.x, to.pos.z) - a0;
+    if (da > Math.PI) da -= Math.PI * 2;
+    else if (da < -Math.PI) da += Math.PI * 2;
+    const r0 = Math.hypot(this.from.pos.x, this.from.pos.z);
+    const r1 = Math.hypot(to.pos.x, to.pos.z);
+    // (Half way round, at least the stand's own reach out: a swing never grazes the rider's shoulder.)
+    const r = Math.max(r0 + (r1 - r0) * e, Math.abs(da) > 1 ? 3.6 * Math.sin(Math.PI * e) : 0);
+    const a = a0 + da * e;
+    this.camera.position.set(Math.sin(a) * r, this.from.pos.y + (to.pos.y - this.from.pos.y) * e, Math.cos(a) * r);
     this.lookAt.lerpVectors(this.from.look, to.look, e);
     this.camera.fov = this.from.fov + (to.fov - this.from.fov) * e;
     this.camera.updateProjectionMatrix();

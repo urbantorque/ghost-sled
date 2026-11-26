@@ -1104,10 +1104,13 @@ export class Rider {
     (this.scarf.material as ShaderMaterial).stencilRef = 3;
     this.scarf.frustumCulled = false;
     this.scarf.castShadow = true;
-    // (Round 9: a four-tailed scarf's second pair is the same mesh again, drawn a hand lower, a little shorter and
-    // turned out from the knot: one more draw, only while one is worn.)
+    // (Round 9: a four-tailed scarf's second pair is the same mesh again, mirrored to the other side of the travel and
+    // a little shorter: one more draw, only while one is worn.)
     this.scarfTwin = new Mesh(this.tailGeo, this.scarf.material);
     this.scarfTwin.matrixAutoUpdate = false;
+    // (Its world matrix is written each frame round the knot (updateScarf); left to three, the scene's update would put
+    // it back over the first pair and the second pair would never be seen.)
+    this.scarfTwin.matrixWorldAutoUpdate = false;
     this.scarfTwin.frustumCulled = false;
     this.scarfTwin.castShadow = true;
     this.scarfTwin.visible = false;

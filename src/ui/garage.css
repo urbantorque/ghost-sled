@@ -119,7 +119,8 @@
 }
 
 .gs-gar-card {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  max-height: 62%;
   overflow-y: auto;
   min-height: 0;
   display: flex;
@@ -287,7 +288,7 @@
 }
 
 .gs-gar-strip {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 7em;
   overflow-y: auto;
   display: grid;
@@ -455,7 +456,9 @@
   .gs-gar-card {
     background: transparent;
     box-shadow: none;
-    padding: 0;
+    max-height: none;
+    padding: 2px 4px;
+    margin: -2px -4px;
   }
 
   .gs-gar-strip {
