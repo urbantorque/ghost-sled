@@ -288,8 +288,9 @@ export function restyleCrowd(geo: BufferGeometry, biome: BiomeId): void {
 const DRESS: Record<BiomeId, { coats: string[]; hats: string[] }> = {
   // Loden greens, charcoal, wine-plum and oatmeal; cream, sky and heather knits.
   alpine: { coats: ['#4E6B4C', '#3A4058', '#2F5A52', '#2E3A66', '#6A4058', '#CFC2A8', '#4A6390', '#6B5646', '#7A8C6A'], hats: ['#F0E8D8', '#9CC0EE', '#3F5A44', '#B9A6E0', '#FFFFFF', '#5B8FD6', '#8A6E5A', '#D7E3F4'] },
-  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
-  oldrun: { coats: ['#4E6B4C', '#3A4058', '#2F5A52', '#2E3A66', '#6A4058', '#CFC2A8', '#4A6390', '#6B5646', '#7A8C6A'], hats: ['#F0E8D8', '#9CC0EE', '#3F5A44', '#B9A6E0', '#FFFFFF', '#5B8FD6', '#8A6E5A', '#D7E3F4'] },
+  // The Old Run (round 9): the grand hotel's guests and the lake town in their winter best: charcoal, navy, a deep
+  // plum, loden, camel and oatmeal greatcoats; black and cream hats, fur in grey and brown. Never a signal colour.
+  oldrun: { coats: ['#33344A', '#2C3A5C', '#54404E', '#465A48', '#7A6650', '#C8BCA6', '#4A4A58', '#6A5A4A'], hats: ['#26242E', '#E8E0D2', '#6A5A4C', '#8A8C96', '#3A4A3E', '#D8CCB8'] },
   // Expedition parkas: steel blue, deep teal, glacier white, slate, a muted ochre, indigo.
   glacier: { coats: ['#4C6FA8', '#2D6670', '#DDE6EF', '#55607A', '#9C8452', '#34406E', '#6A86B8', '#3E4A62'], hats: ['#E8E0D2', '#BDEBFF', '#9CB4D8', '#F4F6FA', '#5B8FD6', '#7A8AA6'] },
   // Ash folk: ash grey, charcoal, basalt plum, slate teal, umber and dusty lilac.

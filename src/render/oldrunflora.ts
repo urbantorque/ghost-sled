@@ -209,12 +209,13 @@ function stem(s: BareSpec, lod: Lod, x0: number, z0: number, lx: number, lz: num
   // which a blind critic read as a slab of rock on the bank). Low's tree (no shadow map) and the far one, where the
   // spikes would be under a pixel, keep a thin haze of the finer twigs a step paler: what a bare crown is from there.
   ends.push([top, [0, 1, 0], 0.85]);
-  const spikes = lod === 0 ? (s.twin ? 3 : 4) : lod === 1 ? (s.twin ? 1 : 2) : 0;
+  const spikes = lod === 0 ? (s.twin ? 3 : 4) : lod === 1 ? (s.twin ? 2 : 3) : 0;
   const hk = lod === 2 ? 1.1 : 0.62;
   for (const [at, d, w] of ends) {
     const tw = s.twig.clone().multiplyScalar(0.94 + 0.12 * rnd());
     if (spikes > 0) sprig(at, d, s.fanR * k * w * 1.5, shade(tw, 0.8), s.hang, spikes, out);
-    if (lod === 0 || (lod === 1 && w < 0.75 && rnd() < 0.5)) continue;
+    // (Low's haze read as cards perched on the twigs like birds: Low keeps its spikes too, and only the far tree its haze.)
+    if (lod < 2) continue;
     if (lod === 2 && w < 0.75) continue;
     out.push(fan(at, d, s.fanR * k * w * hk * (0.85 + 0.3 * rnd()), tw, s.hang));
   }

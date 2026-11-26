@@ -29,7 +29,8 @@ import type { Particles } from './particles';
 type V3 = [number, number, number];
 
 const IRON = new Color('#26242E');
-const BRONZE = new Color('#A87A40');
+/** Bronze: an olive-brown body, a gold light at its rim when it is lit (never the coral of the rider's family). */
+const BRONZE = new Color('#7E6A3A');
 const GREEN = new Color('#2F5446');
 const CREAM = new Color('#EEE4D0');
 const TIMBER = new Color('#5E4640');
@@ -41,7 +42,7 @@ const CREST_D = FLOOR + CREST_U * WALL + CREST_TOP * 0.55;
 const BELL_CLEAR = 2.9;
 /** The length of rope that swings with its bell (m). */
 const SWING_ROPE = 1.3;
-const BRONZE_GLOW = new Color('#FFC070');
+const BRONZE_GLOW = new Color('#D8B060');
 const XAXIS = new Vector3(1, 0, 0);
 const ONE = new Vector3(1, 1, 1);
 const tq = new Quaternion();
@@ -296,7 +297,7 @@ export class OldRunPieces {
         if (this.bellMesh) {
           tq.setFromAxisAngle(XAXIS, sw);
           this.bellMesh.setMatrixAt(i, tm.compose(b.pivot, tq, ONE));
-          this.bellMesh.setColorAt(i, tc.setRGB(1, 1, 1).lerp(BRONZE_GLOW, Math.min(1, k * 0.7)).multiplyScalar(1 + k * 0.9));
+          this.bellMesh.setColorAt(i, tc.setRGB(1, 1, 1).lerp(BRONZE_GLOW, Math.min(0.6, k * 0.4)).multiplyScalar(1 + k * 0.55));
         }
         if (k > 0.3 && Math.abs(b.z - s.z) < 90) pushLocalLight(b.x, b.y, -b.z, MARIGOLD_LIN.r, MARIGOLD_LIN.g, MARIGOLD_LIN.b, 9, Math.min(1.4, k * 0.6));
       });

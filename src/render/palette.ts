@@ -927,7 +927,8 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.massif.veil = 0.12;
       p.grade = { lift: c('#0C1026'), gain: c('#FFFAF2'), saturation: 1.08, contrast: 1.1, grain: 0.6, foot: 0.34, shafts: 0.65, lens: 0.2, focal: 0.5, gust: 0, glitter: 0.3 };
       // (Few banks: a winter afternoon's high cirrus, lit from under by the low sun.)
-      p.clouds = { low: 0.18, high: 0.5, top: 0.15, lit: c('#FFF0DC'), shade: c('#ACA6C8'), rim: c('#FFC890'), shadow: 0.14 };
+      // (Banks heaped off the far ridges and a few long wisps: a field of high wisps read as stamped flat ellipses.)
+      p.clouds = { low: 0.4, high: 0.22, top: 0.2, lit: c('#FFF0DC'), shade: c('#ACA6C8'), rim: c('#FFC890'), shadow: 0.14 };
       p.atmo = { rays: 0.7, halo: 0, meteors: 0, banner: 0, slide: 0, sweep: 0.3, valley: 0.85, valleyColor: c('#E6D4CC'), drift: 0.25 };
       p.bloom = 0.36;
       p.snowfall = 0.02;
@@ -1240,7 +1241,11 @@ function round7(p: Palette, biome: BiomeId): void {
       p.grade.hi = c('#FFF6E4');
       p.grade.lo = c('#E2E4FF');
       p.grade.posterKey = 0.92;
-      p.grade.posterCool = 0.14;
+      // (Low's lit snow read as beige sand under the low sun: its poster keeps less of the light's warmth and leans
+      // the lit snow toward the shade's periwinkle, the warmth left in the sky and the sun's rim.)
+      p.grade.posterCool = 0.2;
+      p.posterSnowSat = 0.45;
+      p.posterSunSat = 0.55;
       p.poster.foot = 0.45;
       return;
     case 'alpine':
@@ -1544,12 +1549,14 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyBand = { color: c('#FFA884'), fade: 20, k: 0.9 };
         p.skyBelow = c('#C49CB0');
         p.snowLit = c('#FCEAE6');
-        p.snowShade = c('#7468B8');
-        p.snowDeep = c('#3C3490');
+        // (A single pink-violet took the near wall, the trees and the sky alike: the shade a bluer violet, the far plane
+        // paler and bluer, so the three planes part.)
+        p.snowShade = c('#6870BC');
+        p.snowDeep = c('#343C94');
         p.fog = c('#C8A2B4');
         p.rim = c('#FFC294');
         p.hemiSky = c('#8C96D0');
-        p.air.far = c('#6E70AE');
+        p.air.far = c('#8C98CC');
         p.clouds.lit = c('#FFD0A8');
         p.clouds.shade = c('#8A80B0');
         p.clouds.rim = c('#FFA868');
@@ -1599,7 +1606,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.stars = 0.25;
         p.hazardDim = 0.88;
         p.lamps = 1.25;
-        p.lampAir = 0.08;
+        p.lampAir = 0.03;
         p.lanternGlow = 0.3;
         p.giftGlow = 0.35;
         p.ghostGlow = 1.45;
@@ -2703,7 +2710,8 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
     phrase: 'by Lamplight',
     dusk: 1,
     start: (p) => {
-      setSun(p, 22, 11, 40, 12);
+      // (The moon's shadows a little higher: low, the rider's lay detached beside the sled as a dark blob.)
+      setSun(p, 22, 11, 40, 22);
       p.moon = true;
       p.moonPhase = 0.35;
       p.sunDisc = 1;
@@ -2735,7 +2743,8 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.stars = 0.9;
       p.hazardDim = 0.85;
       p.lamps = 1.6;
-      p.lampAir = 0.14;
+      // (A lamp's haze in the air near the crest stood through the frame as a warm vertical stripe: a breath of it.)
+      p.lampAir = 0.04;
       p.lanternGlow = 0.6;
       p.giftGlow = 0.5;
       p.ghostGlow = 1.5;

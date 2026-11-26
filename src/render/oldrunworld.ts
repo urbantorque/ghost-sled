@@ -1,13 +1,16 @@
 import { BufferGeometry, Color, ConeGeometry, CylinderGeometry, InstancedMesh, Matrix4, Mesh, Object3D, PerspectiveCamera, Quaternion, ShaderMaterial, SphereGeometry, Vector3 } from 'three';
 import type { Snap } from '../game/run';
 import type { Course } from '../sim/course';
-import { CREST_TOP, CREST_U, FLOOR, LIP, WALL, trackAt } from '../sim/oldrun';
+import { CREST_TOP, CREST_U, FLOOR, LIP, WALL, placeOf, trackAt } from '../sim/oldrun';
 import { crestGround as drawnGround } from './ground';
 import type { Sim } from '../sim/sim';
 import { SNOW, merge, part } from './flora';
 import { box, quad, seg } from './landmarkKit';
 import { withChamfer } from './chamfer';
 import { makeToonMaterial, shared } from './materials';
+import { LOW_BOLD, type StillFigure, crowdColors, stillCrowd } from './crowd';
+import { getPalette } from './palette';
+import { Mood } from '../sim/chaos';
 import { pushLocalLight } from './lights';
 import { HOTEL, START_HOUSE, TIMING, isOldRun } from './oldrunplan';
 import { OldRunPieces } from './oldrunpieces';
@@ -172,6 +175,7 @@ export class OldRunWorld {
       this.hotel(c, low);
       this.timingHouse(c, low);
       this.finishLine(c);
+      this.onlookers(c, low);
     });
     this.root.add(this.pieces.root);
   }
@@ -589,16 +593,17 @@ export class OldRunWorld {
     this.litZ.push(zc);
   }
 
-  /** The line across the ice at the finish: two rows of ink and cream checks over the whole channel, wall to wall. */
+  /** The line across the ice at the finish: four rows of big ink and cream checks over the whole channel, wall to
+   *  wall, long down the run so the lens sees them square (ART.md 12's line). */
   private finishLine(c: Course): void {
     const z = c.finishZ;
     const t = trackAt(c, z);
     const q = Math.sqrt(1 + t.p * t.p);
-    const sq = 0.62;
+    const sq = 0.9;
     const n = Math.floor((LIP * 2) / sq);
     const ink: BufferGeometry[] = [];
     const cream: BufferGeometry[] = [];
-    for (let row = 0; row < 2; row++) {
+    for (let row = 0; row < 4; row++) {
       for (let i = 0; i < n; i++) {
         const d0 = -LIP + i * sq;
         const d1 = d0 + sq;
@@ -617,6 +622,58 @@ export class OldRunWorld {
     m.castShadow = false;
   }
 
+  // ------------------------------------------------------------------ the onlookers
+
+  /** The hotel's guests and the town come up to watch: still figures in the resort's coats and hats (crowd.ts
+   *  stillCrowd, one draw, Low fewer and bolder) on the hotel's terrace, by the start house, behind the bells'
+   *  brackets on the Hotel Straights' crests, at the Labyrinth's board, in two stands at the Horseshoe and lining the
+   *  outrun to the timing house. Never on the ice. */
+  private onlookers(c: Course, low: boolean): void {
+    const p = getPalette('oldrun', Mood.None);
+    const { coats, hats } = crowdColors('oldrun', p);
+    const list: StillFigure[] = [];
+    let k = 0;
+    const put = (side: number, z0: number, z1: number, n: number, d0 = CREST_D + 0.35, deep = 1.1): void => {
+      for (let i = 0; i < n; i++) {
+        k++;
+        if (low && k % 2 === 0) continue;
+        const h = (k * 0.618034) % 1;
+        const z = z0 + ((z1 - z0) * (i + 0.5)) / n + (h - 0.5) * 0.8;
+        const t = trackAt(c, z);
+        const d = d0 + ((k * 0.41421) % 1) * deep;
+        const x = t.cx + side * d * Math.sqrt(1 + t.p * t.p);
+        list.push({ x, y: drawnGround(c, x, z) - 0.05, z: -z, face: -side, coat: coats[k % coats.length], hat: hats[(k * 3) % hats.length] });
+      }
+    };
+    // The hotel's terrace, along its balustrade.
+    const terrace = LIP + 4.4;
+    put(HOTEL.side, HOTEL.from, HOTEL.to - 10, 26, terrace, 2.2);
+    // By the start house, both crests.
+    put(-HOTEL.side, START_HOUSE.z1 + 3, START_HOUSE.z1 + 14, 6);
+    // The Hotel Straights' bends, on their outside crests, where the bells hang (every other one).
+    const turns = placeOf(c, 'hotel').turns;
+    turns.forEach((tn, i) => {
+      if (i % 2) return;
+      const zm = tn.z0 + tn.len / 2;
+      put(tn.side, zm + 3, zm + 15, 6);
+    });
+    // The Labyrinth's exit, by its board, and its entry.
+    const lab = placeOf(c, 'labyrinth');
+    put(-1, lab.z1 + 2, lab.z1 + 18, 8);
+    put(1, lab.z0 - 30, lab.z0 - 18, 5);
+    // Two stands at the Horseshoe: deep on its outside crest, a row on its inside one.
+    const hook = placeOf(c, 'hook');
+    const ht = hook.turns[1] ?? hook.turns[0];
+    put(ht.side, ht.z0 + ht.len * 0.3, ht.z0 + ht.len * 0.55, 16, CREST_D + 1.2, 3.2);
+    put(-ht.side, ht.z0 + ht.len * 0.45, ht.z0 + ht.len * 0.6, 8);
+    // The outrun, lining both crests to the timing house and past the line.
+    put(1, c.finishZ - 70, c.finishZ + 25, 22);
+    put(-1, c.finishZ - 70, c.finishZ - 16, 12);
+    if (!list.length) return;
+    const m = this.add(stillCrowd(list, 'oldrun', low ? LOW_BOLD : 1));
+    m.castShadow = false;
+  }
+
   // ------------------------------------------------------------------ each frame
 
   update(_dt: number, time: number, mode: ViewMode, s: Snap, sim: Sim | null, _camera: PerspectiveCamera): void {
@@ -630,14 +687,15 @@ export class OldRunWorld {
     // day, the lamp's light at dusk and by Lamplight.
     const lampK = shared.uLampK.value as number;
     const lit = Math.max(0, Math.min(1.6, (lampK - 0.35) / 0.8));
-    this.glow.uniforms.uEmissiveStrength.value = lit * 1.6;
+    this.glow.uniforms.uEmissiveStrength.value = Math.min(1.25, lit * 1.3);
     if (lit <= 0.02) return;
     // The nearest lamps light the ice under them: from a little behind the rider to 110 m ahead.
     const z = s.z;
     for (let i = 0; i < this.lampN; i++) {
       const lz = this.lamps[i * 3 + 2];
       if (lz < z - 25 || lz > z + 110) continue;
-      pushLocalLight(this.lamps[i * 3], this.lamps[i * 3 + 1], -lz, LAMP_LIN.r, LAMP_LIN.g, LAMP_LIN.b, 13, 0.9 * Math.min(1, lit));
+      // (Soft: a lamp over a deep wall lit the wall's face under it, which the lens sees edge-on as a stripe of light.)
+      pushLocalLight(this.lamps[i * 3], this.lamps[i * 3 + 1], -lz, LAMP_LIN.r, LAMP_LIN.g, LAMP_LIN.b, 11, 0.55 * Math.min(1, lit));
     }
   }
 }
