@@ -544,9 +544,10 @@ export class GullhavenWorld {
     // The pennants: a triangle of cloth on a short staff over the post, flying along its own +x (aSway 0 at the staff).
     const nf = Math.ceil(n / FLAG_EVERY);
     const flagsA = this.inst(pennant(FLAG_A), nf, this.cloth);
-    const flagsB = this.inst(pennant(FLAG_B), nf, this.cloth);
+    // (Low: one colour of pennant on the posts themselves, no staffs: two draws fewer.)
+    const flagsB = low ? null : this.inst(pennant(FLAG_B), nf, this.cloth);
     const staffG = part(new CylinderGeometry(0.025, 0.025, 1.0, 4, 1), POST_C, { pos: [0, 1.85, 0] });
-    const staffs = this.inst(staffG, nf);
+    const staffs = low ? null : this.inst(staffG, nf);
     const gullies = gulliesOf(c);
     const upAt = (z: number): number => {
       let k = 0;
@@ -588,23 +589,23 @@ export class GullhavenWorld {
       }
       prev = v3.clone();
       if (i % FLAG_EVERY === 0) {
-        staffs.setMatrixAt(f++, m4.compose(v3, q4.identity(), s3.set(1, 1, 1)));
+        if (staffs) staffs.setMatrixAt(f++, m4.compose(v3, q4.identity(), s3.set(1, 1, 1)));
         // Inland (-x, away from the sea) on the wind, a little up; over a column straight up.
         const k2 = upAt(z);
         const yaw = Math.PI + (hash(i, 3) - 0.5) * 0.3;
         const pitch = -0.18 - k2 * 1.35;
         q4.setFromAxisAngle(up, yaw).multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), -pitch));
-        m4.compose(v3.clone().add(new Vector3(0, 1.98, 0)), q4, s3.set(1, 1, 1));
-        if (Math.floor(i / FLAG_EVERY) % 2 === 0) flagsA.setMatrixAt(fa++, m4);
+        m4.compose(v3.clone().add(new Vector3(0, staffs ? 1.98 : 1.2, 0)), q4, s3.set(1, 1, 1));
+        if (!flagsB || Math.floor(i / FLAG_EVERY) % 2 === 0) flagsA.setMatrixAt(fa++, m4);
         else flagsB.setMatrixAt(fb++, m4);
       }
     }
     posts.count = k;
     rails.count = r;
     if (panels) panels.count = r;
-    staffs.count = f;
+    if (staffs) staffs.count = f;
     flagsA.count = fa;
-    flagsB.count = fb;
+    if (flagsB) flagsB.count = fb;
     for (const im of [posts, rails, panels, staffs, flagsA, flagsB]) {
       if (!im) continue;
       im.computeBoundingSphere();
@@ -724,9 +725,10 @@ export class GullhavenWorld {
         spans.push(40 + h1 * 8, 6 + h2 * 4, 3.4);
       }
     }
-    this.add(merge(cornice)).name = 'cornices';
+    // (Low: the windsocks stand still in the cornices' draw.)
+    this.add(merge(low ? [...cornice, ...socks.map((g) => (g.deleteAttribute('aSway'), g))] : cornice)).name = 'cornices';
     if (walls.length) this.add(merge(walls), this.rockMat).name = 'geo-walls';
-    if (socks.length) {
+    if (socks.length && !low) {
       const m = new Mesh(this.keep(merge(socks)), this.cloth);
       m.name = 'windsocks';
       m.castShadow = true;
@@ -853,7 +855,10 @@ export class GullhavenWorld {
       { h: 5, rx: 0.5, rz: 0.4, layers: 13, seed: 0x5ea },
       { h: 3, rx: 0.55, rz: 0.45, layers: 10, seed: 0x5eb },
       { h: 1.6, rx: 0.6, rz: 0.5, layers: 7, seed: 0x5ec },
-    ].map((q) => strata({ rx: q.rx, rz: q.rz, h: q.h, layers: low ? Math.ceil(q.layers * 0.6) : q.layers, sides: low ? 6 : 8, rock: [ROCK_D, ROCK, ROCK_L], lie: SNOW, taper: 0.28, shift: 0.12, dip: 0.07, warp: 0.25, bays: 0.25, rough: 0.3, lieMin: 0.05, seed: q.seed }));
+    ]
+      // (Low: the column alone, one draw.)
+      .filter((_, k) => !low || k === 1)
+      .map((q) => strata({ rx: q.rx, rz: q.rz, h: q.h, layers: low ? Math.ceil(q.layers * 0.6) : q.layers, sides: low ? 6 : 8, rock: [ROCK_D, ROCK, ROCK_L], lie: null, taper: 0.28, shift: 0.12, dip: 0.07, warp: 0.25, bays: 0.25, rough: 0.3, seed: q.seed }));
     const spots: Array<Array<[number, number, number, number, number]>> = [[], [], []];
     const end = placesOf(c).sheds - 200;
     let j = 0;
@@ -863,10 +868,10 @@ export class GullhavenWorld {
       const sx = shoreX(c, z, this.sea);
       const out = 40 + hash(j, 52) * 220;
       const w = 16 + hash(j, 54) * 20;
-      const k = Math.floor(hash(j, 53) * 3);
+      const k = low ? 0 : Math.floor(hash(j, 53) * 3);
       spots[k].push([sx + out, z, w, hash(j, 55) * 6.28, 0]);
       // A smaller one beside it now and then.
-      if (hash(j, 56) < 0.45) spots[(k + 1) % 3].push([sx + out + 20 + hash(j, 57) * 24, z + 14 + hash(j, 58) * 30, w * 0.55, hash(j, 59) * 6.28, 0]);
+      if (hash(j, 56) < 0.45) spots[low ? 0 : (k + 1) % 3].push([sx + out + 20 + hash(j, 57) * 24, z + 14 + hash(j, 58) * 30, w * 0.55, hash(j, 59) * 6.28, 0]);
     }
     this.stackSpots = [];
     forms.forEach((g, k) => {

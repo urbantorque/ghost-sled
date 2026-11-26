@@ -623,9 +623,9 @@
   background: linear-gradient(180deg, #2a3a86 0%, #ffa86a 100%);
 }
 
-/* Gullhaven (round 9): a storm deck over the sea, a low sun under its edge. */
+/* Gullhaven (round 9): a slate storm deck over the sea, and the low sun's band of light under its edge. */
 .b-gullhaven .gs-mtn-sky {
-  background: linear-gradient(180deg, #2c3350 0%, #4a5a78 55%, #e8a878 100%);
+  background: linear-gradient(180deg, #2a3450 0%, #4e5a7a 38%, #f2dcb8 56%, #e8b48a 100%);
 }
 
 /* Lanternfall: the end of night, indigo down to a violet that holds the lamps' marigold at its foot. */
@@ -3347,7 +3347,7 @@
 }
 
 .gs-toast-sky.b-gullhaven {
-  background: linear-gradient(180deg, #2c3350 0%, #4a5a78 55%, #e8a878 100%);
+  background: linear-gradient(180deg, #2a3450 0%, #4e5a7a 38%, #f2dcb8 56%, #e8b48a 100%);
 }
 
 /* An event's finale: the round it ends on, in the event's role colour (the hazards ice blue, the Gift

@@ -7,14 +7,19 @@ import type { MountainCard } from './contract';
 const SIGNAL = '#FF4D2E';
 
 const RIDGES: Record<MountainCard['biome'], string> = {
-  // (Gullhaven, round 9: a first sketch until its world is made, notes/r9-gullhaven.md: a low sun under a storm deck, the
-  // sea, the cape with its beacon.)
+  // Gullhaven (round 9, notes/r9-gullhaven-world.md): a storm deck over the sea with the low sun under its lifted edge, the
+  // sun's path down the swell, and the cape's clifftop falling to the sea on the left, cut by a gully, the lighthouse on
+  // its point.
   gullhaven:
-    '<rect x="0" y="18" width="160" height="16" fill="#121933" opacity=".28"/>' +
-    '<circle cx="118" cy="44" r="10" fill="#FFE2C4" opacity=".8"/>' +
-    '<path d="M40 80V60h120v20z" fill="#F5F3FF" opacity=".14"/>' +
-    '<path d="M0 80V48l22-4 20 8 14 10 8 18z" fill="#121933" opacity=".8"/>' +
-    '<path d="M14 45v-9h3v9z" fill="#F5F3FF" opacity=".85"/>',
+    '<path d="M0 0h160v22c-10 4-22-2-34 3s-24 2-38-1-30 4-44 1-26-3-44 1z" fill="#121933" opacity=".52"/>' +
+    '<path d="M0 26c18-4 30 2 44-1s30-4 44 1 24 2 38-3 24 1 34-3" fill="none" stroke="#FFE2B8" stroke-width="1" opacity=".55"/>' +
+    '<circle cx="118" cy="40" r="8" fill="#FFF0D8" opacity=".95"/>' +
+    '<path d="M0 80V46h160v34z" fill="#26465A" opacity=".78"/>' +
+    '<path d="M112 50h12M110 56h16M108 63h20M106 71h24" stroke="#FFE6C0" stroke-width="1.6" stroke-linecap="round" opacity=".75"/>' +
+    '<path d="M62 58c14-1 30 1 44-1M84 66c18-1 36 1 56-1M24 74c22-1 46 1 66-1" stroke="#F5F3FF" stroke-width=".9" opacity=".3"/>' +
+    '<path d="M0 80V36l26-2 10 8 6-3 8 9 10 4 4 28z" fill="#121933" opacity=".88"/>' +
+    '<path d="M0 36l26-2 10 8 6-3 8 9 10 4" fill="none" stroke="#F5F3FF" stroke-width="1.6" opacity=".85"/>' +
+    '<path d="M56 50v-9h2.6v9z" fill="#F5F3FF"/><path d="M55.2 41h4.2l-2.1-2.4z" fill="#F5F3FF" opacity=".7"/>',
   alpine:
     '<circle cx="114" cy="60" r="13" fill="#FFE6C9" opacity=".85"/>' +
     '<path d="M0 80V56l22-14 16 9 24-22 22 18 18-10 26 20 32-8v31z" fill="#F5F3FF" opacity=".26"/>' +

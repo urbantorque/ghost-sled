@@ -110,6 +110,17 @@ export const TITLE_SHOTS: Readonly<Record<string, TitleShot>> = {
     desk: { r: 6.4, up: 3, sweep: -0.3, drift: 0.12, ahead: 42, lift: 0.4, crane: 0.2, hero: [0.08, 0.2] },
     phone: { r: 7.4, up: 2.4, sweep: -0.12, drift: 0.05, ahead: 30, lift: 0.5, crane: 0, hero: [-0.06, -0.06] },
   },
+  // Round 9, Gullhaven (notes/r9-gullhaven-world.md): a rider soaring the Great Geo's column over its cleft, the sea a
+  // thousand metres down and the low sun under the storm deck's edge ahead. The reel rides from the shelf before its lip
+  // out over the mouth, in the Great Geo's own light (the squall broken); the lens high and swung to the hero's right,
+  // seaward, the look far ahead and low, so the cleft and the sun's path on the sea lie past the hero's shoulder.
+  gullhaven: {
+    from: 2120,
+    to: 2480,
+    light: 2260,
+    desk: { r: 6.6, up: 2.6, sweep: 0.45, drift: 0.12, ahead: 40, lift: 0.2, crane: 0.25, hero: [0.08, 0.2] },
+    phone: { r: 7.6, up: 2.2, sweep: 0.18, drift: 0.05, ahead: 30, lift: 0.4, crane: 0, hero: [-0.06, -0.06] },
+  },
 };
 
 /** The shot for a mountain id (a Daily, a Cup and anything unknown get the plain reel). */
