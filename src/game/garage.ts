@@ -311,9 +311,9 @@ export const TRAILS: readonly TrailDef[] = [
   tr('skylanterns', 'Sky Lanterns', 'Little paper lanterns that lift off the stern and rise', 0, { form: flakes('lantern', 'rise', 4, 0.26, '#FFF0D0', PAPER, true) }, { kind: 'set', mountain: 'lanternfall', piece: 1 }),
   // The three new mountains' sets (round 9, G6): the Old Run's bells pealing, Gullhaven's gulls hanging in the sea
   // wind, Gablefall's market pinwheels.
-  tr('pealrings', 'Bell Peals', 'Cream paper arcs that ring out from each side of the sled and widen, the bend bells\' peal', 0, { form: flakes('arcs', 'peal', 6, 0.5, PAPER, AMBER) }, { kind: 'set', mountain: 'oldrun', piece: 1 }),
+  tr('pealrings', 'Bell Peals', 'Cream paper arcs that ring out from each side of the sled and widen, the bend bells\' peal', 0, { form: flakes('arcs', 'peal', 6, 0.5, PAPER, GOLD) }, { kind: 'set', mountain: 'oldrun', piece: 1 }),
   tr('gulls', 'Gulls', 'Cream gulls that hang in the wind beside you, wings beating, then peel away', 0, { form: flakes('gull', 'hang', 4, 0.6, PAPER, GOLD) }, { kind: 'set', mountain: 'gullhaven', piece: 1 }),
-  tr('pinwheels', 'Pinwheels', 'Paper pinwheels off the market stalls, spinning as they tumble out behind', 0, { form: flakes('pinwheel', 'tumble', 8, 0.34, PAPER, HONEY) }, { kind: 'set', mountain: 'gablefall', piece: 1 }),
+  tr('pinwheels', 'Pinwheels', 'Paper pinwheels in cream and gold off the market stalls, spinning as they pop out and drift', 0, { form: flakes('pinwheel', 'pop', 8, 0.3, PAPER, GOLD) }, { kind: 'set', mountain: 'gablefall', piece: 1 }),
   // The months' trails (round 9, G6): cut, as the months' scarves were. Made twice as big they read as gold shards and
   // stains, and a blind critic matched four of the twelve to their months (the ornaments six), with five of them
   // paired with the shop's own (stars with Paper Snow and Kite Tails, slips with Paper Streamers). None was ever on

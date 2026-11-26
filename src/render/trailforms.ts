@@ -192,8 +192,10 @@ function shapeGeometry(shape: FlakeShape, body: Color, edge: Color): BufferGeome
         const c = Math.cos(a);
         const s = Math.sin(a);
         const r = (x: number, y: number): [number, number, number] => [x * c - y * s, x * s + y * c, 0];
-        tri([0, 0, 0], r(0.5, 0), r(0.5, 0.46), body, body, edge);
-        tri([0, 0, 0], r(0.5, 0.46), r(0.08, 0.16), body, edge, body);
+        // (Its vanes alternate cream and gold, the toy's own two colours; all cream they read as the Paper Cranes.)
+        const v = i % 2 ? edge : body;
+        tri([0, 0, 0], r(0.5, 0), r(0.5, 0.46), v, v, v);
+        tri([0, 0, 0], r(0.5, 0.46), r(0.08, 0.16), v, v, v);
       }
       break;
     }

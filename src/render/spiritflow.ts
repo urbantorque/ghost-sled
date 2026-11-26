@@ -169,7 +169,8 @@ function flameMaterial(hdr: number): ShaderMaterial {
         if (vFlame.w > 0.5) {
           // The glow on the scarf's tip: a soft round light, vermillion warming to orange.
           float g2 = dot(c, c);
-          a = exp(-g2 * 3.2) * (1.0 - smoothstep(0.75, 1.0, g2));
+          // (Round 9, G6: a tighter, fainter halo: its wide low-alpha edge, laid over the snow's blue shade, read mauve.)
+          a = exp(-g2 * 5.0) * (1.0 - smoothstep(0.5, 0.8, g2)) * 0.75;
           // (Round 9, G6: the flame's orange warming toward the gifts' marigold a breath, so the glow laid over white snow
           // and the spray stays a warm orange; half vermillion, translucent over white, it read rose, the grudge's, in
           // every critic's frame.)

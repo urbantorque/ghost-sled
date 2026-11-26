@@ -309,7 +309,8 @@ export class GarageUI {
   private tile(k: GarageShelfKey, p: { id: string; name: string; price: number; state: GarageItemView['state']; isNew?: boolean }, on: boolean): HTMLElement {
     const word = p.state === 'buy' || p.state === 'short' ? `${fmt(p.price)} gifts` : k === 'sled' && p.state === 'on' ? 'Your sled' : STATE_WORD[p.state];
     const b = btn(this.ctx, {
-      cls: `gs-gar-tile${on ? ' is-on' : ''} is-${p.state}`,
+      // (The picked tile is is-picked: is-on is the state of a piece worn, and the two read as one.)
+      cls: `gs-gar-tile${on ? ' is-picked' : ''} is-${p.state}`,
       fk: `g-tile-${k}-${p.id}`,
       onClick: () => {
         this.pick[k] = p.id;

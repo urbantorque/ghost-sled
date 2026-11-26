@@ -179,8 +179,9 @@ const CREAM_KNIT = new Color('#F3E6D4');
 const BURN_MID = new Color('#FF6A1A').multiplyScalar(1.15);
 const BURN_TIP = new Color('#FFC23A').multiplyScalar(1.1);
 const INK_KNIT = new Color('#1A2140');
-/** The fifth tier's inlay while cold: a warm umber, never the coat's navy (round 9, G6). */
-const INLAY_COLD = new Color('#3A2A20');
+/** The fifth tier's inlay while cold: the trim's red a step deeper (round 9, G6: cream on the honey wood was never seen,
+ *  dark umber read as a void and as ink on a sled). */
+const INLAY_COLD = new Color('#D8402A');
 /** A cream stitch burning: a pale gold (the burn keeps the knit's value, round 9). */
 const BURN_CREAM = new Color('#FFF6E2').multiplyScalar(1.1);
 /** Round 9: the ribbon is three vertices across (its edges and its middle), so a pattern can run across it as well as
@@ -301,7 +302,7 @@ function endShape(ends: ScarfEnds, accent: Color, width: number): ScarfShape | n
       // (Gablefall's Market Awning: a wide cream valance across the tip, three scallops hanging past it, wider than the
       // tail. Flat, as the knit is; 3 scallops of 10 wedges.)
       const pos: number[] = [];
-      const half = w * 0.85;
+      const half = w * 0.62;
       const r = (2 * half) / 6;
       pos.push(-half, -0.04, 0, half, -0.04, 0, half, 0.03, 0, -half, -0.04, 0, half, 0.03, 0, -half, 0.03, 0);
       for (let k = 0; k < 3; k++) {
@@ -312,9 +313,15 @@ function endShape(ends: ScarfEnds, accent: Color, width: number): ScarfShape | n
           pos.push(cx, 0.03, 0, cx - Math.cos(a1) * r, 0.03 - Math.sin(a1) * r, 0, cx - Math.cos(a0) * r, 0.03 - Math.sin(a0) * r, 0);
         }
       }
-      const g = new BufferGeometry();
-      g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
-      return shapeOf([{ geo: g, color: accent }], END_V);
+      // (The bar and the middle scallop cream, the outer two the scarf's red: an awning's edge, not one cream fan, which
+      // read as a board across the sled.)
+      const bar = new BufferGeometry();
+      bar.setAttribute('position', new BufferAttribute(new Float32Array(pos.slice(0, 18)), 3));
+      const outer = new BufferGeometry();
+      outer.setAttribute('position', new BufferAttribute(new Float32Array([...pos.slice(18, 18 + 90), ...pos.slice(18 + 180)]), 3));
+      const mid = new BufferGeometry();
+      mid.setAttribute('position', new BufferAttribute(new Float32Array(pos.slice(18 + 90, 18 + 180)), 3));
+      return shapeOf([{ geo: bar, color: accent }, { geo: mid, color: accent }, { geo: outer, color: RIDER_COLORS.accent.clone().multiplyScalar(0.92) }], END_V);
     }
     default:
       return null;
@@ -1377,9 +1384,9 @@ export class Rider {
     }
     col.needsUpdate = true;
     this.burnShown = k;
-    // The fifth tier's inlay burns with the scarf: a dark umber line while it is cold (round 9, G6: the tier's own words,
-    // "ink inlay"; in cream on the honey wood five critics never saw it). (The constructor paints the scarf before the
-    // sled's inlay is made.)
+    // The fifth tier's inlay burns with the scarf: the trim's red while it is cold (round 9, G6: in cream on the honey wood
+    // five critics never saw it, and dark it read as a void). (The constructor paints the scarf before the sled's inlay
+    // is made.)
     const im = this.sledInlay?.material as MeshBasicMaterial | undefined;
     if (!im) return;
     if (k <= 0.01) im.color.copy(INLAY_COLD);
