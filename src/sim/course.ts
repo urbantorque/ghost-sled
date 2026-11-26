@@ -7,6 +7,7 @@ import { GATE_PAST_LINE, START_GATE_Z } from './charms';
 import { ALL_EVENTS } from './chaos';
 import type { Kit, KitPlan, KitRider } from './kit';
 import { HOUSE_GRADE, OLDRUN_KIT, OLDRUN_LAYOUT, TRACK_GRADE } from './oldrun';
+import { BEACON_GRADE, DESCENT_GRADE, GULLHAVEN_KIT, GULLHAVEN_LAYOUT, HARBOUR_GRADE, HEAD_EXTRA, PATH_HW, SHEDS_GRADE, SHELF_GRADE } from './gullhaven';
 import { CHUNK_LEN, FOREST_LIMIT, SAFE_LANE, THRESHOLD_AFTER, THRESHOLD_AFTER_MIN, THRESHOLD_BEFORE, THRESHOLD_BEFORE_MAX, THRESHOLD_HW, bank } from './courseparts';
 
 export { CHUNK_LEN, FOREST_LIMIT, SAFE_LANE, THRESHOLD_AFTER, THRESHOLD_AFTER_MIN, THRESHOLD_BEFORE, THRESHOLD_BEFORE_MAX, THRESHOLD_HW, bank };
@@ -241,10 +242,10 @@ export const RUN_OUT = FIVE.runOut;
 export const FINISH_SQUARE = FIVE.square;
 
 /** Each course biome's descent. */
-const LAYOUTS: Record<CourseBiome, Layout> = { alpine: FIVE, glacier: FIVE, volcanic: FIVE, blossom: FIVE, lantern: FIVE, oldrun: OLDRUN_LAYOUT };
+const LAYOUTS: Record<CourseBiome, Layout> = { alpine: FIVE, glacier: FIVE, volcanic: FIVE, blossom: FIVE, lantern: FIVE, oldrun: OLDRUN_LAYOUT, gullhaven: GULLHAVEN_LAYOUT };
 
 /** Each new mountain's own ground (round 9): none for the five, a Daily or a Cup. */
-const KITS: Partial<Record<CourseBiome, Kit>> = { oldrun: OLDRUN_KIT };
+const KITS: Partial<Record<CourseBiome, Kit>> = { oldrun: OLDRUN_KIT, gullhaven: GULLHAVEN_KIT };
 
 /** The descent a seed is laid as, without building its course. */
 export function layoutFor(seed: number): Layout {
@@ -304,6 +305,7 @@ const TALL: Record<CourseBiome, ObstacleKind[]> = {
   lantern: ['spire', 'spire', 'basalt'],
   // (Round 9: the Old Run stands nothing in its track; these rows are never read there.)
   oldrun: ['pine', 'pine', 'pine'],
+  gullhaven: ['rock', 'rock', 'rock'],
 };
 
 const LOW: Record<CourseBiome, ObstacleKind[]> = {
@@ -313,6 +315,7 @@ const LOW: Record<CourseBiome, ObstacleKind[]> = {
   blossom: ['lantern', 'rock', 'log'],
   lantern: ['lantern', 'rock', 'iceblock'],
   oldrun: ['rock', 'rock', 'log'],
+  gullhaven: ['rock', 'rock', 'rock'],
 };
 
 /**
@@ -362,7 +365,15 @@ export type SectionKind =
   | 'labyrinth'
   | 'outrun'
   // (and the start house at its head, steeper than the track: oldrun.ts HOUSE_GRADE)
-  | 'house';
+  | 'house'
+  // Round 9, Gullhaven (gullhaven.ts): the clifftop path, a gully's head, the beacon's slope at the start, the cut down
+  // to the harbour, the fish sheds and the harbour's ice it finishes on.
+  | 'cliffpath'
+  | 'geo'
+  | 'beacon'
+  | 'descent'
+  | 'sheds'
+  | 'harbour';
 export const SECTION_KINDS: readonly SectionKind[] = [
   'cruise',
   'chute',
@@ -386,6 +397,12 @@ export const SECTION_KINDS: readonly SectionKind[] = [
   'labyrinth',
   'outrun',
   'house',
+  'cliffpath',
+  'geo',
+  'beacon',
+  'descent',
+  'sheds',
+  'harbour',
 ];
 /** What a section does to the course. `slope`, `wander`, `wave`, `span`, `obstacles`, `kickers`,
  *  `moguls`, `drops` and `relief` are multipliers (1 = the plain corridor); the rest are as noted. */
@@ -497,6 +514,15 @@ const SHAPES: Record<SectionKind, SectionShape> = {
   labyrinth: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 0.5, ...BARE }),
   outrun: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 0.5, ...BARE }),
   house: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 0.5, ...BARE }),
+  // Round 9, Gullhaven: the kit draws its line, its width and its ground; these say that nothing of the five's stands or
+  // launches on it, that its line is the path's middle, and where something turns a sled back: the fence on the clifftop
+  // (0.8 m past the edge, before the cliff's fall), the cut's and the sheds' walls, the harbour's quays.
+  cliffpath: shaped({ pin: 1, wander: 0, span: 0, relief: 0.3, obstacles: 0, limit: 0.8, ...BARE }),
+  geo: shaped({ pin: 1, wander: 0, span: 0, relief: 0.15, obstacles: 0, limit: 0.8, ...BARE }),
+  beacon: shaped({ pin: 1, wander: 0, span: 0, relief: 0.2, obstacles: 0, limit: 0.8, ...BARE }),
+  descent: shaped({ pin: 1, wander: 0, span: 0, relief: 0.2, obstacles: 0, limit: 2, ...BARE }),
+  sheds: shaped({ pin: 1, wander: 0, span: 0, relief: 0.1, obstacles: 0, limit: 2, ...BARE }),
+  harbour: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 3, ...BARE }),
 };
 
 /** The ground's real gradient for the kinds that promise one; the rest scale the mountain's own slope. */
@@ -516,6 +542,12 @@ const GRADE: Partial<Record<SectionKind, readonly [number, number]>> = {
   labyrinth: [TRACK_GRADE, TRACK_GRADE],
   outrun: [0.05, 0.05],
   house: [HOUSE_GRADE, HOUSE_GRADE],
+  cliffpath: [SHELF_GRADE, SHELF_GRADE],
+  geo: [SHELF_GRADE + HEAD_EXTRA, SHELF_GRADE + HEAD_EXTRA],
+  beacon: [BEACON_GRADE, BEACON_GRADE],
+  descent: [DESCENT_GRADE, DESCENT_GRADE],
+  sheds: [SHEDS_GRADE, SHEDS_GRADE],
+  harbour: [HARBOUR_GRADE, HARBOUR_GRADE],
 };
 
 /** The half-width of the kinds that pin it. */
@@ -532,6 +564,12 @@ const WIDTH: Partial<Record<SectionKind, readonly [number, number]>> = {
   labyrinth: [7.5, 7.5],
   outrun: [7.5, 7.5],
   house: [7.5, 7.5],
+  cliffpath: [PATH_HW, PATH_HW],
+  geo: [PATH_HW, PATH_HW],
+  beacon: [PATH_HW, PATH_HW],
+  descent: [PATH_HW, PATH_HW],
+  sheds: [PATH_HW, PATH_HW],
+  harbour: [PATH_HW, PATH_HW],
 };
 
 const BLEND: Record<SectionKind, number> = {
@@ -557,6 +595,12 @@ const BLEND: Record<SectionKind, number> = {
   labyrinth: 40,
   outrun: 60,
   house: 40,
+  cliffpath: 50,
+  geo: 40,
+  beacon: 1,
+  descent: 60,
+  sheds: 60,
+  harbour: 60,
 };
 
 /** The metres of a section's body past its blend. Terraces and leaps work theirs out from what they hold. */
@@ -583,6 +627,12 @@ const BODY: Record<SectionKind, readonly [number, number]> = {
   labyrinth: [0, 0],
   outrun: [0, 0],
   house: [0, 0],
+  cliffpath: [0, 0],
+  geo: [0, 0],
+  beacon: [0, 0],
+  descent: [0, 0],
+  sheds: [0, 0],
+  harbour: [0, 0],
 };
 
 /** A slope that steepens is a crest: the blend takes long enough to stay under this curvature (a sled
@@ -625,6 +675,8 @@ const CLIFFS: Record<CourseBiome, { first: readonly [number, number]; plain: rea
   lantern: { first: [18, 20], plain: [22.5, 24.5], last: [19, 21] },
   // (Round 9: the Old Run has no leaps; never read there.)
   oldrun: { first: [15, 17], plain: [13.5, 16], last: [18, 21] },
+  // (Round 9: Gullhaven has no leaps; never read there.)
+  gullhaven: { first: [15, 17], plain: [13.5, 16], last: [18, 21] },
 };
 
 /** Terraces: the lead to the first lip, the step spacing and the steps' fall. */
@@ -746,6 +798,12 @@ const SCRIPTS: Record<CourseBiome, readonly [Act, Act, Act]> = {
     { name: 'The Labyrinth', blocks: [['labyrinth']] },
     { name: 'The Horseshoe', blocks: [['track']] },
   ],
+  // Gullhaven (round 9): its acts' names; its kit (gullhaven.ts) lays their ground, not these blocks.
+  gullhaven: [
+    { name: 'The Cape', blocks: [['cliffpath']] },
+    { name: 'The Geos', blocks: [['geo']] },
+    { name: 'The Harbour Road', blocks: [['cliffpath']] },
+  ],
 };
 
 /** What each mountain promises to hold, on every seed. */
@@ -756,6 +814,7 @@ const SIGNATURES: Record<CourseBiome, readonly SectionKind[]> = {
   blossom: ['terraces', 'tunnel', 'street', 'fork'],
   lantern: ['ravine', 'fork', 'street', 'bridge'],
   oldrun: [],
+  gullhaven: [],
 };
 
 /** Lanternfall's avenues: a street there stands between two rows of stone lamps, a pair every LAMP_STEP metres,

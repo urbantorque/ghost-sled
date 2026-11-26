@@ -6,11 +6,12 @@ export type BiomeId = 'alpine' | 'glacier' | 'volcanic' | 'blossom' | 'lantern' 
 /** What a course is built as. Since Lanternfall's world was built this is the look itself; the name is kept for
  *  the sim's tables. (Round 9: and a new mountain that lays its own ground, under its own id, until its world lane makes
  *  it a look of its own: it borrows one meanwhile, LOOK below. The Old Run's is its own.) */
-export type CourseBiome = BiomeId;
+export type CourseBiome = BiomeId | 'gullhaven';
 export type MountainId = 'pinecrest' | 'frostfang' | 'ember' | 'sakura' | 'lanternfall' | 'oldrun' | 'daily';
 
-/** A new mountain's borrowed look, until its world lane gives it its own (round 9; Lanternfall's round 7 path). */
-const LOOK: Partial<Record<CourseBiome, BiomeId>> = {};
+/** A new mountain's borrowed look, until its world lane gives it its own (round 9; Lanternfall's round 7 path).
+ *  Gullhaven (notes/r9-gullhaven.md) borrows Pinecrest's while its lab runs. */
+const LOOK: Partial<Record<CourseBiome, BiomeId>> = { gullhaven: 'alpine' };
 
 /** The look a course biome is drawn and scored with: its own (Lanternfall borrowed Frostfang's until its world
  *  was built), or a new mountain's borrowed one. */
@@ -159,6 +160,25 @@ const BIOME_PARAMS: Record<CourseBiome, MountainParams> = {
     snowmanChance: 0,
     rampDistance: 3000,
   },
+  // Gullhaven (round 9, notes/r9-gullhaven.md): a clifftop run down a cape's seaward flank, laid by its own file
+  // (gullhaven.ts). Its kit stands its own few rocks and lays its own lines, so nothing here lays a feature; its slope is
+  // the course's real mean grade (a get-up's push and the far terrain read it), its ramp its own 4,800 m.
+  gullhaven: {
+    biome: 'gullhaven',
+    slope: 0.22,
+    wander: 0,
+    halfWidthStart: 10,
+    halfWidthEnd: 10,
+    density: 0,
+    kickerChance: 0,
+    dropChance: 0,
+    mogulChance: 0,
+    iceChance: 0,
+    ventChance: 0,
+    gateChance: 0,
+    snowmanChance: 0,
+    rampDistance: 4800,
+  },
 };
 
 /** Lanternfall's seed. Chosen among eight: its descent keeps every promise the fairness test makes of a
@@ -170,6 +190,9 @@ export const LANTERNFALL_SEED = 0x510e527f;
 export const OLDRUN_SEED = 0x9b05688c;
 /** (The name the groundwork and its lab knew it by.) */
 export const OLDRUN_LAB_SEED = OLDRUN_SEED;
+/** Round 9: Gullhaven's lab course (SHA-256's seventh initial word, beside the Old Run's sixth), in BIOME_BY_SEED only
+ *  until the mountain registers (notes/r9-gullhaven.md). */
+export const GULLHAVEN_LAB_SEED = 0x1f83d9ab;
 
 export const MOUNTAINS: readonly MountainDef[] = [
   { id: 'pinecrest', name: 'Pinecrest', tagline: 'Pine forest, soft powder, snowmen', seed: 0x51ed270b, unlockGhosts: 0 },
@@ -190,6 +213,7 @@ const BIOME_BY_SEED = new Map<number, CourseBiome>([
   [0x3c6ef372, 'blossom'],
   [LANTERNFALL_SEED, 'lantern'],
   [OLDRUN_LAB_SEED, 'oldrun'],
+  [GULLHAVEN_LAB_SEED, 'gullhaven'],
 ]);
 
 const BIOMES: readonly BiomeId[] = ['alpine', 'glacier', 'volcanic', 'blossom'];
