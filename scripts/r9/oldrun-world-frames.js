@@ -61,6 +61,8 @@ async (page) => {
       { hour: c.hour, mirror: c.mirror },
     );
   }
+  // (A probe's own page code, run once the ride is on: e.g. hiding a system to see what draws a shape.)
+  if (c.prep) await page.evaluate(c.prep);
   await page.addStyleTag({ content: 'body * { visibility: hidden !important; } canvas { visibility: visible !important; }' });
   const shot = [];
   let first = true;

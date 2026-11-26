@@ -1706,7 +1706,13 @@ export function makeSnowMaterial(track = false): ShaderMaterial {
             sky = mix(sky, stood, smoothstep(tips + 0.5, tips - 0.5, hr) * near * lakeK);
           }
           // Round 7 (the pipe lane, postfx/reflect.ts): the baked sky on every glaze, or the frame itself.
-          sky = iceMirror(sky, vWorldPos, rr, lakeK);
+          #ifdef TRACK
+            // (The Old Run's walls curve every way: a baked sky mirrored in them set the moon down a wall three times
+            // over. The track's ice takes the sky's own gradient, and the glaze half of the bake.)
+            sky = mix(sky, iceMirror(sky, vWorldPos, rr, lakeK), 0.5 * tGlaze);
+          #else
+            sky = iceMirror(sky, vWorldPos, rr, lakeK);
+          #endif
           // The fork's strip is seen at a grazing angle, where it mirrors the low horizon: under a gold
           // hour's peach horizon it lay across the snow as a salmon smear and never read as ice (the
           // review loop). It takes half its mirror from the deep upper sky, so it stays a blue lane.

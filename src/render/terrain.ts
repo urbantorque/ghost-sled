@@ -369,7 +369,10 @@ class ChunkJob {
           break;
         }
         const rq = p * 4;
-        this.rock[rq] = Math.max(rockWeight(ridge, wall, fall, limit, ed, off, sx, sz, z, this.kick[kq] > 0), cRock);
+        // (Round 9: the Old Run's crest is snow all along. Where a bend sweeps it across a row, its face falls steeply
+        // down the run, and the ledge-face test painted it as Pinecrest's strata: a blind critic read a dark slab of
+        // rock on the bank.)
+        this.rock[rq] = tr ? 0 : Math.max(rockWeight(ridge, wall, fall, limit, ed, off, sx, sz, z, this.kick[kq] > 0), cRock);
         this.rock[rq + 1] = led ? y - lipY : y - by;
         this.rock[rq + 2] = led ? x : z;
         // (A wall on one bank only ramps its own ice by its height: its crest casts on the floor only in a canyon.)

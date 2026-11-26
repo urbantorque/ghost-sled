@@ -7,7 +7,7 @@
 //   playwright-cli -s=r9-oldrun-world --raw run-code --filename=scripts/r9/oldrun-world-glcount.js
 // Pinecrest: { m: 0 } in place of the seed.
 async (page) => {
-  const cfg = { tier: 'low', seed: '', m: 0, z0: 300, v: 30, warm: 8, seconds: 10, ...((await page.evaluate(() => window.__glCfg).catch(() => null)) || {}) };
+  const cfg = { tier: 'low', seed: '', m: 0, z0: 300, v: 30, warm: 8, seconds: 10, save: 'fresh', query: '', kit: false, ...((await page.evaluate(() => window.__glCfg).catch(() => null)) || {}) };
   await page.evaluate(() => { try { localStorage.clear(); } catch {} }).catch(() => {});
   await page.addInitScript(() => {
     if (WebGL2RenderingContext.prototype.__counted) return;
@@ -29,7 +29,7 @@ async (page) => {
     window.__gl = { start: () => { counts.clear(); on = true; }, stop: () => { on = false; return { counts: [...counts] }; } };
   });
   const q = cfg.seed ? `&seed=${cfg.seed}` : `&m=${cfg.m}`;
-  await page.goto(`${cfg.base}?platform=mock&debug&save=fresh&autoride=1&tier=${cfg.tier}${q}`);
+  await page.goto(`${cfg.base}?platform=mock&debug&save=${cfg.save}&autoride=1&tier=${cfg.tier}${q}${cfg.query}`);
   await page.waitForFunction(() => window.__gs && (window.__gs.phase === 'run' || window.__gs.dailyReady), null, { timeout: 300000 });
   await page.evaluate(() => window.__gs.phase === 'run' || window.__gs.ride());
   await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run' && window.__gs.run, null, { timeout: 120000 });
@@ -63,7 +63,7 @@ async (page) => {
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
-  }, { z0: cfg.z0, v: cfg.v, kit: !!cfg.seed });
+  }, { z0: cfg.z0, v: cfg.v, kit: !!cfg.seed || cfg.kit });
   await page.waitForTimeout(cfg.warm * 1000);
   const z0 = await page.evaluate(() => { window.__glf0 = window.__glf; window.__gl.start(); return Math.round(window.__gs.run.sim.s.z); });
   await page.waitForTimeout(cfg.seconds * 1000);
@@ -72,7 +72,7 @@ async (page) => {
   const get = (k) => (r.counts.find(([n]) => n === k)?.[1] ?? 0) / f;
   const total = r.counts.reduce((a, [, n]) => a + n, 0);
   return JSON.stringify({
-    cfg: { seed: cfg.seed, m: cfg.m, tier: cfg.tier, z0: cfg.z0, v: cfg.v },
+    cfg: { seed: cfg.seed, m: cfg.m, tier: cfg.tier, z0: cfg.z0, v: cfg.v, save: cfg.save, query: cfg.query },
     z: [z0, r.z],
     frames: r.frames,
     programs: r.programs,

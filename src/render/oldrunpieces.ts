@@ -1,4 +1,4 @@
-import { BufferGeometry, Color, CylinderGeometry, InstancedMesh, LatheGeometry, Matrix4, Mesh, MeshBasicMaterial, Object3D, ShaderMaterial, SphereGeometry, Vector2, Vector3 } from 'three';
+import { BufferGeometry, Color, CylinderGeometry, InstancedMesh, LatheGeometry, Matrix4, Mesh, MeshBasicMaterial, Object3D, Quaternion, ShaderMaterial, SphereGeometry, Vector2, Vector3 } from 'three';
 import type { Snap } from '../game/run';
 import type { Beat } from '../game/beats';
 import type { Course } from '../sim/course';
@@ -30,7 +30,6 @@ type V3 = [number, number, number];
 
 const IRON = new Color('#26242E');
 const BRONZE = new Color('#A87A40');
-const BRONZE_LIT = new Color('#FFB24A');
 const GREEN = new Color('#2F5446');
 const CREAM = new Color('#EEE4D0');
 const TIMBER = new Color('#5E4640');
@@ -40,6 +39,12 @@ const LAMP_LIN = new Color('#FFC27A').convertSRGBToLinear();
 const CREST_D = FLOOR + CREST_U * WALL + CREST_TOP * 0.55;
 /** A bell's lip over the wall it hangs above (m): clear over a rider's head on the glaze. */
 const BELL_CLEAR = 2.9;
+/** The length of rope that swings with its bell (m). */
+const SWING_ROPE = 1.3;
+const BRONZE_GLOW = new Color('#FFC070');
+const XAXIS = new Vector3(1, 0, 0);
+const ONE = new Vector3(1, 1, 1);
+const tq = new Quaternion();
 
 const tm = new Matrix4();
 const tv = new Vector3();
@@ -59,8 +64,8 @@ function bellGeometry(): BufferGeometry {
 }
 
 interface Bell {
-  node: Object3D;
-  mat: ShaderMaterial;
+  /** Where it swings from (world): the foot of the rope's fixed length. */
+  pivot: Vector3;
   x: number;
   y: number;
   z: number;
@@ -75,6 +80,8 @@ export class OldRunPieces {
   private readonly owned: Array<{ dispose(): void }> = [];
   private plays: readonly MomentPlay[] = [];
   private bells: Bell[] = [];
+  /** Every bell, one draw: each instance swings on its own and is lit by its own colour. */
+  private bellMesh: InstancedMesh | null = null;
   private bellPlay = -1;
   private dial: Object3D | null = null;
   private splitLamp: ShaderMaterial | null = null;
@@ -101,6 +108,7 @@ export class OldRunPieces {
     for (const o of this.owned) o.dispose();
     this.owned.length = 0;
     this.bells = [];
+    this.bellMesh = null;
     this.dial = null;
     this.splitLamp = null;
     this.hookLamps = null;
@@ -114,7 +122,6 @@ export class OldRunPieces {
     for (const b of this.bells) {
       b.rang = -9;
       b.missed = false;
-      b.node.rotation.set(0, b.node.rotation.y, 0);
     }
   }
 
@@ -138,7 +145,13 @@ export class OldRunPieces {
 
   private bellsFor(c: Course, p: MomentPlay, iron: BufferGeometry[]): void {
     this.bellPlay = p.index;
-    const geo = this.keep(bellGeometry());
+    // (A short length of rope swings with its bell, from a pivot under the rope's fixed length.)
+    const geo = this.keep(merge([bellGeometry().translate(0, -SWING_ROPE, 0), seg([0, 0, 0], [0, -SWING_ROPE, 0], 0.025, IRON)]));
+    const im = new InstancedMesh(geo, this.mat, Math.max(1, p.targets.length));
+    im.castShadow = true;
+    im.frustumCulled = false;
+    this.root.add(im);
+    this.bellMesh = im;
     for (const t of p.targets) {
       const tt = trackAt(c, t.z);
       const side = t.x >= tt.cx ? 1 : -1;
@@ -151,17 +164,9 @@ export class OldRunPieces {
       iron.push(seg([a.x, armY - 1.6, -t.z], [a.x + (t.x - a.x) * 0.45, armY, -t.z], 0.045, IRON));
       iron.push(box(0.5, 0.5, 0.5, IRON, [a.x, a.y - 0.05, -t.z]));
       // The bell on its rope, as long as the height it asks: hung from the arm's end, its lip BELL_CLEAR over the wall.
-      const node = new Object3D();
-      node.position.set(t.x, armY, -t.z);
-      const rope = armY - (gy + BELL_CLEAR + 0.95);
-      const mat = this.keep(makeToonMaterial({ coolShade: 0.4, emissive: BRONZE_LIT.clone(), emissiveStrength: 0 }));
-      const ropeM = new Mesh(this.keep(seg([0, 0, 0], [0, -rope, 0], 0.025, IRON)), this.mat);
-      const bellM = new Mesh(geo, mat);
-      bellM.position.set(0, -rope, 0);
-      bellM.castShadow = true;
-      node.add(ropeM, bellM);
-      this.root.add(node);
-      this.bells.push({ node, mat, x: t.x, y: gy + BELL_CLEAR + 0.5, z: t.z, rang: -9, missed: false });
+      const pivotY = gy + BELL_CLEAR + 0.95 + SWING_ROPE;
+      if (armY > pivotY + 0.05) iron.push(seg([t.x, armY, -t.z], [t.x, pivotY, -t.z], 0.025, IRON));
+      this.bells.push({ pivot: new Vector3(t.x, Math.min(armY, pivotY), -t.z), x: t.x, y: gy + BELL_CLEAR + 0.5, z: t.z, rang: -9, missed: false });
     }
   }
 
@@ -212,6 +217,7 @@ export class OldRunPieces {
     const lamp = new Mesh(this.keep(part(new SphereGeometry(0.42, 10, 8), new Color('#5A5468'))), lampMat);
     lamp.position.set(B.x, top + 0.75, -zb);
     this.root.add(lamp);
+    dial.userData.lamp = lamp;
     this.splitLamp = lampMat;
     this.splitAt = [B.x, top + 0.75, zb];
   }
@@ -267,12 +273,16 @@ export class OldRunPieces {
 
   update(c: Course, time: number, s: Snap, sim: Sim | null, run: boolean, low: boolean, reduced: boolean): void {
     this.time = time;
+    // (Each set piece's moving parts are drawn from within reach of it only.)
+    const reach = low ? 420 : 700;
+    const near = (z0: number, z1: number): boolean => s.z > z0 - reach && s.z < z1 + 90;
     const plays = run && sim ? sim.plays : this.plays.length ? this.plays : momentPlays(c);
     if (plays !== this.plays) this.build(c, plays, low);
     const mo = run && sim ? sim.mo : null;
     const breathe = reduced ? 0.75 : 0.6 + 0.4 * Math.sin(time * 3.2);
     // The bells.
-    if (this.bellPlay >= 0) {
+    if (this.bellMesh && this.bellPlay >= 0) this.bellMesh.visible = near(this.plays[this.bellPlay].z0, this.plays[this.bellPlay].z1);
+    if (this.bellPlay >= 0 && this.bellMesh?.visible) {
       const active = mo !== null && mo.active === this.bellPlay;
       const next = active ? mo!.at : mo && mo.next > this.bellPlay ? -1 : 0;
       this.bells.forEach((b, i) => {
@@ -281,16 +291,26 @@ export class OldRunPieces {
         if (b.rang >= 0) k = 0.5 + 2.6 * Math.exp(-t * 2.2);
         else if (b.missed) k = 0;
         else if (i === next && Math.abs(b.z - s.z) < 260) k = 0.5 + 0.9 * breathe;
-        b.mat.uniforms.uEmissiveStrength.value = k;
-        // A rung bell swings along the run and settles.
+        // Lit from inside by its own colour (over 1 it blooms on Medium and High), and a rung bell swings and settles.
         const sw = b.rang >= 0 && !reduced ? 0.55 * Math.exp(-t * 0.9) * Math.sin(t * 5.2) : 0;
-        b.node.rotation.x = sw;
+        if (this.bellMesh) {
+          tq.setFromAxisAngle(XAXIS, sw);
+          this.bellMesh.setMatrixAt(i, tm.compose(b.pivot, tq, ONE));
+          this.bellMesh.setColorAt(i, tc.setRGB(1, 1, 1).lerp(BRONZE_GLOW, Math.min(1, k * 0.7)).multiplyScalar(1 + k * 0.9));
+        }
         if (k > 0.3 && Math.abs(b.z - s.z) < 90) pushLocalLight(b.x, b.y, -b.z, MARIGOLD_LIN.r, MARIGOLD_LIN.g, MARIGOLD_LIN.b, 9, Math.min(1.4, k * 0.6));
       });
+      if (this.bellMesh) {
+        this.bellMesh.instanceMatrix.needsUpdate = true;
+        if (this.bellMesh.instanceColor) this.bellMesh.instanceColor.needsUpdate = true;
+      }
     }
     // The split's dial and lamp.
     if (this.splitPlay >= 0 && this.dial && this.splitLamp) {
       const p = this.plays[this.splitPlay];
+      const show = near(p.z1 - 40, p.z1);
+      this.dial.visible = show;
+      if (this.dial.userData.lamp) (this.dial.userData.lamp as Mesh).visible = show;
       const active = mo !== null && mo.active === this.splitPlay;
       const end = this.ended.get(this.splitPlay);
       let frac = 0;
@@ -309,6 +329,7 @@ export class OldRunPieces {
     // The Horseshoe's lanterns.
     if (this.hookPlay >= 0 && this.hookLamps) {
       const p = this.plays[this.hookPlay];
+      this.hookLamps.visible = near(p.z0, p.z1);
       const active = mo !== null && mo.active === this.hookPlay;
       const end = this.ended.get(this.hookPlay);
       const n = this.hookPos.length;

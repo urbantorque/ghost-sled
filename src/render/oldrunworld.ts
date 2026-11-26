@@ -137,6 +137,7 @@ export class OldRunWorld {
     this.lamps = new Float32Array(0);
     this.lampN = 0;
     this.litZ = [];
+    this.windows = [];
   }
 
   private keep<T extends { dispose(): void }>(o: T): T {
@@ -144,8 +145,12 @@ export class OldRunWorld {
     return o;
   }
 
-  private add(g: BufferGeometry, glow = false): Mesh {
+  /** The places' meshes and the stretch of run each is seen from (sim z): drawn only from within reach of it. */
+  private windows: Array<{ m: Mesh; z0: number; z1: number }> = [];
+
+  private add(g: BufferGeometry, glow = false, z0 = -Infinity, z1 = Infinity): Mesh {
     const m = new Mesh(this.keep(g), glow ? this.glow : this.mat);
+    if (z0 > -Infinity) this.windows.push({ m, z0, z1 });
     m.castShadow = !glow;
     m.receiveShadow = true;
     m.matrixAutoUpdate = false;
@@ -336,8 +341,8 @@ export class OldRunWorld {
     parts.push(part(new ConeGeometry(2.1, 1.2, 4, 1), SLATE, { pos: [sx, sg + 3.2, -2], rot: [0, Math.PI / 4, 0] }));
     const win = [box(0.08, 0.9, 1.4, GLASS, [sx - HOTEL.side * 1.22, sg + 1.6, -2])];
     if (!low) parts.push(box(0.1, 0.12, 1.6, CREAM, [sx - HOTEL.side * 1.24, sg + 1.12, -2]));
-    this.add(merge(placed(parts, t.cx, by, zc, -Math.atan(t.p))));
-    this.add(merge(placed(win, t.cx, by, zc, -Math.atan(t.p))), true);
+    this.add(merge(placed(parts, t.cx, by, zc, -Math.atan(t.p))), false, START_HOUSE.z0, START_HOUSE.z1);
+    this.add(merge(placed(win, t.cx, by, zc, -Math.atan(t.p))), true, START_HOUSE.z0, START_HOUSE.z1);
   }
 
   // ------------------------------------------------------------------ the grand hotel
@@ -487,8 +492,8 @@ export class OldRunWorld {
         parts.push(box(0.5, 0.16, len, CREAM, [bx, (g + g2) / 2 + 1.05, -(dz + (tz1 - tz0) / n / 2)], [Math.atan2(g2 - g, (tz1 - tz0) / n), 0, 0]));
       }
     }
-    this.add(merge(placed(parts, t.cx, c.baseY(zMid), zMid, 0)));
-    this.add(merge(placed(glass, t.cx, c.baseY(zMid), zMid, 0)), true);
+    this.add(merge(placed(parts, t.cx, c.baseY(zMid), zMid, 0)), false, HOTEL.from - 10, HOTEL.to);
+    this.add(merge(placed(glass, t.cx, c.baseY(zMid), zMid, 0)), true, HOTEL.from - 10, HOTEL.to);
     this.litZ.push(zMid);
   }
 
@@ -577,8 +582,8 @@ export class OldRunWorld {
     const fg = g(fx, -D / 2);
     parts.push(seg([fx, fg, -D / 2], [fx, fg + 16, -D / 2], 0.08, IRON));
     if (!low) parts.push(box(0.05, 1.3, 2.2, TRIM, [fx, fg + 15.1, -D / 2 + 1.15]));
-    this.add(merge(placed(parts, t.cx, by, zc, -Math.atan(t.p))));
-    this.add(merge(placed(glass, t.cx, by, zc, -Math.atan(t.p))), true);
+    this.add(merge(placed(parts, t.cx, by, zc, -Math.atan(t.p))), false, zc - 8, zc + 8);
+    this.add(merge(placed(glass, t.cx, by, zc, -Math.atan(t.p))), true, zc - 8, zc + 8);
     this.litZ.push(zc);
   }
 
@@ -606,7 +611,7 @@ export class OldRunWorld {
         ((i + row) % 2 ? cream : ink).push(g);
       }
     }
-    const m = this.add(merge([...ink, ...cream]));
+    const m = this.add(merge([...ink, ...cream]), false, z, z + 2);
     m.castShadow = false;
   }
 
@@ -615,6 +620,10 @@ export class OldRunWorld {
   update(_dt: number, time: number, mode: ViewMode, s: Snap, sim: Sim | null, _camera: PerspectiveCamera): void {
     if (!this.course || this.lampN === 0) return;
     this.pieces.update(this.course, time, s, sim, mode === 'run', this.detail === 'low', reduced());
+    // A place is drawn from within reach of it only (Low's reach is shorter): the hotel and the start house off the
+    // first few hundred metres, the timing house and the line off the last. Its parapet and lamps are always drawn.
+    const reach = this.detail === 'low' ? 420 : 700;
+    for (const w of this.windows) w.m.visible = s.z > w.z0 - reach && s.z < w.z1 + 90;
     // The lamps' glass and the windows light as the day goes (the palette's lamps, by the journey): dark glass by
     // day, the lamp's light at dusk and by Lamplight.
     const lampK = shared.uLampK.value as number;
