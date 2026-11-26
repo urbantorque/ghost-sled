@@ -1,5 +1,6 @@
 import { Color, DoubleSide, FrontSide, type Material, NormalBlending, NotEqualStencilFunc, ShaderMaterial, type Texture, UniformsLib, UniformsUtils, Vector2, Vector3, Vector4 } from 'three';
 import { BEST_HEX, FRIEND_HEX } from '../game/beats';
+import { GLAZE_HI, GLAZE_LO } from '../sim/oldrun';
 import { FAR_GLSL, farUniforms } from './farshadow';
 import { localUniforms, setLocalLightTier } from './lights';
 import { Palette, setPoster, tierLook } from './palette';
@@ -893,16 +894,33 @@ export const SNOW_SURF_GLSL = /* glsl */ `
   }
 `;
 
-export function makeSnowMaterial(): ShaderMaterial {
+/** Round 9, the Old Run's track (`makeSnowMaterial(true)`, terrain.ts aTrack): the channel is ice, not snow. The
+ *  track's ice is a polished blue-white with long runner scratches along the line and a soft mirror; the glaze, high on
+ *  a bend's outside wall where the sim lays it, is a band of deep clear ice that mirrors the sky and the sun hard, with
+ *  a scribed bright edge at its top and foot so it reads at speed; the slush in a bend's floor is dull, matte and
+ *  churned. Past the lip the parapet's crest is snow. Only the Old Run's terrain compiles any of it. */
+const TRACK_GLSL = /* glsl */ `
+  #ifdef TRACK
+    /** The glaze's band, in shares up the wall (oldrun.ts GLAZE_LO, GLAZE_HI). */
+    const float T_GLAZE_LO = ${GLAZE_LO.toFixed(3)};
+    const float T_GLAZE_HI = ${GLAZE_HI.toFixed(3)};
+  #endif
+`;
+
+export function makeSnowMaterial(track = false): ShaderMaterial {
   // (Round 8, second attempt: the wind's relief tiles, baked once on idle after the first frame. snowrelief.ts.)
   startReliefBake(() => shared.uSnowFx.value > 0);
   return new ShaderMaterial({
     lights: true,
     // (Round 8, the light lane: the lamps' air, LIGHT_GLSL fogged. The snow already reads the local lights.)
-    defines: { LAMP_AIR: 1 },
+    defines: { LAMP_AIR: 1, ...(track ? { TRACK: 1 } : {}) },
     uniforms: { ...lightsUniforms(), ...shared, ...bands, ...rock, ...lake, ...iceMirror, ...relief },
     vertexShader: /* glsl */ `
       ${SHADOW_VERT_PARS}
+      #ifdef TRACK
+        attribute vec4 aTrack;
+        varying vec4 vTrack;
+      #endif
       attribute float aEdge;
       attribute float aIce;
       attribute vec4 aKick;
@@ -924,6 +942,9 @@ export function makeSnowMaterial(): ShaderMaterial {
         vGroom = aGroom;
         vEdge = aEdge;
         vIce = aIce;
+        #ifdef TRACK
+          vTrack = aTrack;
+        #endif
         vKick = aKick;
         vSnow = aSnow;
         vRock = aRock;
@@ -934,6 +955,10 @@ export function makeSnowMaterial(): ShaderMaterial {
       ${SHADOW_FRAG_PARS}
       ${LIGHT_GLSL}
       ${LANTERN_POOL_GLSL}
+      ${TRACK_GLSL}
+      #ifdef TRACK
+        varying vec4 vTrack;
+      #endif
       uniform vec3 uSnowLit;
       uniform vec3 uSnowShade;
       uniform vec3 uSnowDeep;
@@ -1252,6 +1277,21 @@ export function makeSnowMaterial(): ShaderMaterial {
         }
         // Glass Ice glazes the whole course; elsewhere ice patches (and the glacier's base sheen) glaze.
         float ice = max(max(max(vIce, vPaint.y), lakeK), uIceMood >= 1.0 ? 0.85 : uIceMood * 0.55) * (1.0 - bare);
+        // How much of the ice's mirror, sun path and body this pixel takes (all of it, but on the Old Run's track).
+        float iceM = ice;
+        #ifdef TRACK
+          // Round 9, the Old Run's track (TRACK_GLSL): inside the lip the channel is ice, so none of the snow's own
+          // work (dunes, ripples, relief, grain, old tracks) is drawn on it. The glaze's band and the slush's floor are
+          // the sim's own, their edges cut a pixel wide.
+          float tu = vTrack.x;
+          float tAA = min(fwidth(tu), 0.2) * 0.75 + 0.006;
+          float tIn = 1.0 - smoothstep(1.0, 1.0 + max(tAA, 0.035), tu);
+          float tGlaze = vTrack.y * smoothstep(T_GLAZE_LO - tAA, T_GLAZE_LO + tAA, tu) * (1.0 - smoothstep(T_GLAZE_HI - tAA, T_GLAZE_HI + tAA, tu));
+          float tSlush = smoothstep(0.5, 1.0, vTrack.z) * (1.0 - smoothstep(-tAA, tAA, tu));
+          ice = max(ice, tIn);
+          // (The track's ice mirrors softly, the glaze hard, the slush not at all.)
+          iceM = ice * mix(0.36, 1.0, tGlaze) * (1.0 - tSlush);
+        #endif
         // 1 in bright day moods, 0 at night.
         float dayK = smoothstep(0.7, 0.95, dot(uSnowLit, vec3(0.3, 0.59, 0.11)));
         // Micro-dunes perturb the shading normal (visual only, fades out with distance).
@@ -1613,6 +1653,16 @@ export function makeSnowMaterial(): ShaderMaterial {
           // its colour against the snow even from far up the run, where a mirror alone goes white.
           body = mix(body, uSnowDeep * vec3(0.3, 0.36, 0.5), lakeK);
           body = mix(body, uSnowDeep * vec3(0.62, 0.8, 1.0), vPaint.y);
+          float crackK = 1.0;
+          #ifdef TRACK
+            // The track's ice is the snow's own light a step cooler and clearer (a pale polished ice, never a dark
+            // floor); the glaze a deep clear blue, darker than the wall round it, so the band reads before its shine
+            // does; the slush keeps the snow's matte (drawn below).
+            vec3 tBody = col * mix(vec3(0.93), uSnowShade / max(uSnowLit, vec3(0.05)), 0.42);
+            vec3 gBody = mix(uSnowShade, uSnowDeep, 0.7) * vec3(0.74, 0.9, 1.1) * (0.5 + 0.5 * shadow);
+            body = mix(mix(tBody, gBody, tGlaze), col, tSlush);
+            crackK = mix(0.35, 0.8, tGlaze);
+          #endif
           // Fractures frozen in the body: the borders of irregular ice plates, straight-edged and
           // sharp like real cracks (smooth noise contours read as a topographic map), near the lens only.
           float nearC = 1.0 - smoothstep(5.0, 24.0, dist);
@@ -1622,9 +1672,13 @@ export function makeSnowMaterial(): ShaderMaterial {
             // (Round 8's review loop: still a regular hexagonal mesh over the lake's black. Fainter again, so the
             // long fractures and the bubbles carry the ice. And on Ember's dark cold glaze, uGlazeCool, the plates'
             // pale borders drew a cell grid on the fork's strip; there they are a faint seam.)
-            body = mix(body, mix(uSnowShade, uSnowLit, 0.6), crack * nearC * mix(0.5, 0.1, lakeK) * (1.0 - 0.75 * uGlazeCool));
+            body = mix(body, mix(uSnowShade, uSnowLit, 0.6), crack * nearC * mix(0.5, 0.1, lakeK) * (1.0 - 0.75 * uGlazeCool) * crackK);
           }
-          col = mix(col, body, 0.62 * ice);
+          #ifdef TRACK
+            col = mix(col, body, (0.62 + 0.3 * tGlaze) * ice);
+          #else
+            col = mix(col, body, 0.62 * ice);
+          #endif
           // The mirror: the sky, and low along the horizon the far ridges, mirrored dark and soft in
           // the glaze, so the ice reads as a reflection and not a matte colour.
           vec3 sky = mix(uSkyHorizon, uSkyZenith, smoothstep(0.0, 0.42, rr.y));
@@ -1664,7 +1718,7 @@ export function makeSnowMaterial(): ShaderMaterial {
           // (Round 8's review: under Ember's fire-red horizon the fork's strip still mirrored a vermillion band across
           // the snow, the rider's colour on a hazard. Where the palette asks, a glaze holds the cold of the deep sky.)
           sky = mix(sky, mix(uSkyZenith, uSnowDeep, 0.6), uGlazeCool * (1.0 - lakeK));
-          col = mix(col, sky * (0.72 + 0.28 * shadow), clamp(fr * 1.15, 0.0, 0.95) * ice * (1.0 - 0.8 * vPaint.y));
+          col = mix(col, sky * (0.72 + 0.28 * shadow), clamp(fr * 1.15, 0.0, 0.95) * iceM * (1.0 - 0.8 * vPaint.y));
           if (lakeK > 0.0) {
             vec2 lp = vWorldPos.xz;
             // The rider in the mirror: the reflected ray is tested against a soft upright figure at the
@@ -1741,16 +1795,16 @@ export function makeSnowMaterial(): ShaderMaterial {
           float polish = smoothstep(0.3, 0.75, vnoise(vec2(sq.x * 1.1, sq.y * 0.035)));
           // The sun path stays on the open glaze rather than blowing out across the banks.
           float open = mix(0.2, 1.0, smoothstep(0.82, 0.96, ng.y));
-          col += uSunColor * aniso * (0.25 + 0.85 * polish) * ice * shadow * open * 0.45;
+          col += uSunColor * aniso * (0.25 + 0.85 * polish) * iceM * shadow * open * 0.45;
           // Scratches glint only in and around the sun path (a wide lobe lit them across the whole
           // foreground as a fan of speed lines), barely at all elsewhere.
           float sunR = pow(max(dot(rr, uSunDir), 0.0), 14.0);
           float scratch = smoothstep(0.62, 0.92, vnoise(vec2(sq.x * 6.0, sq.y * 0.06)));
-          col += mix(uSunColor, vec3(1.0), 0.3) * scratch * (0.012 + 0.6 * sunR) * ice * shadow * (1.0 - smoothstep(14.0, 70.0, dist));
+          col += mix(uSunColor, vec3(1.0), 0.3) * scratch * (0.012 + 0.6 * sunR) * iceM * shadow * (1.0 - smoothstep(14.0, 70.0, dist));
           // The brightest sun streaks roll off short of white (about 90% once graded) instead of
           // clipping, so they keep their gold and the glaze under them its form.
           vec3 over = max(col - 0.6, 0.0);
-          col = mix(col, max(glaze, min(col, vec3(0.6)) + 0.16 * (1.0 - exp(-over / 0.16))), ice);
+          col = mix(col, max(glaze, min(col, vec3(0.6)) + 0.16 * (1.0 - exp(-over / 0.16))), iceM);
           // The gold sun path (ART.md section 7): the glaze mirrors the low sun disc as one long streak
           // running from under it all the way to the lens, tight across the view and loose along it,
           // broken into glittering polished runs. Laid over the rolled-off glaze rather than added to it,
@@ -1763,8 +1817,29 @@ export function makeSnowMaterial(): ShaderMaterial {
           float path = exp(-acrossA * acrossA / 0.005 - elevD * elevD / 0.08) * step(0.0, dot(rA, dA));
           float runs = 0.55 + 0.45 * smoothstep(0.25, 0.7, vnoise(vec2(sq.x * 0.9, sq.y * 0.05)));
           vec3 goldC = mix(mix(uSunColor, vec3(1.0, 0.78, 0.4), 0.5) * 0.86, uSunColor * 0.95, lakeK * 0.75);
-          col = mix(col, goldC, path * runs * ice * mix(0.25, 1.0, shadow) * open * 0.92);
+          col = mix(col, goldC, path * runs * iceM * mix(0.25, 1.0, shadow) * open * 0.92);
         }
+        #ifdef TRACK
+          if (tIn > 0.0) {
+            // The glaze's edges, scribed: a thin bright line along its top and its foot where the polish starts, so
+            // the band reads as a band at speed and from far down the run, in the light's own colour and the
+            // snow's in the shade.
+            float tw = tAA * 1.4 + 0.012;
+            float scribe = vTrack.y * max(1.0 - smoothstep(tw * 0.4, tw, abs(tu - T_GLAZE_HI)), 0.7 * (1.0 - smoothstep(tw * 0.4, tw, abs(tu - T_GLAZE_LO))));
+            col = mix(col, mix(lit * mix(sunSnow, vec3(1.0), 0.4), lit * 0.92, 1.0 - shadow) * 1.04, scribe * 0.7 * tIn);
+            // The slush in a bend's floor: the snow the sleds scraped off the walls, dull and churned, a step down
+            // from the ice either side and grey in its light, never shining.
+            if (tSlush > 0.0) {
+              vec2 sq2 = vec2(vTrack.w, vWorldPos.z);
+              float cl = vnoise(sq2 * vec2(2.2, 0.8)) * 0.55 + vnoise(sq2 * vec2(6.0, 2.4) + 3.0) * 0.3 + vnoise(sq2 * vec2(13.0, 5.0) + 7.0) * 0.15;
+              vec3 sl = mix(shade, lit * sunSnow, t * 0.78);
+              float lum = dot(sl, vec3(0.2126, 0.7152, 0.0722));
+              sl = mix(sl, vec3(lum), 0.3) * mix(0.84, 0.97, smoothstep(0.3, 0.72, cl));
+              sl = mix(sl, sl * mix(vec3(0.9), uSnowShade / max(uSnowLit, vec3(0.05)), 0.55), (1.0 - smoothstep(0.25, 0.5, cl)) * 0.7);
+              col = mix(col, sl, tSlush);
+            }
+          }
+        #endif
         if (pond > 0.01) {
           // Still water in a terrace's flat (Sakura): a dark mirror of the sky with the sun's glint in it
           // and a pale skin of ice at its wandering brim.

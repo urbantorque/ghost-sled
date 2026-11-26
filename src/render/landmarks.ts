@@ -506,6 +506,10 @@ export class SitePlan {
   /** Where everything stands (see the class's head). */
   private layout(): Draft[] {
     const c = this.course;
+    // (Round 9: the Old Run stands none of the five's pieces, no grandstands at its start, no lift line, no gate or
+    // hut down its banks; its own world builds the hotel, the start and timing houses and the parapet's lamps,
+    // oldrunworld.ts.)
+    if (c.kit?.id === 'oldrun') return [];
     const end = c.finishZ + c.runOut;
     const seed = c.seed;
     const secs: Section[] = [];

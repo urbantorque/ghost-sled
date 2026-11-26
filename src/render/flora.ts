@@ -20,6 +20,7 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { BiomeId } from '../sim/mountains';
 import { silverTreeGeometry } from './lanternkit';
+import { bareTreeGeometry } from './oldrunflora';
 import { charPineGeometry, seracGeometry, spireGeometry } from './meshes';
 import { Palette } from './palette';
 import { Facets, columnInto, columnsInto, honeycomb } from './rockforms';
@@ -1207,6 +1208,9 @@ export function forestSteps(biome: BiomeId, p: Palette, set: 'a' | 'b', lod: Lod
   // Lanternfall: ink conifers hold the values, and bare silver trees are the light shape among them (the
   // second of them hung with small lit lanterns: the lamp grove's own tree).
   if (biome === 'lantern') return a ? [() => boughPineGeometry(p, 5, lod), () => heavyPineGeometry(p, lod)] : [() => silverTreeGeometry(0, false), () => silverTreeGeometry(1, true)];
+  // The Old Run (round 9): an old wood of bare winter trees, beeches and birches, never the five's spruces
+  // (oldrunflora.ts).
+  if (biome === 'oldrun') return a ? [() => bareTreeGeometry('beech', lod), () => bareTreeGeometry('oldbeech', lod)] : [() => bareTreeGeometry('birch', lod), () => bareTreeGeometry('twinbirch', lod)];
   // (Sakura's blossom has a build a level: the treeline's and near rows' rounded puffs, Low's leaner ones, and
   // the far orchards' three puffs: chamfer.ts's lift, the visual lift's blossom.)
   const bl: CanopyBuild = lod === 0 ? 'near' : lod === 1 ? 'lean' : 'far';
@@ -1233,7 +1237,7 @@ export function nearWall(biome: BiomeId): boolean {
 
 /** Whether a biome's set has cheaper builds at lod 1 and 2 (else every lod is the full set). */
 export function hasLod(biome: BiomeId, set: 'a' | 'b'): boolean {
-  return biome === 'alpine' || biome === 'blossom' || (biome === 'lantern' && set === 'a');
+  return biome === 'alpine' || biome === 'blossom' || biome === 'oldrun' || (biome === 'lantern' && set === 'a');
 }
 
 /** A forest set made at once (tests and probes; the game makes it a variant per idle callback). */
@@ -1249,8 +1253,8 @@ export function forestBase(biome: BiomeId, p: Palette, lod: Lod = 0): { a: Buffe
 /** Chance an instance of set 'a' or 'b' takes the variant (pick 1) rather than the original. */
 export const VARIANT_SHARE: Record<BiomeId, { a: number; b: number }> = {
   alpine: { a: 0.3, b: 0.24 },
-  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
-  oldrun: { a: 0.3, b: 0.24 },
+  // (The Old Run, round 9: a veteran beech in four, and one birch in three a coppiced pair.)
+  oldrun: { a: 0.25, b: 0.33 },
   glacier: { a: 0.3, b: 0.4 },
   volcanic: { a: 0.35, b: 0.4 },
   blossom: { a: 0.4, b: 0.4 },

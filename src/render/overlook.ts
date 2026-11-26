@@ -214,6 +214,8 @@ export class OverlookPlan {
   planTo(_z: number): void {
     if (this.done) return;
     this.done = true;
+    // (Round 9: the Old Run's banks are its parapet's crest and its forest; no bank opens over a panorama there.)
+    if (this.course.kit?.id === 'oldrun') return;
     const end = this.course.finishZ + this.course.runOut;
     while (this.nextZ <= end) this.planNext(end);
     this.close(end);

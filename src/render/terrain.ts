@@ -1,6 +1,7 @@
 import { BufferAttribute, BufferGeometry, Mesh, Object3D, ShaderMaterial } from 'three';
 import { CHUNK_LEN, Course, Ramp } from '../sim/course';
-import { HANDOVER_FROM, HANDOVER_TO, MID_ROW, handoverRow, ledgeAt, rampart, rockWeight, smoothK, vnoise2, wallK } from './ground';
+import { FLOOR as TRACK_FLOOR, GLAZE, SLUSH, WALL as TRACK_WALL, trackAt } from '../sim/oldrun';
+import { HANDOVER_FROM, HANDOVER_TO, MID_ROW, groundOf, handoverRow, ledgeAt, rampart, rockWeight, smoothK, vnoise2, wallK } from './ground';
 import { addLightSource, pushLocalLight } from './lights';
 import { makeSnowMaterial, shared } from './materials';
 import { LIP, LIP_FROM, lipDrop, type OverlookPlan, type Overlooks } from './overlook';
@@ -98,7 +99,9 @@ function overLip(lift: number, e: number, w: number): number {
 export function lateralOffsets(course: Course, d: TerrainDetail): number[] {
   const hw = course.params.halfWidthStart + 2.6;
   const inner = hw + 10;
-  const n = Math.ceil((inner * 2) / d.inner);
+  // (Round 9: the Old Run's channel is a 15 m U whose walls curve over 4.9 m; at Low's 1.6 m a wall was three flat
+  // facets. Its terrain is a third the width of the five's, so a metre's spacing costs Low what the five's does.)
+  const n = Math.ceil((inner * 2) / (course.kit?.id === 'oldrun' ? Math.min(d.inner, 1.05) : d.inner));
   const out: number[] = [];
   // Low (reach 60) keeps the original coarse columns.
   for (const s of d.reach > 60 ? OUTER_STEPS_FINE : OUTER_STEPS) if (s > 10 && s <= d.reach) out.push(-(hw + s), hw + s);
@@ -149,6 +152,13 @@ class ChunkJob {
   readonly paint: Float32Array;
   /** Per vertex (round 8, the snow lane): how groomed the corridor's lane is at this row (snowsurf.ts). */
   readonly groom: Float32Array;
+  /** Per vertex, the Old Run's track only (round 9; null elsewhere): the share up the wall square to the channel (0 at
+   *  the floor's edge, 1 at the lip, under 0 on the floor), whether this side's wall carries the glaze here, whether
+   *  the floor here is slush, and metres across square to the channel (signed by side). The snow shader's TRACK
+   *  branch draws the ice, the glaze's band and the slush from them exactly where the sim lays its surfaces. */
+  readonly track: Float32Array | null;
+  /** The course's drawn ground (ground.ts groundOf): the sim's, but past the Old Run's lip its crest of snow. */
+  private readonly gnd: (x: number, z: number) => number;
   private ramps: Ramp[] = [];
   private drift: [number, number] = [0, 0];
   row = 0;
@@ -172,6 +182,8 @@ class ChunkJob {
     this.rock = new Float32Array(n * 4);
     this.paint = new Float32Array(n * 4);
     this.groom = new Float32Array(n);
+    this.track = course.kit?.id === 'oldrun' ? new Float32Array(n * 4) : null;
+    this.gnd = groundOf(course);
   }
 
   get done(): boolean {
@@ -244,15 +256,38 @@ class ChunkJob {
       const wallR = cp && cr > 0 && cp.kindAt(z, 1) === 'wall' ? cr : 0;
       let p = this.row * cols;
       groomRow(this.groom, p, cols, groomedAt(c, z));
+      // (The Old Run's track: the channel square to its line, which side carries the glaze here and whether the floor
+      // is slush, asked of the sim's own surfaces at the glaze's middle and the floor's.)
+      const tr = this.track;
+      let tq = 1;
+      let glazeL = 0;
+      let glazeR = 0;
+      let slush = 0;
+      if (tr) {
+        const ta = trackAt(c, z);
+        tq = Math.sqrt(1 + ta.p * ta.p);
+        const mid = (TRACK_FLOOR + 0.65 * TRACK_WALL) * tq;
+        glazeL = c.surface(cx - mid, z) === GLAZE ? 1 : 0;
+        glazeR = c.surface(cx + mid, z) === GLAZE ? 1 : 0;
+        slush = c.surface(cx, z) === SLUSH ? 1 : 0;
+      }
+      const gnd = this.gnd;
       for (let col = 0; col < cols; col++) {
         const x = cx + this.offs[col];
         const ed = Math.abs(this.offs[col]) - hw;
         const off = this.offs[col];
         const side = off < 0 ? -1 : 1;
-        const y0 = c.ground(x, z);
+        const y0 = gnd(x, z);
         let y = y0;
-        const yx = c.ground(x + e, z);
-        const yz = c.ground(x, z + e);
+        const yx = gnd(x + e, z);
+        const yz = gnd(x, z + e);
+        if (tr) {
+          const d = Math.abs(off) / tq;
+          tr[p * 4] = (d - TRACK_FLOOR) / TRACK_WALL;
+          tr[p * 4 + 1] = side < 0 ? glazeL : glazeR;
+          tr[p * 4 + 2] = slush;
+          tr[p * 4 + 3] = side * d;
+        }
         const sx = (yx - y0) / e;
         const sz = (yz - y0) / e;
         let gx = sx;
@@ -381,6 +416,7 @@ class ChunkJob {
     geo.setAttribute('aRock', new BufferAttribute(this.rock, 4));
     geo.setAttribute('aPaint', new BufferAttribute(this.paint, 4));
     geo.setAttribute('aGroom', new BufferAttribute(this.groom, 1));
+    if (this.track) geo.setAttribute('aTrack', new BufferAttribute(this.track, 4));
     geo.setIndex(new BufferAttribute(idx, 1));
     geo.computeBoundingSphere();
     geo.computeBoundingBox();
@@ -397,6 +433,9 @@ export function buildTerrainGeometry(course: Course, index: number, d: TerrainDe
 export class Terrain {
   readonly root = new Object3D();
   readonly material: ShaderMaterial;
+  /** The Old Run's track (round 9): the same snow under its TRACK branch (ice, the glaze, the slush), made the first
+   *  time its course is drawn. The five never compile it. */
+  private trackMat: ShaderMaterial | null = null;
   private meshes = new Map<number, Mesh>();
   private job: ChunkJob | null = null;
   private fogCourse: Course | null = null;
@@ -559,7 +598,9 @@ export class Terrain {
   }
 
   private add(i: number, geo: BufferGeometry): void {
-    const mesh = new Mesh(geo, this.material);
+    const track = geo.getAttribute('aTrack') !== undefined;
+    if (track && !this.trackMat) this.trackMat = makeSnowMaterial(true);
+    const mesh = new Mesh(geo, track ? this.trackMat! : this.material);
     mesh.receiveShadow = this.shadows;
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();
