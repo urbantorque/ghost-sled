@@ -98,6 +98,17 @@ export const TITLE_SHOTS: Readonly<Record<string, TitleShot>> = {
     desk: { r: 4.8, up: 1.3, sweep: 0.4, drift: 0.14, ahead: 40, lift: 0.6, crane: 0, hero: [0.08, 0.2] },
     phone: { r: 7.2, up: 1.5, sweep: 0.12, drift: 0.05, ahead: 30, lift: 0.8, crane: 0, hero: [-0.06, -0.06] },
   },
+  // Round 9, the Old Run (notes/r9-oldrun-world.md): a rider high on the glaze through the Horseshoe, the bare wood
+  // round the track and the lake far below in the setting sun. The reel rides the lead bend and the hook in the gold
+  // over the lake; the lens a little high and swung to the hero's right, so the wall's glaze and the valley share the
+  // frame over its shoulder.
+  oldrun: {
+    from: 2380,
+    to: 2860,
+    light: 2350,
+    desk: { r: 5.4, up: 1.4, sweep: 0.36, drift: 0.12, ahead: 34, lift: 0.7, crane: 0.2, hero: [0.08, 0.2] },
+    phone: { r: 7.2, up: 1.5, sweep: 0.12, drift: 0.05, ahead: 24, lift: 0.7, crane: 0, hero: [-0.06, -0.06] },
+  },
 };
 
 /** The shot for a mountain id (a Daily, a Cup and anything unknown get the plain reel). */

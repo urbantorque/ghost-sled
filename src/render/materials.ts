@@ -1661,7 +1661,7 @@ export function makeSnowMaterial(track = false): ShaderMaterial {
             vec3 tBody = col * mix(vec3(0.93), uSnowShade / max(uSnowLit, vec3(0.05)), 0.42);
             vec3 gBody = mix(uSnowShade, uSnowDeep, 0.7) * vec3(0.74, 0.9, 1.1) * (0.5 + 0.5 * shadow);
             body = mix(mix(tBody, gBody, tGlaze), col, tSlush);
-            crackK = mix(0.35, 0.8, tGlaze);
+            crackK = mix(0.35, 0.3, tGlaze);
           #endif
           // Fractures frozen in the body: the borders of irregular ice plates, straight-edged and
           // sharp like real cracks (smooth noise contours read as a topographic map), near the lens only.
@@ -1834,8 +1834,8 @@ export function makeSnowMaterial(track = false): ShaderMaterial {
               float cl = vnoise(sq2 * vec2(2.2, 0.8)) * 0.55 + vnoise(sq2 * vec2(6.0, 2.4) + 3.0) * 0.3 + vnoise(sq2 * vec2(13.0, 5.0) + 7.0) * 0.15;
               vec3 sl = mix(shade, lit * sunSnow, t * 0.78);
               float lum = dot(sl, vec3(0.2126, 0.7152, 0.0722));
-              sl = mix(sl, vec3(lum), 0.3) * mix(0.84, 0.97, smoothstep(0.3, 0.72, cl));
-              sl = mix(sl, sl * mix(vec3(0.9), uSnowShade / max(uSnowLit, vec3(0.05)), 0.55), (1.0 - smoothstep(0.25, 0.5, cl)) * 0.7);
+              sl = mix(sl, vec3(lum), 0.42) * mix(0.88, 0.97, smoothstep(0.3, 0.72, cl));
+              sl = mix(sl, sl * mix(vec3(0.92), uSnowShade / max(uSnowLit, vec3(0.05)), 0.5), (1.0 - smoothstep(0.2, 0.45, cl)) * 0.32);
               col = mix(col, sl, tSlush);
             }
           }

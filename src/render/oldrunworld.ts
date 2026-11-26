@@ -371,11 +371,15 @@ export class OldRunWorld {
         // The windows: storey by storey on the facade, tall and narrow, shutters either side (Medium and High).
         for (let s = 0; s < storeys; s++) {
           const y = floor + plinthH + s * sh + sh * 0.52;
-          glass.push(box(0.12, sh * 0.56, bw * 0.42, GLASS, [front - side * 0.04, y, -zz]));
+          const wh = sh * (s === 0 ? 0.64 : s === storeys - 1 ? 0.46 : 0.56);
+          glass.push(box(0.12, wh, bw * 0.32, GLASS, [front - side * 0.06, y, -zz]));
+          // Its surround in cream, a sill under it, and on the first floor a pediment over it; green shutters either side.
+          parts.push(box(0.1, wh + 0.3, bw * 0.44, CREAM, [front - side * 0.03, y, -zz]));
+          parts.push(box(0.26, 0.14, bw * 0.5, CREAM, [front - side * 0.1, y - wh / 2 - 0.12, -zz]));
           if (!low) {
-            parts.push(box(0.1, sh * 0.58, 0.22, TRIM, [front - side * 0.07, y, -(zz - bw * 0.33)]));
-            parts.push(box(0.1, sh * 0.58, 0.22, TRIM, [front - side * 0.07, y, -(zz + bw * 0.33)]));
-            parts.push(box(0.16, 0.14, bw * 0.5, CREAM, [front - side * 0.08, y + sh * 0.33, -zz]));
+            parts.push(box(0.1, wh, 0.26, TRIM, [front - side * 0.07, y, -(zz - bw * 0.31)]));
+            parts.push(box(0.1, wh, 0.26, TRIM, [front - side * 0.07, y, -(zz + bw * 0.31)]));
+            if (s === 0) parts.push(part(new ConeGeometry(bw * 0.3, 0.5, 3, 1), CREAM, { pos: [front - side * 0.12, y + wh / 2 + 0.38, -zz], rot: [0, side > 0 ? -Math.PI / 2 : Math.PI / 2, 0], scale: [1, 1, 0.35] }));
           }
           // And the back, plainer (seen from the title's lens and over the crest).
           if (!low && s < 3) glass.push(box(0.1, sh * 0.5, bw * 0.38, GLASS, [back + side * 0.04, y, -zz]));
@@ -389,6 +393,11 @@ export class OldRunWorld {
           parts.push(part(new ConeGeometry(bw * 0.4, 1.1, 4, 1), SNOW, { pos: [dx, top + 3.1, -zz], rot: [0, Math.PI / 4, 0], scale: [0.7, 1, 1] }));
           glass.push(box(0.12, 1, bw * 0.3, GLASS, [dx - side * 0.56, top + 1.75, -zz]));
         }
+      }
+      // A string course at every storey, and quoins down the block's corners: the render in panels, as a grand hotel's.
+      for (let s = 1; s < storeys; s++) parts.push(box(HOTEL.deep + 0.24, 0.16, blen + 0.24, CREAM, [xMid, floor + plinthH + s * sh, -zc]));
+      if (!low) {
+        for (let y = floor + plinthH + 0.5; y < top - 0.3; y += 0.9) for (const ez of [z0 + 0.25, z1 - 0.25]) parts.push(box(0.5, 0.4, 0.62, CREAM, [front - side * 0.06, y, -ez]));
       }
       // The first floor's balcony: an iron rail along the whole facade on a slab.
       const by1 = floor + plinthH + sh * 0.02;
@@ -414,12 +423,17 @@ export class OldRunWorld {
         glass.push(box(0.12, sh * 0.55, 1.4, GLASS, [tx - side * (w / 2 + 0.03), y, -zc]));
         if (!low) glass.push(box(1.4, sh * 0.55, 0.12, GLASS, [tx, y, -(zc - w / 2 - 0.03)]));
       }
+      {
+        const sp = tall ? 13 : 9;
+        parts.push(part(new ConeGeometry(w * 0.74, sp, 4, 1), SLATE, { pos: [tx, floor + hgt + sp / 2 + 0.2, -zc], rot: [0, Math.PI / 4, 0] }));
+        // A ring of snow on its lower slope, and an iron finial.
+        parts.push(part(new ConeGeometry(w * 0.7, sp * 0.18, 4, 1, true), SNOW, { pos: [tx, floor + hgt + sp * 0.42, -zc], rot: [0, Math.PI / 4, 0] }));
+      }
       if (tall) {
-        parts.push(part(new ConeGeometry(w * 0.74, 9, 4, 1), SLATE, { pos: [tx, floor + hgt + 4.7, -zc], rot: [0, Math.PI / 4, 0] }));
-        parts.push(seg([tx, floor + hgt + 9, -zc], [tx, floor + hgt + 14.5, -zc], 0.07, IRON));
-        parts.push(box(0.05, 1.2, 2, TRIM, [tx, floor + hgt + 13.6, -(zc - 1)]));
+        parts.push(seg([tx, floor + hgt + 12, -zc], [tx, floor + hgt + 18.5, -zc], 0.07, IRON));
+        parts.push(box(0.05, 1.2, 2, TRIM, [tx, floor + hgt + 17.6, -(zc - 1)]));
       } else {
-        parts.push(...mansard(w + 0.4, w + 0.4, floor + hgt + 0.2, 5, [tx, 0, -zc]));
+        parts.push(seg([tx, floor + hgt + 8.5, -zc], [tx, floor + hgt + 10.5, -zc], 0.06, IRON));
       }
     }
     // The terrace before it: a level of snow behind a stone balustrade over the crest, lamps at its corners.
@@ -444,64 +458,87 @@ export class OldRunWorld {
 
   // ------------------------------------------------------------------ the timing house
 
-  /** The timing house at the outrun: a two-storey timber house past the crest on the left, its gable toward the
-   *  track coming down, a great clock face in it, the judges' balcony under it, its windows lit as the evening comes;
-   *  a flagpole beside it. */
+  /** The timing house at the outrun: a two-storey timber house past the crest on the left, the judges' balcony along
+   *  its track side, its windows lit as the evening comes, and on its up-run end a square clock tower whose great
+   *  face looks up the track at the rider coming down (the finish's mark, seen from the last bend); a flagpole by it.
+   *  Its plinth takes up the crest's fall under it. */
   private timingHouse(c: Course, low: boolean): void {
     const fz = c.finishZ;
-    const zc = fz - 3;
+    const zc = fz - 4;
     const side = TIMING.side;
     const t = trackAt(c, zc);
     const edge = LIP * Math.sqrt(1 + t.p * t.p);
-    const x0 = side * (edge + TIMING.e + 4);
-    const g0 = drawnGround(c, t.cx + x0, zc) - c.baseY(zc);
+    const W = 8.5;
+    const D = 10;
+    const H = 7;
+    const x0 = side * (edge + TIMING.e + W / 2);
+    const by = c.baseY(zc);
+    const g = (x: number, dz: number) => drawnGround(c, t.cx + x, zc + dz) - by;
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const a of [-1, 1]) for (const b of [-1, 1]) {
+      const y = g(x0 + (a * W) / 2, (b * D) / 2);
+      lo = Math.min(lo, y);
+      hi = Math.max(hi, y);
+    }
+    const f0 = hi + 0.6;
     const parts: BufferGeometry[] = [];
     const glass: BufferGeometry[] = [];
-    const W = 7.5;
-    const D = 9;
-    const H = 6.4;
-    parts.push(box(W + 0.4, 1.2, D + 0.4, PLINTH, [x0, g0 + 0.3, 0]));
-    parts.push(box(W, H, D, TIMBER_C, [x0, g0 + 0.9 + H / 2, 0]));
+    parts.push(box(W + 0.5, f0 - lo + 0.6, D + 0.5, PLINTH, [x0, (f0 + lo - 0.6) / 2, 0]));
+    parts.push(box(W, H, D, TIMBER_C, [x0, f0 + H / 2, 0]));
     // Cream boards at the corners and a band between the storeys.
-    for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) parts.push(box(0.3, H, 0.3, CREAM, [x0 + (a * W) / 2, g0 + 0.9 + H / 2, (b * D) / 2]));
-    parts.push(box(W + 0.2, 0.25, D + 0.2, CREAM, [x0, g0 + 0.9 + H * 0.5, 0]));
-    // The roof, its gable up the run (+z) and down it.
-    const rh = 4.2;
+    for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) parts.push(box(0.32, H, 0.32, CREAM, [x0 + (a * W) / 2, f0 + H / 2, (b * D) / 2]));
+    parts.push(box(W + 0.2, 0.25, D + 0.2, CREAM, [x0, f0 + H * 0.5, 0]));
+    // The roof, its ridge along the run.
+    const rh = 3.8;
+    const run = W / 2 + 0.8;
+    const slope = Math.atan2(rh, run);
     for (const s of [-1, 1]) {
-      const run = W / 2 + 0.7;
-      const slope = Math.atan2(rh, run);
-      parts.push(box(Math.hypot(rh, run), 0.24, D + 1.4, SLATE, [x0 + (s * run) / 2, g0 + 0.9 + H + rh / 2, 0], [0, 0, -s * slope]));
-      parts.push(box(Math.hypot(rh, run) * 0.5, 0.16, D + 1.3, SNOW, [x0 + (s * run) / 4, g0 + 0.9 + H + rh * 0.74, 0], [0, 0, -s * slope]));
+      parts.push(box(Math.hypot(rh, run), 0.24, D + 1.4, SLATE, [x0 + (s * run) / 2, f0 + H + rh / 2, 0], [0, 0, -s * slope]));
+      parts.push(box(Math.hypot(rh, run) * 0.5, 0.16, D + 1.3, SNOW, [x0 + (s * run) / 4, f0 + H + rh * 0.74, 0], [0, 0, -s * slope]));
     }
-    const gy = g0 + 0.9 + H;
-    parts.push(quad([x0 - W / 2 - 0.2, gy, D / 2 + 0.05], [x0 + W / 2 + 0.2, gy, D / 2 + 0.05], [x0, gy + rh, D / 2 + 0.05], [x0, gy + rh, D / 2 + 0.05], CREAM));
-    // The clock in the gable facing up the run: a white face in an iron ring, twelve marks and its two hands.
-    const cy = gy + 1.25;
-    const cz = D / 2 + 0.2;
-    parts.push(part(new CylinderGeometry(1.15, 1.15, 0.12, 20, 1), IRON, { pos: [x0, cy, cz], rot: [Math.PI / 2, 0, 0] }));
-    parts.push(part(new CylinderGeometry(1, 1, 0.1, 20, 1), new Color('#F4EEE0'), { pos: [x0, cy, cz + 0.05], rot: [Math.PI / 2, 0, 0] }));
+    const gy = f0 + H;
+    for (const dz of [-D / 2 - 0.05, D / 2 + 0.05]) {
+      parts.push(quad([x0 - W / 2 - 0.2, gy, dz], [x0 + W / 2 + 0.2, gy, dz], [x0, gy + rh, dz], [x0, gy + rh, dz], CREAM));
+      parts.push(quad([x0 + W / 2 + 0.2, gy, dz], [x0 - W / 2 - 0.2, gy, dz], [x0, gy + rh, dz], [x0, gy + rh, dz], CREAM));
+    }
+    // The clock tower on the up-run end: square, boarded, rising clear of the roof, its clock under a pyramid cap.
+    const TW = 3.6;
+    const tz = D / 2 - TW / 2 + 0.3;
+    const tTop = f0 + H + rh + 5.6;
+    parts.push(box(TW, tTop - f0, TW, TIMBER_D, [x0, (f0 + tTop) / 2, tz]));
+    parts.push(box(TW + 0.5, 0.4, TW + 0.5, CREAM, [x0, tTop, tz]));
+    parts.push(part(new ConeGeometry(TW * 0.85, 3.6, 4, 1), SLATE, { pos: [x0, tTop + 2, tz], rot: [0, Math.PI / 4, 0] }));
+    parts.push(seg([x0, tTop + 3.6, tz], [x0, tTop + 5, tz], 0.05, IRON));
+    const cy = tTop - 1.9;
+    const cz = tz + TW / 2 + 0.06;
+    parts.push(box(TW - 0.4, TW - 0.4, 0.1, CREAM, [x0, cy, cz - 0.02]));
+    parts.push(part(new CylinderGeometry(1.4, 1.4, 0.12, 24, 1), IRON, { pos: [x0, cy, cz + 0.04], rot: [Math.PI / 2, 0, 0] }));
+    parts.push(part(new CylinderGeometry(1.24, 1.24, 0.1, 24, 1), new Color('#F4EEE0'), { pos: [x0, cy, cz + 0.09], rot: [Math.PI / 2, 0, 0] }));
     for (let h = 0; h < 12; h++) {
       const a = (h / 12) * Math.PI * 2;
-      parts.push(box(0.07, h % 3 === 0 ? 0.24 : 0.14, 0.04, IRON, [x0 + Math.sin(a) * 0.82, cy + Math.cos(a) * 0.82, cz + 0.11], [0, 0, -a]));
+      parts.push(box(0.09, h % 3 === 0 ? 0.3 : 0.17, 0.04, IRON, [x0 + Math.sin(a) * 1.02, cy + Math.cos(a) * 1.02, cz + 0.15], [0, 0, -a]));
     }
-    parts.push(box(0.06, 0.62, 0.04, IRON, [x0 + 0.21, cy + 0.2, cz + 0.13], [0, 0, -0.8]));
-    parts.push(box(0.05, 0.86, 0.04, IRON, [x0 - 0.05, cy + 0.42, cz + 0.14], [0, 0, 0.12]));
-    // The judges' balcony on the track's side, under the eaves, and its windows.
+    parts.push(box(0.08, 0.72, 0.04, IRON, [x0 + 0.24, cy + 0.24, cz + 0.17], [0, 0, -0.8]));
+    parts.push(box(0.06, 1.04, 0.04, IRON, [x0 - 0.06, cy + 0.5, cz + 0.18], [0, 0, 0.12]));
+    // A louvred belfry under the cap on the other three faces, dark in their openings.
+    if (!low) for (const [dx, dz2, w, d] of [[TW / 2 + 0.03, 0, 0.1, 1.6], [-TW / 2 - 0.03, 0, 0.1, 1.6], [0, -TW / 2 - 0.03, 1.6, 0.1]] as const) parts.push(box(w, 1.8, d, GLASS, [x0 + dx, cy, tz + dz2]));
+    // The judges' balcony along the track side, and the windows.
     const bxs = x0 - side * (W / 2 + 0.7);
-    parts.push(box(1.4, 0.2, D - 1, CREAM, [bxs, g0 + 0.9 + H * 0.52, 0]));
-    parts.push(box(0.06, 0.95, D - 1, IRON, [bxs - side * 0.66, g0 + 0.9 + H * 0.52 + 0.55, 0]));
-    for (const zz of [-2.6, 0, 2.6]) {
-      glass.push(box(0.12, 1.6, 1.3, GLASS, [x0 - side * (W / 2 + 0.03), g0 + 0.9 + H * 0.75, zz]));
-      glass.push(box(0.12, 1.4, 1.1, GLASS, [x0 - side * (W / 2 + 0.03), g0 + 0.9 + H * 0.25, zz]));
+    parts.push(box(1.4, 0.2, D - 1, CREAM, [bxs, f0 + H * 0.52, 0]));
+    parts.push(box(0.06, 0.95, D - 1, IRON, [bxs - side * 0.66, f0 + H * 0.52 + 0.55, 0]));
+    for (const zz of [-3, 0, 3]) {
+      glass.push(box(0.12, 1.7, 1.3, GLASS, [x0 - side * (W / 2 + 0.03), f0 + H * 0.75, zz]));
+      glass.push(box(0.12, 1.5, 1.1, GLASS, [x0 - side * (W / 2 + 0.03), f0 + H * 0.25, zz]));
     }
-    glass.push(box(1.2, 1.4, 0.12, GLASS, [x0 - 1.8, g0 + 0.9 + H * 0.25, D / 2 + 0.03]));
-    glass.push(box(1.2, 1.4, 0.12, GLASS, [x0 + 1.8, g0 + 0.9 + H * 0.25, D / 2 + 0.03]));
+    glass.push(box(1.2, 1.5, 0.12, GLASS, [x0 + side * 2.4, f0 + H * 0.25, D / 2 + 0.03]));
     // The flagpole, in iron, the resort's green flag.
     const fx = x0 + side * (W / 2 + 3);
-    parts.push(seg([fx, g0, -D / 2], [fx, g0 + 15, -D / 2], 0.08, IRON));
-    if (!low) parts.push(box(0.05, 1.3, 2.2, TRIM, [fx, g0 + 14.1, -D / 2 + 1.15]));
-    this.add(merge(placed(parts, t.cx, c.baseY(zc), zc, -Math.atan(t.p))));
-    this.add(merge(placed(glass, t.cx, c.baseY(zc), zc, -Math.atan(t.p))), true);
+    const fg = g(fx, -D / 2);
+    parts.push(seg([fx, fg, -D / 2], [fx, fg + 16, -D / 2], 0.08, IRON));
+    if (!low) parts.push(box(0.05, 1.3, 2.2, TRIM, [fx, fg + 15.1, -D / 2 + 1.15]));
+    this.add(merge(placed(parts, t.cx, by, zc, -Math.atan(t.p))));
+    this.add(merge(placed(glass, t.cx, by, zc, -Math.atan(t.p))), true);
     this.litZ.push(zc);
   }
 

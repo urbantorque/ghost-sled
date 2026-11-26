@@ -1,5 +1,5 @@
 import { BufferAttribute, BufferGeometry, Color, CylinderGeometry, LatheGeometry, OctahedronGeometry, Vector2 } from 'three';
-import { SNOW, dropSlivers, merge, part, type Lod } from './flora';
+import { SNOW, dropSlivers, merge, part, shade, type Lod } from './flora';
 
 // The Old Run's forest (round 9, notes/r9-oldrun-world.md): an old wood of bare winter trees round the track, never the
 // five's spruces. The blind sort put the groundwork's pines with the five's forest (notes/r9-concepts.md), so the Old
@@ -22,10 +22,10 @@ function rnd(): number {
  *  its red-plum twigs. */
 const BEECH = new Color('#6E6A80');
 const BEECH_DARK = new Color('#4A4560');
-const BEECH_TWIG = new Color('#5E4E66');
+const BEECH_TWIG = new Color('#7C6C84');
 const BIRCH = new Color('#E6E0DA');
 const BIRCH_RING = new Color('#34303E');
-const BIRCH_TWIG = new Color('#6C4E62');
+const BIRCH_TWIG = new Color('#86627A');
 
 /** A limb from a to b, tapering r0 to r1 (no caps: a forest holds a few thousand). */
 function limb(a: V3, b: V3, r0: number, r1: number, col: Color, sides: number): BufferGeometry {
@@ -41,11 +41,23 @@ function limb(a: V3, b: V3, r0: number, r1: number, col: Color, sides: number): 
   return part(g, col);
 }
 
-/** A fan of twigs at a branch's end: a flattened faceted lens laid along the branch, its top a step paler where the
- *  light falls on it. `down` lets it hang (a birch's weeping ends). */
+/** A spray of twigs at a branch's end: thin spikes fanning out along the branch (`n` of them; a birch's droop with
+ *  `down`), so the crown is a lace with the sky through it, never a clump of foliage. */
+function sprig(at: V3, dir: V3, len: number, col: Color, down: number, n: number, out: BufferGeometry[]): void {
+  for (let k = 0; k < n; k++) {
+    const yaw = Math.atan2(dir[0], dir[2]) + (k / Math.max(1, n - 1) - 0.5) * 1.5 + (rnd() - 0.5) * 0.4;
+    const pitch = Math.asin(Math.max(-1, Math.min(1, dir[1]))) * 0.7 + (rnd() - 0.5) * 0.7 - down * 0.9;
+    const l = len * (0.65 + 0.45 * rnd());
+    const d: V3 = [Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)];
+    out.push(limb(at, [at[0] + d[0] * l, at[1] + d[1] * l, at[2] + d[2] * l], 0.035 + 0.012 * len, 0.006, col, 3));
+  }
+}
+
+/** The haze of fine twigs round a branch's end, a step paler than its spikes: a thin faceted lens laid along the
+ *  branch, its top paler where the light falls on it. What a bare crown is from further off than its twigs. */
 function fan(at: V3, dir: V3, r: number, col: Color, down = 0): BufferGeometry {
   const yaw = Math.atan2(dir[0], dir[2]);
-  const g = part(new OctahedronGeometry(r, 0), col, { pos: [at[0] + dir[0] * r * 0.45, at[1] + dir[1] * r * 0.3 - down * r * 0.35, at[2] + dir[2] * r * 0.45], rot: [0.25 * (rnd() - 0.5), yaw, 0.3 * (rnd() - 0.5)], scale: [0.85 + 0.3 * rnd(), 0.5 + 0.35 * down, 1.25 + 0.25 * rnd()], jitter: r * 0.22 });
+  const g = part(new OctahedronGeometry(r, 0), col, { pos: [at[0] + dir[0] * r * 0.45, at[1] + dir[1] * r * 0.3 - down * r * 0.35, at[2] + dir[2] * r * 0.45], rot: [0.25 * (rnd() - 0.5), yaw, 0.3 * (rnd() - 0.5)], scale: [0.7 + 0.25 * rnd(), 0.3 + 0.3 * down, 1.15 + 0.25 * rnd()], jitter: r * 0.2 });
   // The upper facets take a little of the sky, the lower a little shade: three values, as a gouache haze.
   const pos = g.getAttribute('position') as BufferAttribute;
   const c = g.getAttribute('color') as BufferAttribute;
@@ -117,7 +129,7 @@ function spec(kind: 'beech' | 'oldbeech' | 'birch' | 'twinbirch'): BareSpec {
     case 'birch':
       return { seed: 9203, height: 11, trunkR: 0.2, from: 0.48, limbs: 7, reach: 0.27, rise: [0.95, 1.25], fanR: 0.82, hang: 0.7, bark: BIRCH, barkDark: BIRCH_RING, twig: BIRCH_TWIG, rings: true, twin: false };
     case 'twinbirch':
-      return { seed: 9241, height: 9, trunkR: 0.16, from: 0.45, limbs: 5, reach: 0.25, rise: [0.95, 1.3], fanR: 0.75, hang: 0.8, bark: BIRCH, barkDark: BIRCH_RING, twig: BIRCH_TWIG, rings: true, twin: true };
+      return { seed: 9241, height: 9, trunkR: 0.16, from: 0.45, limbs: 4, reach: 0.25, rise: [0.95, 1.3], fanR: 0.75, hang: 0.8, bark: BIRCH, barkDark: BIRCH_RING, twig: BIRCH_TWIG, rings: true, twin: true };
   }
 }
 
@@ -188,13 +200,17 @@ function stem(s: BareSpec, lod: Lod, x0: number, z0: number, lx: number, lz: num
       ends.push([bt, bd, 0.7]);
     }
   }
-  // The crown's lace: a fan of twigs at every end, and the leader's own.
+  // The crown's lace: a spray of twig spikes at every end, and the leader's own, over a thin haze of the finer twigs a
+  // step paler (far off, the haze alone, a size up: what a bare crown is from there).
   ends.push([top, [0, 1, 0], 0.85]);
-  const fk = lod === 2 ? 1.35 : 1;
+  const spikes = lod === 0 ? (s.twin ? 2 : 3) : lod === 1 ? (s.twin ? 1 : 2) : 0;
+  const hk = lod === 2 ? 1.1 : 0.62;
   for (const [at, d, w] of ends) {
+    const tw = s.twig.clone().multiplyScalar(0.94 + 0.12 * rnd());
+    if (spikes > 0) sprig(at, d, s.fanR * k * w * 1.5, shade(tw, 0.8), s.hang, spikes, out);
     if (lod === 1 && w < 0.75 && rnd() < 0.5) continue;
     if (lod === 2 && w < 0.75) continue;
-    out.push(fan(at, d, s.fanR * k * w * fk * (0.85 + 0.3 * rnd()), s.twig.clone().multiplyScalar(0.94 + 0.12 * rnd()), s.hang));
+    out.push(fan(at, d, s.fanR * k * w * hk * (0.85 + 0.3 * rnd()), tw, s.hang));
   }
   // Snow in the crook where the crown starts.
   if (lod < 2) out.push(part(new OctahedronGeometry(R * 1.6, 0), SNOW, { pos: [x0 + lx * H * s.from, H * s.from + R * 0.6, z0 + lz * H * s.from], scale: [1, 0.35, 1], jitter: 0.03 }));

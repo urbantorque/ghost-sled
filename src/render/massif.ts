@@ -117,35 +117,38 @@ export const SEA_GLSL = /* glsl */ `
     float q = clamp(l, 0.0, 0.999) * 3.0;
     return (floor(q) + smoothstep(0.35, 0.65, fract(q))) / 3.0;
   }
-  vec4 seaOfClouds(vec3 d) {
+  vec4 seaLake(vec3 d) {
+    float t = uSeaY / min(d.y, -0.0004);
+    vec2 p = d.xz * t;
+    float detail = 1.0 - smoothstep(2500.0, 7000.0, t);
+    // Round 9, the Old Run: the valley's floor far below is a lake of open water under the low sun, the far ridges
+    // standing out of it. A deep cold body, the sky mirrored toward the horizon, slow ripples held in the world and
+    // the sun's path down it in broken glitter on its bearing; never a sea of cloud (ART.md, the Old Run's brief).
+    vec2 lw = p + cameraPosition.xz;
+    float rip = snoise(vec2(lw.x * 0.0035, lw.y * 0.011)) * 0.6 + snoise(vec2(lw.x * 0.009, lw.y * 0.027) + 3.0) * 0.4;
+    #if SEA_Q > 0
+      rip += snoise(vec2(lw.x * 0.03, lw.y * 0.08) + 7.0) * 0.25 * detail;
+    #endif
+    float graze = 1.0 - clamp(-d.y * 7.0, 0.0, 1.0);
+    vec3 lake = mix(uSeaDeep * 0.8, mix(uSeaHaze, uSeaShade, 0.3), 0.22 + 0.58 * graze * graze);
+    lake *= 0.94 + 0.1 * rip;
+    vec2 lsx = normalize(uSeaSun.xz + vec2(0.0001, 0.0));
+    vec2 ld = normalize(d.xz);
+    float across = ld.x * lsx.y - ld.y * lsx.x;
+    float up = smoothstep(-0.03, 0.04, uSeaSun.y);
+    float path = exp(-across * across / (0.0016 + 0.004 * graze)) * step(0.0, dot(ld, lsx)) * up;
+    float glit = smoothstep(0.15, 0.75, rip * 0.5 + 0.5);
+    lake = mix(lake, uSeaRim * 1.25, path * (0.35 + 0.65 * glit) * 0.85);
+    // A broad warm sheen toward the sun across the whole lake, and the far water melting into the horizon haze.
+    lake = mix(lake, mix(uSeaHaze, uSeaRim, 0.4), pow(max(dot(ld, lsx), 0.0), 6.0) * 0.3 * up * graze);
+    lake = mix(lake, uSeaHaze, smoothstep(1500.0, 14000.0, t) * 0.8);
+    return vec4(lake, 1.0);
+  }
+  vec4 seaClouds(vec3 d) {
     float t = uSeaY / min(d.y, -0.0004);
     vec2 p = d.xz * t;
     // Fine detail fades with distance, where it would shimmer at a grazing angle.
     float detail = 1.0 - smoothstep(2500.0, 7000.0, t);
-    if (uSeaLake > 0.0) {
-      // Round 9, the Old Run: the valley's floor far below is a lake of open water under the low sun, the far ridges
-      // standing out of it. A deep cold body, the sky mirrored toward the horizon, slow ripples held in the world and
-      // the sun's path down it in broken glitter on its bearing; never a sea of cloud (ART.md, the Old Run's brief).
-      vec2 lw = p + cameraPosition.xz;
-      float rip = snoise(vec2(lw.x * 0.0035, lw.y * 0.011)) * 0.6 + snoise(vec2(lw.x * 0.009, lw.y * 0.027) + 3.0) * 0.4;
-      #if SEA_Q > 0
-        rip += snoise(vec2(lw.x * 0.03, lw.y * 0.08) + 7.0) * 0.25 * detail;
-      #endif
-      float graze = 1.0 - clamp(-d.y * 7.0, 0.0, 1.0);
-      vec3 lake = mix(uSeaDeep * 0.8, mix(uSeaHaze, uSeaShade, 0.3), 0.22 + 0.58 * graze * graze);
-      lake *= 0.94 + 0.1 * rip;
-      vec2 lsx = normalize(uSeaSun.xz + vec2(0.0001, 0.0));
-      vec2 ld = normalize(d.xz);
-      float across = ld.x * lsx.y - ld.y * lsx.x;
-      float up = smoothstep(-0.03, 0.04, uSeaSun.y);
-      float path = exp(-across * across / (0.0016 + 0.004 * graze)) * step(0.0, dot(ld, lsx)) * up;
-      float glit = smoothstep(0.15, 0.75, rip * 0.5 + 0.5);
-      lake = mix(lake, uSeaRim * 1.25, path * (0.35 + 0.65 * glit) * 0.85);
-      // A broad warm sheen toward the sun across the whole lake, and the far water melting into the horizon haze.
-      lake = mix(lake, mix(uSeaHaze, uSeaRim, 0.4), pow(max(dot(ld, lsx), 0.0), 6.0) * 0.3 * up * graze);
-      lake = mix(lake, uSeaHaze, smoothstep(1500.0, 14000.0, t) * 0.8);
-      return vec4(lake, 1.0);
-    }
     float n = seaBillow(p, detail);
     vec2 sxz = normalize(uSeaSun.xz + vec2(0.0001, 0.0));
     #if SEA_Q > 0
@@ -209,6 +212,10 @@ export const SEA_GLSL = /* glsl */ `
     // Aerial perspective: the far sea melts into the horizon.
     col = mix(col, uSeaHaze, smoothstep(1200.0, 12000.0, t) * 0.92);
     return vec4(col, step(0.001, uSea));
+  }
+  // (One return a function: a lake's early return read to the D3D compiler as an unset result.)
+  vec4 seaOfClouds(vec3 d) {
+    return uSeaLake > 0.0 ? seaLake(d) : seaClouds(d);
   }
 `;
 

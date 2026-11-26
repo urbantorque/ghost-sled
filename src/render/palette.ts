@@ -1530,23 +1530,23 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       },
     },
     {
-      // Through the Horseshoe the sun sets gold over the lake: the far ridges lit along their crests, the shade a deep
-      // slate-violet, the iron lamps beginning to tell.
+      // Through the Horseshoe the sun sets over the lake in rose, not Pinecrest's honey: the far ridges lit along their
+      // crests, a rose haze in the valley, the shade a violet-slate, the iron lamps beginning to tell.
       from: 1900, at: 2500, dusk: 0.65,
       edit: (p) => {
         setSun(p, -12, 2.8, 21, 8);
         p.sunColor = c('#FFCA94');
         p.sunCore.setRGB(3, 2.1, 1.15);
         p.sunGlow = 1;
-        p.skyZenith = c('#2A3A76');
-        p.skyMid = c('#9C8EB4');
-        p.skyHorizon = c('#FFBA84');
-        p.skyBand = { color: c('#FFAE6E'), fade: 20, k: 0.9 };
-        p.skyBelow = c('#C8A8B0');
-        p.snowLit = c('#FFF2E4');
-        p.snowShade = c('#6C74C0');
-        p.snowDeep = c('#3A3E96');
-        p.fog = c('#D6B0A8');
+        p.skyZenith = c('#33367A');
+        p.skyMid = c('#A08AB6');
+        p.skyHorizon = c('#F6A890');
+        p.skyBand = { color: c('#FFA884'), fade: 20, k: 0.9 };
+        p.skyBelow = c('#C49CB0');
+        p.snowLit = c('#FCEAE6');
+        p.snowShade = c('#7468B8');
+        p.snowDeep = c('#3C3490');
+        p.fog = c('#C8A2B4');
         p.rim = c('#FFC294');
         p.hemiSky = c('#8C96D0');
         p.air.far = c('#6E70AE');
@@ -1574,16 +1574,16 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.sunGlow = 0.7;
         p.sunColor = c('#EAC0A8');
         p.sunCore.setRGB(2.4, 1.6, 1.1);
-        p.skyZenith = c('#1C2A62');
+        p.skyZenith = c('#16285A');
         p.skyMid = c('#6E6CA8');
-        p.skyHorizon = c('#E8A492');
-        p.skyBand = { color: c('#F2A486'), fade: 22, k: 0.65 };
-        p.skyBelow = c('#8A80A8');
-        p.snowLit = c('#E8E2EE');
-        p.snowShade = c('#545CAA');
-        p.snowDeep = c('#2C3082');
-        p.rim = c('#F0C0B4');
-        p.fog = c('#8C86B2');
+        p.skyHorizon = c('#EE9A58');
+        p.skyBand = { color: c('#F4A070'), fade: 22, k: 0.65 };
+        p.skyBelow = c('#6E7298');
+        p.snowLit = c('#C8D2EA');
+        p.snowShade = c('#3E4E96');
+        p.snowDeep = c('#242C7A');
+        p.rim = c('#F0C0A4');
+        p.fog = c('#5E74A8');
         p.hemiSky = c('#6E78C8');
         p.air.far = c('#4A4E96');
         p.clouds.lit = c('#E8B4A4');
@@ -2986,8 +2986,62 @@ const lamps = (p: Palette, k: number): void => {
  *  acts carry their places with them. A row is a place's own picture: its exposure and split tone, its
  *  air, and what lights it. Blended in over the section's own blend and out past its end. */
 export const PLACES: Record<BiomeId, Place[]> = {
-  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
-  oldrun: [],
+  // The Old Run (round 9, notes/r9-oldrun-world.md): its places graded over the hour's light. The start house and the
+  // hotel above it in the warm light off the facade; the Hotel Straights' wood dappled, shafts between the trunks; the
+  // Labyrinth's deep walls holding the shade, the lamps already telling there; the Horseshoe's stretch over the lake in
+  // the sunset's rose; the outrun at the timing house, its windows and the lamps the light at the line.
+  oldrun: [
+    {
+      kind: 'house',
+      edit: (p) => {
+        p.grade.hi = c('#FFF2DA');
+        p.lift.bounce = 0.5;
+        lamps(p, 0.5);
+      },
+    },
+    {
+      kind: 'track',
+      nth: 0,
+      edit: (p) => {
+        p.atmo.rays = 1;
+        p.grade.shafts = 1;
+        p.lift.sun = 0.6;
+        p.grade.hi = c('#FFF4E0');
+        p.grade.contrast += 0.03;
+      },
+    },
+    {
+      // (The deepest walls on the run, 7.5 m: a slot of shade with the light only on the high glaze and the crest.)
+      kind: 'labyrinth',
+      edit: (p) => {
+        p.lift.sun = 0.45;
+        p.grade.hi = c('#F6F4FF');
+        p.grade.lo = c('#DCDCFF');
+        p.grade.saturation -= 0.03;
+        p.clouds.shadow = 0.05;
+        lamps(p, 0.75);
+      },
+    },
+    {
+      kind: 'track',
+      nth: 3,
+      edit: (p) => {
+        p.atmo.valley = 0.7;
+        p.atmo.valleyColor = c('#E8B0A8');
+        p.grade.hi = c('#FFECE0');
+        p.grade.contrast += 0.04;
+        p.bloom += 0.05;
+      },
+    },
+    {
+      kind: 'outrun',
+      edit: (p) => {
+        lamps(p, 1.5);
+        p.lampAir = 0.1;
+        p.grade.hi = c('#FFEEDA');
+      },
+    },
+  ],
   alpine: [
     {
       // The gold's own leap (the second): honey on the lit snow, violet in the long shadows, the valley's
