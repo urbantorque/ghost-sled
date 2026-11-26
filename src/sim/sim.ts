@@ -9,7 +9,7 @@ import { SledDef, sledById } from './sleds';
 import { CHARM, CHARM_COUNT, type CharmGate, PATH_ID0, PATH_STEP, STARTER_POOL, laneOf, offersFor, synergiesOf } from './charms';
 import { SHOWDOWN_POINTS, SHOWDOWN_UNITS, STEAL_POINTS, STEAL_UNITS } from './rivals';
 import { DOUBLE_GAP, GRAB_LATCH, GRAB_STEER, LATCH_TICKS, LET_GO_TICKS, SIGNATURE, SPECIAL_TICKS, SPECIAL_WINDOW, TAP_TICKS, TRICK, TRICKS, TWEAK_LATE, grabTier, nameFlight, sigFallTier, sigTier } from './tricks';
-import { KINDLE_COLD, KINDLE_REACH, LEGEND_AHEAD, WAKE_MIN, pathOff, LEGEND_ID0, type LegendPlay, type MomentPlay, RIBBON_CAP, RIBBON_HW, RIBBON_RATE, coastSeconds, fallPace, fallZ, flamePace, gateX, legendFor, machineZ, momentPlays, pathX } from './moments';
+import { CHAIN_FLIGHT, KINDLE_COLD, KINDLE_REACH, LEGEND_AHEAD, WAKE_MIN, pathOff, LEGEND_ID0, type LegendPlay, type MomentPlay, RIBBON_CAP, RIBBON_HW, RIBBON_RATE, coastSeconds, fallPace, fallZ, flamePace, gateX, legendFor, machineZ, momentPlays, pathX } from './moments';
 
 // The deterministic run simulation. One call to step() advances exactly one 60 Hz tick.
 
@@ -68,6 +68,10 @@ const HIT_FAST_SPEED = 24;
  *  tick, is a wall to it unless it is in the air over it. Riding up a drift, across a roof's gable or up an alley's floor
  *  rises far less in a tick; a house front, a drift's side mid-ramp and an alley's floor seen from the pavement are walls. */
 const LEVEL_RISE = 0.3;
+/** Round 9, Gablefall's set pieces: a sled is on the roofs over ground CHAIN_UP or more over the street's level, and on
+ *  the street's level under STREET_LEVEL over it. */
+const CHAIN_UP = 1.5;
+const STREET_LEVEL = 1;
 /** (The old name for the count: the get-ups a rider starts with.) */
 export const TUMBLES = GET_UPS;
 /** Before this distance a fall is always free: nobody's first minute ends in a wreck. */
@@ -2354,6 +2358,86 @@ export class Sim {
       this.events.push({ type: 'moment', index: p.index, phase, n, of: mo.of });
     };
     switch (p.verb) {
+      case 'chain': {
+        // (Round 9, Gablefall.) Roofs landed in a row: each flight of CHAIN_FLIGHT s or more down on the roofs (stomped,
+        // in the variant that asks it, `row`), a sketchy landing or a sled on the street's level inside the rows once the
+        // chain has begun ending it.
+        const c = this.course;
+        const up = c.ground(s.x, s.z) - c.baseY(s.z) >= CHAIN_UP;
+        for (const e of this.events) {
+          if (e.type !== 'land') continue;
+          if (e.late) {
+            // (A press just after a clean landing made it a stomp: it counts where stomps are what count.)
+            if (p.row && e.quality === 'perfect' && up) {
+              mo.n++;
+              say('step', mo.n);
+            }
+            continue;
+          }
+          if (e.airtime < CHAIN_FLIGHT || !up) continue;
+          if (e.quality === 'sketchy') {
+            if (mo.ok) say('miss', mo.n);
+            mo.ok = false;
+          } else if (!p.row || e.quality === 'perfect') {
+            mo.n++;
+            say('step', mo.n);
+          }
+        }
+        if (mo.ok && mo.n > 0 && mo.n < p.need && s.grounded && s.tumble === 0 && c.streetAt(s.z) !== null && s.y - c.baseY(s.z) < STREET_LEVEL) {
+          mo.ok = false;
+          say('miss', mo.n);
+        }
+        if (!mo.ok || mo.n >= p.need || s.z >= p.z1) this.momentEnd(p, mo.ok && mo.n >= p.need);
+        break;
+      }
+      case 'awnings': {
+        // (Round 9, Gablefall.) The market street is hung with its stalls' awnings the whole way: a stomped landing on the
+        // street's level there flattens one, and so many win it; a sketchy landing ends it. In a row (`row`) a clean
+        // landing there starts the count again (and a press just after it, which makes it a stomp, gives the count back).
+        const c = this.course;
+        for (const e of this.events) {
+          if (e.type !== 'land') continue;
+          if (e.quality === 'sketchy') {
+            if (mo.ok) say('miss', mo.n);
+            mo.ok = false;
+            continue;
+          }
+          if (e.quality === 'hop' || s.y - c.baseY(s.z) >= STREET_LEVEL || c.streetAt(s.z) === null) continue;
+          if (e.quality === 'perfect') {
+            if (e.late && p.row && mo.aux > 0) mo.n = mo.aux;
+            mo.aux = 0;
+            mo.n++;
+            this.charge(PEAL_UNITS, true);
+            say('step', mo.n);
+          } else if (p.row && mo.n > 0) {
+            mo.aux = mo.n;
+            mo.n = 0;
+            say('miss', 0);
+          }
+        }
+        if (!mo.ok || mo.n >= p.need || s.z >= p.z1) this.momentEnd(p, mo.ok && mo.n >= p.need);
+        break;
+      }
+      case 'washing': {
+        // (Round 9, Gablefall.) Each line as the sled passes its alley's middle on the line's own row: rung in the air over
+        // the alley within its reach across, missed on the ground or wide of it; a line on the other row is not this
+        // rider's to ring.
+        const c = this.course;
+        while (mo.at < p.targets.length && p.targets[mo.at].z <= s.z) {
+          const t = p.targets[mo.at++];
+          const st = c.streetAt(t.z);
+          const cx = c.centerX(t.z);
+          if (!st || (t.x > cx ? s.x <= st.x1 : s.x >= st.x0)) continue;
+          const dx = s.x - t.x;
+          if (!s.grounded && s.tumble === 0 && dx <= t.hw && dx >= -t.hw) {
+            mo.n++;
+            this.charge(PEAL_UNITS, true);
+            say('step', mo.n);
+          } else say('miss', mo.n);
+        }
+        if (mo.n >= p.need || mo.at >= p.targets.length || s.z >= p.z1) this.momentEnd(p, mo.n >= p.need);
+        break;
+      }
       // (Round 9, Gullhaven: the sea stacks' gaps are passed as the bend bells are rung.)
       case 'stacks':
       case 'peal': {
@@ -3549,6 +3633,11 @@ function momentCount(p: MomentPlay): number {
       return 1;
     case 'stacks':
       return p.targets.length;
+    // (Round 9, Gablefall: the roofs, the awnings, the lines its variant asks for.)
+    case 'chain':
+    case 'awnings':
+    case 'washing':
+      return p.need;
     default:
       return 1;
   }

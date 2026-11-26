@@ -4,6 +4,7 @@ import { PI, TAU, dsin } from './dmath';
 import { MOUNTAINS } from './mountains';
 import { type OldRunPlace, placeOf, wallX } from './oldrun';
 import { type GullPlace, gullPlaceOf, gulliesOf } from './gullhaven';
+import { type GablePlace, gablePlaceOf, washingOf } from './gablefall';
 import { hash32 } from './prng';
 
 // Set pieces: each mountain's three biggest places, one a stage, each with a verb of its own that the sim plays,
@@ -42,13 +43,18 @@ import { hash32 } from './prng';
 //   soar      soar across the Great Geo: off its lip and over its mouth on the sea wind, down on its far shelf, long
 //             in the air, or stomped
 //   stacks    thread the sea stacks: pass through each gap between them along the shore road
+// Round 9, Gablefall (notes/r9-gablefall.md), appended:
+//   chain     a chain of roofs: land so many hops on the roofs in a row, never touching the street between
+//   awnings   stomp the market's awnings down the market street: so many stomped landings on its stalls' awnings
+//   washing   ring the washing lines strung across the alleys: through each, in the air over its alley, within its
+//             reach across, as a bell is rung
 // This file names them and says where they are and what each holds. What happens in them is the sim's (sim.ts).
 //
 // Pure: no DOM, render or audio imports.
 
-export type MomentVerb = 'race' | 'gates' | 'rings' | 'collapse' | 'steps' | 'slide' | 'shatter' | 'surge' | 'flourish' | 'follow' | 'kindle' | 'carry' | 'peal' | 'split' | 'glaze' | 'beam' | 'soar' | 'stacks';
+export type MomentVerb = 'race' | 'gates' | 'rings' | 'collapse' | 'steps' | 'slide' | 'shatter' | 'surge' | 'flourish' | 'follow' | 'kindle' | 'carry' | 'peal' | 'split' | 'glaze' | 'beam' | 'soar' | 'stacks' | 'chain' | 'awnings' | 'washing';
 /** Every verb, in an order that will not change: the music's stingers and the boards key on it. */
-export const VERBS: readonly MomentVerb[] = ['race', 'gates', 'rings', 'collapse', 'steps', 'slide', 'shatter', 'surge', 'flourish', 'follow', 'kindle', 'carry', 'peal', 'split', 'glaze', 'beam', 'soar', 'stacks'];
+export const VERBS: readonly MomentVerb[] = ['race', 'gates', 'rings', 'collapse', 'steps', 'slide', 'shatter', 'surge', 'flourish', 'follow', 'kindle', 'carry', 'peal', 'split', 'glaze', 'beam', 'soar', 'stacks', 'chain', 'awnings', 'washing'];
 /** How a verb is played where it appears twice ('' where it has one way). */
 export type MomentStyle = '' | 'sprint' | 'chase' | 'sit' | 'swing' | 'stair' | 'hops';
 /** How the lens frames it: out and up over a drop ('wide'), low and close down a street or a tube
@@ -81,6 +87,10 @@ export const BEAM_STEP = 40;
 const BEAM_V = 32;
 export const SOAR_LONG = 360;
 export const STACK_STEP = 60;
+/** Round 9, Gablefall (notes/r9-gablefall.md): a roof counts in the chain off a flight of CHAIN_FLIGHT s or more; a stall
+ *  every AWNING_STEP m down the market street, its awning over the street the whole way (the world stands them). */
+export const CHAIN_FLIGHT = 0.4;
+export const AWNING_STEP = 40;
 export const SPLIT_PACE = 31.2;
 export const GLAZE_NEED = 180;
 export const GLAZE_ROW = 90;
@@ -191,6 +201,24 @@ const FAMILY: Record<string, readonly Variant[]> = {
     { key: 'stomp', name: 'Stomped', line: 'Soar the Great Geo and stomp the landing', t: { stomp: 1 } },
   ],
   // The gaps between the stacks, `off` m either side of the line in turn, `hw` m wide either side.
+  // Round 9, Gablefall. So many roofs landed in a row (perfect ones, `stomp`); so many awnings stomped (`row`: in a row,
+  // a clean landing starting the count again); so many washing lines rung (within `hw` m across of where each sags
+  // lowest).
+  chain: [
+    { key: 'five', name: 'Five roofs', line: 'Land five roofs in a row, never the street', t: { need: 5 } },
+    { key: 'six', name: 'Six roofs', line: 'Land six roofs in a row, never the street', t: { need: 6 } },
+    { key: 'stomped', name: 'Five stomped', line: 'Stomp five roofs in a row, never the street', t: { need: 5, stomp: 1 } },
+  ],
+  awnings: [
+    { key: 'three', name: 'Three awnings', line: 'Stomp three market awnings down the street', t: { need: 3 } },
+    { key: 'four', name: 'Four awnings', line: 'Stomp four market awnings down the street', t: { need: 4 } },
+    { key: 'row', name: 'In a row', line: 'Stomp three awnings in a row', t: { need: 3, row: 1 } },
+  ],
+  washing: [
+    { key: 'four', name: 'Four lines', line: 'Ring four washing lines over the alleys', t: { need: 4, hw: 1.6 } },
+    { key: 'five', name: 'Five lines', line: 'Ring five washing lines over the alleys', t: { need: 5, hw: 2.2 } },
+    { key: 'low', name: 'At their lowest', line: 'Ring three lines where they sag lowest', t: { need: 3, hw: 1.1 } },
+  ],
   stacks: [
     { key: 'weave', name: 'The weave', line: 'Thread every gap between the sea stacks', t: { off: 3, hw: 1.8 } },
     { key: 'tight', name: 'Tight gaps', line: 'Thread the sea stacks: the gaps are tight', t: { off: 3, hw: 1.4 } },
@@ -224,6 +252,7 @@ interface Def {
   /** Round 9: a mountain whose kit lays its own places stands its set piece on one of them, not on a section. */
   place?: OldRunPlace;
   gplace?: GullPlace;
+  fplace?: GablePlace;
 }
 
 /** The named mountains' set pieces, one a stage, in order down each descent. */
@@ -265,6 +294,13 @@ const AUTHORED: Record<string, readonly Def[]> = {
     { key: 'lighthouse', name: 'The Lighthouse', verb: 'beam', kind: 'cliffpath', nth: 0, gplace: 'cape', cam: 'side', line: 'Ride in the lighthouse beam at every mark' },
     { key: 'greatgeo', name: 'The Great Geo', verb: 'soar', kind: 'geo', nth: 4, gplace: 'great', cam: 'wide', line: 'Soar across the Great Geo' },
     { key: 'seastacks', name: 'The Sea Stacks', verb: 'stacks', kind: 'descent', nth: 0, gplace: 'shore', cam: 'low', line: 'Thread every gap between the sea stacks' },
+  ],
+  // Round 9: Gablefall's, on its own places (gablefall.ts gablePlaceOf), a run of rooftops each: Church Hill's roofs, the
+  // market street, the Water Stairs' alleys.
+  gablefall: [
+    { key: 'roofrun', name: 'The Roof Run', verb: 'chain', kind: 'rooftops', nth: 0, fplace: 'roofrun', cam: 'wide', line: 'Land five roofs in a row, never the street' },
+    { key: 'marketday', name: 'Market Day', verb: 'awnings', kind: 'rooftops', nth: 1, fplace: 'market', cam: 'low', line: 'Stomp three market awnings down the street' },
+    { key: 'washing', name: 'The Washing Lines', verb: 'washing', kind: 'rooftops', nth: 2, fplace: 'stairs', cam: 'side', line: 'Ring four washing lines over the alleys' },
   ],
 };
 
@@ -357,12 +393,13 @@ export function planMoments(course: Course): MomentSpec[] {
   const authored = AUTHORED[namedMountain(course.seed) ?? ''];
   if (authored) {
     for (const d of authored) {
-      if (d.place || d.gplace) {
+      if (d.place || d.gplace || d.fplace) {
         // (Round 9: on the kit's own place, a little before its first bend to a little past its last; Gullhaven's places
         // are laid as they are played.)
-        const pl = d.gplace ? gullPlaceOf(course, d.gplace) : placeOf(course, d.place!);
-        const z0 = Math.round(d.gplace ? pl.z0 : pl.z0 - 30);
-        const z1 = Math.round(d.gplace ? pl.z1 : pl.z1 + 20);
+        // (Gablefall's too.)
+        const pl = d.fplace ? gablePlaceOf(course, d.fplace) : d.gplace ? gullPlaceOf(course, d.gplace) : placeOf(course, d.place!);
+        const z0 = Math.round(d.gplace || d.fplace ? pl.z0 : pl.z0 - 30);
+        const z1 = Math.round(d.gplace || d.fplace ? pl.z1 : pl.z1 + 20);
         const style = d.style ?? '';
         out.push({ index: 0, key: d.key, name: d.name, verb: d.verb, style, line: d.line, cam: d.cam, light: d.light ?? null, z0, z1, stage: course.stageAt(z0).index, variants: family(d.verb, style).length, machine: d.machine ?? '' });
         continue;
@@ -925,6 +962,23 @@ function build(course: Course, m: MomentSpec, vi: number, g: number): MomentPlay
       p.row = !!t.stomp;
       break;
     }
+    case 'chain':
+      // (Round 9, Gablefall.) Roofs landed in a row, perfect ones in the stomped variant (row).
+      p.need = k('need', 5);
+      p.row = !!t.stomp;
+      break;
+    case 'awnings':
+      // A stall every AWNING_STEP m down the market street (where the world stands them; the street is under awnings the
+      // whole way).
+      for (let z = m.z0 + 30; z < m.z1 - 10; z += AWNING_STEP) p.targets.push({ z, x: course.safeX(z), hw: 6, h: 0 });
+      p.need = k('need', 3);
+      p.row = !!t.row;
+      break;
+    case 'washing':
+      // A line across each alley from the set piece's first metre to its last, both rows (gablefall.ts washingOf).
+      for (const w of washingOf(course, m.z0 + 5, m.z1 - 5)) p.targets.push({ z: w.z, x: w.x, hw: k('hw', 1.6), h: 0 });
+      p.need = k('need', 4);
+      break;
     case 'stacks': {
       // A gap every STACK_STEP m down the shore road, off the line to one side and then the other.
       let to: 1 | -1 = side;
@@ -1128,6 +1182,7 @@ interface LegendDef {
   /** Round 9: on a kit's own place (oldrun.ts placeOf, gullhaven.ts gullPlaceOf), not a section. */
   place?: OldRunPlace;
   gplace?: GullPlace;
+  fplace?: GablePlace;
 }
 
 const LEGENDS: Record<string, readonly LegendDef[]> = {
@@ -1162,6 +1217,12 @@ const LEGENDS: Record<string, readonly LegendDef[]> = {
   gullhaven: [
     { key: 'keeper', name: 'The Beacon Keeper', line: "The beacon's keeper walks the clifftop: follow his lamp", kind: 'runner', at: 'cliffpath', nth: 0, gplace: 'capeend', amp: 2.6, wave: 120 },
     { key: 'fleet', name: 'The Herring Lights', line: 'The fleet comes home, every boat lit on the sea', kind: 'sky', at: 'geo', nth: 0, gplace: 'geos' },
+  ],
+  // Round 9: Gablefall. Every window in the town lit for Candlemas over the Market's last roofs; the lamplighter runs the
+  // last street down to the river ahead of the rider, lighting its lamps.
+  gablefall: [
+    { key: 'lamplighter', name: 'The Lamplighter', line: 'The lamplighter runs to the river: follow his lamp', kind: 'runner', at: 'rooftops', nth: 2, fplace: 'lamps', amp: 2.4, wave: 110 },
+    { key: 'candlemas', name: 'Candlemas', line: 'Every window in the town is lit for Candlemas', kind: 'sky', at: 'rooftops', nth: 1, fplace: 'candles' },
   ],
 };
 
@@ -1209,7 +1270,7 @@ export function planLegends(course: Course): readonly (LegendPlay | null)[] {
     let seen = 0;
     const free = (s: { z0: number; z1: number }): boolean => !pieces.some((p) => p.z0 < s.z1 && p.z1 > s.z0);
     const sec =
-      (d.place || d.gplace ? (({ z0, z1 }) => ({ kind: d.at, z0: z0 - 30, z1: z1 + 20 }))(d.gplace ? gullPlaceOf(course, d.gplace) : placeOf(course, d.place!)) : undefined) ??
+      (d.place || d.gplace || d.fplace ? (({ z0, z1 }) => ({ kind: d.at, z0: z0 - 30, z1: z1 + 20 }))(d.fplace ? gablePlaceOf(course, d.fplace) : d.gplace ? gullPlaceOf(course, d.gplace) : placeOf(course, d.place!)) : undefined) ??
       secs.find((s) => s.kind === d.at && seen++ === d.nth) ??
       (namedMountain(course.seed) ? (d.alt ? secs.find((s) => s.kind === d.alt && s.z0 > 500 && free(s)) : undefined) : secs.find((s) => s.kind === d.at && s.z0 > 500));
     // Never over a set piece: one thing asks for the rider's eyes at a time.

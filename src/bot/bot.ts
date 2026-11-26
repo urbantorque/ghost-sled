@@ -415,6 +415,8 @@ export class Bot {
   private reflex = false;
   /** Riding a set piece's gates (momentOff): no detours, a nearer look. */
   private inGates = false;
+  /** Round 9, Gablefall: down the market street for its awnings, off the roofs its kit line would ride. */
+  private inStreet = false;
   /** Round 9: a new mountain's line for this rider as it is (kit.ts lineFor), and the Old Run's track (the walls' yaw
    *  and the damped swing in its heading). Read once at construction; false on the five, so nothing below runs there. */
   private readonly kitLine: boolean;
@@ -594,7 +596,7 @@ export class Bot {
     // (Down a slalom of sitting gates the line is the slalom itself, one smooth swing gate to gate.)
     const x = this.lines.safeX(z) + (this.slalom ? this.slalomOff(this.slalom, z) : this.off) + this.charmOff(z);
     // (Round 9: a new mountain's line for this rider as it is at this thought.)
-    return this.kitLine ? x + this.course.lineFor(z, this.rider) - this.lines.safeX(z) : x;
+    return this.kitLine && !this.inStreet ? x + this.course.lineFor(z, this.rider) - this.lines.safeX(z) : x;
   }
 
   /** The lane this rider rides for at each charm gate, chosen once its offers are dealt (-1 not yet). */
@@ -755,6 +757,15 @@ export class Bot {
       const t = p.targets[mo.at];
       return t && t.z - z < 70 ? t.x - this.lines.safeX(t.z) : null;
     }
+    // (Round 9, Gablefall: the next washing line on this rider's row where it sags lowest, off the ridge's line it rides;
+    // the market street's own middle for its awnings.)
+    if (p.verb === 'washing') {
+      const c = this.course;
+      const side = sim.s.x >= c.centerX(z) ? 1 : -1;
+      const t = p.targets.find((q) => q.z > z + 1 && (q.x - c.centerX(q.z)) * side > 0);
+      return t && t.z - z < 70 ? t.x - c.lineFor(t.z, this.rider) : null;
+    }
+    if (p.verb === 'awnings') return 0;
     if (p.verb === 'gates' || p.verb === 'beam') {
       // (Sitting gates are one line from the set piece's first metre to its last gate: a rider who left it
       // between gates popped there, and flew the next three.)
@@ -858,8 +869,10 @@ export class Bot {
         this.commitPop(apply, Math.max(apply + 12, this.tickAtZ(now, rel) + Math.round(gauss(this.rng) * this.t.timingSd * 0.5)));
         return true;
       }
+      // (Round 9, Gablefall: the market's awnings are stomped as a street's hops are, from as far as a flight fits.)
+      case 'awnings':
       case 'steps': {
-        if (p.style !== 'hops' || p.z1 - zp < v * 2.4 || now < this.momentWait) return false;
+        if ((p.verb === 'steps' && p.style !== 'hops') || p.z1 - zp < v * (p.verb === 'awnings' ? 1.2 : 2.4) || now < this.momentWait) return false;
         // Pop as soon as the sled is down and the street ahead is open to land on: three flights of a hundred
         // metres have to fit in the street, so the first leaves at its top and none waits for a perfect one.
         const R = apply + this.rng.int(13, 17);
@@ -921,13 +934,14 @@ export class Bot {
     const mOff = this.momentOff();
     const verb = mOff !== null ? this.sim.plays[this.sim.mo.active]?.verb : undefined;
     this.inGates = verb === 'gates' || verb === 'beam' || verb === 'stacks';
+    this.inStreet = verb === 'awnings';
     const piece = this.inGates ? this.sim.plays[this.sim.mo.active] : null;
     this.slalom = piece && piece.style === 'sit' ? piece : null;
     this.wake = verb === 'follow' ? this.sim.plays[this.sim.mo.active].path : null;
     // (A line to ride wants the runners on the snow: no pops for the fun of it meanwhile.)
     // (And a low flame not yet fed is carried on the snow to its brazier: no pop flies past it.)
     const feeding = verb === 'carry' && !(this.sim.mo.mask & 1);
-    this.onLine = verb === 'gates' || verb === 'follow' || verb === 'kindle' || verb === 'peal' || verb === 'glaze' || verb === 'beam' || verb === 'stacks' || feeding;
+    this.onLine = verb === 'gates' || verb === 'follow' || verb === 'kindle' || verb === 'peal' || verb === 'glaze' || verb === 'beam' || verb === 'stacks' || verb === 'washing' || feeding;
     this.feed = feeding ? (this.sim.plays[this.sim.mo.active].relight ?? null) : null;
     this.momentLine = mOff !== null;
     if (mOff !== null) {

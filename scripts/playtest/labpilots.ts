@@ -160,6 +160,8 @@ interface Act {
   calm?: boolean;
   /** No drift of the pilot's own here. */
   noDrift?: boolean;
+  /** Round 9, Gablefall: still spring the lips on the way (the washing lines hang over the alleys a pop crosses). */
+  lips?: boolean;
 }
 
 /** telemetry.js's frozen novice, mid, expert and line pilots, without the ghost targeting; mid and expert know
@@ -403,6 +405,30 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         const px = kit.pathX;
         return { x: (z: number) => px(c, p.path, z), noDrift: true };
       }
+      case 'awnings': {
+        // (Round 9, Gablefall.) Down in the market street, popping as soon as the sled is down and stomping each landing
+        // (the air's own habit), as down a street's hops: so many come down on the stalls' awnings.
+        if (!skilled) return null;
+        const mid = (z: number): number => c.centerX(z);
+        if (!s.grounded || s.y - c.baseY(s.z) > 1) return { x: mid, noDrift: true };
+        if (M.wait > 0) M.wait--;
+        if (p.z1 - s.z < v * 1.2 || M.wait > 0) return { x: mid, noDrift: true };
+        if (M.tap === 0) M.tap = 14 + Math.floor(mr() * 5 * sloppy);
+        if (--M.tap === 0) {
+          M.wait = 16;
+          return { x: mid, action: false, calm: true, noDrift: true };
+        }
+        return { x: mid, action: true, calm: true, noDrift: true };
+      }
+      case 'washing': {
+        // (Round 9, Gablefall.) Through the next line on this rider's row where it sags lowest, springing the alley's lip
+        // under it as always.
+        if (!skilled) return null;
+        const side = s.x >= c.centerX(s.z) ? 1 : -1;
+        const tw = p.targets.find((q: AnySim) => q.z > s.z + 1 && (q.x - c.centerX(q.z)) * side > 0);
+        if (!tw || tw.z - s.z > Math.max(45, s.speed * 1.6)) return null;
+        return { x: () => tw.x, noDrift: true, lips: true };
+      }
       case 'stacks': {
         // (Round 9, Gullhaven.) Through the next gap between the stacks, from a second and a half out.
         const t = p.targets.find((q: AnySim) => q.z > s.z + 1);
@@ -595,7 +621,7 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
       return { steer: 4, action: false };
     }
     let ramp = !act ? nextRamp(s) : null;
-    const lip = !act && !ramp ? lipAhead(s) : null;
+    const lip = (!act || act.lips) && !ramp ? lipAhead(s) : null;
     let target = lineAt;
     // A kicker whose flight comes down on glass that is to be slid across is ridden round: a popped flight off
     // the one above Mirror Lake lands 110 m into its 270 m, and what is left is too short for a slide each way.

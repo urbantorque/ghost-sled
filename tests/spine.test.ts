@@ -253,8 +253,12 @@ describe('the next run', () => {
 });
 
 describe('the long night and the mirrors', () => {
-  it('rides ten whole mountains, chaos rising each leg', () => {
-    expect(LEGS).toHaveLength(10);
+  // (Round 9: sixteen legs once the three new mountains are all registered, in the ladder's order, Lanternfall the finale
+  // of each half: DECISIONS 394, answer 6.)
+  it('rides sixteen whole mountains, chaos rising each leg', () => {
+    expect(LEGS).toHaveLength(16);
+    expect(LEGS.map((l) => l.mountain).slice(0, 8)).toEqual(['pinecrest', 'frostfang', 'gablefall', 'ember', 'oldrun', 'sakura', 'gullhaven', 'lanternfall']);
+    expect(LEGS[15]).toEqual({ mountain: 'lanternfall', mirror: true });
     expect(legStep(0)).toBe(0);
     expect(legChaos(5, 0)).toMatchObject({ mood: Mood.None, event: ChaosEvent.None });
     expect(legChaos(5, 1).mood).not.toBe(Mood.None);

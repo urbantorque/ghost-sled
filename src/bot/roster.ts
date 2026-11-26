@@ -160,6 +160,22 @@ export const HOME_RIDERS: readonly Rider[] = [
     bio: 'Mends nets in the sheds all winter. Counts the gulls in every gully on the way down.',
     says: { pass: ['Gulls!', 'Hold on!'], passed: ['Oh, the wind!', 'Watch the lip.'], won: ['Every gull counted.'], lost: ['Next storm.'] },
   },
+  // Gablefall (index 7): the town's own.
+  {
+    key: 'wren', name: 'Wren Slater', hat: 'brim', emblem: 'bell', accent: '#E4DCD0', sled: 2, style: 'stunt', skill: 0.86, home: 7,
+    bio: 'Mends the slates she rides. Has not set a runner in the street since she was seven.',
+    says: { pass: ['Roof to roof!', 'Up here!'], passed: ['Good hop.', 'Hm, the street.'], won: ['Never touched the cobbles.'], lost: ['You stomped them all.'] },
+  },
+  {
+    key: 'abel', name: 'Abel Thorne', hat: 'hood', emblem: 'star', accent: '#DDE4EC', sled: 4, style: 'liner', skill: 0.73, home: 7,
+    bio: 'Rings the noon bells and sleds down for his dinner. Never misses an alley, never hurries one.',
+    says: { pass: ['Mind the chimneys.', 'Steady.'], passed: ['Well rung.', 'After you.'], won: ['The bells keep time.'], lost: ['A fair ride.'] },
+  },
+  {
+    key: 'hettie', name: 'Hettie Lamb', hat: 'bobble', emblem: 'snowflake', accent: '#F2E2D8', sled: 0, style: 'collector', skill: 0.58, home: 7,
+    bio: 'Takes the bread round by sled before it is light. Knows every lit window on the way to the river.',
+    says: { pass: ['Fresh loaves!', 'Coming through!'], passed: ['Oh, the market!', 'Mind the barrows.'], won: ['Every window counted.'], lost: ['Back for the second batch.'] },
+  },
 ];
 
 const BY_NAME = new Map([...ROSTER, ...HOME_RIDERS].map((r) => [r.name, r]));

@@ -377,6 +377,48 @@ export function placesOf(c: Course): { close: { z0: number; z1: number }; gates:
   return { close: { z0: close.z0, z1: close.z1 }, gates: d.gates, quay: d.quay };
 }
 
+/** Gablefall's places for its set pieces and legends (moments.ts), one run of rooftops a stage: Church Hill's roofs for
+ *  the Roof Run ('roofrun', from the rows' head drifts nearly to their end: a popped flight here is two seconds and 60 to
+ *  90 m, so a chain of roofs needs the room); the market street down the Market's first stretch ('market', then the
+ *  Candlemas sky over the rest of its roofs, 'candles'); the Water Stairs' rows for the washing lines ('stairs', then the
+ *  lamplighter's run down the last street to the river, 'lamps'). */
+export type GablePlace = 'roofrun' | 'candles' | 'market' | 'lamps' | 'stairs';
+export function gablePlaceOf(c: Course, place: GablePlace): { z0: number; z1: number } {
+  const runs = laid(c).spans.filter((s) => s.kind === 'rooftops');
+  const [a, b, e] = runs;
+  switch (place) {
+    case 'roofrun':
+      return { z0: a.z0 + 60, z1: a.z1 - 30 };
+    case 'market':
+      return { z0: b.z0 + 30, z1: b.z0 + 400 };
+    case 'candles':
+      return { z0: b.z0 + 460, z1: b.z1 - 60 };
+    case 'stairs':
+      return { z0: e.z0 + 60, z1: e.z0 + 460 };
+    case 'lamps':
+      return { z0: e.z0 + 510, z1: e.z1 - 20 };
+  }
+}
+
+/** The washing lines strung across the alleys from z0 to z1, both rows, in order down the run: each at its alley's
+ *  middle, sagging lowest a little off the ridge (to one side and then the other along each row). */
+export function washingOf(c: Course, z0: number, z1: number): { z: number; x: number; side: -1 | 1 }[] {
+  const out: { z: number; x: number; side: -1 | 1 }[] = [];
+  for (const row of laid(c).rows) {
+    let k = 0;
+    for (const p of row.pieces) {
+      if (p.kind !== 'alley') continue;
+      const z = (p.z0 + p.z1) / 2;
+      if (z < z0 || z > z1) continue;
+      out.push({ z, x: at(c, z).cx + row.side * (RIDGE + (k++ % 2 === 0 ? 1 : -1) * WASH_SAG), side: row.side });
+    }
+  }
+  out.sort((p, q) => p.z - q.z);
+  return out;
+}
+/** How far off the ridge a washing line sags lowest. */
+const WASH_SAG = 1.2;
+
 /** The row of one side at z, or null. */
 export function rowAt(c: Course, side: -1 | 1, z: number): Row | null {
   const a = at(c, z);

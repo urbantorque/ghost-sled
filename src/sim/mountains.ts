@@ -7,7 +7,7 @@ export type BiomeId = 'alpine' | 'glacier' | 'volcanic' | 'blossom' | 'lantern' 
  *  the sim's tables. (Round 9: and a new mountain that lays its own ground, under its own id, until its world lane makes
  *  it a look of its own: it borrows one meanwhile, LOOK below. The Old Run's, Gullhaven's and Gablefall's are their own.) */
 export type CourseBiome = BiomeId;
-export type MountainId = 'pinecrest' | 'frostfang' | 'ember' | 'sakura' | 'lanternfall' | 'oldrun' | 'gullhaven' | 'daily';
+export type MountainId = 'pinecrest' | 'frostfang' | 'ember' | 'sakura' | 'lanternfall' | 'oldrun' | 'gullhaven' | 'gablefall' | 'daily';
 
 /** A new mountain's borrowed look, until its world lane gives it its own (round 9; Lanternfall's round 7 path). */
 const LOOK: Partial<Record<CourseBiome, BiomeId>> = {};
@@ -213,9 +213,11 @@ export const OLDRUN_LAB_SEED = OLDRUN_SEED;
 export const GULLHAVEN_SEED = 0x1f83d9ab;
 /** (The name its lab knew it by.) */
 export const GULLHAVEN_LAB_SEED = GULLHAVEN_SEED;
-/** Round 9: Gablefall's lab seed (SHA-256's eighth initial word, beside Gullhaven's seventh): in BIOME_BY_SEED only until
- *  its lane registers the mountain (no Daily's and no Cup's to 2040, tests/gablefall.test.ts). */
-export const GABLEFALL_LAB_SEED = 0x5be0cd19;
+/** Round 9: Gablefall's seed (SHA-256's eighth initial word, beside Gullhaven's seventh): its lab course, kept as the
+ *  mountain's own (no Daily's and no Cup's to 2040, tests/gablefall.test.ts; its rows are the ones the lab tuned). */
+export const GABLEFALL_SEED = 0x5be0cd19;
+/** (The name its lab knew it by.) */
+export const GABLEFALL_LAB_SEED = GABLEFALL_SEED;
 
 export const MOUNTAINS: readonly MountainDef[] = [
   { id: 'pinecrest', name: 'Pinecrest', tagline: 'Pine forest, soft powder, snowmen', seed: 0x51ed270b, unlockGhosts: 0 },
@@ -227,6 +229,8 @@ export const MOUNTAINS: readonly MountainDef[] = [
   // ?debug&m=, the pool generator, the graveyards' naming order).
   { id: 'oldrun', name: 'The Old Run', tagline: 'An old ice track: ride high on the glaze', seed: OLDRUN_SEED, unlockGhosts: 18 },
   { id: 'gullhaven', name: 'Gullhaven', tagline: 'A sea cape: pop off the gully lips, ride the wind', seed: GULLHAVEN_SEED, unlockGhosts: 32 },
+  // (The last of the three, and the first a player meets: at 8 ghosts, between Frostfang and Ember.)
+  { id: 'gablefall', name: 'Gablefall', tagline: 'A town under snow: ride the roofs, stomp each landing', seed: GABLEFALL_SEED, unlockGhosts: 8 },
 ];
 
 

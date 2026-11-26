@@ -148,6 +148,28 @@ export function momentLine(verb: MomentVerb, key: string, phase: MomentPhase, n:
       if (phase === 'won') return `Every gap, ${of} of ${of}`;
       if (phase === 'lost') return `${n} of ${of} gaps`;
       return null;
+    // Round 9, Gablefall.
+    case 'chain':
+      if (phase === 'start') return `Roof 0 of ${of}`;
+      if (phase === 'step') return `Roof ${n} of ${of}`;
+      if (phase === 'miss') return 'Down in the street';
+      if (phase === 'won') return `${of} roofs in a row`;
+      if (phase === 'lost') return `${n} of ${of} roofs`;
+      return null;
+    case 'awnings':
+      if (phase === 'start') return `Awning 0 of ${of}`;
+      if (phase === 'step') return `Awning ${n} of ${of}`;
+      if (phase === 'miss') return 'A rough landing';
+      if (phase === 'won') return `${of} awnings stomped`;
+      if (phase === 'lost') return `${n} of ${of} awnings`;
+      return null;
+    case 'washing':
+      if (phase === 'start') return `Line 0 of ${of}`;
+      if (phase === 'step') return `Rang line ${n} of ${of}`;
+      if (phase === 'miss') return 'Missed a line';
+      if (phase === 'won') return `${of} lines rung`;
+      if (phase === 'lost') return `${n} of ${of} lines`;
+      return null;
     case 'glaze':
       // (n is quarters of the hold.)
       if (phase === 'start') return 'Hold the glaze';
