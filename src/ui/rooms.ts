@@ -72,6 +72,9 @@ export function openRoom(door: TitleDoor, m: TitleModel, o: RoomOpts): Room {
     const v = sheetFrame(o.ctx, { cls: `gs9-room is-view is-${d}`, title, close: 'Back', closeIcon: 'back', fk: 'close-view', onClose: () => shut() });
     build(v.body);
     o.parent.append(v.el);
+    // (Round 9, U4: a view with a row to look at first, the rider who rides next, opens with it in sight.)
+    const at = v.body.querySelector<HTMLElement>('[data-next]');
+    if (at) v.body.scrollTop = Math.max(0, at.getBoundingClientRect().top - v.body.getBoundingClientRect().top - v.body.clientHeight / 2);
     shut = openSheet(v.el, fromEl, [], () => {
       v.el.remove();
       const i = pushed.indexOf(shut);
@@ -347,7 +350,9 @@ function ladder(body: HTMLElement, m: TitleModel, f: Fill): void {
     // (Round 9, U4: the one who rides next says their line; the rest their name, home and time, so the twelve read as
     // a ladder at a glance and not twelve paragraphs; a reader still hears each one's line.)
     tag?.style.setProperty('--rider', r.accent);
+    const next = r.state === 'next';
     const li = h('li', `gs9-rung is-${r.state}`, h('span', 'gs9-order-n gs9-num', String(i + 1)), bust, h('span', 'gs9-rung-t', name, r.state === 'next' ? h('span', 'gs9-rung-b', r.bio) : sr(r.bio), meta), tag);
+    if (next) li.dataset.next = '';
     list.append(li);
   });
   body.append(list);

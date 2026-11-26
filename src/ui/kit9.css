@@ -502,6 +502,11 @@
   background: linear-gradient(100deg, rgba(8, 12, 30, 0.72) 0%, rgba(8, 12, 30, 0.5) 46%, rgba(8, 12, 30, 0.34) 100%);
 }
 
+/* The HUD steps back while the card is up, so its chips never read through the card's ink. */
+.gs-ui:has(> .gs9-pause-layer:not([hidden])) > .gs-hud {
+  opacity: 0.35;
+}
+
 .gs9-pause {
   width: min(440px, 38vw);
 }
