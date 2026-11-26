@@ -516,13 +516,14 @@ const SHAPES: Record<SectionKind, SectionShape> = {
   house: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 0.5, ...BARE }),
   // Round 9, Gullhaven: the kit draws its line, its width and its ground; these say that nothing of the five's stands or
   // launches on it, that its line is the path's middle, and where something turns a sled back: the fence on the clifftop
-  // (0.8 m past the edge, before the cliff's fall), the cut's and the sheds' walls, the harbour's quays.
+  // (0.8 m past the edge, before the cliff's fall), all the way down: the cut, the sheds and the harbour keep the sea on
+  // their right too, past the same fence (a wider limit there let a sled down the cliff's fall under the harbour's ice).
   cliffpath: shaped({ pin: 1, wander: 0, span: 0, relief: 0.3, obstacles: 0, limit: 0.8, ...BARE }),
   geo: shaped({ pin: 1, wander: 0, span: 0, relief: 0.15, obstacles: 0, limit: 0.8, ...BARE }),
   beacon: shaped({ pin: 1, wander: 0, span: 0, relief: 0.2, obstacles: 0, limit: 0.8, ...BARE }),
-  descent: shaped({ pin: 1, wander: 0, span: 0, relief: 0.2, obstacles: 0, limit: 2, ...BARE }),
-  sheds: shaped({ pin: 1, wander: 0, span: 0, relief: 0.1, obstacles: 0, limit: 2, ...BARE }),
-  harbour: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 3, ...BARE }),
+  descent: shaped({ pin: 1, wander: 0, span: 0, relief: 0.2, obstacles: 0, limit: 0.8, ...BARE }),
+  sheds: shaped({ pin: 1, wander: 0, span: 0, relief: 0.1, obstacles: 0, limit: 0.8, ...BARE }),
+  harbour: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 0.8, ...BARE }),
 };
 
 /** The ground's real gradient for the kinds that promise one; the rest scale the mountain's own slope. */
