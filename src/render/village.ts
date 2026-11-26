@@ -202,6 +202,9 @@ interface Style {
 
 const STYLE: Record<BiomeId, Style> = {
   alpine: { walls: [C('#8A5A44'), C('#A06A4C'), C('#E8DCCB'), C('#74493A')], roof: C('#F4F2FA'), trim: C('#4A3040'), glass: C('#2E3658'), ice: C('#BFE4F4'), rim: C('#E8EEF8'), road: C('#7A7896') },
+  // The Old Run's lake town far below (round 9): a resort's stucco in cream, ochre and a pale rose-grey, slate trim, and
+  // its lake open dark water under a pale rim of shore ice, not a frozen white disc.
+  oldrun: { walls: [C('#E6DAC4'), C('#D6BE96'), C('#C8B6BC'), C('#B4BCB6')], roof: C('#F2F0F8'), trim: C('#3E3C54'), glass: C('#2E3658'), ice: C('#4C5A86'), rim: C('#E4EAF6'), road: C('#7A7896') },
   glacier: { walls: [C('#E2563A'), C('#F0A030'), C('#D8E2EE'), C('#C8402E')], roof: C('#F2F8FF'), trim: C('#3A4A66'), glass: C('#24345A'), ice: C('#A8E8FA'), rim: C('#E6F4FF'), road: C('#7C8CB0') },
   volcanic: { walls: [C('#564A52'), C('#4A4048'), C('#6A5A5E'), C('#3E363E')], roof: C('#E8DCDC'), trim: C('#241E26'), glass: C('#2A2030'), ice: C('#3A2A30'), rim: C('#5A4A50'), road: C('#5A4A58') },
   blossom: { walls: [C('#EFE4D6'), C('#E6D6C8'), C('#C8402E'), C('#F2EADF')], roof: C('#F6F2FA'), trim: C('#3A3048'), glass: C('#3A2E48'), ice: C('#C8DCF4'), rim: C('#F0EAF4'), road: C('#8A80A0') },
@@ -265,6 +268,8 @@ export function buildVillage(spec: VillageSpec): VillageBuild {
   else if (spec.biome === 'glacier') station(s, new Frame(lmX, 0, lmZ, range(0, 3)), st, lights);
   else if (spec.biome === 'volcanic') lodgeHall(s, new Frame(lmX, 0, lmZ, Math.PI / 2), st, lights);
   else if (spec.biome === 'lantern') lampTowerFar(s, new Frame(lmX, 0, lmZ, Math.PI / 4), st, lights);
+  // (The Old Run's lake town has its church too; never Sakura's pagoda, which every mountain not named here had.)
+  else if (spec.biome === 'oldrun') church(s, new Frame(lmX, 0, lmZ, Math.PI / 2 + range(-0.1, 0.1)), st, lights);
   else pagoda(s, new Frame(lmX, 0, lmZ, Math.PI / 4), st, lights);
   if (spec.biome === 'blossom') {
     // A vermillion spirit gate across the road at the top of the town.
@@ -330,7 +335,8 @@ export function buildHamlet(spec: VillageSpec, ground: (x: number, z: number) =>
   taken.push([lx, lz, 18]);
   const lf = new Frame(lx, footing(lx, lz, 10), lz, Math.PI / 2 + range(-0.2, 0.2));
   box(s, lf, 26, 16, 8, STONE, -8);
-  if (spec.biome === 'alpine') {
+  // (The Old Run's hamlets keep Pinecrest's chapel: a vermillion pagoda, the else's, is Sakura's and the rider's colour.)
+  if (spec.biome === 'alpine' || spec.biome === 'oldrun') {
     const white = C('#ECE6EE');
     box(s, lf, 14, 8, 7, white);
     gable(s, lf, 14, 8, 7, 4.5, 0.8, st.roof, white);

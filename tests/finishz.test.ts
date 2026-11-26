@@ -19,7 +19,7 @@ const pool = (n: number, distance: number, ticks: number): PoolGhostData[] =>
 
 describe("each course's own finish line", () => {
   it('is 4,500 m on the five and every Daily, from the seed alone and from the course', () => {
-    for (const m of MOUNTAINS) {
+    for (const m of MOUNTAINS.filter((q) => ['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall'].includes(q.id))) {
       expect(finishZOf(m.seed), m.id).toBe(FINISH_Z);
       expect(finishZFor(m.seed), m.id).toBe(new Course(m.seed).finishZ);
     }

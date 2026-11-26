@@ -14,6 +14,7 @@ import { fallCuts } from '../src/render/moments';
 import { TOP_SPEED, blurK } from '../src/render/speedfeel';
 import { ChaosEvent, Mood } from '../src/sim/chaos';
 import { Sim } from '../src/sim/sim';
+import { planMoments } from '../src/sim/moments';
 
 // The crash beat's pack shot: after the held frame the lens cuts to face the pack from low downhill
 // of the wreck, and keeps clear of the trees at its spot and across its line to the wreck.
@@ -678,6 +679,27 @@ describe('directed shots: the plan', () => {
     for (const m of MOUNTAINS) {
       const c = courseFor(m.seed);
       const shots = planShots(c);
+      // (Round 9: a mountain laid by its own kit has no leap to hold wide over and no street to track down, so none of
+      // the five's three is planned there: whatever is, lies on its course. What it has instead: each of its set
+      // pieces carries a lens of its own (moments.ts cam), on its course, the Old Run's bells from the side, its
+      // Labyrinth low and its Horseshoe wide.)
+      if (c.kit) {
+        expect(c.leaps.length, m.id).toBe(0);
+        for (const s of shots) {
+          expect(s.kind === 'wide' || s.kind === 'track', `${m.id} ${s.kind}`).toBe(false);
+          expect(s.z1, `${m.id} ${s.kind}`).toBeGreaterThan(s.z0);
+          expect(s.z1, `${m.id} ${s.kind}`).toBeLessThanOrEqual(c.finishZ + c.runOut);
+        }
+        const pieces = planMoments(c);
+        expect(pieces.length, m.id).toBe(3);
+        expect(new Set(pieces.map((p) => p.cam)).size, m.id).toBe(3);
+        for (const p of pieces) {
+          expect(p.z0, `${m.id} ${p.key}`).toBeGreaterThanOrEqual(0);
+          expect(p.z1, `${m.id} ${p.key}`).toBeGreaterThan(p.z0);
+          expect(p.z1, `${m.id} ${p.key}`).toBeLessThanOrEqual(c.finishZ + c.runOut);
+        }
+        continue;
+      }
       const wide = shots.find((s) => s.kind === 'wide')!;
       const track = shots.find((s) => s.kind === 'track')!;
       const whip = shots.find((s) => s.kind === 'whip')!;

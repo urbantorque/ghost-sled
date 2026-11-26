@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { CHUNK_LEN, courseFor, type Course, type Section, type SectionKind } from '../src/sim/course';
+import { CHUNK_LEN, FOREST_LIMIT, courseFor, type Course, type Section, type SectionKind } from '../src/sim/course';
 import { MOUNTAINS } from '../src/sim/mountains';
 import { coastOn, rodeHome } from '../src/render/ghosts';
-import { HANDOVER_TO, MID_ROW, crestE, facetNoise, handoverRow, openFoot, rampart, rockWeight, standable, visualGround, wallK } from '../src/render/ground';
+import { HANDOVER_TO, MID_ROW, crestE, crestGround, facetNoise, groundOf, handoverRow, openFoot, rampart, rockWeight, standable, visualGround, wallK } from '../src/render/ground';
 import { buildTerrainGeometry } from '../src/render/terrain';
 
 // What the ground is: rock where something shaped it, snow everywhere a sled rides, the terrain's edge
@@ -96,6 +96,33 @@ describe('the handover at a ledge', () => {
   it("meets the mid-ground's straight rows at the terrain's edge", () => {
     for (const seed of SEEDS) {
       const c = courseFor(seed);
+      // (Round 9: a mountain laid by its own kit has no ledge to hand over at. The Old Run's terrain meets the
+      // mid-ground on the ground both draw past its lip instead, the crest of snow (groundOf): its edge stands on it,
+      // over it by what the drifts lift the snow, never under.)
+      if (c.kit) {
+        expect(c.ledges.length).toBe(0);
+        const drawn = groundOf(c);
+        let seen = 0;
+        for (const i of [4, 23, 43]) {
+          const g = buildTerrainGeometry(c, i, DETAIL);
+          const pos = g.getAttribute('position');
+          const edge = g.getAttribute('aEdge');
+          for (let v = 0; v < pos.count; v++) {
+            if (edge.getX(v) < HANDOVER_TO + 1) continue;
+            const z = -pos.getZ(v);
+            expect(handoverRow(c, z)).toBe(false);
+            // (What the mid-ground's rows draw is the same crest.)
+            expect(drawn(pos.getX(v), z)).toBe(crestGround(c, pos.getX(v), z));
+            const dy = pos.getY(v) - crestGround(c, pos.getX(v), z);
+            expect(dy).toBeGreaterThan(-0.01);
+            expect(dy).toBeLessThan(2.6);
+            seen++;
+          }
+          g.dispose();
+        }
+        expect(seen).toBeGreaterThan(300);
+        continue;
+      }
       const l = c.leaps[0];
       expect(handoverRow(c, l.z)).toBe(true);
       const i = Math.floor(l.z / CHUNK_LEN);
@@ -126,6 +153,22 @@ describe('what can stand', () => {
   it('keeps trees off walls and ledge faces, and on the rest of the bank', () => {
     for (const seed of SEEDS) {
       const c = courseFor(seed);
+      // (Round 9: a kit's mountain has no ravine wall and no ledge. The Old Run's walls are its track's ice, and its
+      // trees stand off them by the treeline (groves.ts: FOREST_LIMIT past its lip, its shape has no wall), out on the
+      // crest's far fall where the drawn ground drops away from the lip, never on the wall or the crest's top; and
+      // the whole bank past that is ground a tree can stand on.)
+      if (c.kit) {
+        expect(c.ledges.length).toBe(0);
+        for (let z = 20; z < c.finishZ; z += 25) {
+          expect(c.shapeAt(z).wall, `${z}`).toBeLessThanOrEqual(0.3);
+          for (const side of [-1, 1]) {
+            const x = c.centerX(z) + side * (c.halfWidth(z) + FOREST_LIMIT);
+            expect(crestGround(c, x + side, z), `${z} ${side}`).toBeLessThan(crestGround(c, x - side, z));
+          }
+          for (const e of [FOREST_LIMIT, FOREST_LIMIT + 6, 30, 60]) expect(standable(c, z, e), `${z} ${e}`).toBe(true);
+        }
+        continue;
+      }
       for (const sec of sections(c, 'ravine')) {
         const z = sec.z0 + sec.blend + 50;
         expect(standable(c, z, 7)).toBe(false);
@@ -161,6 +204,23 @@ describe('an animal at the treeline', () => {
   it('never stands in rock, in a street, or over a gorge, on any mountain', () => {
     for (const seed of SEEDS) {
       const c = courseFor(seed);
+      // (Round 9: on a kit's mountain what bounds the run is its lip. The Old Run's limit is half a metre past it, where
+      // its parapet stands on the crest of snow, so Life stands nothing in front of a treeline there: its watchers are
+      // its own, on its crests and its hotel's terrace (oldrunworld.ts, tests/setpieces.test.ts the start). Past its lip
+      // the ground is that crest, drawn the same everywhere it is asked, never rock, and nowhere over a gorge.)
+      if (c.kit) {
+        for (let z = 80; z < c.finishZ; z += 3) {
+          for (const e of EDGES) {
+            expect(openFoot(c, z, e), `a figure at the lip at ${z}`).toBe(false);
+            for (const side of [-1, 1]) {
+              const x = c.centerX(z) + side * (c.halfWidth(z) + e);
+              expect(visualGround(c, x, z), `the crest at ${z}`).toBe(crestGround(c, x, z));
+            }
+          }
+          expect(c.shapeAt(z).fall, `over a gorge at ${z}`).toBeLessThan(1);
+        }
+        continue;
+      }
       let open = 0;
       for (let z = 80; z < c.finishZ; z += 3) {
         for (const e of EDGES) {
@@ -185,6 +245,23 @@ describe('an animal at the treeline', () => {
     // (Life asks openFoot a little further out than each stands: 4.5 to 8.4 m, plus up to 1.5.)
     for (const seed of SEEDS) {
       const c = courseFor(seed);
+      // (Round 9: on a kit's mountain what bounds the run is its lip. The Old Run's limit is half a metre past it, where
+      // its parapet stands on the crest of snow, so Life stands nothing in front of a treeline there: its watchers are
+      // its own, on its crests and its hotel's terrace (oldrunworld.ts, tests/setpieces.test.ts the start). Past its lip
+      // the ground is that crest, drawn the same everywhere it is asked, never rock, and nowhere over a gorge.)
+      if (c.kit) {
+        for (let z = 80; z < c.finishZ; z += 3) {
+          for (const e of [3.6, 4.6, 6.4, 8.4]) {
+            expect(openFoot(c, z, e), `a figure at the lip at ${z}`).toBe(false);
+            for (const side of [-1, 1]) {
+              const x = c.centerX(z) + side * (c.halfWidth(z) + e);
+              expect(visualGround(c, x, z), `the crest at ${z}`).toBe(crestGround(c, x, z));
+            }
+          }
+          expect(c.shapeAt(z).fall, `over a gorge at ${z}`).toBeLessThan(1);
+        }
+        continue;
+      }
       let open = 0;
       for (let z = 80; z < c.finishZ; z += 3) {
         for (const e of [3.6, 4.6, 6.4, 8.4]) {

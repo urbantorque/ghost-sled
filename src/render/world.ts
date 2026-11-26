@@ -58,6 +58,8 @@ import { SpeedPosts } from './speedposts';
 import { SpiritFx } from './spirit';
 import { MarqueeWorld } from './marqueeworld';
 import { LanternWorld } from './lanternworld';
+import type { OldRunWorld } from './oldrunworld';
+import { isOldRun, oldrunClearings } from './oldrunplan';
 import { LanternRow } from './lanternrow';
 import type { Fireworks } from './fireworks';
 import type { TrailDef } from '../game/garage';
@@ -262,6 +264,12 @@ export class World {
   /** Lanternfall's own world: the cloud sea, the valley of lanterns, its lamps and set pieces (round 7, the
    *  lanternworld lane). Empty on every other mountain. */
   private readonly lantern: LanternWorld;
+  /** Round 9: the Old Run's own world (oldrunworld.ts: the hotel and start house, the parapet and its iron lamps, the
+   *  timing house, the lake), loaded on demand the first time its course is drawn, into its own root. Null until then
+   *  and on every other mountain. */
+  private oldrun: OldRunWorld | null = null;
+  private oldrunLoading = false;
+  private readonly oldrunRoot = new Object3D();
   /** Round 8, the light lane: the Lantern Row's lit lanterns over the finish town and the title shot. */
   private readonly row = new LanternRow();
   /** The rails and the marks of the leaps and forks (rails.ts): one draw, on every tier. */
@@ -496,6 +504,8 @@ export class World {
     this.props.siteClearings = (z0, z1, out) => {
       this.overlooks.clearings(z0, z1, out);
       this.lantern.clearings(z0, z1, out);
+      // (The Old Run's hotel and timing house, known before its world has loaded: oldrunplan.ts.)
+      oldrunClearings(this.course, z0, z1, out);
     };
     this.spirit.setQuality(quality.particleBudget, quality.bloom);
     this.charmGates.setCourse(this.course);
@@ -505,6 +515,7 @@ export class World {
       this.spirit.root,
       this.marquee.root,
       this.lantern.root,
+      this.oldrunRoot,
       this.row.root,
       this.sky.root,
       this.terrain.root,
@@ -556,6 +567,7 @@ export class World {
     this.rider.echoK = echoOf(this.palette.grade.flash);
     this.rider.setHeroRim(this.palette.heroRim);
     this.lakeMirror = new LakeMirror(this.renderer);
+    this.syncOldRun();
     this.applyWeather();
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -726,6 +738,7 @@ export class World {
     this.sky.setDetail(q.detail);
     this.poster.setTier(q.detail === 'low');
     this.lantern.setDetail(q.detail);
+    this.oldrun?.setDetail(q.detail);
     this.row.setDetail(q.detail);
     this.charmGates.setLow(q.detail === 'low');
     this.life.setQuality(q.detail, q.forestDensity);
@@ -769,6 +782,7 @@ export class World {
     if (this.palette.massif.heroAz) this.marquee.setConeBearing(this.palette.massif.heroAz);
     this.setPieces.setCourse(c, this.palette, this.mood);
     this.lantern.setCourse(c);
+    this.syncOldRun();
     this.row.setCourse(c);
     this.sky.setPalette(this.palette);
     this.setGhostGlow(this.palette.ghostGlow);
@@ -869,6 +883,24 @@ export class World {
     const mood = this.mood;
     this.mood = -1 as Mood;
     this.setMood(mood);
+  }
+
+  /** Round 9: the Old Run's world, loaded the first time its course is drawn (nothing of it is in the first
+   *  download), and handed every course after (it empties itself on any other mountain). */
+  private syncOldRun(): void {
+    if (this.oldrun) {
+      this.oldrun.setCourse(this.course);
+      return;
+    }
+    if (this.oldrunLoading || !isOldRun(this.course)) return;
+    this.oldrunLoading = true;
+    void import('./oldrunworld').then((m) => {
+      const w = new m.OldRunWorld(this.particles);
+      w.setDetail(this.quality.detail);
+      w.setCourse(this.course);
+      this.oldrunRoot.add(w.root);
+      this.oldrun = w;
+    });
   }
 
   /** The ghosts' glow for the palette (Ghosts.setGlow), with Spirit Flow's lift on it (round 8, speed). */
@@ -1037,6 +1069,7 @@ export class World {
     this.spirit.reset();
     this.marquee.reset();
     this.lantern.reset();
+    this.oldrun?.reset();
     this.charmGates.reset();
     this.sdLook = null;
     this.dashK = 0;
@@ -1142,6 +1175,7 @@ export class World {
     this.marquee.leading = v.lead !== false;
     this.marquee.update(dt, v.time, v.mode, s, v.sim, this.quality.detail === 'low');
     this.lantern.update(dt, v.time, v.mode, s, v.sim, this.cam.camera, this.palette);
+    this.oldrun?.update(dt, v.time, v.mode, s, v.sim, this.cam.camera);
     this.row.update(s.z, v.mode, this.palette);
     // Named moments after the raw events: the camera, the ghost layer, then the world's own.
     this.cam.beats(beats, feel);
@@ -1151,6 +1185,7 @@ export class World {
     this.spirit.beats(beats);
     if (v.mode === 'run') this.marquee.beats(beats, s);
     if (v.mode === 'run') this.lantern.beats(beats, s);
+    if (v.mode === 'run') this.oldrun?.beats(beats, s);
     this.flash = Math.max(this.flash, this.spirit.takeFlash());
     this.moments.update(v, dt);
     this.setPieces.update(s.z, this.quality.viewChunks * CHUNK_LEN, tmpV.set(s.x, s.y, -s.z), v.time, v.mode === 'run' ? beats : NO_BEATS);

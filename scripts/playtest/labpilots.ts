@@ -21,6 +21,11 @@ export interface Kit {
   gateX?: (g: AnySim, ticks: number) => number;
   pathX?: (course: AnySim, path: AnySim, z: number) => number;
   machineZ?: (p: AnySim, ticks: number, car?: number) => number;
+  /** Round 9, the Old Run: its track's own turn (sim.ts wallYaw, TRACK_DAMP, TRACK_BANK), so the skilled pilots hold
+   *  a height on its walls as a rider who knows them does. Absent, they steer to a heading as everywhere. */
+  track?: { wallYaw: (grad: { x: number; z: number }, phi: number, speed: number, g: number) => number; damp: number; bank: number };
+  /** Ride the floor's middle on a kit's course, not the kit's line for this skill (the lab's floor line). */
+  floor?: boolean;
 }
 
 const CHUNK_LEN = 64;
@@ -164,13 +169,44 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
   // (Round 9: on a new mountain the line a rider of this skill rides there and then, kit.ts lineFor: up the Old Run's
   // walls for the skilled. The five have no kit, and ride the safe line as they always did.)
   const rider = { x: 0, y: 0, z: 0, v: 0, skill: skill === 'expert' ? 0.9 : skill === 'mid' ? 0.55 : skill === 'novice' ? 0.25 : 0, nerve: skill === 'expert' ? 0.7 : 0.3 };
-  const lineAt: (z: number) => number = c.kit && c.kit.lineFor ? (z: number) => c.lineFor(z, rider) : (z: number) => c.safeX(z);
+  const lineAt: (z: number) => number = c.kit && c.kit.lineFor && !kit.floor ? (z: number) => c.lineFor(z, rider) : (z: number) => c.safeX(z);
   const steerTo = (s: AnySim, target: (z: number) => number, gain: number, lat: number): number => {
     if (c.kit) Object.assign(rider, { x: s.x, y: s.y, z: s.z, v: s.speed });
     const look = s.z + 4 + s.speed * 0.35;
     const desired = Math.atan2(target(look) - s.x, look - s.z);
     const err = desired - s.velHeading + (lineAt(s.z) - s.x) * lat;
     return Math.max(0, Math.min(8, Math.round(4 + err * gain)));
+  };
+  // (Round 9, the Old Run: on its track the skilled pilots hold a height on the wall, not a heading. The offset square
+  // to the channel is steered toward the line's, with the channel's turn, the wall's own turn and the track's damping
+  // fed forward. The five have no kit, and never come here.)
+  const track = c.kit && kit.track ? kit.track : null;
+  const grad = { x: 0, z: 0 };
+  const across = (z: number, x: number): number => {
+    const p = c.channelSlope(z);
+    return (x - c.centerX(z)) / Math.sqrt(1 + p * p);
+  };
+  const holdTo = (s: AnySim, target: (z: number) => number, gain: number): number => {
+    if (!track) return 4;
+    Object.assign(rider, { x: s.x, y: s.y, z: s.z, v: s.speed });
+    const v = Math.max(8, s.speed);
+    const p = c.channelSlope(s.z);
+    const phi = Math.atan(p);
+    const look = s.z + v * 0.35;
+    const want = across(look, target(look));
+    const wantRate = (across(look + 1, target(look + 1)) - want) * s.vz;
+    const lateral = Math.max(-7, Math.min(7, wantRate - 1.6 * gain * (across(s.z, s.x) - want)));
+    const psi = Math.asin(Math.max(-0.5, Math.min(0.5, lateral / v)));
+    const phiRate = ((c.channelSlope(s.z + 1) - p) * s.vz) / (1 + p * p);
+    c.gradient(s.x, s.z, grad);
+    const yaw = track.wallYaw(grad, phi, s.speed, sim.gravity);
+    const grip = 6.5 * sim.sled.grip * sim.mood.grip * c.surface(s.x, s.z).grip;
+    const velRate = phiRate + 5 * gain * (psi - (s.velHeading - phi));
+    const head = s.velHeading + (velRate + track.bank * yaw) / grip;
+    const rate = velRate + 9 * gain * (head - s.heading);
+    const tr = Math.min(1.45, 2.5 / (1 + s.speed / 16)) * sim.sled.turn;
+    const steer = (rate - track.damp * Math.max(-1, Math.min(1, phi - s.heading)) + yaw) / tr;
+    return Math.max(0, Math.min(8, Math.round(4 + steer * 4)));
   };
   const nextRamp = (s: AnySim) => {
     for (let k = Math.floor(s.z / 64); k <= Math.floor(s.z / 64) + 2; k++) {
@@ -187,7 +223,8 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
   /** The set piece being played, as a rider who knows it rides it. Null between set pieces, for the careful
    *  line, and for a verb this pilot leaves alone. */
   const play = (s: AnySim): Act | null => {
-    if (skill === 'line') return null;
+    // (The floor line rides the floor's middle and nothing else: the lab's bar compares it with the glaze line.)
+    if (skill === 'line' || kit.floor) return null;
     const p = pieceNow(sim);
     if (!p) return null;
     const mo = sim.mo;
@@ -333,6 +370,15 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         if (!p.path || !kit.pathX) return null;
         const px = kit.pathX;
         return { x: (z: number) => px(c, p.path, z), noDrift: true };
+      }
+      case 'peal': {
+        // (Round 9, the Old Run.) Under the next bend bell, from a second and a half out.
+        if (!skilled) return null;
+        const t = p.targets.find((q: AnySim) => q.z > s.z + 1);
+        if (!t || t.z - s.z > Math.max(45, s.speed * 1.6)) return null;
+        // (Held at the bell's own height on its wall: its offset square to the channel, wherever the channel runs.)
+        const d = across(t.z, t.x);
+        return { x: (z: number) => c.centerX(z) + d * Math.sqrt(1 + c.channelSlope(z) ** 2), noDrift: true };
       }
       case 'kindle': {
         // Ride close along one row, then cross for the other: the next unlit lamp on the side being ridden,
@@ -524,13 +570,17 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
     else if (aim) target = aim;
     const bend = c.safeX(s.z + 24) - c.safeX(s.z + 4);
     const room = c.halfWidth(s.z) - Math.abs(s.x - c.centerX(s.z));
-    const mayDrift = !act || !act.noDrift;
+    // (Not on the Old Run's track: a drift there is a skid across a wall, not a turn.)
+    const mayDrift = (!act || !act.noDrift) && !track;
     if (mayDrift && !ramp && P.drift === 0 && Math.abs(bend) > 4.5 && room > 6 && Math.abs(s.x - c.safeX(s.z)) < 0.8 && rnd() < 0.02) P.drift = T + 0.3 + rnd() * 0.25;
     if (P.drift > T && (room < 4 || Math.abs(s.x - c.safeX(s.z)) > 0.8 || !mayDrift)) P.drift = T;
     if (P.drift > T) return { steer: bend > 0 ? 8 : 0, action: true };
     if (P.drift > 0 && P.drift <= T) P.drift = -(T + 3);
     if (P.drift < 0 && T > -P.drift) P.drift = 0;
-    let lvl = steerTo(s, target, 14, ramp || aim || round ? 0 : 0.08);
+    // (On the Old Run's track, a height held on the wall: the mid pilot's hands a little slower and its line a little
+    // loose, the expert's exact.)
+    const wob = skill === 'mid' ? 0.35 * Math.sin(T * 0.9 + P.wob) : 0;
+    let lvl = track && !ramp && !round ? holdTo(s, (z) => target(z) + wob, skill === 'expert' ? 1 : 0.8) : steerTo(s, target, 14, ramp || aim || round ? 0 : 0.08);
     let action = false;
     if (ramp) {
       const u = (s.z - ramp.z) / ramp.len;
@@ -601,7 +651,7 @@ export function spenderFor(name: string, sim: AnySim, seed: number): () => boole
     hold = 3;
     return true;
   };
-  const SPEED = new Set(['race', 'surge', 'carry', 'collapse']);
+  const SPEED = new Set(['race', 'surge', 'carry', 'collapse', 'split']);
   /** What the set pieces ask of the lantern now: 'go' (dash), 'hold' (do not), 'save' (keep one), or nothing. */
   const knows = (): 'go' | 'hold' | 'save' | '' => {
     const s = sim.s;
@@ -610,6 +660,8 @@ export function spenderFor(name: string, sim: AnySim, seed: number): () => boole
       const ticks = sim.tick - sim.mo.t0;
       if (p.verb === 'race') return ticks < 50 ? 'go' : '';
       if (p.verb === 'carry') return ticks < 50 ? 'go' : '';
+      // (Round 9: into the Labyrinth's split as it starts, as into a race.)
+      if (p.verb === 'split') return ticks < 50 ? 'go' : '';
       if (p.verb === 'collapse') return '';
       if (p.verb === 'surge') {
         const d = lipOf(p) - s.z;

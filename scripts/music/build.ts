@@ -24,7 +24,7 @@ import { BANDS, bands, loudness, picture, pulse } from './meter';
 import { SCALES, chordAt, contour, parseLine, progression, stepsPerBar, voicing } from './notation';
 import { type Layer, type Mastered, type Piece, TRACK_TIME, bandOf, calibrate, master, renderSection, renderShot, sumLayers } from './piece';
 import { PIECES } from './pieces';
-import { GESTURES } from './pieces/common';
+import { GESTURES, OWN_GESTURES } from './pieces/common';
 import { wavBytes } from './wav';
 
 const ROOT = join(import.meta.dirname, '..', '..');
@@ -371,10 +371,12 @@ function main(): void {
     console.log(`${p.id}: ${seconds.toFixed(0)} s of music in ${tRender.toFixed(0)} s; full ${(files['full.webm'].length / 1048576).toFixed(2)} MB, lite ${(files['lite.webm'].length / 1048576).toFixed(2)} MB, aac ${(files['lite.m4a'].length / 1048576).toFixed(2)} MB; ${lv.lufs.toFixed(1)} LUFS, tp ${lv.tp.toFixed(1)} (${tpCodec.toFixed(1)} after Opus)`);
   }
 
-  // Level the courses: each reference run (a novice's) at the mean of them all.
+  // Level the courses: each reference run (a novice's) at the mean of the five's (round 9: a new course is levelled to
+  // them, so adding one leaves the five where they were).
   const ids = Object.keys(manifest.pieces).filter((id) => id !== 'title');
   const runL = ids.map((id) => ((analysis[id] as { run: { novice?: { lufs: number } } }).run.novice?.lufs ?? -18));
-  const mean = runL.reduce((a, x) => a + x, 0) / Math.max(1, runL.length);
+  const five = ids.map((id, i) => (['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall'].includes(id) ? runL[i] : NaN)).filter((x) => !Number.isNaN(x));
+  const mean = five.reduce((a, x) => a + x, 0) / Math.max(1, five.length);
   ids.forEach((id, i) => (manifest.pieces[id].gainDb = r1(Math.max(-3, Math.min(3, mean - runL[i])))));
 
   // The probe: a click in silence, in both formats.
@@ -384,7 +386,7 @@ function main(): void {
   writeFileSync(join(OUT, 'probe.m4a'), encode(probe, 'm4a', 96000, tmp));
 
   writeFileSync(MANIFEST, `${JSON.stringify(manifest)}\n`);
-  writeFileSync(ANALYSIS, `${JSON.stringify({ version, verbs: GESTURES.map((x) => x.verb), trackSeconds: Object.fromEntries(Object.entries(TRACK_TIME).map(([k, v]) => [k, r1(v)])), pieces: analysis }, null, 1)}\n`);
+  writeFileSync(ANALYSIS, `${JSON.stringify({ version, verbs: [...GESTURES, ...Object.values(OWN_GESTURES).flat()].map((x) => x.verb), trackSeconds: Object.fromEntries(Object.entries(TRACK_TIME).map(([k, v]) => [k, r1(v)])), pieces: analysis }, null, 1)}\n`);
   rmSync(tmp, { recursive: true, force: true });
   console.log(`version ${version}; ${((performance.now() - t00) / 1000).toFixed(0)} s in all`);
 }

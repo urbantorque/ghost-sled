@@ -213,7 +213,9 @@ describe('live missions (the pause card)', () => {
 describe('next unlock', () => {
   it('moves from the next mountain to the next sled to nothing', () => {
     expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 2 })).toEqual({ kind: 'mountain', name: 'Frostfang Glacier', biome: 'glacier', have: 2, need: 4 });
-    expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 13 })).toEqual({ kind: 'mountain', name: 'Sakura Ridge', biome: 'blossom', have: 13, need: 24 });
+    // (Round 9: the Old Run opens at 18, before Sakura's 24.)
+    expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 13 })).toEqual({ kind: 'mountain', name: 'The Old Run', biome: 'oldrun', have: 13, need: 18 });
+    expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 19 })).toEqual({ kind: 'mountain', name: 'Sakura Ridge', biome: 'blossom', have: 19, need: 24 });
     expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 60, gifts: 50 })).toEqual({ kind: 'sled', name: 'Whirl Saucer', gifts: 70 });
     expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 60, gifts: 500, ownedSleds: [0, 1] })).toEqual({ kind: 'sled', name: 'Lodge Toboggan', gifts: 0 });
     expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 60, ownedSleds: [0, 1, 2, 3, 4, 5] })).toBeNull();

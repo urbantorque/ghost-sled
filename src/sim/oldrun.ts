@@ -1,15 +1,17 @@
-// The Old Run (round 9, notes/r9-ground.md section 5): an old ice track down a forest, ridden on its banked walls.
-// Its descent is laid here, through course.ts's kit seam (kit.ts), never by the five's acts. As round 9's groundwork
-// left it, a lab course (mountains.ts OLDRUN_LAB_SEED, not in MOUNTAINS): the wall's physics and the line its riders
-// take, for the Old Run's own lane to build its mountain on.
+// The Old Run (round 9, notes/r9-ground.md section 5, notes/r9-oldrun.md): an old ice track cut down a forest for the
+// grand hotel at its head, ridden on its banked walls. Its descent is laid here, through course.ts's kit seam (kit.ts),
+// never by the five's acts.
 //
 // The channel: a 5.2 m floor and curved walls to a lip 7.5 m from the middle, measured square to the channel, which
-// bends left and right down a steady 0.17 (|dx/dz| at most 0.7, radius 40 m and more). On a straight both walls stand
-// 2.6 m; through a bend the outside wall rises (to 7.5 m at radius 70 or tighter) on its own smooth profile over 70 m
-// either side, so no line up a wall ever crests. A sled settles on a bend's outside wall where the wall's yaw turns it
-// as fast as the channel turns (sim.ts wallYaw): tan(theta) = v^2 / (g R), so the slush rider sits low in the floor and
-// the glaze rider high. The surfaces: fast track ice on the straights and walls, the glaze high on a bend's outside
-// wall, slush in a bend's floor. Nothing stands in the track and nothing in it can floor a rider: its lip only scrapes.
+// bends left and right down a steady 0.28 (|dx/dz| at most 0.7, radius 40 m and more) from a steeper start house. Its
+// bends are long and held: each turn's curvature rises, holds at the radius it was laid for, and falls. On a straight
+// both walls stand 2.6 m; through a bend the outside wall rises on its own smooth profile over 70 m either side (so no
+// line up a wall ever crests) to the height that puts a sled at the run's speed on the glaze: 420 / R metres, 3 to 7.5.
+// A sled settles on a bend's outside wall where the bank turns it as fast as the channel turns (sim.ts wallYaw):
+// tan(theta) = v^2 / (g R), so the slow rider sits low, in the floor's slush, and the fast one high, on the glaze; and
+// the bank carries a sled round its bend without the runners' slip a steered turn costs (sim.ts TRACK_BANK). The
+// surfaces: fast track ice on the straights and walls, the glaze, faster still, high on a bend's outside wall, slush
+// in a bend's floor. Nothing stands in the track and nothing in it can floor a rider: its lip only scrapes.
 //
 // Pure: no DOM, render or audio imports. Values only from chaos.ts and dmath.ts; course.ts and kit.ts for types.
 
@@ -18,6 +20,12 @@ import { smoothstep } from './dmath';
 import type { Chunk, Course, Layout, Section, SectionKind, Surface } from './course';
 import type { Kit, KitBeat, KitPlan, KitRider } from './kit';
 import type { Rng } from './prng';
+
+/** The track's grade, and the start house's above it (course.ts's GRADE reads them): the start house drops 13 m more
+ *  than the track would over its 160 m, so a rider leaves it near 25 m/s instead of reaching speed half a stage on. */
+export const TRACK_GRADE = 0.28;
+export const HOUSE_GRADE = 0.36;
+export const HOUSE_LEN = 160;
 
 /** Its descent: three stages of 950, 1,000 and 1,050 m; no ramp, kicker or leap in its first minute; the outrun to the
  *  timing house (120 m before the line, 200 past it); thresholds on the track's straights, as wide as the channel;
@@ -42,33 +50,42 @@ export const OLDRUN_LAYOUT: Layout = {
 export const FLOOR = 2.6;
 export const WALL = 4.9;
 export const LIP = FLOOR + WALL;
-/** A straight's walls, and a bend's outside wall at its deepest (radius TIGHT or less) and at its gentlest. */
+/** A straight's walls; a bend's outside wall at its deepest; its least; and the height for a radius (WALL_K / R): the
+ *  wall that puts a sled at about 34 m/s two thirds of the way up it, on the glaze, at the radius it turns. */
 export const WALL_LOW = 2.6;
 export const WALL_DEEP = 7.5;
-const WALL_GENTLE = 5;
-const TIGHT = 70;
-const GENTLE = 130;
+const WALL_LEAST = 3;
+const WALL_K = 420;
 /** How far before and after a bend its outside wall takes to rise and fall (a smootherstep: |H''| <= 0.0069 for the
  *  whole 4.9 m, under the curvature that lifts a sled at 46 m/s anywhere up the wall). */
 export const WALL_RAMP = 70;
+/** The parapet past the lip as the world draws it (drawnGround): the wall's curve carried on to CREST_U of its width,
+ *  then a crest of snow that rounds over in CREST_TOP metres and falls in CREST_FALL to the forest floor, CREST_OUT
+ *  over the lip's height. */
+export const CREST_U = 1.25;
+export const CREST_TOP = 1.2;
+export const CREST_FALL = 5;
+export const CREST_OUT = 0.4;
 /** The glaze: the band of a bend's outside wall it lies on (shares of the wall's width up), on a wall this high. */
-export const GLAZE_LO = 0.5;
-export const GLAZE_HI = 0.85;
-const GLAZE_WALL = 4;
-/** A bend whose curvature is this share of the deepest's (1/60) or more has slush in its floor. */
+export const GLAZE_LO = 0.4;
+export const GLAZE_HI = 0.9;
+const GLAZE_WALL = 3;
+/** A bend whose curvature is this share of the deepest's (1/60) or more has slush in its floor (radius 180 or less). */
 const SLUSH_BEND = 1 / 3;
 const DEEP = 1 / 60;
 /** The steepest the line runs off the fall line (the five's own: 35 degrees). */
 export const MAX_SLOPE = 0.7;
 
-/** The track's surfaces (round 9). Only the glaze is ice, so the ice charms bite only on the line that earns them. */
-export const TRACK_ICE: Surface = { grip: 0.8, drag: 0.55, ice: false };
-export const GLAZE: Surface = { grip: 0.85, drag: 0.4, ice: true };
-export const SLUSH: Surface = { grip: 1, drag: 1.6, ice: false };
+/** The track's surfaces (round 9). Only the glaze is ice, so the ice charms bite only on the line that earns them. The
+ *  slush's drag is what makes the floor the slower line: at 1.3 the mid pilot's glaze line beats its own floor line by
+ *  about 16% of the bends' time (notes/r9-oldrun.md section 1). */
+export const TRACK_ICE: Surface = { grip: 0.8, drag: 0.45, ice: false };
+export const GLAZE: Surface = { grip: 0.85, drag: 0.25, ice: true };
+export const SLUSH: Surface = { grip: 1, drag: 1.3, ice: false };
 
-/** One turn of the line: its slope dx/dz changes by `dp` over `len` metres from z0, on a smoothstep, so the line's
- *  curvature is at most 1.5 dp / len (= 1 / R, the radius it was laid for). Its outside wall is `side` (the side the
- *  channel turns away from) and rises to `h`. */
+/** One turn of the line: its slope dx/dz changes by `dp` over `len` metres from z0, its curvature rising over the
+ *  turn's first quarter, held at 1 / R (the radius it was laid for) through its middle half, and falling over its last
+ *  quarter. Its outside wall is `side` (the side the channel turns away from) and rises to `h`. */
 export interface Turn {
   z0: number;
   len: number;
@@ -81,6 +98,11 @@ export interface Turn {
 /** What the kit laid on a course: its turns, in order. */
 interface Laid {
   turns: Turn[];
+  /** The acts' turns: the Hotel Straights', the Labyrinth's, the Horseshoe's lead and its hook. */
+  hotel: Turn[];
+  labyrinth: Turn[];
+  lead: Turn[];
+  hook: Turn[];
 }
 
 const LAID = new WeakMap<Course, Laid>();
@@ -95,15 +117,44 @@ function laid(c: Course): Laid {
   return d;
 }
 
-/** A turn's wall height for its radius: the deepest at TIGHT or tighter, easing to WALL_GENTLE at GENTLE. */
+/** A turn's wall height for its radius (WALL_K / R, WALL_LEAST to WALL_DEEP). */
 function wallFor(r: number): number {
-  const t = (r - TIGHT) / (GENTLE - TIGHT);
-  return t <= 0 ? WALL_DEEP : t >= 1 ? WALL_GENTLE : WALL_DEEP + (WALL_GENTLE - WALL_DEEP) * t;
+  const h = WALL_K / r;
+  return h < WALL_LEAST ? WALL_LEAST : h > WALL_DEEP ? WALL_DEEP : h;
+}
+
+/** The share of a turn's length its curvature takes to rise to the turn's radius, and again to fall from it. */
+const RAMP = 0.25;
+const RA = 1 - RAMP;
+/** A turn's slope (its share of dp) at u through it: the curvature rises linearly, holds, and falls. */
+function easeP(u: number): number {
+  if (u <= RAMP) return (u * u) / (2 * RAMP) / RA;
+  if (u <= 1 - RAMP) return (RAMP / 2 + (u - RAMP)) / RA;
+  const w = u - (1 - RAMP);
+  return (RAMP / 2 + (1 - 2 * RAMP) + w - (w * w) / (2 * RAMP)) / RA;
+}
+/** Its integral (the line's x, in dp * len), and its derivative (the curvature, in dp / len). */
+function easeX(u: number): number {
+  const f1 = (RAMP * RAMP) / 6;
+  if (u <= RAMP) return (u * u * u) / (6 * RAMP) / RA;
+  const m = 1 - 2 * RAMP;
+  if (u <= 1 - RAMP) {
+    const v = u - RAMP;
+    return (f1 + (RAMP / 2) * v + (v * v) / 2) / RA;
+  }
+  const f2 = f1 + (RAMP / 2) * m + (m * m) / 2;
+  const w = u - (1 - RAMP);
+  return (f2 + (RAMP / 2 + m) * w + (w * w) / 2 - (w * w * w) / (6 * RAMP)) / RA;
+}
+function easeK(u: number): number {
+  if (u <= RAMP) return u / RAMP / RA;
+  if (u <= 1 - RAMP) return 1 / RA;
+  return (1 - u) / RAMP / RA;
 }
 
 /** A turn of `dp` laid for radius `r` from z0. */
 function turn(z0: number, dp: number, r: number): Turn {
-  return { z0, len: 1.5 * Math.abs(dp) * r, dp, r, side: dp > 0 ? -1 : 1, h: wallFor(r) };
+  return { z0, len: (Math.abs(dp) * r) / RA, dp, r, side: dp > 0 ? -1 : 1, h: wallFor(r) };
 }
 
 /** An S-bend from z0: a, then -2a, then a again (back to the slope it started on), each turn laid for radius r, with
@@ -115,13 +166,16 @@ function sBend(z0: number, a: number, r: number, hold: number): Turn[] {
   return [t1, t2, t3];
 }
 
+/** The Horseshoe's radius. */
+const HOOK_R = 70;
+
 const endOf = (ts: readonly Turn[]): number => ts[ts.length - 1].z0 + ts[ts.length - 1].len;
 
 /** S-bends drawn for one act and spread from z0 to z1 with even straights between (and before and after): when the
  *  draw is too long for the room, its holds and radii shrink together, never under radius 40. */
 function act(z0: number, z1: number, n: number, rng: Rng, a: readonly [number, number], r: readonly [number, number], hold: readonly [number, number]): Turn[] {
   const specs = Array.from({ length: n }, () => ({ a: rng.range(a[0], a[1]) * (rng.chance(0.5) ? 1 : -1), r: rng.range(r[0], r[1]), hold: rng.range(hold[0], hold[1]) }));
-  const length = (k: number): number => specs.reduce((s, q) => s + 6 * Math.abs(q.a) * Math.max(40, q.r * k) + 2 * q.hold * k, 0);
+  const length = (k: number): number => specs.reduce((s, q) => s + (4 * Math.abs(q.a) * Math.max(40, q.r * k)) / RA + 2 * q.hold * k, 0);
   let k = 1;
   const room = z1 - z0 - 30 * (n + 1);
   while (length(k) > room && k > 0.3) k -= 0.02;
@@ -181,10 +235,10 @@ function at(c: Course, z: number): At {
     const u = (z - t.z0) / t.len;
     if (u > 0) {
       if (u < 1) {
-        // smoothstep's integral (u^3 - u^4/2) for x, itself for the slope, its derivative for the curvature.
-        cx += t.dp * t.len * (u * u * u - 0.5 * u * u * u * u);
-        p += t.dp * u * u * (3 - 2 * u);
-        pp += (t.dp * 6 * u * (1 - u)) / t.len;
+        // The turn's ease: its integral for x, itself for the slope, its derivative for the curvature.
+        cx += t.dp * t.len * easeX(u);
+        p += t.dp * easeP(u);
+        pp += (t.dp * easeK(u)) / t.len;
       } else {
         cx += t.dp * t.len * (u - 0.5);
         p += t.dp;
@@ -206,6 +260,54 @@ function at(c: Course, z: number): At {
   o.hl = WALL_LOW + hl;
   o.hr = WALL_LOW + hr;
   return o;
+}
+
+/** The ground as the world draws it (read only; the sim never calls it): the kit's own inside CREST_U of the wall's
+ *  width (past anything a sled reaches: the lip turns it back 0.5 m out, its gradient is read 0.2 m round it), and
+ *  past it the parapet's snow, rounding over in CREST_TOP metres and falling in CREST_FALL to the forest floor outside,
+ *  CREST_OUT over the lip's height: a crest of snow, not the cliff the sim's rising curve would draw. */
+export function drawnGround(c: Course, x: number, z: number): number {
+  const { d, h } = across(c, x, z);
+  const u = (d - FLOOR) / WALL;
+  if (u <= CREST_U) return c.ground(x, z);
+  const base = c.baseY(z);
+  const t = d - FLOOR - CREST_U * WALL;
+  const y1 = h * CREST_U * CREST_U;
+  const s1 = (2 * h * CREST_U) / WALL;
+  if (t <= CREST_TOP) return base + y1 + s1 * t - (s1 * t * t) / (2 * CREST_TOP);
+  const top = y1 + (s1 * CREST_TOP) / 2;
+  return base + top - (top - (h + CREST_OUT)) * smoothstep(0, CREST_FALL, t - CREST_TOP);
+}
+
+/** The track at z as the world draws it (read only): the line, its slope dx/dz, its curvature d2x/dz2, and the walls'
+ *  heights left (-x) and right (+x). */
+export function trackAt(c: Course, z: number): { cx: number; p: number; pp: number; hl: number; hr: number } {
+  const a = at(c, z);
+  return { cx: a.cx, p: a.p, pp: a.pp, hl: a.hl, hr: a.hr };
+}
+
+/** The turns the kit laid on a course, in order (read only: the world hangs things on them). */
+export function turnsOf(c: Course): readonly Readonly<Turn>[] {
+  return laid(c).turns;
+}
+
+/** The Old Run's places (moments.ts lays its set pieces and legends on them): each act's turns, first metre to last. */
+export type OldRunPlace = 'hotel' | 'labyrinth' | 'lead' | 'hook';
+export function placeOf(c: Course, place: OldRunPlace): { z0: number; z1: number; turns: readonly Readonly<Turn>[] } {
+  const ts = laid(c)[place];
+  return { z0: ts[0].z0, z1: endOf(ts), turns: ts };
+}
+
+/** The x of a point u of the way up the wall on `side` at z (u 0 the floor's edge, 1 the lip). */
+export function wallX(c: Course, z: number, side: 1 | -1, u: number): number {
+  const a = at(c, z);
+  return a.cx + side * (FLOOR + u * WALL) * Math.sqrt(1 + a.p * a.p);
+}
+
+/** Where a sled is up the wall it is on: 0 on the floor, 1 at the lip, and the side (+1 right). */
+export function wallU(c: Course, x: number, z: number): { u: number; side: 1 | -1 } {
+  const { d, side } = across(c, x, z);
+  return { u: d <= FLOOR ? 0 : (d - FLOOR) / WALL, side };
 }
 
 /** Where (x, z) is across the channel: the distance square to it from the middle, the side, that side's wall. */
@@ -257,26 +359,24 @@ export const OLDRUN_KIT: Kit = {
     const [g0a, g0b] = gate(s0);
     const [g1a, g1b] = gate(s1);
     const out0 = fin - OLDRUN_LAYOUT.square;
-    // The Hotel Straights: the start house's 160 m straight, then two long S-bends.
-    const hotel = act(170, g0a - 20, 2, rng, [0.3, 0.45], [85, 130], [40, 80]);
-    // The Labyrinth: three short S-bends close together.
-    const labyrinth = act(g0b + 20, g1a - 20, 3, rng, [0.4, 0.55], [42, 58], [8, 25]);
-    // The Horseshoe: an S-bend, then one long hook (35 degrees off the fall line, held, and back), the deepest bank,
-    // into the outrun.
-    const lead = act(g1b + 20, g1b + 330, 1, rng, [0.3, 0.42], [70, 100], [20, 40]);
+    // The Hotel Straights: the start house's 160 m straight, then two long sweeping S-bends (radius 100 to 135).
+    const hotel = act(HOUSE_LEN + 10, g0a - 20, 2, rng, [0.45, 0.6], [100, 135], [10, 30]);
+    // The Labyrinth: three tight S-bends close together (radius 45 to 60, the deepest walls).
+    const labyrinth = act(g0b + 20, g1a - 20, 3, rng, [0.55, 0.7], [45, 60], [0, 12]);
+    // The Horseshoe: a lead S-bend, then the hook: out to 35 degrees off the fall line, round through 70 degrees at
+    // radius 70 on the deepest bank (the Horseshoe itself, about 130 m held), and back, into the outrun.
+    const lead = act(g1b + 20, g1b + 330, 1, rng, [0.4, 0.5], [80, 100], [10, 25]);
     const hookSide = rng.chance(0.5) ? 1 : -1;
-    const hold = rng.range(140, 160);
-    const backAt = out0 - 30 - turn(0, MAX_SLOPE, 60).len;
-    const hookIn = turn(backAt - hold - turn(0, MAX_SLOPE, 60).len, hookSide * MAX_SLOPE, 60);
-    const hookOut = turn(backAt, -hookSide * MAX_SLOPE, 60);
-    LAID.set(c, { turns: [...hotel, ...labyrinth, ...lead, hookIn, hookOut] });
+    const hook = sBend(out0 - 30 - (4 * MAX_SLOPE * HOOK_R) / RA, hookSide * MAX_SLOPE, HOOK_R, 0);
+    LAID.set(c, { turns: [...hotel, ...labyrinth, ...lead, ...hook], hotel, labyrinth, lead, hook });
     const beats: KitBeat[] = [];
     let prev: SectionKind | null = null;
     const push = (kind: SectionKind, len: number, gateOn = false): void => {
       beats.push({ kind, len, blend: blendOf(kind, prev), ...(gateOn ? { gate: true as const } : {}) });
       prev = kind;
     };
-    push('track', g0a);
+    push('house', HOUSE_LEN);
+    push('track', g0a - HOUSE_LEN);
     push('track', g0b - g0a, true);
     push('labyrinth', g1a - g0b);
     push('track', g1b - g1a, true);
@@ -312,7 +412,9 @@ export const OLDRUN_KIT: Kit = {
     if (d <= FLOOR) return base;
     // The wall, and past the lip the parapet: the wall's own curve carried on up, so the lip is never a crest and the
     // ground stays smooth enough there for the sim's gradient (a steeper parapet, curving six times as hard, read as
-    // the ground falling away under a sled that reached it).
+    // the ground falling away under a sled that reached it). (The world draws a crest of snow out past CREST_U, where
+    // no sled ever is: drawnGround below. The sim keeps the curve rising, since its landing's prediction looks past
+    // the lip and a crest there changed where flights were set to land.)
     const u = (d - FLOOR) / WALL;
     return base + h * u * u;
   },
@@ -334,10 +436,20 @@ export const OLDRUN_KIT: Kit = {
   },
 
   lineFor(c: Course, z: number, r: KitRider): number {
-    // A careful or new rider lets the walls turn it (its own settling height); a skilled one rides up into the glaze.
+    // A careful or new rider lets the walls turn it (its own settling height). Where its speed settles a rider on the
+    // glaze it rides there (the bank carries it, nothing is spent); below the glaze a skilled rider climbs onto it (a
+    // little slip for the glaze's speed), and above it keeps under the lip. The climb comes in as the bend deepens.
+    // A new rider (skill under 0.3) does not trust the walls yet: it steers down off them toward the floor's middle, so
+    // it rides low and in the slush, the safe slow line (at skill 0 a fifth of the way up to where the wall would carry
+    // it). The bot's weakest ride so, and the pool's slow end with them.
     const reach = r.skill <= 0.3 ? 0 : r.skill >= 0.8 ? 1 : (r.skill - 0.3) / 0.5;
-    const { u, side, a } = settles(c, z, r.v);
-    const want = u > 0.02 ? u + reach * (u < 0.62 ? 0.62 - u : 0) : 0;
+    const trust = r.skill >= 0.3 ? 1 : 0.2 + (0.8 * (r.skill > 0 ? r.skill : 0)) / 0.3;
+    const st = settles(c, z, r.v);
+    const { side, a } = st;
+    const u = st.u * trust;
+    const lo = GLAZE_LO + 0.15;
+    const hi = GLAZE_HI - 0.05;
+    const want = u <= 0.02 ? 0 : u >= lo ? (u < hi ? u : hi) : u + reach * (lo - u) * smoothstep(0, 0.15, u);
     return a.cx + side * across0(want > GLAZE_HI ? GLAZE_HI : want) * Math.sqrt(1 + a.p * a.p);
   },
 
@@ -347,7 +459,7 @@ export const OLDRUN_KIT: Kit = {
     // Up the glaze through every bend of radius 100 or tighter: six sparks along its middle, the middle one great. What
     // a rider takes there it takes by riding the line the bend pays for.
     for (const t of laid(c).turns) {
-      if (t.r > 100 || t.h < GLAZE_WALL) continue;
+      if (t.r > 100) continue;
       for (let k = 0; k < 6; k++) {
         const z = t.z0 + (t.len * (k + 0.5)) / 6;
         if (z < chunk.z0 || z >= chunk.z1) continue;

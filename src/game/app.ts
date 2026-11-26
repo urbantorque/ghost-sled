@@ -36,7 +36,7 @@ import { GhostEntry, GhostManager, GhostPose, RaceEvent, emptyPose, realStanding
 import { type CupMountain, type RideMountain, cupChaos, cupMountain, weekKey, weekNumber } from './cup';
 import { type Graveyard, bundledGraveyards, graveyards } from './graveyards';
 import { planMarquee } from './marquee';
-import { ROSTER, riderByName } from '../bot/roster';
+import { HOME_RIDERS, ROSTER, riderByName } from '../bot/roster';
 import { STAR_GIFTS, masteryBoard, readMastery, settleMastery } from './mastery';
 import { PAINTS, paintById } from './paints';
 import { SHELVES, type ShelfId, freeItem, hatById, scarfById, soundById, trailById } from './garage';
@@ -1813,7 +1813,8 @@ export class App {
       grudgeAtStart: g ? { name: g.name, record: g.record, them: g.them ?? 1, streak: g.streak ?? 1 } : null,
       friend: goal ? { name: goal.name, distance: goal.standing.distance, time: goal.standing.time } : null,
       lifetimePassed: d.ghostsPassed,
-      unlockLadder: MOUNTAINS.filter((m) => !m.finale && m.unlockGhosts > d.ghostsPassed).map((m) => ({ id: m.id, name: m.name, biome: biomeForSeed(m.seed), need: m.unlockGhosts })),
+      // (Round 9: in the order they open, now that the Old Run opens at 18 after Sakura's 24 in MOUNTAINS.)
+      unlockLadder: MOUNTAINS.filter((m) => !m.finale && m.unlockGhosts > d.ghostsPassed).map((m) => ({ id: m.id, name: m.name, biome: biomeForSeed(m.seed), need: m.unlockGhosts })).sort((a, b) => a.need - b.need),
       missionsCrossed: () => this.missionsCrossedNow(),
       graveyards: this.graves,
       // A named mountain's authored set pieces; a Daily's or a Cup's biggest places.
@@ -2786,7 +2787,7 @@ export class App {
       const rec = readMastery(d.mastery[key]);
       // (A mirror's board is its own, under its own key; its riders are the mountain's.)
       const pool = poolFor(this.mountain.id);
-      const riderTimes = new Map(ROSTER.filter((r) => r.home === mi).map((r) => {
+      const riderTimes = new Map([...ROSTER, ...HOME_RIDERS].filter((r) => r.home === mi).map((r) => {
         const g = pool.find((p) => p.name === r.name);
         return [r.key, g && (g.finishTick ?? -1) > 0 ? (g.finishTick as number) / 60 : null] as const;
       }));

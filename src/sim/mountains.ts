@@ -1,15 +1,16 @@
 import { hash32, hashString } from './prng';
 
-/** The five looks the world and the music are dressed for: the four, and Lanternfall's own (round 7). */
-export type BiomeId = 'alpine' | 'glacier' | 'volcanic' | 'blossom' | 'lantern';
+/** The looks the world and the music are dressed for: the four, Lanternfall's own (round 7) and the Old Run's (round
+ *  9, notes/r9-oldrun.md section 2). */
+export type BiomeId = 'alpine' | 'glacier' | 'volcanic' | 'blossom' | 'lantern' | 'oldrun';
 /** What a course is built as. Since Lanternfall's world was built this is the look itself; the name is kept for
  *  the sim's tables. (Round 9: and a new mountain that lays its own ground, under its own id, until its world lane makes
- *  it a look of its own: it borrows one meanwhile, LOOK below.) */
-export type CourseBiome = BiomeId | 'oldrun';
-export type MountainId = 'pinecrest' | 'frostfang' | 'ember' | 'sakura' | 'lanternfall' | 'daily';
+ *  it a look of its own: it borrows one meanwhile, LOOK below. The Old Run's is its own.) */
+export type CourseBiome = BiomeId;
+export type MountainId = 'pinecrest' | 'frostfang' | 'ember' | 'sakura' | 'lanternfall' | 'oldrun' | 'daily';
 
 /** A new mountain's borrowed look, until its world lane gives it its own (round 9; Lanternfall's round 7 path). */
-const LOOK: Partial<Record<CourseBiome, BiomeId>> = { oldrun: 'alpine' };
+const LOOK: Partial<Record<CourseBiome, BiomeId>> = {};
 
 /** The look a course biome is drawn and scored with: its own (Lanternfall borrowed Frostfang's until its world
  *  was built), or a new mountain's borrowed one. */
@@ -164,17 +165,23 @@ const BIOME_PARAMS: Record<CourseBiome, MountainParams> = {
  *  mountain, and its two streets stay inside the village's triangle budget on Low (notes/r7-moments.md). */
 export const LANTERNFALL_SEED = 0x510e527f;
 
+/** Round 9: the Old Run's seed (SHA-256's sixth initial word, beside Lanternfall's fifth): the groundwork's lab course,
+ *  kept as the mountain's own (it is no Daily's and no Cup's to 2040, and its track is the one the lab tuned). */
+export const OLDRUN_SEED = 0x9b05688c;
+/** (The name the groundwork and its lab knew it by.) */
+export const OLDRUN_LAB_SEED = OLDRUN_SEED;
+
 export const MOUNTAINS: readonly MountainDef[] = [
   { id: 'pinecrest', name: 'Pinecrest', tagline: 'Pine forest, soft powder, snowmen', seed: 0x51ed270b, unlockGhosts: 0 },
   { id: 'frostfang', name: 'Frostfang Glacier', tagline: 'Glass ice and big drops', seed: 0x2b7e1516, unlockGhosts: 4 },
   { id: 'ember', name: 'Ember Peak', tagline: 'Basalt, ash snow, steam vents', seed: 0x6a09e667, unlockGhosts: 12 },
   { id: 'sakura', name: 'Sakura Ridge', tagline: 'Blossom slopes and spirit gates', seed: 0x3c6ef372, unlockGhosts: 24 },
   { id: 'lanternfall', name: 'Lanternfall', tagline: 'Where the spirit lights come from', seed: LANTERNFALL_SEED, unlockGhosts: 48, finale: true },
+  // Round 9: the new mountains are appended, never inserted (MOUNTAINS is read by index: the Trials, The Twelve's homes,
+  // ?debug&m=, the pool generator, the graveyards' naming order).
+  { id: 'oldrun', name: 'The Old Run', tagline: 'An old ice track: ride high on the glaze', seed: OLDRUN_SEED, unlockGhosts: 18 },
 ];
 
-/** Round 9: the Old Run's lab course (SHA-256's sixth initial word, beside Lanternfall's fifth). Built as the Old Run,
- *  but not in MOUNTAINS: nobody can pick it. The Old Run's own lane registers the mountain (on this seed or its own). */
-export const OLDRUN_LAB_SEED = 0x9b05688c;
 
 const BIOME_BY_SEED = new Map<number, CourseBiome>([
   [0x51ed270b, 'alpine'],

@@ -110,5 +110,29 @@ export function momentLine(verb: MomentVerb, key: string, phase: MomentPhase, n:
       if (phase === 'won') return 'The great lantern is lit';
       if (phase === 'lost') return 'The flame went out';
       return null;
+    // Round 9, the Old Run.
+    case 'peal':
+      if (phase === 'start') return `Bell 0 of ${of}`;
+      if (phase === 'step') return `Bell ${n} of ${of}`;
+      if (phase === 'miss') return 'A bell hangs silent';
+      if (phase === 'won') return `Every bell, ${of} of ${of}`;
+      if (phase === 'lost') return `${n} of ${of} bells`;
+      return null;
+    case 'split':
+      if (phase === 'start') return 'The split is running';
+      if (phase === 'lead') return 'Inside the split';
+      if (phase === 'trail') return 'Behind the split';
+      if (phase === 'miss') return 'Touched the lip';
+      if (phase === 'won') return 'Beat the split';
+      if (phase === 'lost') return 'Missed the split';
+      return null;
+    case 'glaze':
+      // (n is quarters of the hold.)
+      if (phase === 'start') return 'Hold the glaze';
+      if (phase === 'step') return n >= 3 ? 'Nearly there' : 'Hold it';
+      if (phase === 'miss') return 'Off the glaze';
+      if (phase === 'won') return 'Held the glaze';
+      if (phase === 'lost') return 'The glaze let go';
+      return null;
   }
 }

@@ -48,7 +48,7 @@ const PRODUCED: ReadonlyArray<{ id: string; name: string }> = [
 ];
 
 /** Every set-piece verb (src/sim/moments.ts), and the plain stinger a verb without one of its own plays. */
-const VERBS = ['race', 'gates', 'rings', 'collapse', 'steps', 'slide', 'shatter', 'surge', 'flourish', 'follow', 'kindle', 'carry', 'any'] as const;
+const VERBS = ['race', 'gates', 'rings', 'collapse', 'steps', 'slide', 'shatter', 'surge', 'flourish', 'follow', 'kindle', 'carry', 'peal', 'split', 'glaze', 'any'] as const;
 const cap = (s: string): string => s[0].toUpperCase() + s.slice(1);
 
 const MOODS: ReadonlyArray<{ mood: Mood; name: string }> = [

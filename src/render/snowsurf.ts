@@ -1,4 +1,5 @@
 import type { Course, SectionKind } from '../sim/course';
+import { SLUSH } from '../sim/oldrun';
 
 // Round 8, snow as the hero material (V1): the three surfaces a player tells apart at a glance, read from
 // what the sim already knows and drawn, never fed back. Ice is the sim's own (course.surface: a lake, the
@@ -37,6 +38,10 @@ export function groomedAt(c: Course, z: number): number {
 /** The snow a runner cuts at sim (x, z), for its rut: 2 ice, 1 a groomed lane, 0 powder (fractions where
  *  the groomed lane gives way to powder at a section's change or toward the bank). */
 export function rutSurface(c: Course, x: number, z: number): number {
+  // (Round 9: the Old Run's track is ice from wall to wall, the glaze and the track's own (which the sim keeps off its
+  // ice charms): runners only scratch it. Cut as a groomed lane, its lit lips lay a pale band down the walls behind the
+  // sled. Its slush takes a groomed lane's shallow cut.)
+  if (c.kit?.id === 'oldrun') return c.surface(x, z) === SLUSH ? 0.85 : 2;
   if (c.surface(x, z).ice) return 2;
   // The bank past the corridor's edge is powder, whatever the lane is.
   const bank = ease(-1.5, 0.5, c.edgeExcess(x, z));

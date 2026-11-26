@@ -2,6 +2,7 @@ import { type ChaosRoll, moodInfo } from './chaos';
 import type { Course, Ledge, Obstacle, SectionKind, SkyGate } from './course';
 import { PI, TAU, dsin } from './dmath';
 import { MOUNTAINS } from './mountains';
+import { type OldRunPlace, placeOf, wallX } from './oldrun';
 import { hash32 } from './prng';
 
 // Set pieces: each mountain's three biggest places, one a stage, each with a verb of its own that the sim plays,
@@ -29,13 +30,18 @@ import { hash32 } from './prng';
 //   kindle    ride close along rows of unlit stone lamps to light them, on both sides of the road (Lanternfall)
 //   carry     take a flame at the shrine and bring it to the great lantern at the line; it burns down, a hit takes
 //             some of it, and a fall or a ward gutters it: ride back up to its pace and it catches (Lanternfall)
+// Round 9, the Old Run (notes/r9-oldrun.md section 2), appended:
+//   peal      ring the bend bells: a bell hangs from an iron bracket high on each bend's outside wall; pass under
+//             it, on the glaze or over it, and it rings
+//   split     beat the Labyrinth's split: from its first bend to its last inside the split's time
+//   glaze     hold the glaze through the Horseshoe: so many seconds of the hook ridden on its glaze
 // This file names them and says where they are and what each holds. What happens in them is the sim's (sim.ts).
 //
 // Pure: no DOM, render or audio imports.
 
-export type MomentVerb = 'race' | 'gates' | 'rings' | 'collapse' | 'steps' | 'slide' | 'shatter' | 'surge' | 'flourish' | 'follow' | 'kindle' | 'carry';
+export type MomentVerb = 'race' | 'gates' | 'rings' | 'collapse' | 'steps' | 'slide' | 'shatter' | 'surge' | 'flourish' | 'follow' | 'kindle' | 'carry' | 'peal' | 'split' | 'glaze';
 /** Every verb, in an order that will not change: the music's stingers and the boards key on it. */
-export const VERBS: readonly MomentVerb[] = ['race', 'gates', 'rings', 'collapse', 'steps', 'slide', 'shatter', 'surge', 'flourish', 'follow', 'kindle', 'carry'];
+export const VERBS: readonly MomentVerb[] = ['race', 'gates', 'rings', 'collapse', 'steps', 'slide', 'shatter', 'surge', 'flourish', 'follow', 'kindle', 'carry', 'peal', 'split', 'glaze'];
 /** How a verb is played where it appears twice ('' where it has one way). */
 export type MomentStyle = '' | 'sprint' | 'chase' | 'sit' | 'swing' | 'stair' | 'hops';
 /** How the lens frames it: out and up over a drop ('wide'), low and close down a street or a tube
@@ -56,6 +62,16 @@ interface Variant {
   line: string;
   t?: Tune;
 }
+
+/** Round 9, the Old Run (the lab's numbers, notes/r9-oldrun.md section 2). The bend bells: how far either side of a
+ *  bell's x a sled rings it (m). The split: its even pace through the Labyrinth (m/s; the lab's mid pilot rides it at
+ *  31.5, the strong bot at 33.5). The Horseshoe: ticks on its glaze in all (the mid pilot holds about 175 of the hook's
+ *  520, the expert 207), in one hold (the expert's longest 113, the mid pilot's 73), and high on it (the expert 94). */
+export const PEAL_HW = 1.6;
+export const SPLIT_PACE = 31.2;
+export const GLAZE_NEED = 180;
+export const GLAZE_ROW = 90;
+export const GLAZE_HIGH = 80;
 
 /** A verb's variants where it is played one way: a family. The first is the plainest. */
 const FAMILY: Record<string, readonly Variant[]> = {
@@ -127,6 +143,26 @@ const FAMILY: Record<string, readonly Variant[]> = {
   ],
   // (Round 8: still air 1.03 and the wind 1.01, from 1 and 0.98: the shrine's chute is 50 m shorter since the stage
   // lines' thresholds and drops a sled most of its way, and a rider who fell above it lit the lantern once in five.)
+  // Round 9, the Old Run. The bells hang 0.6 of the way up the wall (the glaze's middle at the Hotel's speed), or high
+  // under the lip, or each higher than the last; `u` is the share up the wall, `rise` the peal's.
+  peal: [
+    { key: 'even', name: 'On the glaze', line: 'Ring every bell on the glaze', t: { u: 0.6 } },
+    { key: 'high', name: 'High on the wall', line: 'Ring every bell: they hang high on the wall', t: { u: 0.78 } },
+    { key: 'rising', name: 'Each higher than the last', line: 'Ring every bell: each hangs higher than the last', t: { rise: 1 } },
+  ],
+  // The split's pace, m/s from the Labyrinth's first bend to its last (the lab's mid pilot rides it at about the even
+  // pace); `clean`: and never touch the lip.
+  split: [
+    { key: 'even', name: 'The split', line: "Beat the Labyrinth's split", t: { pace: SPLIT_PACE } },
+    { key: 'quick', name: 'A quick split', line: 'Beat a quick split through the Labyrinth', t: { pace: SPLIT_PACE + 1.4 } },
+    { key: 'clean', name: 'Clean', line: 'Beat the split and never touch the lip', t: { pace: SPLIT_PACE, clean: 1 } },
+  ],
+  // Ticks on the glaze through the hook: in all, in one hold, or high on it (`u`, the least share up the wall).
+  glaze: [
+    { key: 'hold', name: 'Hold it', line: 'Hold the glaze through the Horseshoe', t: { need: GLAZE_NEED } },
+    { key: 'unbroken', name: 'Unbroken', line: 'Hold the glaze through the Horseshoe without a break', t: { need: GLAZE_ROW, row: 1 } },
+    { key: 'high', name: 'High on it', line: 'Hold the glaze high through the Horseshoe', t: { need: GLAZE_HIGH, u: 0.7 } },
+  ],
   carry: [
     { key: 'still', name: 'Still air', line: 'Carry the flame to the great lantern', t: { slack: 1.03, hit: 0.3 } },
     { key: 'wind', name: 'A wind off the Crown', line: 'Carry the flame: a wind is up, so do not slow', t: { slack: 1.01, hit: 0.18 } },
@@ -152,6 +188,8 @@ interface Def {
   line: string;
   /** The race's machine, as its lines call it. */
   machine?: string;
+  /** Round 9: a mountain whose kit lays its own places stands its set piece on one of them, not on a section. */
+  place?: OldRunPlace;
 }
 
 /** The named mountains' set pieces, one a stage, in order down each descent. */
@@ -180,6 +218,12 @@ const AUTHORED: Record<string, readonly Def[]> = {
     { key: 'cloudsea', name: 'The Cloud Sea', verb: 'follow', kind: 'ravine', nth: 0, through: 1, cam: 'low', line: 'Follow the guide light through the cloud' },
     { key: 'lamproad', name: 'The Lamp Road', verb: 'kindle', kind: 'street', nth: 0, cam: 'low', light: 'lanterns', line: 'Light the lamps on both sides of the road' },
     { key: 'firstflame', name: 'The First Flame', verb: 'carry', kind: 'chute', nth: 0, toLine: true, cam: 'wide', light: 'lanterns', line: 'Carry the flame to the great lantern' },
+  ],
+  // Round 9: the Old Run's, on its own places (oldrun.ts placeOf): the Hotel Straights' bends, the Labyrinth, the hook.
+  oldrun: [
+    { key: 'bendbells', name: 'The Bend Bells', verb: 'peal', kind: 'track', nth: 0, place: 'hotel', cam: 'side', line: 'Ring every bell on the glaze' },
+    { key: 'labyrinth', name: 'The Labyrinth', verb: 'split', kind: 'labyrinth', nth: 0, place: 'labyrinth', cam: 'low', line: "Beat the Labyrinth's split" },
+    { key: 'horseshoe', name: 'The Horseshoe', verb: 'glaze', kind: 'track', nth: 3, place: 'hook', cam: 'wide', line: 'Hold the glaze through the Horseshoe' },
   ],
 };
 
@@ -272,6 +316,15 @@ export function planMoments(course: Course): MomentSpec[] {
   const authored = AUTHORED[namedMountain(course.seed) ?? ''];
   if (authored) {
     for (const d of authored) {
+      if (d.place) {
+        // (Round 9: on the kit's own place, a little before its first bend to a little past its last.)
+        const pl = placeOf(course, d.place);
+        const z0 = Math.round(pl.z0 - 30);
+        const z1 = Math.round(pl.z1 + 20);
+        const style = d.style ?? '';
+        out.push({ index: 0, key: d.key, name: d.name, verb: d.verb, style, line: d.line, cam: d.cam, light: d.light ?? null, z0, z1, stage: course.stageAt(z0).index, variants: family(d.verb, style).length, machine: d.machine ?? '' });
+        continue;
+      }
       let seen = 0;
       const i = secs.findIndex((s) => s.kind === d.kind && seen++ === d.nth);
       if (i >= 0) make(i, d);
@@ -338,7 +391,8 @@ export interface MomentGate {
   phase: number;
 }
 
-/** A bell hung over the run, right across it. */
+/** A bell hung over the run, right across it. (Round 9, the Old Run's bend bells: hung over the glaze at x, rung by a
+ *  sled within hw of it either way as it passes; h is the share up the wall it hangs at, for the world.) */
 export interface MomentTarget {
   z: number;
   x: number;
@@ -399,7 +453,9 @@ export interface MomentPlay extends MomentSpec {
   /** shatter: the bells, in order. */
   targets: MomentTarget[];
   /** What wins it, where the verb counts: steps, stomps; slide, ticks of one drift ('long') or of each of two
-   *  ('both' is set); shatter, targets; follow, metres in the wake; kindle, lamps (and `each` a side). */
+   *  ('both' is set); shatter, targets; follow, metres in the wake; kindle, lamps (and `each` a side). Round 9:
+   *  peal, bells; split, the split in ticks (`pace` its m/s, `row` set when a scrape loses it); glaze, ticks on
+   *  the glaze (`row` set when they must be one hold, `hw` the least share up the wall). */
   need: number;
   each: number;
   both: boolean;
@@ -786,6 +842,29 @@ function build(course: Course, m: MomentSpec, vi: number, g: number): MomentPlay
     case 'kindle':
       lampsFor(course, m, k('pattern', 0), p);
       break;
+    case 'peal': {
+      // A bell at the middle of each of the Hotel Straights' bends, on its outside wall, as high as the variant hangs it.
+      const turns = placeOf(course, 'hotel').turns;
+      turns.forEach((tn, i) => {
+        const z = Math.round(tn.z0 + tn.len / 2);
+        const u = t.rise ? 0.45 + (0.4 * i) / Math.max(1, turns.length - 1) : k('u', 0.6);
+        p.targets.push({ z, x: wallX(course, z, tn.side, u), hw: PEAL_HW, h: u });
+      });
+      p.need = p.targets.length;
+      break;
+    }
+    case 'split':
+      // The split's pace, and its time in ticks from the set piece's first metre to its last; clean: no scrape.
+      p.pace = k('pace', SPLIT_PACE);
+      p.need = Math.round(((m.z1 - m.z0) / p.pace) * TICKS);
+      p.row = !!t.clean;
+      break;
+    case 'glaze':
+      // Ticks on the glaze, in all or in one hold (row), above a share of the wall (hw: 0 anywhere on it).
+      p.need = k('need', GLAZE_NEED);
+      p.row = !!t.row;
+      p.hw = k('u', 0);
+      break;
     case 'carry': {
       p.flameTicks = Math.round(coastSeconds(course, m.z0, m.z1, CARRY_V0) * TICKS * CARRY_SLACK * k('slack', 1));
       p.kindle = kindlePace(course, m.z0, m.z1);
@@ -970,6 +1049,8 @@ interface LegendDef {
   alt?: SectionKind;
   amp?: number;
   wave?: number;
+  /** Round 9: on a kit's own place (oldrun.ts placeOf), not a section. */
+  place?: OldRunPlace;
 }
 
 const LEGENDS: Record<string, readonly LegendDef[]> = {
@@ -992,6 +1073,12 @@ const LEGENDS: Record<string, readonly LegendDef[]> = {
   lanternfall: [
     { key: 'rising', name: 'The Great Rising', line: 'Every lantern in the valley is rising', kind: 'sky', at: 'leap', nth: 1 },
     { key: 'lamplighter', name: 'The Tall Lamplighter', line: "The tall lamplighter walks the grove: ride in his lantern's light", kind: 'ribbon', at: 'treerun', nth: 0, amp: 1.6, wave: 120 },
+  ],
+  // Round 9: the Old Run. A bob of the hotel's first winter runs the lead-in ahead of the rider; the hotel's ballroom
+  // lights its every window over the Labyrinth.
+  oldrun: [
+    { key: 'ghostbob', name: 'The Ghost Bob', line: "The hotel's first bob runs the track: follow its lights", kind: 'runner', at: 'track', nth: 3, place: 'lead', amp: 3.2, wave: 110 },
+    { key: 'ballroom', name: 'The Ballroom Night', line: 'The grand hotel lights every window', kind: 'sky', at: 'labyrinth', nth: 0, place: 'labyrinth' },
   ],
 };
 
@@ -1039,6 +1126,7 @@ export function planLegends(course: Course): readonly (LegendPlay | null)[] {
     let seen = 0;
     const free = (s: { z0: number; z1: number }): boolean => !pieces.some((p) => p.z0 < s.z1 && p.z1 > s.z0);
     const sec =
+      (d.place ? (({ z0, z1 }) => ({ kind: d.at, z0: z0 - 30, z1: z1 + 20 }))(placeOf(course, d.place)) : undefined) ??
       secs.find((s) => s.kind === d.at && seen++ === d.nth) ??
       (namedMountain(course.seed) ? (d.alt ? secs.find((s) => s.kind === d.alt && s.z0 > 500 && free(s)) : undefined) : secs.find((s) => s.kind === d.at && s.z0 > 500));
     // Never over a set piece: one thing asks for the rider's eyes at a time.

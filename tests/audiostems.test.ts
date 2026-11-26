@@ -7,13 +7,14 @@ import { AWAIT_MAX_S, BREATH_MAX_S, type Cmd, GATES_OFF, LAND_LEAD_S, LOCK_S, ty
 import { StemStore, parsePack } from '../src/audio/stemstore';
 import { ROSTER } from '../src/bot/roster';
 import analysisFile from '../scripts/music/analysis.json';
+import { OWN_GESTURES } from '../scripts/music/pieces/common';
 
 // The produced score (round 7): the scheduler that sequences its sections (stemform.ts), the store that
 // fetches, tests and decodes its files (stemstore.ts), the files themselves (public/music, built by
 // `npm run music`), what the build measured of them (scripts/music/analysis.json), and the riders' motifs.
 
 const manifest = produced as unknown as StemManifest;
-const COURSES = ['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall'] as const;
+const COURSES = ['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall', 'oldrun'] as const;
 const VERBS = ['race', 'gates', 'rings', 'collapse', 'steps', 'slide', 'shatter', 'surge', 'flourish', 'follow', 'kindle', 'carry'];
 
 /** A small piece with round numbers: 120 bpm in four, so a beat is 0.5 s and a bar 2 s. */
@@ -312,7 +313,7 @@ describe('the layers follow the race', () => {
   });
 
   it('each mountain plays its own piece, and one the score does not know plays the live band', () => {
-    expect(['alpine', 'glacier', 'volcanic', 'blossom', 'lantern'].map(pieceFor)).toEqual([...COURSES]);
+    expect(['alpine', 'glacier', 'volcanic', 'blossom', 'lantern', 'oldrun'].map(pieceFor)).toEqual([...COURSES]);
     expect(pieceFor('moon')).toBeNull();
   });
 });
@@ -372,10 +373,14 @@ describe('the packs', () => {
     for (const b of Object.values(manifest.bytes.title)) expect(b / 1048576).toBeLessThan(1);
   });
 
-  it('every course has the build, the hit, and a stinger for every set-piece verb, the win and the loss', () => {
+  it('every course has the build, the hit, and a stinger for every set-piece verb it can meet, the win and the loss', () => {
+    // (Round 9: a new mountain's own verbs are met there alone, and only its piece carries them: OWN_GESTURES.)
+    const owned = (v: string): string | undefined => Object.keys(OWN_GESTURES).find((k) => OWN_GESTURES[k].some((x) => x.verb === v));
     for (const id of COURSES) {
       const shots = Object.keys(manifest.pieces[id].shots);
-      for (const v of ['build', 'hit', 'st.any', 'st.won', 'st.lost', ...VERBS.map((x) => `st.${x}`)]) expect(shots, `${id} ${v}`).toContain(v);
+      const meets = VERBS.filter((x) => owned(x) === undefined || owned(x) === id);
+      for (const v of ['build', 'hit', 'st.any', 'st.won', 'st.lost', ...meets.map((x) => `st.${x}`)]) expect(shots, `${id} ${v}`).toContain(v);
+      for (const x of VERBS) if (owned(x) !== undefined && owned(x) !== id) expect(shots, `${id} st.${x}`).not.toContain(`st.${x}`);
     }
   });
 });

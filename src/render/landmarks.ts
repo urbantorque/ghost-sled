@@ -103,6 +103,8 @@ const BEHIND_SHORT = 30;
  *  Ember, paper-lantern amber on Sakura. */
 const LAMP_LIGHT: Record<BiomeId, [number, number, number]> = {
   alpine: [1, 0.56, 0.2],
+  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+  oldrun: [1, 0.56, 0.2],
   glacier: [1, 0.68, 0.3],
   volcanic: [1, 0.4, 0.12],
   blossom: [1, 0.6, 0.26],
@@ -123,6 +125,8 @@ const AIR_BIN = 2;
 
 const SPAN_KINDS: Record<BiomeId, Kind[]> = {
   alpine: ['gate', 'bridge'],
+  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+  oldrun: ['gate', 'bridge'],
   glacier: ['arch', 'gate'],
   volcanic: ['basalt', 'arch', 'bridge'],
   blossom: ['torii', 'bridge'],
@@ -132,6 +136,8 @@ const SPAN_KINDS: Record<BiomeId, Kind[]> = {
 // (Ember's vents throw spans high, so it gets the most bank pieces, its basalt lodge among them.)
 const BANK_KINDS: Record<BiomeId, Kind[]> = {
   alpine: ['hut', 'tower', 'jump'],
+  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+  oldrun: ['hut', 'tower', 'jump'],
   glacier: ['falls', 'dome', 'guardian'],
   volcanic: ['guardian', 'hut', 'tower', 'falls'],
   blossom: ['pagoda', 'guardian', 'hut'],
@@ -140,6 +146,8 @@ const BANK_KINDS: Record<BiomeId, Kind[]> = {
 };
 const ENC_KINDS: Record<BiomeId, Kind[]> = {
   alpine: ['gallery'],
+  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+  oldrun: ['gallery'],
   glacier: ['icetunnel', 'gallery'],
   volcanic: ['lavatunnel', 'gallery'],
   blossom: ['toriirow', 'gallery'],
@@ -147,7 +155,7 @@ const ENC_KINDS: Record<BiomeId, Kind[]> = {
 };
 /** How likely a section's piece is to span the run: narrow ones mostly (a ravine's walls hide anything on
  *  its banks), wide ones mostly a bank piece. */
-const SPAN_CHANCE: Record<SectionKind, number> = { chute: 0.8, gully: 0.85, ravine: 1, treerun: 0.7, cruise: 0.55, switchbacks: 0.5, benches: 0.35, bowl: 0.3, split: 0.3, fork: 0.3, lake: 0.15, terraces: 0.2, leap: 0.15, start: 0, street: 0, bridge: 0, tunnel: 0, finish: 0, track: 0, labyrinth: 0, outrun: 0 };
+const SPAN_CHANCE: Record<SectionKind, number> = { chute: 0.8, gully: 0.85, ravine: 1, treerun: 0.7, cruise: 0.55, switchbacks: 0.5, benches: 0.35, bowl: 0.3, split: 0.3, fork: 0.3, lake: 0.15, terraces: 0.2, leap: 0.15, start: 0, street: 0, bridge: 0, tunnel: 0, finish: 0, track: 0, labyrinth: 0, outrun: 0, house: 0 };
 /** Sections whose walls stand close: a tall bank piece behind one rears over the run. */
 const WALLED: ReadonlySet<SectionKind> = new Set<SectionKind>(['ravine', 'gully', 'tunnel', 'treerun']);
 /** Kinds that gather a crowd on the banks (both banks for spans, mostly their own side otherwise). */
@@ -498,6 +506,10 @@ export class SitePlan {
   /** Where everything stands (see the class's head). */
   private layout(): Draft[] {
     const c = this.course;
+    // (Round 9: the Old Run stands none of the five's pieces, no grandstands at its start, no lift line, no gate or
+    // hut down its banks; its own world builds the hotel, the start and timing houses and the parapet's lamps,
+    // oldrunworld.ts.)
+    if (c.kit?.id === 'oldrun') return [];
     const end = c.finishZ + c.runOut;
     const seed = c.seed;
     const secs: Section[] = [];

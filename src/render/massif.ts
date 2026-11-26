@@ -36,9 +36,10 @@ const HERO_AZ = 24;
 export const VOLCANO_TOP = 1040;
 /** The sea of clouds' level relative to the lens (metres). */
 const SEA_Y = -330;
-const PEAK_ID: Record<HeroPeak, number> = { summit: 0, fang: 1, volcano: 2, cone: 3 };
+const PEAK_ID: Record<HeroPeak, number> = { summit: 0, fang: 1, volcano: 2, cone: 3, hills: 3 };
 /** How much of each hero's patch is ever above the sea of clouds (see the hero in VERT). */
-const HERO_REACH: Record<HeroPeak, number> = { summit: 0.86, fang: 0.6, volcano: 0.72, cone: 0.56 };
+// (The Old Run's hills have no hero: its patch closes to a point and draws nothing.)
+const HERO_REACH: Record<HeroPeak, number> = { summit: 0.86, fang: 0.6, volcano: 0.72, cone: 0.56, hills: 0 };
 /** How far Frostfang's needle curves over at its tip (metres), away from the sun's side. */
 const FANG_LEAN = 360;
 /** How each mountain's ranges stand round its hero: crest height, how sharply the peaks rise out of
@@ -51,6 +52,8 @@ const RANGE: Record<HeroPeak, [number, number, number, number]> = {
   fang: [1.5, 2.1, 0.55, 0.5],
   volcano: [0.62, 0.9, 1.25, 0.34],
   cone: [0.5, 0.85, 1.5, 0.22],
+  // (Round 9: the Old Run's low wooded ridges round its lake, long and rounded, no peak standing out of them.)
+  hills: [0.34, 0.75, 1.9, 0.2],
 };
 
 /** 2D simplex noise (Ashima Arts / Stefan Gustavson, MIT), shared by the panorama, the sky dome's
@@ -100,6 +103,7 @@ export const SEA_GLSL = /* glsl */ `
   uniform vec3 uSeaSun;
   uniform vec3 uSeaWarm;
   uniform float uSeaLava;
+  uniform float uSeaLake;
   ${NOISE}
   float seaBillow(vec2 p, float detail) {
     vec2 q = p * 0.0009 + vec2(uTime * 0.0032, uTime * 0.0011);
@@ -113,7 +117,34 @@ export const SEA_GLSL = /* glsl */ `
     float q = clamp(l, 0.0, 0.999) * 3.0;
     return (floor(q) + smoothstep(0.35, 0.65, fract(q))) / 3.0;
   }
-  vec4 seaOfClouds(vec3 d) {
+  vec4 seaLake(vec3 d) {
+    float t = uSeaY / min(d.y, -0.0004);
+    vec2 p = d.xz * t;
+    float detail = 1.0 - smoothstep(2500.0, 7000.0, t);
+    // Round 9, the Old Run: the valley's floor far below is a lake of open water under the low sun, the far ridges
+    // standing out of it. A deep cold body, the sky mirrored toward the horizon, slow ripples held in the world and
+    // the sun's path down it in broken glitter on its bearing; never a sea of cloud (ART.md, the Old Run's brief).
+    vec2 lw = p + cameraPosition.xz;
+    float rip = snoise(vec2(lw.x * 0.0035, lw.y * 0.011)) * 0.6 + snoise(vec2(lw.x * 0.009, lw.y * 0.027) + 3.0) * 0.4;
+    #if SEA_Q > 0
+      rip += snoise(vec2(lw.x * 0.03, lw.y * 0.08) + 7.0) * 0.25 * detail;
+    #endif
+    float graze = 1.0 - clamp(-d.y * 7.0, 0.0, 1.0);
+    vec3 lake = mix(uSeaDeep * 0.8, mix(uSeaHaze, uSeaShade, 0.3), 0.22 + 0.58 * graze * graze);
+    lake *= 0.94 + 0.1 * rip;
+    vec2 lsx = normalize(uSeaSun.xz + vec2(0.0001, 0.0));
+    vec2 ld = normalize(d.xz);
+    float across = ld.x * lsx.y - ld.y * lsx.x;
+    float up = smoothstep(-0.03, 0.04, uSeaSun.y);
+    float path = exp(-across * across / (0.0016 + 0.004 * graze)) * step(0.0, dot(ld, lsx)) * up;
+    float glit = smoothstep(0.15, 0.75, rip * 0.5 + 0.5);
+    lake = mix(lake, uSeaRim * 1.25, path * (0.35 + 0.65 * glit) * 0.85);
+    // A broad warm sheen toward the sun across the whole lake, and the far water melting into the horizon haze.
+    lake = mix(lake, mix(uSeaHaze, uSeaRim, 0.4), pow(max(dot(ld, lsx), 0.0), 6.0) * 0.3 * up * graze);
+    lake = mix(lake, uSeaHaze, smoothstep(1500.0, 14000.0, t) * 0.8);
+    return vec4(lake, 1.0);
+  }
+  vec4 seaClouds(vec3 d) {
     float t = uSeaY / min(d.y, -0.0004);
     vec2 p = d.xz * t;
     // Fine detail fades with distance, where it would shimmer at a grazing angle.
@@ -182,6 +213,10 @@ export const SEA_GLSL = /* glsl */ `
     col = mix(col, uSeaHaze, smoothstep(1200.0, 12000.0, t) * 0.92);
     return vec4(col, step(0.001, uSea));
   }
+  // (One return a function: a lake's early return read to the D3D compiler as an unset result.)
+  vec4 seaOfClouds(vec3 d) {
+    return uSeaLake > 0.0 ? seaLake(d) : seaClouds(d);
+  }
 `;
 
 /** The uniforms the sea shares between the dome and the panorama (one set, updated once). */
@@ -198,6 +233,7 @@ export function makeSeaUniforms() {
     uSeaSun: { value: new Vector3(0, 0.2, -1) },
     uSeaWarm: { value: new Color(0, 0, 0) },
     uSeaLava: { value: 0 },
+    uSeaLake: { value: 0 },
   };
 }
 export type SeaUniforms = ReturnType<typeof makeSeaUniforms>;
@@ -218,6 +254,7 @@ export function paletteSea(u: SeaUniforms, p: Palette): void {
   u.uSeaSun.value.copy(p.diskDir);
   u.uSeaWarm.value.copy(p.deck.glow).multiplyScalar(p.massif.seaWarm * 0.85);
   u.uSeaLava.value = p.massif.seaLava;
+  u.uSeaLake.value = p.massif.seaLake;
 }
 
 const VERT = /* glsl */ `
@@ -912,7 +949,7 @@ export class Massif {
   }
 
   /** The hero summit's height (metres from the lens's level), where its banner leaves the ridge. */
-  private static readonly SUMMIT_Y: Record<HeroPeak, number> = { summit: 1500, fang: 2100, volcano: VOLCANO_TOP - 20, cone: 1300 };
+  private static readonly SUMMIT_Y: Record<HeroPeak, number> = { summit: 1500, fang: 2100, volcano: VOLCANO_TOP - 20, cone: 1300, hills: 400 };
 
   private placePlume(): void {
     const show = this.tier !== 'low' && this.banner > 0.01;

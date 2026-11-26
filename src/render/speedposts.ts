@@ -76,6 +76,8 @@ interface Style {
  *  wands with lilac tags on the glacier, ash-pale stakes on the volcano, bamboo and paper on Sakura. */
 const STYLES: Record<BiomeId, Style> = {
   alpine: { weights: [3, 2, 3, 2], shaft: '#F2EADB', band: '#5C7BD0', fence: '#D8C6AC', flags: ['#5F8FE6', '#E4ECFB'] },
+  // (The Old Run, round 9: never read, its own parapet stands there, oldrunworld.ts; kept for the table's sake.)
+  oldrun: { weights: [3, 2, 3, 2], shaft: '#F2EADB', band: '#5C7BD0', fence: '#D8C6AC', flags: ['#5F8FE6', '#E4ECFB'] },
   glacier: { weights: [4, 3, 3, 0], shaft: '#E2ECF5', band: '#6C8AD8', fence: '#D5DDEA', flags: ['#9A88E6', '#DCE8FA'] },
   volcanic: { weights: [4, 3, 1, 2], shaft: '#D3CED7', band: '#7A70B4', fence: '#C2BCC8', flags: ['#9484D0', '#E2DEE8'] },
   blossom: { weights: [2, 2, 4, 2], shaft: '#EFE7D8', band: '#9C86CC', fence: '#E0D6C4', flags: ['#EDBFD8', '#B09EE8'] },
@@ -356,7 +358,9 @@ export class SpeedPosts {
   /** Keeps the posts round sim z in the ring: a station at a time as the rider comes on, all at once
    *  after a cut (a new run, a revive far off, the title reel moving to another rider). */
   update(z: number): void {
-    if (this.cap <= 0) return;
+    // (Round 9: the Old Run's strobe is its parapet's posts and iron lamps along the lip, oldrunworld.ts; nothing of
+    // the five's stakes and slalom flags stands on its crest.)
+    if (this.cap <= 0 || this.course.kit?.id === 'oldrun') return;
     // (Reduced motion: they stand still, no flap and no whip.)
     (this.mesh.material as ShaderMaterial).uniforms.uPostLive.value = reduced() ? 0 : 1;
     if (!(Math.abs(z - this.lastZ) < 120)) this.seek(z);

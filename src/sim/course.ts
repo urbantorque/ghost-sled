@@ -6,7 +6,7 @@ import { momentPlays, setPieceKinds } from './moments';
 import { GATE_PAST_LINE, START_GATE_Z } from './charms';
 import { ALL_EVENTS } from './chaos';
 import type { Kit, KitPlan, KitRider } from './kit';
-import { OLDRUN_KIT, OLDRUN_LAYOUT } from './oldrun';
+import { HOUSE_GRADE, OLDRUN_KIT, OLDRUN_LAYOUT, TRACK_GRADE } from './oldrun';
 import { CHUNK_LEN, FOREST_LIMIT, SAFE_LANE, THRESHOLD_AFTER, THRESHOLD_AFTER_MIN, THRESHOLD_BEFORE, THRESHOLD_BEFORE_MAX, THRESHOLD_HW, bank } from './courseparts';
 
 export { CHUNK_LEN, FOREST_LIMIT, SAFE_LANE, THRESHOLD_AFTER, THRESHOLD_AFTER_MIN, THRESHOLD_BEFORE, THRESHOLD_BEFORE_MAX, THRESHOLD_HW, bank };
@@ -360,7 +360,9 @@ export type SectionKind =
   // Round 9, the Old Run (oldrun.ts): its channel, its tight S-bends, and the outrun it finishes in.
   | 'track'
   | 'labyrinth'
-  | 'outrun';
+  | 'outrun'
+  // (and the start house at its head, steeper than the track: oldrun.ts HOUSE_GRADE)
+  | 'house';
 export const SECTION_KINDS: readonly SectionKind[] = [
   'cruise',
   'chute',
@@ -383,6 +385,7 @@ export const SECTION_KINDS: readonly SectionKind[] = [
   'track',
   'labyrinth',
   'outrun',
+  'house',
 ];
 /** What a section does to the course. `slope`, `wander`, `wave`, `span`, `obstacles`, `kickers`,
  *  `moguls`, `drops` and `relief` are multipliers (1 = the plain corridor); the rest are as noted. */
@@ -493,6 +496,7 @@ const SHAPES: Record<SectionKind, SectionShape> = {
   track: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 0.5, ...BARE }),
   labyrinth: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 0.5, ...BARE }),
   outrun: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 0.5, ...BARE }),
+  house: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 0.5, ...BARE }),
 };
 
 /** The ground's real gradient for the kinds that promise one; the rest scale the mountain's own slope. */
@@ -508,9 +512,10 @@ const GRADE: Partial<Record<SectionKind, readonly [number, number]>> = {
   terraces: [0.1, 0.1],
   leap: [0.38, 0.42],
   finish: [0.08, 0.08],
-  track: [0.17, 0.17],
-  labyrinth: [0.17, 0.17],
+  track: [TRACK_GRADE, TRACK_GRADE],
+  labyrinth: [TRACK_GRADE, TRACK_GRADE],
   outrun: [0.05, 0.05],
+  house: [HOUSE_GRADE, HOUSE_GRADE],
 };
 
 /** The half-width of the kinds that pin it. */
@@ -526,6 +531,7 @@ const WIDTH: Partial<Record<SectionKind, readonly [number, number]>> = {
   track: [7.5, 7.5],
   labyrinth: [7.5, 7.5],
   outrun: [7.5, 7.5],
+  house: [7.5, 7.5],
 };
 
 const BLEND: Record<SectionKind, number> = {
@@ -550,6 +556,7 @@ const BLEND: Record<SectionKind, number> = {
   track: 40,
   labyrinth: 40,
   outrun: 60,
+  house: 40,
 };
 
 /** The metres of a section's body past its blend. Terraces and leaps work theirs out from what they hold. */
@@ -575,6 +582,7 @@ const BODY: Record<SectionKind, readonly [number, number]> = {
   track: [0, 0],
   labyrinth: [0, 0],
   outrun: [0, 0],
+  house: [0, 0],
 };
 
 /** A slope that steepens is a crest: the blend takes long enough to stay under this curvature (a sled

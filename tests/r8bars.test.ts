@@ -115,9 +115,10 @@ describe('round 8 bars', () => {
   });
 
   it('first minute: the clumsy pilot finishes at least 26 of 30', () => {
+    // (Six seeds a mountain: thirty on the five, and since round 9 six more on each new mountain, held to the same share.)
     const f = clumsyFinishes(M, 6);
-    expect(f.of).toBe(30);
-    expect(f.finished).toBeGreaterThanOrEqual(26);
+    expect(f.of).toBe(6 * M.mountains.MOUNTAINS.length);
+    expect(f.finished).toBeGreaterThanOrEqual(Math.ceil((26 * f.of) / 30));
   });
 
   // Before the spine Lanternfall had nothing left at run 50 but two legends. With it every mountain has something

@@ -158,9 +158,10 @@ export class VerbWorld {
     this.wheels = kit.pool(wheelGeo(), 6, kit.lit);
   }
 
-  /** Whether this file draws this set piece's verb (the fifth mountain's are the lanternworld lane's). */
+  /** Whether this file draws this set piece's verb (the fifth mountain's are the lanternworld lane's; round 9, the
+   *  Old Run's three are its own world's, oldrunworld.ts). */
   owns(p: MomentPlay): boolean {
-    return p.verb !== 'follow' && p.verb !== 'kindle' && p.verb !== 'carry';
+    return p.verb !== 'follow' && p.verb !== 'kindle' && p.verb !== 'carry' && p.verb !== 'peal' && p.verb !== 'split' && p.verb !== 'glaze';
   }
 
   build(c: Course, plays: readonly MomentPlay[]): void {

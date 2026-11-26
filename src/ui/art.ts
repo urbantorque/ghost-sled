@@ -39,6 +39,13 @@ const RIDGES: Record<MountainCard['biome'], string> = {
     '<path d="M72 44h8v-6h-8zM73 37h6v-5h-6zM74 31h4v-4h-4z" fill="#FFC46A"/>' +
     '<path d="M71 44h10M72 37.5h8M73 31.5h6M76 27v-4" stroke="#121933" stroke-width="1.2"/>' +
     '<g fill="#FFD34D"><rect x="24" y="30" width="3" height="4" rx="1"/><rect x="46" y="18" width="2.4" height="3.2" rx=".8"/><rect x="100" y="44" width="3" height="4" rx="1"/><rect x="140" y="50" width="2.4" height="3.2" rx=".8"/><rect x="58" y="8" width="1.8" height="2.4" rx=".6" opacity=".8"/><rect x="12" y="12" width="1.8" height="2.4" rx=".6" opacity=".7"/><rect x="92" y="14" width="1.6" height="2.2" rx=".5" opacity=".7"/></g>',
+  // The Old Run (round 9): a low late sun over bare trees, and the old track's channel sweeping down through them.
+  oldrun:
+    '<circle cx="124" cy="66" r="12" fill="#FFD9A8" opacity=".9"/>' +
+    '<path d="M0 80V60l28-6 30 4 34-8 30 6 38-4v28z" fill="#F5F3FF" opacity=".2"/>' +
+    '<path d="M0 80V70l18-4 4-14 4 14 14-2 4-16 4 16 20 2 4-12 4 12 30 4 4-14 4 14 32 4v6z" fill="#121933" opacity=".72"/>' +
+    '<path d="M18 80c22-10 52-8 66-18s34-12 52-10" fill="none" stroke="#F5F3FF" stroke-width="5" stroke-linecap="round" opacity=".55"/>' +
+    '<path d="M18 80c22-10 52-8 66-18s34-12 52-10" fill="none" stroke="#BDE3FF" stroke-width="1.6" stroke-linecap="round" opacity=".7"/>',
 };
 
 export function biomeArt(biome: MountainCard['biome']): string {

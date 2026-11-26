@@ -82,8 +82,9 @@ export interface Palette {
    *  Skies); 0 keeps them gaps in a sea of cloud. seaWarm lights the sea from beneath in patches, in the
    *  deck's glow colour (Lanternfall: the valley of lanterns under the cloud). bands lays mist in three
    *  layers across the panorama's lower slopes (Sakura's run-in: the mist lifting off the cone). seaLava 1 paints
-   *  the sea as a lake of lava, crust on cracks of the seaWarm glow (Ember's Caldera Leap; 0 everywhere else). */
-  massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number; flow: number; heroAz: number; seaIce: number; seaWarm: number; seaLava: number; bands: number };
+   *  the sea as a lake of lava, crust on cracks of the seaWarm glow (Ember's Caldera Leap; 0 everywhere else). seaLake 1
+   *  paints it as open water, a lake far below with the sky and the low sun in it (the Old Run, round 9; 0 elsewhere). */
+  massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number; flow: number; heroAz: number; seaIce: number; seaWarm: number; seaLava: number; bands: number; seaLake: number };
   /** grain: film grain strength (night moods run light, where grain reads as digital noise in the
    *  dark). foot: how much the bottom edge of the frame darkens and cools (see post.ts). */
   grade: Grade;
@@ -263,8 +264,9 @@ export function filmValue(x: number): number {
 }
 
 /** Each biome's signature mountain (massif.ts): a classic snow-capped summit, an ice fang, a
- *  smoking volcano or a symmetrical snow-capped cone. */
-export type HeroPeak = 'summit' | 'fang' | 'volcano' | 'cone';
+ *  smoking volcano or a symmetrical snow-capped cone. Round 9: or none, 'hills', the Old Run's low wooded ridges round
+ *  its lake, with no hero at the track's vanishing point. */
+export type HeroPeak = 'summit' | 'fang' | 'volcano' | 'cone' | 'hills';
 
 const c = (hex: string) => new Color(hex);
 
@@ -320,7 +322,7 @@ function base(): Palette {
     ridge: [c('#C8B4DE'), c('#9A8AC6'), c('#6660A6')],
     mist: null,
     mistK: 0,
-    massif: { peak: 'summit', rock: c('#5A4E7A'), glow: c('#FF9AA2'), glowK: 0, glowLine: -6000, veil: 0, sea: 1, lava: 0, flow: 0, heroAz: 0, seaIce: 0, seaWarm: 0, seaLava: 0, bands: 0 },
+    massif: { peak: 'summit', rock: c('#5A4E7A'), glow: c('#FF9AA2'), glowK: 0, glowLine: -6000, veil: 0, sea: 1, lava: 0, flow: 0, heroAz: 0, seaIce: 0, seaWarm: 0, seaLava: 0, bands: 0, seaLake: 0 },
     grade: { lift: c('#0A0F2A'), gain: c('#FFF8F0'), saturation: 1.08, contrast: 1.04, grain: 1, foot: 0.3, shafts: 1, lens: 1, focal: 1, gust: 0, glitter: 0.15 },
     clouds: { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFE6CF'), shade: c('#A48CC0'), rim: c('#FFB088'), shadow: 0.3 },
     deck: { k: 0, lit: c('#FFFFFF'), shade: c('#FFFFFF'), glow: c('#FFFFFF') },
@@ -374,6 +376,28 @@ function biomeBase(biome: BiomeId): Palette {
   const p = base();
   switch (biome) {
     case 'alpine':
+      return p;
+    case 'oldrun':
+      // What the chaos moods stand on at the Old Run (round 9): cream snow, slate-lavender shade, a bare wood in
+      // grey-violet and plum, low wooded ridges round a lake and no hero at the end of the track, no sea of cloud.
+      p.snowLit = c('#FFF8F0');
+      p.snowShade = c('#7C88C8');
+      p.snowDeep = c('#48529E');
+      p.tall = c('#5E4E66');
+      p.tallDark = c('#362C42');
+      p.low = c('#4C4660');
+      p.lowLit = c('#7C7290');
+      // (The props' accent is an old resort's green paint, never the rider's vermillion.)
+      p.accentProp = c('#2F5446');
+      p.ridge = [c('#D8CCD8'), c('#A8A4C4'), c('#7880AE')];
+      p.massif.peak = 'hills';
+      p.massif.rock = c('#5E5A7E');
+      // (The valley's floor far below is a lake, not a sea of cloud: massif.ts SEA_GLSL's lake.)
+      p.massif.sea = 1;
+      p.massif.seaLake = 1;
+      p.atmo.banner = 0;
+      p.atmo.slide = 0;
+      p.atmo.valleyColor = c('#E2D2D0');
       return p;
     case 'glacier':
       p.skyZenith = c('#2B5FA8');
@@ -874,6 +898,45 @@ function setSun(p: Palette, az: number, disc: number, light: number, shadowEl: n
  *  chaos moods never see any of it. */
 function clearSkies(p: Palette, biome: BiomeId): void {
   switch (biome) {
+    case 'oldrun':
+      // The Old Run (round 9, notes/r9-oldrun-world.md): a low late sun of a winter afternoon, ahead and to the left
+      // through a bare wood, a soft large disc in a frost haze over a slate-blue sky. Cream snow, slate-lavender shade,
+      // and the long shadows of the trunks raking across the track's ice toward the lens.
+      setSun(p, -18, 7, 26, 9);
+      p.sunColor = c('#FFE8C4');
+      p.sunCore = new Color(2.8, 2.45, 1.85);
+      p.sunTint = 0.75;
+      p.sunSize = 1.15;
+      p.sunGlow = 0.95;
+      p.sunSoft = 0.3;
+      p.skyZenith = c('#2E4A8C');
+      p.skyMid = c('#90A0C6');
+      p.skyHorizon = c('#F4D6AE');
+      p.skyBand = { color: c('#FFDCA6'), fade: 18, k: 0.8 };
+      p.skyBelow = c('#D4C6CC');
+      p.skySpread = 0.6;
+      p.skyCurve = 0.78;
+      p.rim = c('#FFD8A8');
+      p.fog = c('#E2D0C6');
+      p.fogNear = 60;
+      p.fogFar = 560;
+      p.hemiSky = c('#9CAAD8');
+      p.massif.glow = c('#FFC890');
+      p.massif.glowK = 0.45;
+      p.massif.glowLine = -150;
+      p.massif.veil = 0.12;
+      // (Shafts a little only: from a low sun ahead they lay pale wedges down the near walls, and ART.md 12's shafts hang
+      // in the air, never on the near snow.)
+      p.grade = { lift: c('#0C1026'), gain: c('#FFFAF2'), saturation: 1.08, contrast: 1.1, grain: 0.6, foot: 0.34, shafts: 0.3, lens: 0.2, focal: 0.5, gust: 0, glitter: 0.3 };
+      p.poster.shafts = 0.35;
+      // (Few banks: a winter afternoon's high cirrus, lit from under by the low sun.)
+      // (Banks heaped off the far ridges and a few long wisps: a field of high wisps read as stamped flat ellipses.)
+      p.clouds = { low: 0.58, high: 0.2, top: 0.3, lit: c('#FFF0DC'), shade: c('#ACA6C8'), rim: c('#FFC890'), shadow: 0.14 };
+      p.atmo = { rays: 0.7, halo: 0, meteors: 0, banner: 0, slide: 0, sweep: 0.3, valley: 0.85, valleyColor: c('#E6D4CC'), drift: 0.25 };
+      p.bloom = 0.36;
+      p.snowfall = 0.02;
+      p.sparkle = 0.85;
+      return;
     case 'alpine':
       // A bright ski day: a high white sun off to the right, deep cobalt over pale blue, teal pines and
       // short, sharp blue shadows.
@@ -1172,6 +1235,22 @@ function clearSkies(p: Palette, biome: BiomeId): void {
  *  glows; Frostfang and Pinecrest keep their palettes and gain a far plane of their own blue. */
 function round7(p: Palette, biome: BiomeId): void {
   switch (biome) {
+    case 'oldrun':
+      // The far plane is a hazy lavender-slate over the lake, the air warm toward the sun and cool away from it, lying
+      // thick in the valley below the track.
+      p.air = { far: c('#8088B8'), cool: c('#E6E8FF'), low: 0.6, scatter: 1.25 };
+      p.lamps = 0.3;
+      p.grade.exposure = 0.98;
+      p.grade.hi = c('#FFF6E4');
+      p.grade.lo = c('#E2E4FF');
+      p.grade.posterKey = 0.92;
+      // (Low's lit snow read as beige sand under the low sun: its poster keeps less of the light's warmth and leans
+      // the lit snow toward the shade's periwinkle, the warmth left in the sky and the sun's rim.)
+      p.grade.posterCool = 0.2;
+      p.posterSnowSat = 0.45;
+      p.posterSunSat = 0.55;
+      p.poster.foot = 0.45;
+      return;
     case 'alpine':
       p.air = { far: c('#6E9AE2'), cool: c('#E4ECFF'), low: 0.5, scatter: 1.1 };
       p.lamps = 0.2;
@@ -1355,6 +1434,10 @@ function round7(p: Palette, biome: BiomeId): void {
  *  Lanternfall's lamp roads marigold, Frostfang's fields the aurora's teal. */
 function visualLift(p: Palette, biome: BiomeId): void {
   switch (biome) {
+    case 'oldrun':
+      // (The low sun's sheen on the snow and the ice seen toward it; the bare wood lets a little light through.)
+      p.lift = { bounce: 0.4, sun: 0.7, tint: c('#FFF8EE'), sky: 0.42, through: 0.4, sheen: 0.85 };
+      return;
     case 'alpine':
       p.lift = { bounce: 0.42, sun: 0.75, tint: c('#FFFFFF'), sky: 0.48, through: 0.6, sheen: 0.8 };
       return;
@@ -1430,6 +1513,110 @@ export interface JourneyStop {
  *  nowhere else. What belongs to a place rather than to the hour (a street's lamplight, a cavern's dark)
  *  is in PLACES below, keyed to the course's own sections. Round 7 restaged every row to ART.md 15. */
 export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
+  // The Old Run (round 9, notes/r9-oldrun-world.md): a winter afternoon going down. The sun sinks through the wood over
+  // the Hotel Straights and the Labyrinth, sets gold over the lake through the Horseshoe, and the line is crossed in the
+  // first blue of the evening, the parapet's iron lamps lit.
+  oldrun: [
+    {
+      // Deeper in the wood: the sun lower and warmer, the shafts between the trunks stronger.
+      from: 650, at: 1450, dusk: 0.35,
+      edit: (p) => {
+        setSun(p, -16, 5, 24, 8);
+        p.sunColor = c('#FFDEB2');
+        p.sunCore.setRGB(2.9, 2.3, 1.55);
+        p.skyMid = c('#9AA0C2');
+        p.skyHorizon = c('#F8CA94');
+        p.skyBand.color = c('#FFC884');
+        p.fog = c('#DCC2B6');
+        p.rim = c('#FFCC98');
+        p.clouds.lit = c('#FFE2C0');
+        p.air.far = c('#7A80B4');
+        p.atmo.rays = 0.85;
+        p.grade.shafts = 0.38;
+        p.grade.saturation = 1.1;
+        p.lamps = 0.45;
+      },
+    },
+    {
+      // Through the Horseshoe the sun sets over the lake in rose, not Pinecrest's honey: the far ridges lit along their
+      // crests, a rose haze in the valley, the shade a violet-slate, the iron lamps beginning to tell.
+      from: 1900, at: 2500, dusk: 0.65,
+      edit: (p) => {
+        setSun(p, -12, 2.8, 21, 8);
+        p.sunColor = c('#FFCA94');
+        p.sunCore.setRGB(3, 2.1, 1.15);
+        p.sunGlow = 1;
+        p.skyZenith = c('#33367A');
+        p.skyMid = c('#A08AB6');
+        p.skyHorizon = c('#F6A890');
+        p.skyBand = { color: c('#FFA884'), fade: 20, k: 0.9 };
+        p.skyBelow = c('#C49CB0');
+        p.snowLit = c('#FCEAE6');
+        // (A single pink-violet took the near wall, the trees and the sky alike: the shade a bluer violet, the far plane
+        // paler and bluer, so the three planes part.)
+        p.snowShade = c('#6870BC');
+        p.snowDeep = c('#343C94');
+        p.fog = c('#C8A2B4');
+        p.rim = c('#FFC294');
+        p.hemiSky = c('#8C96D0');
+        p.air.far = c('#8C98CC');
+        p.clouds.lit = c('#FFD0A8');
+        p.clouds.shade = c('#8A80B0');
+        p.clouds.rim = c('#FFA868');
+        p.massif.glowK = 0.75;
+        p.massif.glowLine = -60;
+        p.grade.saturation = 1.12;
+        p.grade.hi = c('#FFEED6');
+        p.grade.lo = c('#DCDFFF');
+        p.grade.posterSnow = 0.6;
+        p.hazardDim = 0.94;
+        p.lamps = 0.7;
+        p.bloom = 0.42;
+      },
+    },
+    {
+      // The outrun at dusk: the sun gone behind the far ridge, a rose band under a deepening blue, the snow in the sky's
+      // cool light, and the lamps and the timing house's windows the light at the line.
+      from: 2700, at: 3000, dusk: 0.9,
+      edit: (p) => {
+        setSun(p, -10, 1.2, 19, 8);
+        p.sunDisc = 0.35;
+        p.sunGlow = 0.7;
+        p.sunColor = c('#EAC0A8');
+        p.sunCore.setRGB(2.4, 1.6, 1.1);
+        p.skyZenith = c('#16285A');
+        p.skyMid = c('#6E6CA8');
+        p.skyHorizon = c('#EE9A58');
+        p.skyBand = { color: c('#F4A070'), fade: 22, k: 0.65 };
+        p.skyBelow = c('#6E7298');
+        p.snowLit = c('#C8D2EA');
+        p.snowShade = c('#3E4E96');
+        p.snowDeep = c('#242C7A');
+        p.rim = c('#F0C0A4');
+        p.fog = c('#5E74A8');
+        p.hemiSky = c('#6E78C8');
+        p.air.far = c('#4A4E96');
+        p.clouds.lit = c('#E8B4A4');
+        p.clouds.shade = c('#5A5A9A');
+        p.clouds.rim = c('#F4A088');
+        p.clouds.shadow = 0;
+        p.massif.glowK = 0.4;
+        p.massif.glowLine = 200;
+        p.grade.shafts = 0.25;
+        p.grade.saturation = 1.06;
+        p.grade.hi = c('#FFF0DC');
+        p.grade.lo = c('#DCE0FF');
+        p.stars = 0.25;
+        p.hazardDim = 0.88;
+        p.lamps = 1.25;
+        p.lampAir = 0.03;
+        p.lanternGlow = 0.3;
+        p.giftGlow = 0.35;
+        p.ghostGlow = 1.45;
+        p.bloom = 0.5;
+      },
+    },
+  ],
   alpine: [
     {
       // The cloud builds through the afternoon. The grade holds cool, so the gold later is a change.
@@ -2517,6 +2704,75 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
   // violet with the underside rose and the valley's lanterns paler; the sun up over Firstlight; morning at the line.
   // The snow stays lilac with a silver lit side all the way (ART.md 15): the dawn is in the sky and on the rims,
   // never a gold floor.
+  // The Old Run by Lamplight (round 9, notes/r9-oldrun-world.md): the track at night, as the hotel's guests rode it
+  // after dinner. A half moon over the far ridges, the snow in its cold light, and the parapet's iron lamps the
+  // light down the whole run, their pools amber on the ice; the hotel's windows lit at the top and the lake town's far
+  // below. Snow begins to fall through the lamplight in the Labyrinth.
+  oldrun: {
+    name: 'Lamplight',
+    phrase: 'by Lamplight',
+    dusk: 1,
+    start: (p) => {
+      // (The moon's shadows a little higher: low, the rider's lay detached beside the sled as a dark blob.)
+      setSun(p, 22, 11, 40, 22);
+      p.moon = true;
+      p.moonPhase = 0.35;
+      p.sunDisc = 1;
+      p.sunColor = c('#C8D2F4');
+      p.sunCore.setRGB(1.9, 1.95, 2.25);
+      p.sunTint = 0.9;
+      p.sunSize = 1.3;
+      p.sunGlow = 0.75;
+      p.sunSoft = 0;
+      p.skyZenith = c('#0B1240');
+      p.skyMid = c('#1C2868');
+      p.skyHorizon = c('#4A4E98');
+      p.skyBand = { color: c('#8C88CC'), fade: 26, k: 0.4 };
+      p.skyBelow = c('#262A68');
+      p.snowLit = c('#B4BEE6');
+      p.snowShade = c('#3E4698');
+      p.snowDeep = c('#1C2262');
+      p.rim = c('#D8E0FF');
+      p.fog = c('#2C3474');
+      p.hemiSky = c('#4A58B0');
+      p.air = { far: c('#1E2660'), cool: c('#D8DCFF'), low: 0.7, scatter: 1.05 };
+      p.clouds = { low: 0.1, high: 0.3, top: 0.1, lit: c('#5C66A8'), shade: c('#262C6A'), rim: c('#C8D0FF'), shadow: 0 };
+      p.ridge = [c('#3E447E'), c('#2C3068'), c('#1C2050')];
+      p.massif.rock = c('#1C1E48');
+      p.massif.glow = c('#B8C4F0');
+      p.massif.glowK = 0.25;
+      p.massif.glowLine = 500;
+      p.atmo = { rays: 0, halo: 0, meteors: 0.3, banner: 0, slide: 0, sweep: 0.1, valley: 0.8, valleyColor: c('#3A3E86'), drift: 0.2 };
+      p.stars = 0.9;
+      p.hazardDim = 0.85;
+      p.lamps = 1.6;
+      // (A lamp's haze in the air near the crest stood through the frame as a warm vertical stripe: a breath of it.)
+      p.lampAir = 0.04;
+      // (A sled lantern's pool 3.5 to 4 m across under the sled, ART.md 7's Lantern Night: at 0.6 it was a speck.)
+      p.lanternGlow = 0.85;
+      p.giftGlow = 0.5;
+      p.ghostGlow = 1.5;
+      p.heroRim = 1.45;
+      p.bloom = 0.6;
+      p.sparkle = 1.2;
+      p.grade = { ...p.grade, shafts: 0, saturation: 1.04, contrast: 1.12, exposure: 1.04, glitter: 0.25, hi: c('#FFF0DC'), lo: c('#DCE0FF'), flash: 0.4 };
+      Object.assign(p.poster, { steps: 2, bands: 6, stripe: 0, rim: 0.6, vignette: 0.24, shadow: c('#262A70'), shadowK: 0.35 });
+    },
+    journey: [
+      {
+        // Snow begins to fall through the lamplight in the Labyrinth, and the moon goes behind a veil of it.
+        from: 1000, at: 1700, dusk: 1,
+        edit: (p) => {
+          p.snowfall = 0.22;
+          p.sunGlow = 0.5;
+          p.clouds.high = 0.55;
+          p.stars = 0.5;
+          p.fog = c('#323A7C');
+          p.fogFar = 460;
+        },
+      },
+    ],
+  },
   lantern: {
     name: 'First Light',
     phrase: 'at First Light',
@@ -2743,6 +2999,62 @@ const lamps = (p: Palette, k: number): void => {
  *  acts carry their places with them. A row is a place's own picture: its exposure and split tone, its
  *  air, and what lights it. Blended in over the section's own blend and out past its end. */
 export const PLACES: Record<BiomeId, Place[]> = {
+  // The Old Run (round 9, notes/r9-oldrun-world.md): its places graded over the hour's light. The start house and the
+  // hotel above it in the warm light off the facade; the Hotel Straights' wood dappled, shafts between the trunks; the
+  // Labyrinth's deep walls holding the shade, the lamps already telling there; the Horseshoe's stretch over the lake in
+  // the sunset's rose; the outrun at the timing house, its windows and the lamps the light at the line.
+  oldrun: [
+    {
+      kind: 'house',
+      edit: (p) => {
+        p.grade.hi = c('#FFF2DA');
+        p.lift.bounce = 0.5;
+        lamps(p, 0.5);
+      },
+    },
+    {
+      kind: 'track',
+      nth: 0,
+      edit: (p) => {
+        p.atmo.rays = 1;
+        p.grade.shafts = 0.45;
+        p.lift.sun = 0.6;
+        p.grade.hi = c('#FFF4E0');
+        p.grade.contrast += 0.03;
+      },
+    },
+    {
+      // (The deepest walls on the run, 7.5 m: a slot of shade with the light only on the high glaze and the crest.)
+      kind: 'labyrinth',
+      edit: (p) => {
+        p.lift.sun = 0.45;
+        p.grade.hi = c('#F6F4FF');
+        p.grade.lo = c('#DCDCFF');
+        p.grade.saturation -= 0.03;
+        p.clouds.shadow = 0.05;
+        lamps(p, 0.75);
+      },
+    },
+    {
+      kind: 'track',
+      nth: 3,
+      edit: (p) => {
+        p.atmo.valley = 0.7;
+        p.atmo.valleyColor = c('#E8B0A8');
+        p.grade.hi = c('#FFECE0');
+        p.grade.contrast += 0.04;
+        p.bloom += 0.05;
+      },
+    },
+    {
+      kind: 'outrun',
+      edit: (p) => {
+        lamps(p, 1.5);
+        p.lampAir = 0.1;
+        p.grade.hi = c('#FFEEDA');
+      },
+    },
+  ],
   alpine: [
     {
       // The gold's own leap (the second): honey on the lit snow, violet in the long shadows, the valley's

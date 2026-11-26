@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Vector3 } from 'three';
+import { BufferAttribute, Mesh, Vector3 } from 'three';
 import { Mood } from '../src/sim/chaos';
 import { CHUNK_LEN, Course, RUN_OUT, Section, courseFor } from '../src/sim/course';
 import { MOUNTAINS, dailySeed } from '../src/sim/mountains';
@@ -11,6 +11,9 @@ import { CHAIR_DROP, LINE_Z, liftLayout } from '../src/render/liftline';
 import { LINE_DEPTH, LINE_LIFT, LINE_ROWS } from '../src/render/places';
 import { buildTerrainGeometry } from '../src/render/terrain';
 import { OverlookPlan } from '../src/render/overlook';
+import { HOTEL, START_HOUSE, TIMING, oldrunClearings } from '../src/render/oldrunplan';
+import { OldRunWorld } from '../src/render/oldrunworld';
+import type { Clearing } from '../src/render/dressing';
 
 // The course's sections are the plan: a street is a town, a tunnel an enclosure, a bridge a bridge, and
 // nothing stands in the run. Every vertex of every piece is past the course's own edge limit there (the
@@ -67,6 +70,25 @@ describe('the plan is the course', () => {
         const b = flown(c, mood);
         expect(a.planned.map((s) => [s.z, s.kind, s.len, s.clear])).toEqual(b.planned.map((s) => [s.z, s.kind, s.len, s.clear]));
         const list = a.planned;
+        // (Round 9: a mountain laid by its own kit plans none of the five's places; its sections are its own, and so
+        // are the places on them. The Old Run's house section holds its start house over z = 0 and the grand hotel
+        // beside its straight; its outrun holds the line and the whole run-out, its timing house beside the line.)
+        if (c.kit) {
+          expect(list).toEqual([]);
+          const secs = sections(c);
+          expect(secs[0].kind).toBe('house');
+          expect(START_HOUSE.z0).toBeLessThan(secs[0].z0 + 2);
+          expect(START_HOUSE.z1).toBeGreaterThan(secs[0].z0);
+          expect(HOTEL.from).toBeGreaterThan(START_HOUSE.z1);
+          expect(HOTEL.to).toBeLessThan(secs[0].z1);
+          const out = secs.find((s) => s.kind === 'outrun')!;
+          expect(out.z0).toBeLessThan(c.finishZ - 50);
+          expect(out.z1).toBeGreaterThanOrEqual(c.finishZ + c.runOut);
+          const keep: Clearing[] = [];
+          oldrunClearings(c, c.finishZ - 10, c.finishZ + 10, keep);
+          expect(keep.some((k) => k.side === TIMING.side && k.z0 < c.finishZ && k.z1 > c.finishZ)).toBe(true);
+          return;
+        }
         const holds = (z0: number, z1: number, want: (s: Site) => boolean) => list.some((s) => want(s) && s.z - s.len <= z0 + 2 && s.z + s.len >= z1 - 2);
         for (const sec of sections(c)) {
           const body = sec.z0 + sec.blend;
@@ -307,10 +329,54 @@ describe('the finish line', () => {
   });
 });
 
+/** The Old Run's own places as its world draws them on a tier (oldrunworld.ts, by name): world positions. */
+function oldrunPlaces(c: Course, low: boolean): Map<string, BufferAttribute[]> {
+  const w = new OldRunWorld(null);
+  w.setDetail(low ? 'low' : 'high');
+  w.setCourse(c);
+  const out = new Map<string, BufferAttribute[]>();
+  for (const o of w.root.children) {
+    if (!(o instanceof Mesh) || !o.name) continue;
+    const list = out.get(o.name) ?? [];
+    list.push(o.geometry.getAttribute('position') as BufferAttribute);
+    out.set(o.name, list);
+  }
+  return out;
+}
+
+const trisOf = (list: readonly BufferAttribute[] | undefined): number => (list ?? []).reduce((n, p) => n + p.count / 3, 0);
+
 describe('the start', () => {
   it('is an occasion on every tier: packed stands down both banks, at the cost of triangles alone', () => {
     for (const m of MOUNTAINS) {
       const c = courseFor(m.seed);
+      // (Round 9: a kit's mountain has no stands. The Old Run's occasion is its own on every tier: the start house over
+      // its first metres and the grand hotel beside its straight, its guests out on the terrace, Low paying for them in
+      // triangles alone, the same places and the guests half as many.)
+      if (c.kit) {
+        const full = oldrunPlaces(c, false);
+        const low = oldrunPlaces(c, true);
+        const terrace = (pl: Map<string, BufferAttribute[]>) => {
+          let n = 0;
+          for (const p of pl.get('onlookers') ?? []) {
+            for (let v = 0; v < p.count; v++) {
+              const z = -p.getZ(v);
+              if (z > HOTEL.from && z < HOTEL.to && Math.sign(p.getX(v) - c.centerX(z)) === HOTEL.side) n++;
+            }
+          }
+          return n;
+        };
+        for (const name of ['start-house', 'hotel']) {
+          expect(trisOf(low.get(name)), `${m.name} ${name} low`).toBeGreaterThan(0);
+          expect(trisOf(low.get(name)), `${m.name} ${name}`).toBeLessThan(trisOf(full.get(name)));
+        }
+        expect(trisOf(full.get('hotel')), m.name).toBeGreaterThan(15000);
+        expect(trisOf(full.get('hotel')) + trisOf(full.get('start-house')), m.name).toBeLessThanOrEqual(42000);
+        expect(terrace(full), m.name).toBeGreaterThan(600);
+        expect(terrace(low), m.name).toBeGreaterThan(terrace(full) * 0.35);
+        expect(terrace(low), m.name).toBeLessThan(terrace(full));
+        continue;
+      }
       const p = getPalette(c.biome, Mood.None);
       const s = flown(c, Mood.None).planned.find((q) => q.kind === 'start')!;
       for (const low of [false, true]) {
@@ -335,6 +401,30 @@ describe('the start', () => {
   it('stands its crowd past the limit and its stands clear of the run, either side of the gate', () => {
     for (const m of MOUNTAINS) {
       const c = courseFor(m.seed);
+      // (Round 9: a kit's mountain has no stands and no gate. The Old Run's watchers, its hotel and its timing house
+      // stand past its limit, never on the ice; its start house stands on its crests either side and over the run
+      // only as high as its eaves, a roof a sled leaves from under.)
+      if (c.kit) {
+        for (const low of [false, true]) {
+          const pl = oldrunPlaces(c, low);
+          for (const name of ['onlookers', 'hotel', 'timing-house']) {
+            const list = pl.get(name) ?? [];
+            expect(list.length, `${m.name} ${name}`).toBeGreaterThan(0);
+            for (const p of list) for (let v = 0; v < p.count; v++) expect(c.edgeExcess(p.getX(v), -p.getZ(v)), `${name} at ${Math.round(-p.getZ(v))}`).toBeGreaterThanOrEqual(c.edgeLimit(-p.getZ(v)));
+          }
+          const sides = new Set<number>();
+          for (const p of pl.get('start-house') ?? []) {
+            for (let v = 0; v < p.count; v++) {
+              const x = p.getX(v);
+              const z = -p.getZ(v);
+              if (c.edgeExcess(x, z) >= c.edgeLimit(z)) sides.add(Math.sign(x - c.centerX(z)));
+              else expect(p.getY(v) - c.ground(x, z), `the start house over the run at ${z.toFixed(1)}`).toBeGreaterThan(5);
+            }
+          }
+          expect(sides.size, m.name).toBe(2);
+        }
+        continue;
+      }
       const s = flown(c, Mood.None).planned.find((q) => q.kind === 'start')!;
       const piece = pieceFor('start', pieceCtx(c, s, getPalette(c.biome, Mood.None), false, false));
       piece.steps.forEach((f) => f());

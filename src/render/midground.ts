@@ -5,7 +5,7 @@ import { noise1, noise2 } from '../sim/noise';
 import { LIGHT_GLSL, shared } from './materials';
 import { LIP_FROM, WIDE, flankMode, type OverlookPlan, type Overlooks } from './overlook';
 import { Palette } from './palette';
-import { MID_ROW } from './ground';
+import { MID_ROW, groundOf } from './ground';
 import { VILLAGE_SLOTS, buildHamlet, buildVillage, makeVillageMaterial, type VillageBuild, type VillageLight } from './village';
 
 // The middle of the world: the mountainside from the edge of the terrain mesh out to about a
@@ -843,7 +843,8 @@ export class Midground {
     out.cs = cs / 5;
     const uRef = c.params.halfWidthStart + 2.6 + REF_REACH;
     out.xE = out.cx + side * uRef;
-    out.yE = c.ground(out.xE, z);
+    // (Round 9: on the Old Run past its lip, the crest the terrain draws, not the sim's rising wall. ground.ts groundOf.)
+    out.yE = groundOf(c)(out.xE, z);
     out.ov = 0;
     out.s0 = 0;
     if (this.plan) {
@@ -983,6 +984,7 @@ export class Midground {
     this.sideInfo(z, 1, R);
     const cx = L.cx;
     const by = c.baseY(z);
+    const gnd = groundOf(c);
     this.rowBase = by - 14;
     const base = slot * cols;
     const ys = this.rowY;
@@ -1001,7 +1003,7 @@ export class Midground {
         // skirt tucked 2.5 m under the terrain; the fill far under the run (it only shows past the
         // end of the streamed terrain, in the haze, and stays under the deepest drop).
         x = cx + u;
-        y = kind === 3 ? by - 14 : c.ground(x, z) - (kind === 2 ? 2.5 : 0);
+        y = kind === 3 ? by - 14 : gnd(x, z) - (kind === 2 ? 2.5 : 0);
         // (On an overlook, the terrain's lowered lip, and the bank carrying on down its face.)
         if (kind !== 3 && this.plan) y -= this.plan.drop(z, u < 0 ? -1 : 1, Math.abs(u) - c.halfWidth(z));
         // (And a composed place's banks, as the terrain draws them.)
