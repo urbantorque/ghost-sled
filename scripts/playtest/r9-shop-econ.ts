@@ -134,7 +134,7 @@ function chapterPieces(chapters: Record<string, { xp: number; claimed: number }>
   const to = Math.min(CHAPTER_PAGES, Math.floor(ch.xp / CHAPTER_PAGE_XP));
   const month = Number(at.slice(5, 7));
   for (let p = ch.claimed + 1; p <= to; p++) {
-    if (p === 3) out.push({ month, piece: 'scarf' });
+    // (Round 9, G6: page 3 gives gifts, no longer the month's scarf; the career's lifetime already holds them.)
     if (p === 6) out.push({ month, piece: 'trail' });
     if (p === 8) out.push({ month, piece: 'third' });
   }

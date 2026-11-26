@@ -40,7 +40,7 @@ import { HOME_RIDERS, ROSTER, riderByName } from '../bot/roster';
 import { STAR_GIFTS, masteryBoard, readMastery, settleMastery } from './mastery';
 import { KEPT_PAINTS, PAINTS, paintById } from './paints';
 import { SLED_SHOP, TIER_NAMES, creditLines, fitTier, linesToGo, sledShop, tierState, tiersOn, trackOf, trackPrice } from './tracks';
-import { HATS, ORNAMENTS, SCARVES, SETS, SHELVES, SOUNDS, type ShelfId, type Source, TRAILS, freeItem, hatById, onSale, ornamentById, scarfById, setPiecesFor, soundById, sourceLine, trailById } from './garage';
+import { HATS, ORNAMENTS, SCARVES, SETS, SHELVES, SOUNDS, type ShelfId, type Source, TRAILS, freeItem, hatById, onSale, onShelf, ornamentById, scarfById, setPiecesFor, soundById, sourceLine, trailById } from './garage';
 import type { GarageItemView, GaragePieceShelf, GarageShelfKey, GarageSledView, GarageView, GarageAct } from '../ui/garageview';
 import { WARD_CURVE } from './timescale';
 import { courseFor, eventsFor } from '../sim/course';
@@ -1512,10 +1512,10 @@ export class App {
       return src.kind === 'chapter' ? 'later' : 'found';
     };
     // A shelf lists what is sold and what is held, then the found pieces still to find (where they come from said on
-    // each), never a chapter's piece before its month.
+    // each), never a chapter's piece before its month, and a piece no longer sold only to a rider who holds it.
     const list = <T extends { id: string; name: string; blurb: string; price: number; source: Source }>(items: readonly T[], owned: readonly string[], on: string): GarageItemView[] =>
       items
-        .filter((i) => owned.includes(i.id) || i.source.kind !== 'chapter' || months.has(i.source.month))
+        .filter((i) => onShelf(i.source, owned.includes(i.id), months))
         .map((i) => ({ id: i.id, name: i.name, blurb: i.blurb, from: sourceLine(i.source), price: i.price, state: state(owned.includes(i.id), i.id === on, i.source, i.price) }))
         .sort((x, y) => ORDER[x.state] - ORDER[y.state]);
     const ORDER: Record<GarageItemView['state'], number> = { on: 0, owned: 1, buy: 2, short: 2, later: 3, found: 4 };

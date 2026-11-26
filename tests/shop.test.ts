@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { ALMANAC, CHAPTER_EXTRAS, GARAGE_EXTRAS, chapterRewards, shelfExtras } from '../src/game/almanac';
-import { HATS, ORNAMENTS, SCARVES, SETS, SHELVES, TRAILS, chapterPieces, isOrnament, ornamentById, setPiecesFor } from '../src/game/garage';
+import { ALMANAC, CHAPTER_EXTRAS, CHAPTER_PAGE3_GIFTS, GARAGE_EXTRAS, chapterRewards, shelfExtras } from '../src/game/almanac';
+import { HATS, ORNAMENTS, SCARVES, SETS, SHELVES, TRAILS, chapterPieces, isItem, isOrnament, onSale, onShelf, ornamentById, setPiecesFor, sourceLine } from '../src/game/garage';
 import { KEPT_PAINTS, PAINTS, isPaint, paintById } from '../src/game/paints';
 import { XP, settleSpine, type SpineRun } from '../src/game/rank';
 import { SAVE_KEY, SaveStore, defaultSave, ornamentState, type SaveData } from '../src/game/save';
@@ -112,18 +112,62 @@ describe('the shelves', () => {
     expect(GARAGE_EXTRAS.map((g) => g.page)).toEqual([17, 28, 38, 42, 46, 50]);
   });
 
-  it('gives each mountain a set of three on its own motif, and each month a scarf, a trail and an ornament', () => {
+  it('gives each mountain a set of three on its own motif (the three new ones too), and each month a trail and an ornament', () => {
+    expect(Object.keys(SETS)).toEqual(['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall', 'oldrun', 'gullhaven', 'gablefall']);
+    const seen = new Set<string>();
     for (const [m, ids] of Object.entries(SETS)) {
-      expect(SHELVES.scarf.some((s) => s.id === ids[0]), m).toBe(true);
-      expect(SHELVES.trail.some((s) => s.id === ids[1]), m).toBe(true);
+      const scarf = SHELVES.scarf.find((s) => s.id === ids[0]);
+      const trail = SHELVES.trail.find((s) => s.id === ids[1]);
+      expect(scarf?.source, m).toEqual({ kind: 'set', mountain: m, piece: 0 });
+      expect(trail?.source, m).toEqual({ kind: 'set', mountain: m, piece: 1 });
       expect(isOrnament(ids[2]), m).toBe(true);
+      expect(ORNAMENTS.find((o) => o.id === ids[2])?.source, m).toEqual({ kind: 'set', mountain: m, piece: 2 });
+      for (const id of ids) {
+        expect(seen.has(id), id).toBe(false);
+        seen.add(id);
+      }
     }
+    expect(sourceLine({ kind: 'set', mountain: 'oldrun', piece: 2 })).toBe("The Old Run's set: all of its mastery board");
+    expect(sourceLine({ kind: 'set', mountain: 'gablefall', piece: 0 })).toBe("Gablefall's set: a third of its mastery board");
     for (let m = 1; m <= 12; m++) {
       const p = chapterPieces(m);
-      expect([p.scarf.id, p.trail.id, p.ornament.id]).toEqual([`ch${m}scarf`, `ch${m}trail`, `ch${m}orn`]);
+      expect([p.trail.id, p.ornament.id]).toEqual([`ch${m}trail`, `ch${m}orn`]);
     }
     expect(chapterRewards(4, 8)).toEqual([{ kind: 'garage', shelf: 'ornament', id: 'ch4orn' }]);
-    expect(shelfExtras('2026-12-01').map((e) => e.shelf)).toEqual(['scarf', 'trail', 'ornament']);
+    expect(chapterRewards(4, 6)).toEqual([{ kind: 'garage', shelf: 'trail', id: 'ch4trail' }]);
+    expect(shelfExtras('2026-12-01').map((e) => e.shelf)).toEqual(['trail', 'ornament']);
+  });
+
+  it("cuts the months' scarves: page 3 gives gifts, and none is sold or found, but a save that holds one keeps it", () => {
+    for (let m = 1; m <= 12; m++) {
+      expect(chapterRewards(m, 3)).toEqual([{ kind: 'gifts', gifts: CHAPTER_PAGE3_GIFTS }]);
+      const sc = SCARVES.find((s) => s.id === `ch${m}scarf`);
+      expect(sc?.source).toEqual({ kind: 'kept' });
+      expect(isItem('scarf', `ch${m}scarf`)).toBe(true);
+    }
+    for (const e of CHAPTER_EXTRAS) expect(e.shelf === 'scarf', e.id).toBe(false);
+    expect(CHAPTER_PAGE3_GIFTS).toBeGreaterThan(25 + 5 * 9);
+  });
+
+  it('stops selling one of each pair the critics could not tell apart, its owners keeping it', () => {
+    const months = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    const kept = { hat: ['bobbles'], scarf: ['chunky', 'tassel'], trail: ['sparks'] } as const;
+    for (const [shelf, ids] of Object.entries(kept) as Array<[keyof typeof kept, readonly string[]]>) {
+      for (const id of ids) {
+        const p = SHELVES[shelf].find((x) => x.id === id);
+        expect(p?.source, id).toEqual({ kind: 'kept' });
+        expect(onSale(p!.source, months), id).toBe(false);
+        expect(onShelf(p!.source, false, months), id).toBe(false);
+        expect(onShelf(p!.source, true, months), id).toBe(true);
+      }
+    }
+    // The other of each pair is still sold.
+    for (const id of ['watch']) expect(HATS.find((h) => h.id === id)?.source.kind).toBe('shop');
+    for (const id of ['inkband', 'streamer']) expect(SCARVES.find((s) => s.id === id)?.source.kind).toBe('shop');
+    // A chapter's piece is shown from its month, a found one always, never a kept one to a rider without it.
+    expect(onShelf({ kind: 'chapter', month: 3 }, false, new Set([12]))).toBe(false);
+    expect(onShelf({ kind: 'chapter', month: 3 }, false, new Set([3]))).toBe(true);
+    expect(onShelf({ kind: 'set', mountain: 'oldrun', piece: 0 }, false, new Set())).toBe(true);
   });
 
   it('opens a set\'s pieces at a third, two thirds and all of its board', () => {
@@ -193,13 +237,13 @@ describe('no Almanac page is ever silent', () => {
   it('pays a chapter piece bought before its page its price back, and says so', () => {
     const d = atPage(2);
     d.runs = 3;
-    d.chapters = { '2026-12': { xp: 1500 * 3 - 5, claimed: 2 } };
-    d.scarves = ['ch12scarf'];
+    d.chapters = { '2026-12': { xp: 1500 * 6 - 5, claimed: 5 } };
+    d.trails = ['ch12trail'];
     const before = d.gifts;
     const o = settleSpine(d, spineRun({ day: '2026-12-03' }));
-    const card = o.opened.find((x) => x.chapter === '2026-12' && x.page === 3);
-    expect(card?.name).toBe('You had the Star Knit: 260 gifts back');
-    expect(d.gifts - before).toBeGreaterThanOrEqual(260);
+    const card = o.opened.find((x) => x.chapter === '2026-12' && x.page === 6);
+    expect(card?.name).toBe('You had the Star Strings: 380 gifts back');
+    expect(d.gifts - before).toBeGreaterThanOrEqual(380);
   });
 
   it('puts a chapter\'s ornament in the ornaments held', () => {

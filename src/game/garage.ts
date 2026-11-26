@@ -28,7 +28,11 @@ export type Source =
   /** A mountain's set: earned at a third, two thirds and all of its mastery board. Never sold. */
   | { kind: 'set'; mountain: string; piece: 0 | 1 | 2 }
   /** A month's chapter: sold from its month on, and found on its page. */
-  | { kind: 'chapter'; month: number };
+  | { kind: 'chapter'; month: number }
+  /** No longer sold or found (round 9, G6: one of a pair the critics could not tell apart, or a month's scarf): a save
+   *  that holds it keeps it and wears it, as round 8's chapter paints are kept, and its id is never given to another
+   *  piece. It shows on a shelf only to a rider who holds it. */
+  | { kind: 'kept' };
 
 /** The scarf's accent: none, a cream knit or an ink knit (ART.md section 5: at most one). */
 export type ScarfAccent = 'none' | 'cream' | 'ink';
@@ -51,12 +55,14 @@ export type ScarfPattern =
   | 'holes'
   | 'fold'
   | 'scallop'
-  | 'teeth';
+  | 'teeth'
+  /** Even cream and red stripes across it all down its length, a market awning's (Gablefall's set). */
+  | 'awning';
 /** How many tails, and of what lengths: two (one a little longer, a real knot off centre), one long and one short,
  *  four (two pairs), or one thick rope. */
 export type ScarfForm = 'two' | 'long' | 'four' | 'one';
 /** What weights each tail's end. */
-export type ScarfEnds = 'none' | 'fringe' | 'pom' | 'lamp' | 'ball' | 'drop' | 'point' | 'flame' | 'tassel';
+export type ScarfEnds = 'none' | 'fringe' | 'pom' | 'lamp' | 'ball' | 'drop' | 'point' | 'flame' | 'tassel' | 'bell' | 'fork';
 
 export interface ScarfDef {
   id: string;
@@ -112,11 +118,15 @@ export type FlakeShape =
   | 'crane'
   | 'frond'
   | 'lantern'
-  | 'spark';
+  | 'spark'
+  | 'ring'
+  | 'gull'
+  | 'pinwheel';
 /** How a shape moves once it leaves the sled: falls fluttering and turning, sails out flat and spinning, rises,
  *  is flicked up and out and falls, drops from the stern and bursts, pops out sideways and drifts, rolls along the
- *  snow, bobs behind and winks out, tumbles end over end, or bounds alongside in arcs. */
-export type FlakeMotion = 'flutter' | 'sail' | 'rise' | 'flick' | 'drop' | 'pop' | 'roll' | 'bob' | 'tumble' | 'hop';
+ *  snow, bobs behind and winks out, tumbles end over end, bounds alongside in arcs, rings out behind and widens
+ *  (facing the lens, as a bell's peal), or hangs in the wind beside the rider and peels away. */
+export type FlakeMotion = 'flutter' | 'sail' | 'rise' | 'flick' | 'drop' | 'pop' | 'roll' | 'bob' | 'tumble' | 'hop' | 'peal' | 'hang';
 
 export type TrailForm =
   | { kind: 'flakes'; shape: FlakeShape; motion: FlakeMotion; rate: number; size: number; body: string; edge: string; glow?: boolean }
@@ -175,6 +185,8 @@ export interface OrnamentDef {
 
 const FREE: Source = { kind: 'free' };
 const SHOP: Source = { kind: 'shop' };
+/** No longer sold (round 9, G6): owners keep it. Its price stays as it was sold, for the record. */
+const KEPT: Source = { kind: 'kept' };
 
 // ---------------------------------------------------------------- scarves
 
@@ -187,8 +199,11 @@ const sc = (id: string, name: string, blurb: string, price: number, look: Partia
 export const SCARVES: readonly ScarfDef[] = [
   sc('classic', 'Classic Knit', 'Two tails, two deeper stripes near the tips', 0, { pattern: 'tipStripes' }, FREE),
   sc('creambar', 'Cream Bar', 'Two cream bars across each tail, one mid-tail and one by the tip', 80, { pattern: 'bars', accent: 'cream' }),
-  sc('chunky', 'Chunky Rib', 'Short and twice as broad, a deep rib across it', 110, { pattern: 'rib', length: 0.62, width: 2.1 }),
-  sc('tassel', 'Fringe Knit', 'A long ink fringe at each tip, four broad strands', 150, { pattern: 'plain', accent: 'ink', length: 0.85, ends: 'fringe' }),
+  // (Round 9, G6: five rounds of critics took the Chunky Rib for the Ink Bands and the Fringe Knit for the Long
+  // Streamer at race distance, each fix to one pair making another; each is kept by those who hold it, no longer
+  // sold. The Ink Bands and the Long Streamer stay: the outfit critics named the bands every time.)
+  sc('chunky', 'Chunky Rib', 'Short and twice as broad, a deep rib across it', 110, { pattern: 'rib', length: 0.62, width: 2.1 }, KEPT),
+  sc('tassel', 'Fringe Knit', 'A long ink fringe at each tip, four broad strands', 150, { pattern: 'plain', accent: 'ink', length: 0.85, ends: 'fringe' }, KEPT),
   sc('inkband', 'Ink Bands', 'Broad ink bands all down its length', 190, { pattern: 'bands', accent: 'ink', length: 1.12 }),
   sc('snowtip', 'Snow Tip', 'The last third of each tail dipped in cream, a cream tassel', 240, { pattern: 'tip', accent: 'cream', length: 1.1, width: 1.2, ends: 'tassel' }),
   sc('streamer', 'Long Streamer', 'One slim plain tail twice as long as any other', 300, { pattern: 'plain', width: 0.62, length: 1.45, form: 'long' }),
@@ -203,19 +218,26 @@ export const SCARVES: readonly ScarfDef[] = [
   sc('ashmarket', 'Ash Market', 'Ink-dipped, flame-cut tips under a cream band', 0, { pattern: 'flameBand', accent: 'ink', ends: 'flame', length: 0.95 }, { kind: 'set', mountain: 'ember', piece: 0 }),
   sc('petalhem', 'Petal Hem', 'Cream petals down both edges', 0, { pattern: 'scallop', accent: 'cream', width: 1.15 }, { kind: 'set', mountain: 'sakura', piece: 0 }),
   sc('lamproad', 'Lamp Road', 'One long streamer barred in cream like a row of lamps', 0, { pattern: 'graded', accent: 'cream', form: 'long', width: 0.9 }, { kind: 'set', mountain: 'lanternfall', piece: 0 }),
-  // The months' chapters: each its own form, never a shop knit in another tint.
-  sc('ch1scarf', 'Sunrise Bars', 'Cream bars widening toward the tips like rays', 260, { pattern: 'rays', accent: 'cream' }, { kind: 'chapter', month: 1 }),
-  sc('ch2scarf', 'Icicle Fringe', 'A fringe of stiff cream points', 260, { pattern: 'tip', accent: 'cream', ends: 'point', length: 0.95 }, { kind: 'chapter', month: 2 }),
-  sc('ch3scarf', 'Drip Hem', 'Tails that end in round drops', 260, { pattern: 'tipStripes', ends: 'drop' }, { kind: 'chapter', month: 3 }),
-  sc('ch4scarf', 'Blossom Knit', 'Cream blossoms knitted down the middle', 260, { pattern: 'dots', accent: 'cream', width: 1.1 }, { kind: 'chapter', month: 4 }),
-  sc('ch5scarf', 'Ember Knit', 'Ink-dipped tips under a cream flame band', 260, { pattern: 'flameBand', accent: 'ink', ends: 'flame' }, { kind: 'chapter', month: 5 }),
-  sc('ch6scarf', 'Midsummer Ribbons', 'Four slim ribbons', 260, { pattern: 'plain', width: 0.6, length: 1.15, form: 'four' }, { kind: 'chapter', month: 6 }),
-  sc('ch7scarf', 'Market Tassels', 'Short tails ending in heavy cream tassels', 260, { pattern: 'plain', accent: 'cream', length: 0.7, ends: 'tassel' }, { kind: 'chapter', month: 7 }),
-  sc('ch8scarf', 'Folded Fan', 'Pleated in folds that open as they stream', 260, { pattern: 'fold', width: 1.3, length: 0.9 }, { kind: 'chapter', month: 8 }),
-  sc('ch9scarf', 'Crescent Knit', 'Ink crescents down the tails', 260, { pattern: 'crescent', accent: 'ink' }, { kind: 'chapter', month: 9 }),
-  sc('ch10scarf', 'Hollow Stitch', 'Open-work holes knitted through it', 260, { pattern: 'holes', accent: 'ink', width: 1.1 }, { kind: 'chapter', month: 10 }),
-  sc('ch11scarf', 'Snowball Tails', 'Each tail ending in a round cream snowball', 260, { pattern: 'plain', accent: 'cream', ends: 'ball', length: 0.9 }, { kind: 'chapter', month: 11 }),
-  sc('ch12scarf', 'Star Knit', 'Cream stars knitted down the tails', 260, { pattern: 'dots', accent: 'cream', length: 1.15, width: 0.9 }, { kind: 'chapter', month: 12 }),
+  // The three new mountains' sets (round 9, G6), each from its own world: the Old Run's bend bells, Gullhaven's fence
+  // pennants, Gablefall's market awnings.
+  sc('belltails', 'Bell Tails', 'Two long tails, a cream bell swinging at each tip', 0, { pattern: 'plain', accent: 'cream', length: 1.2, ends: 'bell' }, { kind: 'set', mountain: 'oldrun', piece: 0 }),
+  sc('pennants', 'Pennant Ribbons', 'Four slim ribbons, each cut to a cream swallowtail like the fence\'s pennants', 0, { pattern: 'tip', accent: 'cream', width: 0.66, length: 1.2, form: 'four', ends: 'fork' }, { kind: 'set', mountain: 'gullhaven', piece: 0 }),
+  sc('awning', 'Market Awning', 'Broad, in even cream and red stripes all down its length', 0, { pattern: 'awning', accent: 'cream', width: 1.4, length: 0.95 }, { kind: 'set', mountain: 'gablefall', piece: 0 }),
+  // The months' scarves (round 9, G6, DECISIONS 398's call): four critic rounds could not tell them apart at race
+  // distance, so a month's chapter is its trail, its ornament and its title, and the page that gave its scarf gives
+  // gifts. None was ever on sale (the chapters arrive from ROUND8_START), but a save that somehow holds one keeps it.
+  sc('ch1scarf', 'Sunrise Bars', 'Cream bars widening toward the tips like rays', 260, { pattern: 'rays', accent: 'cream' }, KEPT),
+  sc('ch2scarf', 'Icicle Fringe', 'A fringe of stiff cream points', 260, { pattern: 'tip', accent: 'cream', ends: 'point', length: 0.95 }, KEPT),
+  sc('ch3scarf', 'Drip Hem', 'Tails that end in round drops', 260, { pattern: 'tipStripes', ends: 'drop' }, KEPT),
+  sc('ch4scarf', 'Blossom Knit', 'Cream blossoms knitted down the middle', 260, { pattern: 'dots', accent: 'cream', width: 1.1 }, KEPT),
+  sc('ch5scarf', 'Ember Knit', 'Ink-dipped tips under a cream flame band', 260, { pattern: 'flameBand', accent: 'ink', ends: 'flame' }, KEPT),
+  sc('ch6scarf', 'Midsummer Ribbons', 'Four slim ribbons', 260, { pattern: 'plain', width: 0.6, length: 1.15, form: 'four' }, KEPT),
+  sc('ch7scarf', 'Market Tassels', 'Short tails ending in heavy cream tassels', 260, { pattern: 'plain', accent: 'cream', length: 0.7, ends: 'tassel' }, KEPT),
+  sc('ch8scarf', 'Folded Fan', 'Pleated in folds that open as they stream', 260, { pattern: 'fold', width: 1.3, length: 0.9 }, KEPT),
+  sc('ch9scarf', 'Crescent Knit', 'Ink crescents down the tails', 260, { pattern: 'crescent', accent: 'ink' }, KEPT),
+  sc('ch10scarf', 'Hollow Stitch', 'Open-work holes knitted through it', 260, { pattern: 'holes', accent: 'ink', width: 1.1 }, KEPT),
+  sc('ch11scarf', 'Snowball Tails', 'Each tail ending in a round cream snowball', 260, { pattern: 'plain', accent: 'cream', ends: 'ball', length: 0.9 }, KEPT),
+  sc('ch12scarf', 'Star Knit', 'Cream stars knitted down the tails', 260, { pattern: 'dots', accent: 'cream', length: 1.15, width: 0.9 }, KEPT),
 ];
 
 // ---------------------------------------------------------------- hats
@@ -225,7 +247,9 @@ export const HATS: readonly HatDef[] = [
   { id: 'watch', name: 'Watch Cap', blurb: 'Low and flat-topped, a thick rolled cuff, nothing on top', price: 80, source: SHOP },
   { id: 'twinpom', name: 'Twin Pom', blurb: 'A plain red crown and two big cream poms hung low over the ears', price: 110, source: SHOP },
   { id: 'trapper', name: 'Trapper', blurb: 'Broad, a cream fur band and two long flaps to the scarf', price: 150, source: SHOP },
-  { id: 'bobbles', name: 'Bobble Hem', blurb: 'A hem of ink bobbles hanging round the back of the cuff', price: 200, source: SHOP },
+  // (Round 9, G6: the Bobble Hem's bobbles merged with the hood's fur in cream and with the hair in ink, and three
+  // critic rounds took it for the Watch Cap; kept by those who hold it, no longer sold.)
+  { id: 'bobbles', name: 'Bobble Hem', blurb: 'A hem of ink bobbles hanging round the back of the cuff', price: 200, source: KEPT },
   { id: 'chullo', name: 'Braided Chullo', blurb: 'A short point and two long cream-and-red braids hanging behind the ears', price: 260, source: SHOP },
   { id: 'longcap', name: 'Long Knit Cap', blurb: 'A long tail streaming back past one shoulder, a pom at its end', price: 320, source: SHOP },
   { id: 'muffs', name: 'Pom Muffs', blurb: 'A broad knit band over the crown and two big fur muffs', price: 440, source: SHOP },
@@ -263,7 +287,9 @@ const HONEY = '#FFE6B3';
 export const TRAILS: readonly TrailDef[] = [
   tr('powder', 'Fresh Powder', 'Snow, and only snow', 0, {}, FREE),
   tr('honey', 'Honey Plume', 'A rooster tail of big honey billows, twice as tall', 80, { tint: '#FFE2A8', tintK: 0.7, plume: 2 }),
-  tr('sparks', 'Lantern Sparks', 'Marigold sparks flicked off the runners', 130, { tint: '#FFF1D6', tintK: 0.2, mote: MARIGOLD, motes: 140, moteStyle: 'flick' }),
+  // (Round 9, G6: too few sparks to see at race distance in five rounds, and the only way to show them, bigger
+  // glowing drops arcing off the runners, is Ember Peak's Lava Drops; kept by those who hold it, no longer sold.)
+  tr('sparks', 'Lantern Sparks', 'Marigold sparks flicked off the runners', 130, { tint: '#FFF1D6', tintK: 0.2, mote: MARIGOLD, motes: 140, moteStyle: 'flick' }, KEPT),
   tr('glints', 'Gold Leaf', 'Flakes of gold leaf that spiral up behind and flash', 180, { form: flakes('leaf', 'rise', 34, 0.2, GOLD, '#FFF0B8', true) }),
   tr('stardust', 'Paper Snow', 'Cut-paper snowflakes that flutter and turn as they fall', 250, { form: flakes('snowflake', 'flutter', 40, 0.24, PAPER, CREAMY) }),
   tr('comet', 'Comet Tail', 'Two ribbons of light that rise off the runners and bend with the carve', 340, { form: { kind: 'ribbons', head: AMBER, tail: MARIGOLD } }),
@@ -280,18 +306,25 @@ export const TRAILS: readonly TrailDef[] = [
   tr('lavadrops', 'Lava Drops', 'Glowing drops that arc off the runners', 0, { form: flakes('drop', 'flick', 26, 0.12, AMBER, MARIGOLD, true) }, { kind: 'set', mountain: 'ember', piece: 1 }),
   tr('papercranes', 'Paper Cranes', 'Folded cranes that climb off the wake in pairs', 0, { form: flakes('crane', 'rise', 14, 0.38, PAPER, CREAMY) }, { kind: 'set', mountain: 'sakura', piece: 1 }),
   tr('skylanterns', 'Sky Lanterns', 'Little paper lanterns that lift off the stern and rise', 0, { form: flakes('lantern', 'rise', 4, 0.26, '#FFF0D0', PAPER, true) }, { kind: 'set', mountain: 'lanternfall', piece: 1 }),
-  // The months' chapters: a shape of their own each.
-  tr('ch1trail', 'Dawn Fans', 'Fans of light flicked off each carve', 380, { form: flakes('ray', 'flick', 40, 0.22, '#FFF0C8', MARIGOLD, true) }, { kind: 'chapter', month: 1 }),
-  tr('ch2trail', 'Icicle Chimes', 'Icicles that drop off the runners and burst', 380, { form: flakes('icicle', 'drop', 40, 0.36, '#FFF8EC', HONEY) }, { kind: 'chapter', month: 2 }),
-  tr('ch3trail', 'Drip Lights', 'Drops of light falling from the stern', 380, { form: flakes('drop', 'drop', 40, 0.28, '#FFE6A8', MARIGOLD, true) }, { kind: 'chapter', month: 3 }),
-  tr('ch4trail', 'Blossom Pops', 'Cream blossoms that pop out and drift', 380, { form: flakes('blossom', 'pop', 18, 0.22, PAPER, GOLD) }, { kind: 'chapter', month: 4 }),
-  tr('ch5trail', 'Ember Tongues', 'Flame-shaped tongues licking up off the runners', 380, { form: flakes('tongue', 'rise', 30, 0.22, AMBER, MARIGOLD, true) }, { kind: 'chapter', month: 5 }),
-  tr('ch6trail', 'Sun Motes', 'Rayed suns that roll beside you and fade', 380, { form: flakes('sun', 'roll', 18, 0.3, MARIGOLD, '#FFF0C8') }, { kind: 'chapter', month: 6 }),
-  tr('ch7trail', 'Market Ribbons', 'Cream paper bows that tumble off', 380, { form: flakes('bow', 'flutter', 18, 0.2, PAPER, '#FFF0C8') }, { kind: 'chapter', month: 7 }),
-  tr('ch8trail', 'Folded Fans', 'Paper fans that flutter as they fall', 380, { form: flakes('fan', 'flutter', 16, 0.3, PAPER, GOLD) }, { kind: 'chapter', month: 8 }),
-  tr('ch9trail', 'Moon Slivers', 'Thin crescents of light tumbling end over end', 380, { form: flakes('crescent', 'tumble', 16, 0.24, '#FFF0C8', GOLD, true) }, { kind: 'chapter', month: 9 }),
-  tr('ch10trail', 'Hollow Lights', 'Round paper lanterns with cut eyes that bob and wink out', 380, { form: flakes('hollow', 'bob', 6, 0.22, CREAMY, '#FFF0C8', true) }, { kind: 'chapter', month: 10 }),
-  tr('ch11trail', 'Snowballs', 'Little snowballs that roll off the runners and burst', 380, { form: flakes('ball', 'roll', 14, 0.14, '#FFFDF6', HONEY) }, { kind: 'chapter', month: 11 }),
+  // The three new mountains' sets (round 9, G6): the Old Run's bells pealing, Gullhaven's gulls hanging in the sea
+  // wind, Gablefall's market pinwheels.
+  tr('pealrings', 'Peal Rings', 'Rings of honey light that ring out behind you and widen, the bend bells\' peal', 0, { form: flakes('ring', 'peal', 5, 0.62, HONEY, MARIGOLD, true) }, { kind: 'set', mountain: 'oldrun', piece: 1 }),
+  tr('gulls', 'Gulls', 'Cream gulls that hang in the wind beside you, wings beating, then peel away', 0, { form: flakes('gull', 'hang', 5, 0.52, PAPER, GOLD) }, { kind: 'set', mountain: 'gullhaven', piece: 1 }),
+  tr('pinwheels', 'Pinwheels', 'Paper pinwheels off the market stalls, spinning as they tumble out behind', 0, { form: flakes('pinwheel', 'tumble', 12, 0.4, PAPER, GOLD) }, { kind: 'set', mountain: 'gablefall', piece: 1 }),
+  // The months' chapters: a shape of their own each. (Round 9, G6: each twice the size of the shop's confetti and
+  // fewer, so a month's trail is a few big shapes of its month where the shop's are many small ones; five rounds of
+  // critics found the chapters' small and pale.)
+  tr('ch1trail', 'Dawn Fans', 'Long rays of dawn light flicked off each carve', 380, { form: flakes('ray', 'flick', 26, 0.46, '#FFF0C8', MARIGOLD, true) }, { kind: 'chapter', month: 1 }),
+  tr('ch2trail', 'Icicle Chimes', 'Big icicles that drop off the runners and burst', 380, { form: flakes('icicle', 'drop', 26, 0.62, '#FFF8EC', GOLD) }, { kind: 'chapter', month: 2 }),
+  tr('ch3trail', 'Drip Lights', 'Big drops of light falling from the stern', 380, { form: flakes('drop', 'drop', 24, 0.5, '#FFE6A8', MARIGOLD, true) }, { kind: 'chapter', month: 3 }),
+  tr('ch4trail', 'Blossom Pops', 'Big cream blossoms that pop out and drift', 380, { form: flakes('blossom', 'pop', 12, 0.44, PAPER, GOLD) }, { kind: 'chapter', month: 4 }),
+  tr('ch5trail', 'Ember Tongues', 'Tall flame-shaped tongues licking up off the runners', 380, { form: flakes('tongue', 'rise', 18, 0.46, AMBER, MARIGOLD, true) }, { kind: 'chapter', month: 5 }),
+  tr('ch6trail', 'Sun Motes', 'Big rayed suns that roll beside you and fade', 380, { form: flakes('sun', 'roll', 12, 0.56, MARIGOLD, '#FFF0C8') }, { kind: 'chapter', month: 6 }),
+  tr('ch7trail', 'Market Ribbons', 'Big cream paper bows that tumble off', 380, { form: flakes('bow', 'flutter', 12, 0.44, PAPER, GOLD) }, { kind: 'chapter', month: 7 }),
+  tr('ch8trail', 'Folded Fans', 'Big paper fans that flutter as they fall', 380, { form: flakes('fan', 'flutter', 11, 0.56, PAPER, GOLD) }, { kind: 'chapter', month: 8 }),
+  tr('ch9trail', 'Moon Slivers', 'Big crescents of light tumbling end over end', 380, { form: flakes('crescent', 'tumble', 11, 0.5, '#FFF0C8', GOLD, true) }, { kind: 'chapter', month: 9 }),
+  tr('ch10trail', 'Hollow Lights', 'Round paper lanterns with cut eyes that bob and wink out', 380, { form: flakes('hollow', 'bob', 6, 0.44, CREAMY, '#FFF0C8', true) }, { kind: 'chapter', month: 10 }),
+  tr('ch11trail', 'Snowballs', 'Snowballs that roll off the runners and burst', 380, { form: flakes('ball', 'roll', 10, 0.3, '#FFFDF6', HONEY) }, { kind: 'chapter', month: 11 }),
   tr('ch12trail', 'Star Strings', 'Strings of paper stars fluttering off the stern', 380, { form: { kind: 'kites', shape: 'star', body: PAPER, alt: GOLD } }, { kind: 'chapter', month: 12 }),
 ];
 
@@ -309,6 +342,10 @@ export const ORNAMENTS: readonly OrnamentDef[] = [
   orn('basaltcrown', 'Basalt Pipes', 'Three warm stone columns with a lit seam', true, { kind: 'set', mountain: 'ember', piece: 2 }),
   orn('papercrane', 'Paper Crane', 'A folded cream crane, its wings lifting', false, { kind: 'set', mountain: 'sakura', piece: 2 }),
   orn('greatlantern', 'Great Lantern', 'A storeyed lantern of lit paper, the finale\'s own', true, { kind: 'set', mountain: 'lanternfall', piece: 2 }),
+  // The three new mountains' (round 9, G6): the Old Run's timing house, Gullhaven's lighthouse, a Gablefall house.
+  orn('timingclock', 'Timing Clock', 'The timing house\'s clock: a lit cream dial in a wooden tower under a low cap', true, { kind: 'set', mountain: 'oldrun', piece: 2 }),
+  orn('lighthouse', 'Lighthouse', 'A banded tower, its lamp lit at the top', true, { kind: 'set', mountain: 'gullhaven', piece: 2 }),
+  orn('gablehouse', 'Gable House', 'A steep slate roof under snow, a chimney and a lit window', true, { kind: 'set', mountain: 'gablefall', piece: 2 }),
   orn('ch1orn', 'Sun Disc', 'A rayed cream disc', false, { kind: 'chapter', month: 1 }, 320),
   orn('ch2orn', 'Icicle Crown', 'A ring of hanging icicles', false, { kind: 'chapter', month: 2 }, 320),
   orn('ch3orn', 'Thaw Lantern', 'A tall lantern of thaw-blue paper, icicles dripping from its foot', true, { kind: 'chapter', month: 3 }, 320),
@@ -367,9 +404,17 @@ export function isOrnament(id: unknown): id is string {
 }
 
 /** Whether the shop sells a piece today: a shop piece always, a chapter's from its month on (almanac.ts monthsOpen
- *  says which), never a found one. */
+ *  says which), never a found or a kept one. */
 export function onSale(src: Source, months: ReadonlySet<number>): boolean {
   return src.kind === 'shop' || (src.kind === 'chapter' && months.has(src.month));
+}
+
+/** Whether a shelf lists a piece for a rider: what it holds always; else anything but a kept piece (no longer sold)
+ *  and a chapter's before its month. */
+export function onShelf(src: Source, held: boolean, months: ReadonlySet<number>): boolean {
+  if (held) return true;
+  if (src.kind === 'kept') return false;
+  return src.kind !== 'chapter' || months.has(src.month);
 }
 
 /** A piece's chapter, set or Almanac source in a few words, for its card ("Almanac page 42", "Frostfang's set"). */
@@ -386,6 +431,8 @@ export function sourceLine(src: Source): string {
       return `${SET_MOUNTAIN_NAMES[src.mountain] ?? src.mountain}'s set: ${['a third', 'two thirds', 'all'][src.piece]} of its mastery board`;
     case 'chapter':
       return `${possessive(MONTH_NAMES[src.month - 1] ?? String(src.month))} chapter`;
+    case 'kept':
+      return 'No longer sold: yours to keep';
     default:
       return '';
   }
@@ -393,17 +440,21 @@ export function sourceLine(src: Source): string {
 
 // ---------------------------------------------------------------- the mountains' sets
 
-/** The five's sets, a scarf, a trail and an ornament each, opened at a third, two thirds and all of each mastery
- *  board (DECISIONS 391). The three new mountains' sets come with them (G6, a later lane's). */
+/** Every mountain's set, a scarf, a trail and an ornament each, opened at a third, two thirds and all of each mastery
+ *  board (DECISIONS 391). The three new mountains' were drawn from their own worlds (round 9, G6): a row keyed by a
+ *  mountain not yet registered does nothing (syncSets and settleShop go by the mountains a player can ride). */
 export const SETS: Readonly<Record<string, readonly [string, string, string]>> = {
   pinecrest: ['firchevron', 'staglights', 'cowbell'],
   frostfang: ['fangedge', 'frostfeathers', 'icefang'],
   ember: ['ashmarket', 'lavadrops', 'basaltcrown'],
   sakura: ['petalhem', 'papercranes', 'papercrane'],
   lanternfall: ['lamproad', 'skylanterns', 'greatlantern'],
+  oldrun: ['belltails', 'pealrings', 'timingclock'],
+  gullhaven: ['pennants', 'gulls', 'lighthouse'],
+  gablefall: ['awning', 'pinwheels', 'gablehouse'],
 };
 export const SET_SHARES = [1 / 3, 2 / 3, 1] as const;
-const SET_MOUNTAIN_NAMES: Readonly<Record<string, string>> = { pinecrest: 'Pinecrest', frostfang: 'Frostfang', ember: 'Ember Peak', sakura: 'Sakura Ridge', lanternfall: 'Lanternfall' };
+const SET_MOUNTAIN_NAMES: Readonly<Record<string, string>> = { pinecrest: 'Pinecrest', frostfang: 'Frostfang', ember: 'Ember Peak', sakura: 'Sakura Ridge', lanternfall: 'Lanternfall', oldrun: 'The Old Run', gullhaven: 'Gullhaven', gablefall: 'Gablefall' };
 const MONTH_NAMES = ['First Light', 'The Long Frost', 'Thaw Lanterns', 'Blossom Run', 'Ash and Ember', 'Midsummer Snow', 'Night Market', 'Paper Cranes', 'Harvest Moon', 'The Haunting', 'First Snow', 'Lantern Night'];
 
 /** Set pieces held for a share of a mastery board (0 to 3). */
@@ -413,7 +464,7 @@ export function setPiecesFor(done: number, total: number): number {
   return SET_SHARES.filter((s) => k >= s - 1e-9).length;
 }
 
-/** A chapter's three pieces (scarf, trail, ornament), by month. */
-export function chapterPieces(month: number): { scarf: ScarfDef; trail: TrailDef; ornament: OrnamentDef } {
-  return { scarf: scarfById(`ch${month}scarf`), trail: trailById(`ch${month}trail`), ornament: ornamentById(`ch${month}orn`) };
+/** A chapter's pieces (its trail and its ornament), by month. (Round 9, G6: its scarf is kept, no longer a chapter's.) */
+export function chapterPieces(month: number): { trail: TrailDef; ornament: OrnamentDef } {
+  return { trail: trailById(`ch${month}trail`), ornament: ornamentById(`ch${month}orn`) };
 }

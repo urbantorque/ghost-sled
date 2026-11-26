@@ -94,8 +94,8 @@ describe('the Almanac', () => {
     expect(CHAPTERS).toHaveLength(12);
     expect(chapterKey('2027-02-14')).toBe('2027-02');
     expect(shelfExtras('2026-11-30')).toHaveLength(0);
-    expect(shelfExtras('2026-12-01').map((e) => e.chapter)).toEqual([12, 12, 12]);
-    expect(shelfExtras('2027-02-01').length).toBe(9);
+    expect(shelfExtras('2026-12-01').map((e) => e.chapter)).toEqual([12, 12]);
+    expect(shelfExtras('2027-02-01').length).toBe(6);
     expect(chapterRewards(12, 10)[0].kind).toBe('title');
     for (const e of [...CHAPTER_EXTRAS, ...GARAGE_EXTRAS]) {
       if (e.shelf === 'paint') expect(isPaint(e.id) && paintById(e.id).id === e.id).toBe(true);
