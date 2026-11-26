@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PoolGhostData } from '../src/game/ghostdata';
 import { type Board, RUNG_GIFTS, RUN_GIFTS, STAGES, STAGE_GIFTS, TOP_GIFTS, bestStanding, boardOf, climbMoment, decidedLine, goldHook, laps, medalsHeld, nextLine, rankLine, rungHook, settleClimb, spotOn, stageMedal, stageSeconds, stageThresholds } from '../src/game/ladder';
 import { type Climb, type SaveData, defaultSave } from '../src/game/save';
+import { courseFor } from '../src/sim/course';
 import { MOUNTAINS } from '../src/sim/mountains';
 import { SIM_VERSION } from '../src/sim/sim';
 
@@ -97,6 +98,7 @@ describe('every bundled pool', () => {
 
     it(`${m.id} has three reachable medals on every stage, gold under the whole run's pace`, () => {
       const b = boardOf(pool);
+      const stageLen = courseFor(m.seed).stages.map((st) => st.z1 - st.z0);
       expect(b.riders.length).toBe(pool.length);
       expect(b.stages.length).toBe(STAGES);
       for (const t of b.stages) {
@@ -104,8 +106,9 @@ describe('every bundled pool', () => {
         const [bronze, silver, gold] = t!;
         expect(bronze).toBeGreaterThan(silver);
         expect(silver).toBeGreaterThan(gold);
-        // Gold is a time real riders set: the quickest in the pool beat it.
-        expect(gold).toBeGreaterThan(30);
+        // Gold is a time real riders set: the quickest in the pool beat it. (Round 9: 30 s on a stage of the five's 1,450 m
+        // or more, as much less as a shorter stage is: the Old Run's are 950 to 1,050 m.)
+        expect(gold).toBeGreaterThan(Math.min(30, (30 * stageLen[b.stages.indexOf(t)]) / 1450));
       }
       // A stage gold comes before a whole-run bronze: three of them add up slower than its time.
       const golds = b.stages.reduce((s, t) => s + t![2], 0);

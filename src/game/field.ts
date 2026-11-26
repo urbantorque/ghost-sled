@@ -113,7 +113,7 @@ export const ANCHOR_DEFAULT = 150;
  *  nothing, so the podium is earned, and two a little slower, so a beginner who rides has someone to beat. The riders
  *  still read you (pacer.ts) until the last stage, which they ride on their own pace. A Daily or a Cup is shared and
  *  keeps ANCHOR_DEFAULT. */
-export const FIRST_RUN_PACE: Readonly<Record<string, number>> = { pinecrest: 138, frostfang: 138, ember: 128, sakura: 132, lanternfall: 136, oldrun: 95 };
+export const FIRST_RUN_PACE: Readonly<Record<string, number>> = { pinecrest: 138, frostfang: 138, ember: 128, sakura: 132, lanternfall: 136, oldrun: 92 };
 /** Predicted times the anchor reads per key (the most recent). */
 export const ANCHOR_RUNS = 5;
 /** One quick run pulls the next anchor to this multiple of it at most (anchorFor). */

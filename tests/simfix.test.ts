@@ -420,7 +420,9 @@ describe('the carry and a fall', () => {
 });
 
 describe('room beside the line where a sled cannot hold it', () => {
-  const SEEDS = [...MOUNTAINS.map((m) => m.seed), 0x2026b10c, 0x7e57ab1e, 0x0ddba11];
+  // (Round 9: the courses the five's acts lay. A kit's course, the Old Run's, stands nothing beside its line and has no
+  // leap or mogul field to keep room round: tests/oldrun.test.ts holds its track clear.)
+  const SEEDS = [...MOUNTAINS.map((m) => m.seed).filter((s) => courseFor(s).layout.grammar === 'acts'), 0x2026b10c, 0x7e57ab1e, 0x0ddba11];
   /** The least gap between any hard obstacle's edge and the safe line, over the obstacles standing from z0 to z1. */
   function room(seed: number, z0: number, z1: number): number {
     const c = courseFor(seed);

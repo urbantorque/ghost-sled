@@ -16,7 +16,7 @@ type Style = Extract<SimEvent, { type: 'style' }>;
 describe('near-miss event fields', () => {
   for (const f of files) {
     it(`${f}: gap, side, position, kind and id on every near miss`, () => {
-      const pool = JSON.parse(readFileSync(join(dir, f), 'utf8')) as { ghosts: Array<{ record: string; score: number }> };
+      const pool = JSON.parse(readFileSync(join(dir, f), 'utf8')) as { mountain: string; ghosts: Array<{ record: string; score: number }> };
       // A low, a middle and the top ghost: different lines, different speeds.
       const n = pool.ghosts.length;
       // (Round 8: five, so a pool whose three riders happen to graze nothing still shows the fields.)
@@ -48,7 +48,9 @@ describe('near-miss event fields', () => {
         }
         seen += near.length;
       }
-      expect(seen).toBeGreaterThan(0);
+      // (Round 9: the Old Run stands nothing in its track, so nothing is ever nearly hit there.)
+      if (pool.mountain === 'oldrun') expect(seen).toBe(0);
+      else expect(seen).toBeGreaterThan(0);
     });
   }
 });

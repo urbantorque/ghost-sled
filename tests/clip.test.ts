@@ -131,6 +131,20 @@ describe('the clip: the cut', () => {
     expect(c.reduce((n, s) => n + s.t1 - s.t0, 0)).toBeLessThanOrEqual(CLIP_MAX_TICKS);
     for (const s of c) expect(plan.some((p) => p.kind === s.kind && p.peak === s.peak && s.t0 >= p.t0 && s.t1 === p.t1)).toBe(true);
   });
+
+  it('cuts a real run on the Old Run too (round 9: no leaps, its bends and set pieces the moments), ending at its line', () => {
+    const pool = JSON.parse(readFileSync('src/data/ghosts/oldrun.json', 'utf8'));
+    const entries: Array<{ record: string }> = pool.ghosts ?? pool;
+    for (const e of [entries[0], entries[entries.length - 1]]) {
+      const rec = recordFromString(e.record);
+      const plan = planReel(scanRecord(rec));
+      expect(plan.length).toBeGreaterThan(0);
+      const c = clipCut(plan);
+      expect(c.length).toBe(Math.min(CLIP_SHOTS, plan.length));
+      expect(['finish', 'wreck']).toContain(c[c.length - 1].kind);
+      expect(c.reduce((n, s) => n + s.t1 - s.t0, 0)).toBeLessThanOrEqual(CLIP_MAX_TICKS);
+    }
+  });
 });
 
 /** A MediaRecorder as far as the clip uses one: it records what it is handed, and says what was asked of it. */

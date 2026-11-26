@@ -1205,7 +1205,10 @@ export class Bot {
     const wantRate = (across(look + 1, line(look + 1)) - want) * s.vz;
     const k = clamp(0.45 / this.t.tau, 0.5, 1);
     const lateral = clamp(wantRate - 1.2 * k * (across(zp, xp) - want), -7, 7);
-    const psi = Math.asin(clamp(lateral / v, -0.5, 0.5));
+    // (The angle off the channel that gives that sideways speed, through dmath: the sim's files take no engine-dependent
+    // transcendental, tests/purity.test.ts.)
+    const sl = clamp(lateral / v, -0.5, 0.5);
+    const psi = datan2(sl, Math.sqrt(1 - sl * sl));
     const phiRate = ((c.channelSlope(zp + 1) - p) * s.vz) / (1 + p * p);
     // (The velocity turns with the heading over the lead; the bank turns it too, so the slip it needs is what is left.)
     const vel = s.velHeading + (hp - s.heading);

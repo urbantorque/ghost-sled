@@ -313,7 +313,9 @@ interface RodeRun {
  *  (labpilots.ts prompted); 'trickster-<skill>' the lab's mid or expert on the air map and the charm gates (lab.ts
  *  rides them as 'mid' and 'expert'); 'hands-off' no input at all. */
 function makePilot(M: Mods, name: string, sim: Any, seed: number): { pilot: Pilot; spend: () => boolean } {
-  const kit: Kit = { gateX: M.moments.gateX, pathX: M.moments.pathX, machineZ: M.moments.machineZ };
+  // (Round 9: the Old Run's track, where this build has one, so its skilled pilots hold a height on its walls.)
+  const track = M.sim.wallYaw && M.sim.TRACK_BANK !== undefined ? { wallYaw: M.sim.wallYaw, damp: M.sim.TRACK_DAMP, bank: M.sim.TRACK_BANK } : undefined;
+  const kit: Kit = { gateX: M.moments.gateX, pathX: M.moments.pathX, machineZ: M.moments.machineZ, track };
   if (name === 'hands-off') return { pilot: scripted(() => 0)(sim), spend: () => false };
   if (name.startsWith('trickster-')) {
     const skill = name.slice(10) as 'mid' | 'expert';
@@ -401,7 +403,9 @@ function ride(M: Mods, p: PlannedRun): RodeRun {
   while (!sim.s.crashed && !sim.finished && sim.tick < p.maxSeconds * 60) {
     run.tick();
     const s = sim.s;
-    gm.pace(sim.tick, s.z, !sim.finished && !s.crashed);
+    // (Round 9: the course's own line and last stage, as app.ts paces them: the riders stop reading you at its last stage.)
+    const lastStage = sim.course.stages ? sim.course.stages[sim.course.stages.length - 1] : null;
+    gm.pace(sim.tick, s.z, !sim.finished && !s.crashed, sim.course.finishZ ?? 4500, lastStage ? lastStage.z1 - lastStage.z0 : undefined);
     if (coach) coachStep(sim);
     // The first 30 s, a second at a time: your metres and each rider's gap to you (for reading a first run's race).
     if (sim.tick % 60 === 0 && sim.tick <= 1800) facts.trace.push([sim.tick / 60, Math.round(s.z), ...gm.tracks.map((t: Any) => Math.round(gm.zAt(t, sim.tick) - s.z))]);
@@ -991,6 +995,8 @@ function fieldFor(M: Mods, d: Any, o: { key: string; pool: Any[]; chaos: Any; ki
     promised,
     key: o.key,
     withheld: M.twelve.withheldRiders?.(d.twelve) ?? [],
+    // (Round 9: the course's own line, as app.ts gives the field: a run on the Old Run's 3,000 m finishes there.)
+    finishZ: ((mm: Any) => (mm && M.standing.finishZOf ? M.standing.finishZOf(mm.seed) : undefined))(M.mountains.MOUNTAINS.find((x: Any) => x.id === o.key)),
   });
   if (cup && mine) picks.push({ name: mine.name, kind: 'you', score: mine.score, record: mine.record, distance: mine.distance });
   return picks.map((g: Any) => {
