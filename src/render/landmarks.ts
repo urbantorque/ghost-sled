@@ -112,7 +112,7 @@ const LAMP_LIGHT: Record<BiomeId, [number, number, number]> = {
   lantern: [1, 0.66, 0.2],
   // (Gullhaven, round 9: Pinecrest's, never read: its course plans none of the five's places, landmarks.ts SitePlan, and stands its own, gullhavenworld.ts; its lamplight is its world's, LAMP_HEX.)
   gullhaven: [1, 0.56, 0.2],
-  // (Gablefall, round 9: Pinecrest's until its world is made, notes/r9-gablefall-world.md.)
+  // (Gablefall, round 9: Pinecrest's, never read: its course plans none of the five's places, landmarks.ts SitePlan, and stands its own, gablefallworld.ts.)
   gablefall: [1, 0.56, 0.2],
 };
 /** How much of the day must have gone for the windows to glow (journeyDusk). */
@@ -138,7 +138,7 @@ const SPAN_KINDS: Record<BiomeId, Kind[]> = {
   lantern: ['gate', 'bridge'],
   // (Gullhaven, round 9: Pinecrest's, never read: its course plans none of the five's places, landmarks.ts SitePlan, and stands its own, gullhavenworld.ts.)
   gullhaven: ['gate', 'bridge'],
-  // (Gablefall, round 9: Pinecrest's until its world is made, notes/r9-gablefall-world.md.)
+  // (Gablefall, round 9: Pinecrest's, never read: its course plans none of the five's places, landmarks.ts SitePlan, and stands its own, gablefallworld.ts.)
   gablefall: ['gate', 'bridge'],
 };
 // (Ember's vents throw spans high, so it gets the most bank pieces, its basalt lodge among them.)
@@ -153,7 +153,7 @@ const BANK_KINDS: Record<BiomeId, Kind[]> = {
   lantern: ['tower', 'guardian', 'tower'],
   // (Gullhaven, round 9: Pinecrest's, never read: its course plans none of the five's places, landmarks.ts SitePlan, and stands its own, gullhavenworld.ts.)
   gullhaven: ['hut', 'tower', 'jump'],
-  // (Gablefall, round 9: Pinecrest's until its world is made, notes/r9-gablefall-world.md.)
+  // (Gablefall, round 9: Pinecrest's, never read: its course plans none of the five's places, landmarks.ts SitePlan, and stands its own, gablefallworld.ts.)
   gablefall: ['hut', 'tower', 'jump'],
 };
 const ENC_KINDS: Record<BiomeId, Kind[]> = {
@@ -166,7 +166,7 @@ const ENC_KINDS: Record<BiomeId, Kind[]> = {
   lantern: ['gallery'],
   // (Gullhaven, round 9: Pinecrest's, never read: its course plans none of the five's places, landmarks.ts SitePlan, and stands its own, gullhavenworld.ts.)
   gullhaven: ['gallery'],
-  // (Gablefall, round 9: Pinecrest's until its world is made, notes/r9-gablefall-world.md.)
+  // (Gablefall, round 9: Pinecrest's, never read: its course plans none of the five's places, landmarks.ts SitePlan, and stands its own, gablefallworld.ts.)
   gablefall: ['gallery'],
 };
 /** How likely a section's piece is to span the run: narrow ones mostly (a ravine's walls hide anything on

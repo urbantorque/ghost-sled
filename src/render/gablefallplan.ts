@@ -1,5 +1,5 @@
 import type { Course } from '../sim/course';
-import { BACK, FRONT, NAVE_LEN, PAVE, rowAt } from '../sim/gablefall';
+import { BACK, FRONT, NAVE_LEN, PAVE, STREET_HW, placesOf, rowAt } from '../sim/gablefall';
 import type { Clearing } from './dressing';
 
 // Where Gablefall's own world stands (round 9, notes/r9-gablefall-world.md): what the shared systems need to know before
@@ -15,6 +15,10 @@ export function isGablefall(c: Course): boolean {
 
 /** How far over the street the town's lanes behind the rows lie (trodden snow over the cobbles). */
 export const LANE = 0.3;
+/** The quay at the river: its top over the ice on the town's side (the left), and on the other the river's ice running
+ *  out to its far bank RIVER_FAR metres from the line's middle, where the bank rises to the town's other half. */
+export const QUAY_TOP = 2.8;
+export const RIVER_FAR = 62;
 /** The church's nave: its roof's snow falls from the corridor's limit at NAVE_PITCH to its eave NAVE_EAVE metres past the
  *  corridor's edge, and its walls stand from the hillside under it (hillY) to that eave. */
 export const NAVE_PITCH = 0.95;
@@ -48,6 +52,16 @@ export function townGround(c: Course, x: number, z: number): number {
   const base = c.baseY(z);
   // The lanes and the paving: the street's own level, a little over it where snow lies on them.
   const town = y + (base + LANE - y) * smooth01((e - lim) / 1.2);
+  const q = placesOf(c).quay;
+  if (z >= q - 24) {
+    // The quay: on the town's side its wall stands sheer at the limit to its top; on the other the river's ice runs on
+    // to its far bank, which rises over twenty metres.
+    const k = smooth01((z - q + 24) / 24);
+    const w = smooth01((e - lim) / 0.3);
+    const far = (dx < 0 ? -dx : dx) - RIVER_FAR;
+    const river = dx < 0 ? base + QUAY_TOP : base + (far > 0 ? 8 * smooth01(far / 22) + 0.04 * far : 0);
+    return town + (y + (river - y) * w - town) * k;
+  }
   if (z >= NAVE_LEN + 40) return town;
   // The nave and the hillside under it, eased out into the close over the close's first 40 m.
   const top = c.ground(cx + (dx < 0 ? -1 : 1) * (hw + lim), z);
@@ -80,6 +94,24 @@ export function townRows(c: Course, z0: number, z1: number, out: Set<number>): v
       for (const z of [p.z0 - 0.02, p.z0 + 0.02, p.z0 + 0.5]) if (z > z0 && z < z1) out.add(z);
     }
   }
+}
+
+/** How much of the street's cobbles show at sim z (0..1): the street and the squares are paved, the church's nave and
+ *  the river's ice are not (eased in over the close's first 30 m and out onto the quay over 20 m). */
+export function pavedAt(c: Course, z: number): number {
+  const q = placesOf(c).quay;
+  return smooth01((z - NAVE_LEN - 6) / 30) * (1 - smooth01((z - q + 4) / 20));
+}
+
+/** How much of the corridor at sim z is the river's ice (0..1): from where the quay's ice begins (gablefall.ts RIVER_ICE,
+ *  20 m into the quay) on, drawn as the frozen lake is (materials.ts), black ice with blown snow lying toward its banks. */
+export function riverAt(c: Course, z: number): number {
+  return smooth01((z - placesOf(c).quay - 16) / 14);
+}
+
+/** The street's share across at `adx` metres from its middle: the cobbles, to a little short of their edge. */
+export function streetShare(adx: number): number {
+  return 1 - smooth01((adx - STREET_HW + 0.7) / 0.8);
 }
 
 /** Ground the five's forest, dressing and life keep off on Gablefall: everything past the corridor's edge on both sides

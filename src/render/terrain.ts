@@ -6,7 +6,7 @@ import { addLightSource, pushLocalLight } from './lights';
 import { makeSnowMaterial, shared } from './materials';
 import { LIP, LIP_FROM, lipDrop, type OverlookPlan, type Overlooks } from './overlook';
 import { groomedAt } from './snowsurf';
-import { townColumns, townRows } from './gablefallplan';
+import { pavedAt, riverAt, streetShare, townColumns, townRows } from './gablefallplan';
 
 // Terrain chunks that bend with the corridor: each row of vertices is laid out relative to the
 // centreline at that z, so the playable lane gets dense vertices and the far forest floor is
@@ -222,7 +222,8 @@ class ChunkJob {
       const limit = sh.limit;
       const wk = wallK(wall);
       const crestH = wk > 0 ? wk * (wall + 16) : 0;
-      const lakeK = smoothK(0.3, 0.7, sh.ice);
+      // (Round 9, Gablefall: its river's ice at the quay is drawn as a frozen lake is. gablefallplan.ts riverAt.)
+      const lakeK = this.town ? riverAt(c, z) : smoothK(0.3, 0.7, sh.ice);
       // Sakura's terraces hold still water in their flats (ART.md 15): on the banks beside the run, never
       // on the line, so nothing a sled rides looks like ice that is not there.
       const pondRow = c.biome === 'blossom' && sec0Kind(c, z) === 'terraces';
@@ -287,6 +288,8 @@ class ChunkJob {
         slush = c.surface(cx, z) === SLUSH ? 1 : 0;
       }
       const gnd = this.gnd;
+      // (Round 9, Gablefall: how much of its street's cobbles show on this row, the materials' STREET.)
+      const paved = this.town ? pavedAt(c, z) : 0;
       for (let col = 0; col < cols; col++) {
         const x = cx + this.offs[col];
         const ed = Math.abs(this.offs[col]) - hw;
@@ -397,7 +400,9 @@ class ChunkJob {
         this.paint[rq] = pondRow && lakeK === 0 ? -smoothK(0.4, 1.6, ed) * (1 - smoothK(8.5, 11, ed)) * (1 - smoothK(0.05, 0.16, Math.abs(sz))) * (1 - smoothK(0.06, 0.2, Math.abs(sx))) : lakeK;
         this.paint[rq + 1] = alt === null ? 0 : stripK * (1 - smoothK(2.3, 3.1, Math.abs(x - alt)));
         this.paint[rq + 2] = groom;
-        this.paint[rq + 3] = canopy;
+        // (Gablefall has no tree run: its channel carries the street's cobbles at the street's level, never on a roof or a
+        // drift.)
+        this.paint[rq + 3] = this.town ? (paved > 0 && y0 - by < 0.25 ? paved * streetShare(Math.abs(off)) : 0) : canopy;
         p++;
       }
       this.row++;
@@ -436,6 +441,8 @@ class ChunkJob {
     geo.setAttribute('aPaint', new BufferAttribute(this.paint, 4));
     geo.setAttribute('aGroom', new BufferAttribute(this.groom, 1));
     if (this.track) geo.setAttribute('aTrack', new BufferAttribute(this.track, 4));
+    // (Gablefall's chunks are drawn by the snow under STREET, its cobbles: Terrain.add.)
+    if (this.town) geo.userData.street = true;
     geo.setIndex(new BufferAttribute(idx, 1));
     geo.computeBoundingSphere();
     geo.computeBoundingBox();
@@ -455,6 +462,9 @@ export class Terrain {
   /** The Old Run's track (round 9): the same snow under its TRACK branch (ice, the glaze, the slush), made the first
    *  time its course is drawn. The five never compile it. */
   private trackMat: ShaderMaterial | null = null;
+  /** Gablefall's street (round 9): the same snow under its STREET branch (trodden snow over cobbles), made the first
+   *  time its course is drawn. */
+  private streetMat: ShaderMaterial | null = null;
   private meshes = new Map<number, Mesh>();
   private job: ChunkJob | null = null;
   private fogCourse: Course | null = null;
@@ -619,7 +629,9 @@ export class Terrain {
   private add(i: number, geo: BufferGeometry): void {
     const track = geo.getAttribute('aTrack') !== undefined;
     if (track && !this.trackMat) this.trackMat = makeSnowMaterial(true);
-    const mesh = new Mesh(geo, track ? this.trackMat! : this.material);
+    const street = geo.userData.street === true;
+    if (street && !this.streetMat) this.streetMat = makeSnowMaterial(false, true);
+    const mesh = new Mesh(geo, track ? this.trackMat! : street ? this.streetMat! : this.material);
     mesh.receiveShadow = this.shadows;
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();

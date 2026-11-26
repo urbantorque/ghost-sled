@@ -1261,7 +1261,7 @@ export const VARIANT_SHARE: Record<BiomeId, { a: number; b: number }> = {
   lantern: { a: 0.3, b: 0.3 },
   // (Gullhaven, round 9: Pinecrest's, never read for a tree that stands: no forest grows on its moor or its cliff, gullhavenplan.ts gullhavenClearings.)
   gullhaven: { a: 0.3, b: 0.24 },
-  // (Gablefall, round 9: Pinecrest's until its world is made, notes/r9-gablefall-world.md.)
+  // (Gablefall, round 9: Pinecrest's, never read for a tree that stands: no forest grows in its town, gablefallplan.ts gablefallClearings.)
   gablefall: { a: 0.3, b: 0.24 },
 };
 

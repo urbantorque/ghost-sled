@@ -12,6 +12,7 @@ import { liveTree } from './treelife';
 import { makeToonMaterial, shared } from './materials';
 import {
   BASALT_MODEL_H,
+  CHIMNEY_MODEL_H,
   ROCK_MODEL_H,
   cairnGeometry,
   gateBeamGeometry,
@@ -864,7 +865,8 @@ export class Props {
         const tallK = o.kind === 'pine' || o.kind === 'charpine' || o.kind === 'blossom' ? 1 + 0.3 * hashf(o.id, 3, 9) : 1;
         // (A spire and a basalt cluster stand as tall as their colliders, and so does a rock: the drawn form
         // stays inside what the sim collides with, tests/rockforms.)
-        this.s.set(k, o.kind === 'basalt' ? o.h / BASALT_MODEL_H : o.kind === 'spire' ? o.h / 5 : o.kind === 'rock' || o.kind === 'lavarock' ? o.h / ROCK_MODEL_H : k * tallK, k);
+        // (Round 9: a chimney as tall as its collider too, meshes.ts CHIMNEY_MODEL_H.)
+        this.s.set(k, o.kind === 'basalt' ? o.h / BASALT_MODEL_H : o.kind === 'spire' ? o.h / 5 : o.kind === 'rock' || o.kind === 'lavarock' ? o.h / ROCK_MODEL_H : o.kind === 'chimney' ? o.h / CHIMNEY_MODEL_H : k * tallK, k);
       }
       this.obNeed('ob:' + o.kind);
       this.push('ob:' + o.kind, this.v, this.q, this.s);

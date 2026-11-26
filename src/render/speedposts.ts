@@ -85,7 +85,7 @@ const STYLES: Record<BiomeId, Style> = {
   lantern: { weights: [3, 3, 3, 1], shaft: '#DCD6EE', band: '#7462C4', fence: '#B8B0D4', flags: ['#A894EA', '#E6E0F6'] },
   // (Gullhaven, round 9: Pinecrest's, never read: it stands no stakes, its fence is the run's strobe, gullhavenworld.ts.)
   gullhaven: { weights: [3, 2, 3, 2], shaft: '#F2EADB', band: '#5C7BD0', fence: '#D8C6AC', flags: ['#5F8FE6', '#E4ECFB'] },
-  // (Gablefall, round 9: Pinecrest's until its world is made, notes/r9-gablefall-world.md.)
+  // (Gablefall, round 9: Pinecrest's, never read: it stands no stakes, its house fronts are the run's strobe, gablefallworld.ts.)
   gablefall: { weights: [3, 2, 3, 2], shaft: '#F2EADB', band: '#5C7BD0', fence: '#D8C6AC', flags: ['#5F8FE6', '#E4ECFB'] },
 };
 

@@ -212,7 +212,7 @@ const STYLE: Record<BiomeId, Style> = {
   lantern: { walls: [C('#4A3C66'), C('#3E3258'), C('#5A4C78'), C('#352C50')], roof: C('#EEEAFA'), trim: C('#221C3C'), glass: C('#2A2448'), ice: C('#6A5CB0'), rim: C('#C8C0E8'), road: C('#5E5490') },
   // (Gullhaven, round 9: Pinecrest's, never read: the mid-ground lays no village or hamlet on its coast, midground.ts, and its harbour's houses are its world's.)
   gullhaven: { walls: [C('#8A5A44'), C('#A06A4C'), C('#E8DCCB'), C('#74493A')], roof: C('#F4F2FA'), trim: C('#4A3040'), glass: C('#2E3658'), ice: C('#BFE4F4'), rim: C('#E8EEF8'), road: C('#7A7896') },
-  // (Gablefall, round 9: Pinecrest's until its world is made, notes/r9-gablefall-world.md.)
+  // (Gablefall, round 9: Pinecrest's, never read: its mid-ground stands no villages, its town is its world's, gablefallworld.ts.)
   gablefall: { walls: [C('#8A5A44'), C('#A06A4C'), C('#E8DCCB'), C('#74493A')], roof: C('#F4F2FA'), trim: C('#4A3040'), glass: C('#2E3658'), ice: C('#BFE4F4'), rim: C('#E8EEF8'), road: C('#7A7896') },
 };
 

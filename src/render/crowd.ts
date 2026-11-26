@@ -112,7 +112,7 @@ const CUT: Record<BiomeId, { coat: [number, number, number, number]; sleeve: [nu
   lantern: { coat: [0.19, 0.34, 0.96, 0.5], sleeve: [0.07, 0.14] },
   // (Gullhaven, round 9: Pinecrest's, built with the crowd's figure and never stood: it has no stands, and its folk on the quay are still figures in knitwear and oilskins, stillCrowd and DRESS below, gullhavenworld.ts.)
   gullhaven: { coat: [0.2, 0.27, 0.62, 0.68], sleeve: [0.06, 0.075] },
-  // (Gablefall, round 9: Pinecrest's until its world is made, notes/r9-gablefall-world.md.)
+  // (Gablefall, round 9: Pinecrest's, built with the crowd's figure and never stood: it has no stands, and its townsfolk on the bridge and the quay are still figures, stillCrowd and DRESS below, gablefallworld.ts.)
   gablefall: { coat: [0.2, 0.27, 0.62, 0.68], sleeve: [0.06, 0.075] },
 };
 
@@ -129,7 +129,7 @@ const PROP_REST: Record<BiomeId, [number, number, number, number]> = {
   lantern: [2.95, -0.2, 0, 2],
   // (Gullhaven, round 9: Pinecrest's, never seen: it has no stands, so no prop holder.)
   gullhaven: [0.35, 0.3, 0.1, 0],
-  // (Gablefall, round 9: Pinecrest's until its world is made, notes/r9-gablefall-world.md.)
+  // (Gablefall, round 9: Pinecrest's, never stood, as above.)
   gablefall: [0.35, 0.3, 0.1, 0],
 };
 
@@ -312,8 +312,9 @@ const DRESS: Record<BiomeId, { coats: string[]; hats: string[] }> = {
   // weathered dark green, slate, peat brown, undyed cream and grey; knit caps in the same. Never a signal colour (an
   // oilskin's yellow would be the gifts' marigold).
   gullhaven: { coats: ['#2E3A5C', '#3E5A4A', '#4A5068', '#5A4638', '#D2C6B0', '#6A6E78', '#34404E', '#5E6A5A'], hats: ['#3A4660', '#D8CCB4', '#5E5A50', '#8A7A62', '#2E3448', '#A8A49C'] },
-  // (Gablefall, round 9: Pinecrest's until its world is made, notes/r9-gablefall-world.md.)
-  gablefall: { coats: ['#4E6B4C', '#3A4058', '#2F5A52', '#2E3A66', '#6A4058', '#CFC2A8', '#4A6390', '#6B5646', '#7A8C6A'], hats: ['#F0E8D8', '#9CC0EE', '#3F5A44', '#B9A6E0', '#FFFFFF', '#5B8FD6', '#8A6E5A', '#D7E3F4'] },
+  // Gablefall's townsfolk (round 9, notes/r9-gablefall-world.md): a hill town's winter wool, long coats in loden, navy,
+  // plum, charcoal and oatmeal under knitted caps and felt hats in cream, grey and heather; never a signal colour.
+  gablefall: { coats: ['#3E5446', '#2E3654', '#4E3A52', '#3A3A44', '#B8AC96', '#5A4E44', '#465A6E', '#6A6070'], hats: ['#E6DECE', '#8A8A96', '#5A4E62', '#C8C0B0', '#3A4258', '#9A8C7A'] },
 };
 
 /** A crowd's colour range for a biome: coats and accents. */
