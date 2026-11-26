@@ -1,5 +1,5 @@
 import type { Course } from '../sim/course';
-import { gulliesOf } from '../sim/gullhaven';
+import { gullPlaceOf, gulliesOf } from '../sim/gullhaven';
 import type { Clearing } from './dressing';
 
 // Where Gullhaven's own world stands (round 9, notes/r9-gullhaven-world.md): what the shared systems need to know
@@ -46,10 +46,12 @@ const smooth = (a: number, b: number, x: number): number => {
  *  right of the opening's lens, against the sea. */
 export const BEACON = { z: 132, e: 8, r: 9 };
 
-/** Where the lighthouse stands (sim z): on its point past the end of the Cape, so its tower and its beam are ahead and
- *  to the right over the sea from every shelf of the Cape. */
+/** Where the lighthouse stands (sim z): on its point at the end of the Cape's second shelf, where The Lighthouse's
+ *  marks are (moments.ts beam, gullhaven.ts gullPlaceOf 'cape'), so its tower is ahead and to the right over the sea
+ *  down the whole shelf and its beam falls back across the path at each mark. (It stood past the end of the third
+ *  stage's start, a kilometre from its set piece.) */
 export function lighthouseZ(c: Course): number {
-  return c.layout.stages[0] + 60;
+  return gullPlaceOf(c, 'cape').z1 + 10;
 }
 /** The lighthouse's point: metres past the seaward edge, and its radius. */
 export const LIGHT_POINT = { e: 20, r: 22 };

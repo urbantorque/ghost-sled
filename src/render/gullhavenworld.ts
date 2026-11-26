@@ -17,6 +17,8 @@ import { type Palette, getPalette } from './palette';
 import { Mood } from '../sim/chaos';
 import { LOW_BOLD, type StillFigure, crowdColors, stillCrowd } from './crowd';
 import type { Particles } from './particles';
+import { GullhavenPieces } from './gullhavenpieces';
+import { momentPlays } from '../sim/moments';
 import type { Detail } from './postfx/tiers';
 import { reduced } from '../ui/motion';
 import type { ViewMode } from './world';
@@ -436,9 +438,13 @@ export class GullhavenWorld {
   private gulls: InstancedMesh | null = null;
   private wheel: Array<[number, number, number, number, number, number, number]> = [];
   private hang: Array<[number, number, number, number, number]> = [];
+  /** The three set pieces' props (gullhavenpieces.ts): the lighthouse's marks and its beam on the path, the Great Geo's
+   *  far line, the stacks' gaps on the shore road. */
+  private readonly pieces: GullhavenPieces;
 
-  constructor(_particles: Particles | null, sea: SeaUniforms) {
+  constructor(particles: Particles | null, sea: SeaUniforms) {
     this.root.name = 'gullhaven-world';
+    this.pieces = new GullhavenPieces(particles);
     this.mat = makeToonMaterial({ coolShade: 0.5, stone: true });
     this.glow = makeToonMaterial({ coolShade: 0.4, emissive: LAMP_HEX.clone(), emissiveStrength: 0 });
     this.cloth = makeToonMaterial({ coolShade: 0.45, cloth: true, doubleSided: true });
@@ -484,16 +490,21 @@ export class GullhavenWorld {
     this.build(c);
   }
 
-  reset(): void {}
+  reset(): void {
+    this.pieces.reset();
+  }
 
-  /** The set pieces' named moments this frame (a run's only): the lighthouse's beam, the Great Geo and the stacks are
-   *  the lane's to wire once its sim lands (notes/r9-gullhaven-world.md). */
-  beats(_list: readonly Beat[], _s: Snap): void {}
+  /** The set pieces' named moments this frame (a run's only): a mark ridden in the beam, a gap threaded, the Great Geo
+   *  won or lost (gullhavenpieces.ts). */
+  beats(list: readonly Beat[], s: Snap): void {
+    if (this.course && isGullhaven(this.course)) this.pieces.beats(list, s);
+  }
 
   private dispose(): void {
     for (const o of [...this.root.children]) this.root.remove(o);
     for (const o of this.owned) o.dispose();
     this.owned.length = 0;
+    this.pieces.clear();
     this.windows = [];
     this.lamps = [];
     this.fire = null;
@@ -548,6 +559,9 @@ export class GullhavenWorld {
       this.harbour(c, low);
       this.birds(c, low);
     });
+    // (The set pieces' props are built from the plays on the first frame: a run's own, or the course's on the title.)
+    this.pieces.lantern = this.light;
+    this.root.add(this.pieces.root);
   }
 
   // ------------------------------------------------------------------ the fence
@@ -947,6 +961,15 @@ export class GullhavenWorld {
       .map((q) => strata({ rx: q.rx, rz: q.rz, h: q.h, layers: low ? Math.ceil(q.layers * 0.6) : q.layers, sides: low ? 6 : 8, rock: [ROCK_D, ROCK, ROCK_L], lie: null, taper: 0.28, shift: 0.12, dip: 0.07, warp: 0.25, bays: 0.25, rough: 0.3, seed: q.seed }));
     const spots: Array<Array<[number, number, number, number, number]>> = [[], [], []];
     const end = placesOf(c).sheds - 200;
+    // The Sea Stacks: down the shore road a stack stands in the sea off each of the set piece's gaps, near the cliff's
+    // foot, so the road threads among them (the gaps themselves are the pieces', gullhavenpieces.ts).
+    const shore = momentPlays(c).find((q) => q.verb === 'stacks');
+    for (const [i, t] of (shore?.targets ?? []).entries()) {
+      const sx = shoreX(c, t.z, this.sea);
+      // (Columns and squat blocks, a little lower than the road at its foot: needles there stood over the sheds.)
+      const w = 12 + hash(i, 151) * 8;
+      spots[low ? 0 : i % 2 ? 1 : 2].push([sx + 26 + hash(i, 152) * 24, t.z + (hash(i, 153) - 0.5) * 16, w, hash(i, 154) * 6.28, 0]);
+    }
     let j = 0;
     for (let z = 60; z < end; j++) {
       z += (low ? 220 : 120) + hash(j, 51) * 140;
@@ -1425,7 +1448,7 @@ export class GullhavenWorld {
 
   // ------------------------------------------------------------------ each frame
 
-  update(_dt: number, time: number, _mode: ViewMode, s: Snap, _sim: Sim | null, camera: PerspectiveCamera, p: Palette): void {
+  update(_dt: number, time: number, mode: ViewMode, s: Snap, sim: Sim | null, camera: PerspectiveCamera, p: Palette): void {
     if (!this.course) return;
     const live = reduced() ? 0 : 1;
     const low = this.detail === 'low';
@@ -1460,6 +1483,7 @@ export class GullhavenWorld {
     // The beacon's fire lights the snow round it, by day too.
     if (this.fire && Math.abs(this.fire[2] - s.z) < 220) pushLocalLight(this.fire[0], this.fire[1], -this.fire[2], FIRE_LIN.r, FIRE_LIN.g, FIRE_LIN.b, 22, 0.6 * (0.85 + 0.15 * Math.sin(time * 9 * live)));
     if (this.light && Math.abs(this.light[2] - s.z) < 400) pushLocalLight(this.light[0], this.light[1], -this.light[2], 1, 0.97, 0.9, 30, 0.3 + 0.5 * Math.min(1, lampK));
+    this.pieces.update(this.course, time, s, sim, mode === 'run', low, reduced(), lampK);
     if (lit <= 0.02) return;
     for (const [x, y, z, r] of this.lamps) if (z > s.z - 30 && z < s.z + 160) pushLocalLight(x, y, -z, LAMP_LIN.r, LAMP_LIN.g, LAMP_LIN.b, r, 0.5 * Math.min(1, lit));
   }
