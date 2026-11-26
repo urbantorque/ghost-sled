@@ -372,7 +372,7 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         return { x: (z: number) => px(c, p.path, z), noDrift: true };
       }
       case 'peal': {
-        // (Round 9, the Old Run.) Under the next bend bell: the line moved by as much as the bell hangs off it there.
+        // (Round 9, the Old Run.) Under the next bend bell, from a second and a half out.
         if (!skilled) return null;
         const t = p.targets.find((q: AnySim) => q.z > s.z + 1);
         if (!t || t.z - s.z > Math.max(45, s.speed * 1.6)) return null;

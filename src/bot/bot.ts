@@ -1174,23 +1174,24 @@ export class Bot {
       const pz = c.channelSlope(z);
       return (x - c.centerX(z)) / Math.sqrt(1 + pz * pz);
     };
+    // (It looks 0.9 s ahead: at 0.35 s a rider in the Labyrinth at 40 m/s met each bend a turn late.)
     const look = zp + v * 0.9;
     // (The Old Run's set pieces, for a rider who tries them: at the next bend bell's height on its wall; through the
     // Horseshoe held high, never under the share of the wall its hold asks.)
     const line = (z: number): number => {
       const x = this.lineX(z);
-      const p = this.triesMoment() ?? this.triesNext();
-      if (!p) return x;
-      if (p.verb === 'peal') {
-        const t = p.targets.find((q, i) => !(this.sim.mo.active === p.index && i < this.sim.mo.at) && q.z > zp - 2);
+      const mp = this.triesMoment() ?? this.triesNext();
+      if (!mp) return x;
+      if (mp.verb === 'peal') {
+        const t = mp.targets.find((q, i) => !(this.sim.mo.active === mp.index && i < this.sim.mo.at) && q.z > zp - 2);
         // (Held at the bell's own height on its wall, wherever the channel runs.)
         if (t && t.z - zp < v * 1.6) {
           const pz = c.channelSlope(z);
           return c.centerX(z) + across(t.z, t.x) * Math.sqrt(1 + pz * pz);
         }
-      } else if (p.verb === 'glaze' && p.hw > 0 && z >= p.z0 && z <= p.z1) {
+      } else if (mp.verb === 'glaze' && mp.hw > 0 && z >= mp.z0 && z <= mp.z1) {
         const d = across(z, x);
-        const least = FLOOR + (p.hw + 0.08) * WALL;
+        const least = FLOOR + (mp.hw + 0.08) * WALL;
         if (d > FLOOR || d < -FLOOR) {
           const pz = c.channelSlope(z);
           const q = Math.sqrt(1 + pz * pz);

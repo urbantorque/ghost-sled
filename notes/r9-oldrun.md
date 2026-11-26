@@ -208,3 +208,28 @@ Ghost Bob* (a runner over the Horseshoe's lead S-bend: "The hotel's first bob ru
 Every hunk in a shared game file (`src/game/app.ts`): the mastery board's home riders read `[...ROSTER,
 ...HOME_RIDERS]` (the import and one line). `src/ui/contract.ts`: `MountainCard['biome']` gains `'oldrun'`.
 `src/game/save.ts`, `spineview.ts`, `ui.ts`: untouched.
+
+## 4. Its score
+
+`scripts/music/pieces/oldrun.ts`: **a galop for the grand hotel's band** on the ice, A major at 152, straight: a tuba's
+oom on every beat and the trombones' pah off it, cornets with the tunes and a piccolo over them, pizzicato strings, a
+snare and a bass drum, sleigh bells, a xylophone, and tubular bells for the bends. The verse is three quick notes and a
+run every two bars (the sled into a bend and out of it); the hook takes the same three notes up an octave to a held
+third; the trio drops to the relative minor's colour and the trombones sing it; a second strain carries the hook into
+D (the subdominant, where a galop's trio goes) on the xylophone and the bells; the last stage lifts a whole tone to B,
+and the finale is the game's motif on the whole band. Its form is the five's (an opening, three stages, a breakdown on
+the bend bells, the finale, the results). Original. The live band (`src/audio/theory.ts` CLEAR, `score.ts` SONGS)
+keeps its key and tempo (A major, 152), so a player without the produced score hears the same galop's harmony and pulse.
+
+Its three verbs' stingers (`scripts/music/pieces/common.ts` `OWN_GESTURES.oldrun`): `peal` (three bells struck one
+after another, each higher, to a held chime), `split` (a clock's tick on one note doubling into a rush, then the
+octave), `glaze` (a line that climbs a sixth and holds, high and smooth). They are the Old Run's alone: no Daily, Cup
+or other course lays those verbs, so only its own piece carries them (the stems test now asks each course for a
+stinger of every verb it can meet, and that no course carries another's own). `src/audio/stemform.ts` `PIECE_OF` and
+the dev jukebox know the piece and the verbs.
+
+**The whole score was rebuilt** (`npx tsx scripts/music/build.ts`, the heavy slot, about 16 minutes): the build stamps
+every pack with a hash of all of `scripts/music`, and the game refuses a pack whose stamp is not the manifest's, so a
+new piece means a whole build. The five's packs hold the same music and the same stingers as before (their sources did
+not change); what changes in them is the stamp. The levelling now sets every course's reference run to the mean of
+the five's (`build.ts`), so the five keep the level each had and a new course is levelled to them.

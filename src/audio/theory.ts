@@ -254,12 +254,12 @@ export const STYLES: Record<Mood, Style> = {
  */
 export const CLEAR: Record<BiomeId, Style> = {
   alpine: STYLES[Mood.None],
-  // The Old Run (round 9): a quick galop in A major at 132, the hotel's ballroom band out on the ice. An oom-pah bass
+  // The Old Run (round 9): a quick galop in A major at 152, the hotel's ballroom band out on the ice. An oom-pah bass
   // (the root on the beat, the fifth off it), a kick on every beat and a clap on the off-beat, a bright pluck arp in
   // 16ths and a brass-bright square lead; little reverb, so it stays quick.
   oldrun: {
     tonic: 57,
-    bpm: 132,
+    bpm: 152,
     mode: 'major',
     penta: MAJOR_PENTA,
     bright: 0,

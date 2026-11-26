@@ -58,6 +58,20 @@ export const GESTURES: readonly Gesture[] = [
   { verb: 'lost', says: 'three soft notes stepping down to the tonic', voice: 'bell', beats: 3.5, tune: [[0, 0.9, 3], [1, 0.9, 2], [2, 1.5, 1]], perc: [], hold: [2, 1.5, [1, 5]] },
 ];
 
+/**
+ * Round 9: a new mountain's verbs, met on that mountain alone (no Daily, Cup or other course lays them), so only its
+ * own piece carries their stingers: the five's packs keep the stingers they had, and nobody downloads one the run can
+ * never play. A piece renders GESTURES and its own list here.
+ */
+export const OWN_GESTURES: Readonly<Record<string, readonly Gesture[]>> = {
+  // The Old Run: struck bells climbing a wall; a clock's tick doubling into a rush; a line that climbs and holds.
+  oldrun: [
+    { verb: 'peal', says: 'three bells struck one after another, each higher, to a held chime', voice: 'bell', beats: 3, tune: [[0, 0.5, 5], [0.5, 0.5, 8], [1, 0.5, 10], [1.5, 1.4, 12]], perc: [[0, 0.6], [0.5, 0.7], [1, 0.8], [1.5, 1]], hold: [1.5, 1.5, [1, 5]] },
+    { verb: 'split', says: "a clock's tick on one note doubling into a rush, then the octave", voice: 'lead', beats: 4, tune: [[0, 0.25, 5], [0.5, 0.25, 5], [1, 0.25, 5], [1.5, 0.25, 5], [2, 0.125, 5], [2.25, 0.125, 5], [2.5, 0.125, 6], [2.75, 0.125, 7], [3, 1, 8]], perc: [[0, 0.5], [0.5, 0.55], [1, 0.6], [1.5, 0.65], [2, 0.75], [2.25, 0.8], [2.5, 0.85], [2.75, 0.9], [3, 1]], hold: [3, 1, [1, 5]] },
+    { verb: 'glaze', says: 'a line that climbs a sixth and holds there, high and smooth', voice: 'lead', beats: 4, tune: [[0, 1, 3], [1, 1, 5], [2, 1.9, 8]], perc: [], hold: [0, 4, [1, 3, 5]], swell: true },
+  ],
+};
+
 /** Which of a piece's tracks play a gesture's parts, and where. */
 export interface StingBand {
   lead: ReadonlyArray<{ track: string; oct: number; vel?: number }>;

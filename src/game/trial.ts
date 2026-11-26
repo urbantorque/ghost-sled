@@ -82,7 +82,7 @@ export function daysLeftWords(week: string, now: number): string {
 
 const NAMES: Readonly<Record<string, string>> = { pinecrest: 'Pinecrest', frostfang: 'Frostfang', ember: 'Ember Peak', sakura: 'Sakura Ridge', lanternfall: 'Lanternfall', oldrun: 'The Old Run' };
 /** Each mountain's other hour after its name (almanac.ts HOUR_PHRASES). */
-const HOURS: Readonly<Record<string, string>> = { pinecrest: 'at Dusk', frostfang: 'at Noon', ember: 'at Night', sakura: 'in the Evening', lanternfall: 'at First Light' };
+const HOURS: Readonly<Record<string, string>> = { pinecrest: 'at Dusk', frostfang: 'at Noon', ember: 'at Night', sakura: 'in the Evening', lanternfall: 'at First Light', oldrun: 'by Lamplight' };
 const MOOD_WORDS: Readonly<Record<number, string>> = {
   [Mood.Blizzard]: 'in a Blizzard',
   [Mood.Lantern]: 'on a Lantern Night',
