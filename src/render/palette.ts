@@ -1600,7 +1600,6 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.hazardDim = 0.88;
         p.lamps = 1.25;
         p.lampAir = 0.08;
-        p.poolSilver = { color: c('#EEE8F2'), k: 0.45 };
         p.lanternGlow = 0.3;
         p.giftGlow = 0.35;
         p.ghostGlow = 1.45;
@@ -2737,9 +2736,6 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.hazardDim = 0.85;
       p.lamps = 1.6;
       p.lampAir = 0.14;
-      // (A lamp's amber added to the moonlit lavender ice read as magenta: its pool lifts the ice toward silver, its
-      // amber at the heart, as Lanternfall's.)
-      p.poolSilver = { color: c('#ECE6F4'), k: 0.65 };
       p.lanternGlow = 0.6;
       p.giftGlow = 0.5;
       p.ghostGlow = 1.5;

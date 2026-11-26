@@ -45,7 +45,9 @@ const TIMBER_D = new Color('#3E2E2C');
 const CREAM = new Color('#EEE4D0');
 /** The lamps' and the windows' light: warm, under the lantern's marigold (it is lamplight, not a thing to take). */
 const LAMP_HEX = new Color('#FFC27A');
-const LAMP_LIN = new Color('#FFC27A').convertSRGBToLinear();
+/** The light the lamps lay on the ice: a pale warm white. (Amber added to the moonlit lavender ice read as magenta;
+ *  Lanternfall's silver pools are its own, tests/hours.test.ts.) */
+const LAMP_LIN = new Color('#FFE4BC').convertSRGBToLinear();
 
 /** Metres between the parapet's posts (Low: twice that), and between its lamps down each side. */
 const POST_GAP = 4.4;
