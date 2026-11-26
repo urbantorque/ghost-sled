@@ -492,6 +492,11 @@ export class Menus {
   hidePause(): void {
     if (!this.pause.open) return;
     this.disarmHome();
+    // (Round 9, U4: settings opened over the card go with it: P resumes from under them too.)
+    if (this.settings.open) {
+      this.settings.hide();
+      this.pauseCard.classList.remove('is-covered');
+    }
     this.pause.hide();
     // Lift inert from the surfaces underneath first, or the focus return below cannot land.
     this.onChange();
