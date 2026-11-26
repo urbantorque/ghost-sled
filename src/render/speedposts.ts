@@ -83,7 +83,7 @@ const STYLES: Record<BiomeId, Style> = {
   blossom: { weights: [2, 2, 4, 2], shaft: '#EFE7D8', band: '#9C86CC', fence: '#E0D6C4', flags: ['#EDBFD8', '#B09EE8'] },
   // Lanternfall: pale wands banded in violet, silver-grey rails, lilac and cream flags.
   lantern: { weights: [3, 3, 3, 1], shaft: '#DCD6EE', band: '#7462C4', fence: '#B8B0D4', flags: ['#A894EA', '#E6E0F6'] },
-  // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+  // (Gullhaven, round 9: Pinecrest's, never read: it stands no stakes, its fence is the run's strobe, gullhavenworld.ts.)
   gullhaven: { weights: [3, 2, 3, 2], shaft: '#F2EADB', band: '#5C7BD0', fence: '#D8C6AC', flags: ['#5F8FE6', '#E4ECFB'] },
 };
 

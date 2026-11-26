@@ -110,7 +110,7 @@ const CUT: Record<BiomeId, { coat: [number, number, number, number]; sleeve: [nu
   blossom: { coat: [0.2, 0.28, 0.82, 0.58], sleeve: [0.06, 0.13] },
   // The lamplighters' robe: narrow at the shoulder, a full bell to the snow, a wide sleeve.
   lantern: { coat: [0.19, 0.34, 0.96, 0.5], sleeve: [0.07, 0.14] },
-  // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+  // (Gullhaven, round 9: Pinecrest's, built with the crowd's figure and never stood: it has no stands, and its folk on the quay are still figures in knitwear and oilskins, stillCrowd and DRESS below, gullhavenworld.ts.)
   gullhaven: { coat: [0.2, 0.27, 0.62, 0.68], sleeve: [0.06, 0.075] },
 };
 
@@ -125,7 +125,7 @@ const PROP_REST: Record<BiomeId, [number, number, number, number]> = {
   blossom: [3.15, -0.3, 0, 2],
   // A lighting pole held up at arm's length, its flame over the heads, turned in the hand.
   lantern: [2.95, -0.2, 0, 2],
-  // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+  // (Gullhaven, round 9: Pinecrest's, never seen: it has no stands, so no prop holder.)
   gullhaven: [0.35, 0.3, 0.1, 0],
 };
 
