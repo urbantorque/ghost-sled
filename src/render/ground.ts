@@ -1,5 +1,5 @@
 import { Course, type Ledge } from '../sim/course';
-import { drawnGround } from '../sim/oldrun';
+import { CREST_OUT, CREST_TOP, CREST_U, FLOOR, WALL, trackAt } from '../sim/oldrun';
 
 // What the ground is, as opposed to how high it is. The sim's ground() says how high every surface
 // stands; everything here is the look laid over it, and every number past `limit` (where a sled is
@@ -158,16 +158,42 @@ export function composedAt(c: Course, x: number, z: number, g: number): number {
 /** Round 9 (the Old Run's world): the ground a course is drawn on, which is the sim's own on the five. The Old Run's
  *  track keeps its wall's curve rising past the lip in the sim (its landing's prediction looks past it), and drawn
  *  as it stands that is a cliff the height of a house within a few metres; its world draws the parapet's crest of
- *  snow there instead, falling to the forest floor (oldrun.ts drawnGround), so everything past the lip stands on
+ *  snow there instead, falling to the forest floor (oldrun.ts drawnGround, its fall lengthened: crestGround), so
+ *  everything past the lip stands on
  *  that. Inside the lip's reach the two are the same to the millimetre. */
 export type GroundFn = (x: number, z: number) => number;
 const drawers = new WeakMap<Course, GroundFn>();
+
+/** How far the crest falls to the forest floor as the world draws it (oldrun.ts drawnGround's own fall is 5 m: from
+ *  across a bend its outer face, in shade, read to a blind critic as a dark rock slab standing on the bank). */
+const CREST_FALL_DRAWN = 16;
+const smooth01 = (t: number): number => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+
+/** The Old Run's ground as its world draws it (round 9): oldrun.ts drawnGround's crest of snow past the lip (the
+ *  sim's own ground inside CREST_U of the wall's width, then the crest rounding over in CREST_TOP), falling to the
+ *  forest floor over CREST_FALL_DRAWN metres, a long soft bank of snow rather than a steep face. */
+export function crestGround(c: Course, x: number, z: number): number {
+  const t = trackAt(c, z);
+  const q = Math.sqrt(1 + t.p * t.p);
+  const dx = x - t.cx;
+  const d = (dx >= 0 ? dx : -dx) / q;
+  const u = (d - FLOOR) / WALL;
+  if (u <= CREST_U) return c.ground(x, z);
+  const h = dx >= 0 ? t.hr : t.hl;
+  const base = c.baseY(z);
+  const tt = d - FLOOR - CREST_U * WALL;
+  const y1 = h * CREST_U * CREST_U;
+  const s1 = (2 * h * CREST_U) / WALL;
+  if (tt <= CREST_TOP) return base + y1 + s1 * tt - (s1 * tt * tt) / (2 * CREST_TOP);
+  const top = y1 + (s1 * CREST_TOP) / 2;
+  return base + top - (top - (h + CREST_OUT)) * smooth01((tt - CREST_TOP) / CREST_FALL_DRAWN);
+}
 
 /** How a course's ground is drawn (read once a row or a build: a call through it costs nothing on the five). */
 export function groundOf(c: Course): GroundFn {
   let f = drawers.get(c);
   if (!f) {
-    f = c.kit?.id === 'oldrun' ? (x, z) => drawnGround(c, x, z) : (x, z) => c.ground(x, z);
+    f = c.kit?.id === 'oldrun' ? (x, z) => crestGround(c, x, z) : (x, z) => c.ground(x, z);
     drawers.set(c, f);
   }
   return f;
@@ -180,7 +206,7 @@ export function visualGround(c: Course, x: number, z: number): number {
   const e = Math.abs(off) - c.halfWidth(z);
   let y = c.ground(x, z);
   // (The Old Run's crest of snow past its lip: groundOf.)
-  if (e > 0 && c.kit?.id === 'oldrun') return drawnGround(c, x, z);
+  if (e > 0 && c.kit?.id === 'oldrun') return crestGround(c, x, z);
   if (e <= 0) return y;
   const sh = c.shapeAt(z);
   const wall = sh.wall;

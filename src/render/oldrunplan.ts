@@ -7,8 +7,9 @@ import type { Clearing } from './dressing';
 
 /** The grand hotel: on the right of the start house's straight, its three blocks stepping down the slope beside the
  *  track, its facade toward the low sun on the left (sim z from FROM to TO, its front FRONT metres past the lip, its
- *  depth DEEP). */
-export const HOTEL = { side: 1 as const, from: 14, to: 112, front: 27, deep: 17 };
+ *  depth DEEP). Down the straight from the start house, so the lens leaving it has the whole hotel, towers and all,
+ *  ahead on its right (beside the start house it stood out of every frame but its own slab of facade). */
+export const HOTEL = { side: 1 as const, from: 40, to: 140, front: 27, deep: 17 };
 /** The start house over the track's first metres (sim z). */
 export const START_HOUSE = { z0: -9, z1: 7 };
 /** The timing house beside the finish line, on the left, past the crest. */

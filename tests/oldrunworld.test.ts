@@ -1,7 +1,7 @@
 import { BufferAttribute, BufferGeometry } from 'three';
 import { describe, expect, it } from 'vitest';
 import { forestSteps, hasLod } from '../src/render/flora';
-import { groundOf, visualGround } from '../src/render/ground';
+import { crestGround, groundOf, visualGround } from '../src/render/ground';
 import { bareTreeGeometry } from '../src/render/oldrunflora';
 import { getPalette } from '../src/render/palette';
 import { buildTerrainGeometry } from '../src/render/terrain';
@@ -63,7 +63,10 @@ describe("the Old Run's world", () => {
         expect(gnd(far, z)).toBeLessThan(lip + 3);
         expect(c.ground(far, z)).toBeGreaterThan(lip + 20);
         // Props stand on what is drawn.
-        expect(visualGround(c, far, z)).toBeCloseTo(drawnGround(c, far, z), 6);
+        expect(visualGround(c, far, z)).toBeCloseTo(crestGround(c, far, z), 6);
+        // Its crest is the sim's drawn crest to the top, and only its fall is longer.
+        const top = t.cx + side * (FLOOR + WALL * 1.3) * q;
+        expect(crestGround(c, top, z)).toBeCloseTo(drawnGround(c, top, z), 6);
       }
     }
   });

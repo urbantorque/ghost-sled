@@ -1,7 +1,8 @@
 import { BufferGeometry, Color, ConeGeometry, CylinderGeometry, InstancedMesh, Matrix4, Mesh, Object3D, PerspectiveCamera, Quaternion, ShaderMaterial, SphereGeometry, Vector3 } from 'three';
 import type { Snap } from '../game/run';
 import type { Course } from '../sim/course';
-import { CREST_TOP, CREST_U, FLOOR, LIP, WALL, drawnGround, trackAt } from '../sim/oldrun';
+import { CREST_TOP, CREST_U, FLOOR, LIP, WALL, trackAt } from '../sim/oldrun';
+import { crestGround as drawnGround } from './ground';
 import type { Sim } from '../sim/sim';
 import { SNOW, merge, part } from './flora';
 import { box, quad, seg } from './landmarkKit';
@@ -405,6 +406,26 @@ export class OldRunWorld {
       parts.push(box(0.06, 1, blen - 1, IRON, [front - side * 1.36, by1 + 0.6, -zc]));
       // Chimneys on the ridge.
       for (const k of [0.22, 0.78]) parts.push(box(0.9, 3.2, 1.4, PLINTH, [xMid + side * 2.5, top + rh + 0.6, -(z0 + blen * k)]));
+      // A glazed veranda along the plinth's front, its roof a terrace for the first floor: the hotel's long gallery.
+      const vx = front - side * 1.9;
+      parts.push(box(3.6, 0.28, blen - 0.6, CREAM, [vx, floor + plinthH - 0.1, -zc]));
+      const posts = Math.round(blen / 3);
+      for (let i = 0; i <= posts; i++) parts.push(box(0.2, plinthH - 0.2, 0.2, CREAM, [front - side * 3.55, floor + plinthH / 2 - 0.1, -(z0 + 0.3 + ((blen - 0.6) * i) / posts)]));
+      glass.push(box(0.08, plinthH - 0.9, blen - 0.8, GLASS, [front - side * 3.5, floor + plinthH / 2 - 0.15, -zc]));
+      if (b === 1) {
+        // The middle block's pavilion: brought forward of the facade and carried up through the cornice into a tall
+        // gable with a round window, so the roofline has a gable to the track between its two towers.
+        const pw = blen * 0.36;
+        const px = front - side * 1.2;
+        parts.push(box(2.6, storeys * sh + plinthH, pw, RENDER_C, [px + side * 1.3 - side * 0.1, floor + (storeys * sh + plinthH) / 2, -zc]));
+        const gy = top + 0.4;
+        const gh = 5.8;
+        parts.push(quad([px, gy, -(zc - pw / 2 - 0.2)], [px, gy, -(zc + pw / 2 + 0.2)], [px, gy + gh, -zc], [px, gy + gh, -zc], side > 0 ? CREAM : CREAM));
+        parts.push(quad([px, gy, -(zc + pw / 2 + 0.2)], [px, gy, -(zc - pw / 2 - 0.2)], [px, gy + gh, -zc], [px, gy + gh, -zc], CREAM));
+        const slope = Math.atan2(gh, pw / 2 + 0.4);
+        for (const s2 of [-1, 1]) parts.push(box(2.8, 0.3, Math.hypot(gh, pw / 2 + 0.4) + 0.3, SLATE, [px + side * 1.3, gy + gh / 2 + 0.15, -(zc + (s2 * (pw / 2 + 0.4)) / 2)], [s2 * slope, 0, 0]));
+        glass.push(part(new CylinderGeometry(0.9, 0.9, 0.12, 14, 1), GLASS, { pos: [px - side * 0.05, gy + gh * 0.4, -zc], rot: [0, 0, Math.PI / 2] }));
+      }
     }
     // The towers where the blocks meet: square, a storey and a roof over the mansards; the lower one taller, spired,
     // flying a flag in the resort's green.
@@ -508,8 +529,12 @@ export class OldRunWorld {
     const tTop = f0 + H + rh + 5.6;
     parts.push(box(TW, tTop - f0, TW, TIMBER_D, [x0, (f0 + tTop) / 2, tz]));
     parts.push(box(TW + 0.5, 0.4, TW + 0.5, CREAM, [x0, tTop, tz]));
-    parts.push(part(new ConeGeometry(TW * 0.85, 3.6, 4, 1), SLATE, { pos: [x0, tTop + 2, tz], rot: [0, Math.PI / 4, 0] }));
-    parts.push(seg([x0, tTop + 3.6, tz], [x0, tTop + 5, tz], 0.05, IRON));
+    // A low hipped cap and on it an open cupola for the timing bell, never a church's spire.
+    parts.push(part(new ConeGeometry(TW * 0.86, 1.5, 4, 1), SLATE, { pos: [x0, tTop + 0.95, tz], rot: [0, Math.PI / 4, 0] }));
+    for (const [a, b] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) parts.push(box(0.12, 1.3, 0.12, CREAM, [x0 + a, tTop + 1.9, tz + b]));
+    parts.push(box(1.4, 0.16, 1.4, CREAM, [x0, tTop + 2.6, tz]));
+    parts.push(part(new CylinderGeometry(0.16, 0.26, 0.4, 8, 1, true), new Color('#8A6A3E'), { pos: [x0, tTop + 2.1, tz] }));
+    parts.push(part(new ConeGeometry(0.95, 0.7, 4, 1), SLATE, { pos: [x0, tTop + 3.0, tz], rot: [0, Math.PI / 4, 0] }));
     const cy = tTop - 1.9;
     const cz = tz + TW / 2 + 0.06;
     parts.push(box(TW - 0.4, TW - 0.4, 0.1, CREAM, [x0, cy, cz - 0.02]));
