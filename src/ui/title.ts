@@ -464,7 +464,9 @@ export class Title {
     if (d === 'events') aria += `. Inside: your flame, today's Daily and contracts, this week's Cup and its league${m.trial ? ', the Trial' : ''}`;
     else if (d === 'progress') aria += `. Inside: the Almanac, The Twelve${sp?.longNight ? ', the Long Night' : ''}${sp?.album ? ', the Spirit Album' : ''}, medals and mastery stars, and missions`;
     const intro = this.introFor(d, m);
-    const words = h('span', 'gs9-door-t', h('span', 'gs9-door-l', DOOR_LABEL[d]), status ? h('span', `gs9-door-s${d === 'events' ? ' is-flame' : ''}`, status) : null);
+    // (A phone's door is a quarter of the width: "Daily & Cup" there, so it keeps one line over its flame.)
+    const label = d === 'events' ? h('span', 'gs9-door-l', h('span', 'gs9-door-long', DOOR_LABEL[d]), h('span', 'gs9-door-short', 'Daily & Cup')) : h('span', 'gs9-door-l', DOOR_LABEL[d]);
+    const words = h('span', 'gs9-door-t', label, status ? h('span', `gs9-door-s${d === 'events' ? ' is-flame' : ''}`, status) : null);
     const b = b9(this.ctx, 'secondary', [words, intro ? h('span', 'gs9-tag is-gift gs9-new', 'New') : null], { icon: DOOR_ICON[d], fk: `door-${d}`, cls: 'gs9-door', aria: intro ? `${aria}. Something new` : aria, onClick: () => this.openDoor(d, b) });
     if (d === 'events' || d === 'progress') b.setAttribute('aria-haspopup', 'dialog');
     return b;

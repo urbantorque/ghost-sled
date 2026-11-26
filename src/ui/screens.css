@@ -528,8 +528,18 @@
 /* The picked mountain is the larger chip: its name, and your best there in words. */
 .gs9-chip.is-sel {
   width: clamp(140px, 13vw, 200px);
-  box-shadow: inset 0 0 0 2px var(--c-text), var(--shadow);
   cursor: default;
+}
+
+/* The picked chip's ring, drawn over its sky (an inset shadow on the chip sat under the sky and showed only round the
+   name). */
+.gs9-chip.is-sel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 2px var(--c-text);
+  pointer-events: none;
 }
 
 .gs9-chip.is-sel .gs9-chip-name {
@@ -713,6 +723,10 @@
   text-align: left;
 }
 
+.gs9-door-short {
+  display: none;
+}
+
 .gs9-door-s {
   color: var(--text-dim);
   font-size: var(--fs-xs);
@@ -776,8 +790,10 @@
     display: none;
   }
 
+  /* (No drop shadow: the strip scrolls, and a scroller clips a chip's shadow into a square backing.) */
   .gs9-chip,
   .gs9-chip.is-sel {
+    box-shadow: inset 0 0 0 1px var(--hair);
     flex: 1 0 auto;
     width: auto;
     min-width: 60px;
@@ -801,13 +817,17 @@
     overflow: visible;
   }
 
+  /* (The row centred like the column, the best first: alone at the far left it read as a stray.) */
   .gs9-how.is-best-only {
     display: flex;
   }
 
+  .gs9-how {
+    justify-content: center;
+  }
+
   .gs9-how-best {
     display: inline-flex;
-    margin-right: auto;
   }
 
   .gs9-ride {
@@ -849,6 +869,14 @@
   .gs9-door-l {
     font-size: var(--fs-s);
     line-height: 1.05;
+  }
+
+  .gs9-door-long {
+    display: none;
+  }
+
+  .gs9-door-short {
+    display: inline;
   }
 
   .gs9-door-s {
