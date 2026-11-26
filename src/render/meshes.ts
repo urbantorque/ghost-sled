@@ -2227,29 +2227,6 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
       out.push(strap());
       break;
     }
-    case 'floppeak': {
-      // Flop Peak (round 9): a tall soft felt cone that rises well over the crown and flops forward over the brow, a
-      // cream pom swinging at its tip; felt, so smooth and unribbed. From behind it is the tallest hat, a rounded
-      // hump; the Long Knit Cap's tail streams back and to one side.
-      out.push(dome(1.06), part(new TorusGeometry(0.266, 0.045, lite ? 4 : 6, lite ? 14 : 24), cuff, { pos: [0, 0.9, 0.01], rot: [Math.PI / 2, 0, 0] }));
-      const path = [new Vector3(0, 1.0, 0.03), new Vector3(-0.01, 1.22, 0.05), new Vector3(-0.05, 1.42, 0.04), new Vector3(-0.15, 1.53, 0.03), new Vector3(-0.28, 1.5, 0.03), new Vector3(-0.36, 1.38, 0.03)];
-      const rad = [0.24, 0.19, 0.13, 0.09, 0.062, 0.045];
-      for (let i = 0; i < path.length - 1; i++) {
-        const w0 = (i / (path.length - 1)) * 0.75;
-        const w1 = ((i + 1) / (path.length - 1)) * 0.75;
-        const a = path[i];
-        const b = path[i + 1];
-        out.push(sway(capsule(a, b, rad[i], rad[i + 1], shade(C.accent, i % 2 ? 0.94 : 1), lite ? 7 : 11), (x, y, z) => {
-          const t = Math.max(0, Math.min(1, ((x - a.x) * (b.x - a.x) + (y - a.y) * (b.y - a.y) + (z - a.z) * (b.z - a.z)) / a.distanceToSquared(b)));
-          return [w0 + (w1 - w0) * t, 0];
-        }));
-      }
-      out.push(pom(-0.37, 1.29, 0.03, 0.09, 1));
-      out.push(part(new TorusGeometry(0.262, 0.03, lite ? 4 : 5, lite ? 14 : 22), C.pom, { pos: [0, 0.96, 0.01], rot: [Math.PI / 2, 0, 0] }));
-      goggles(0.99, -0.236);
-      out.push(strap(0.25, 0.975));
-      break;
-    }
     case 'beanie':
     default: {
       // The beanie, pulled down to just above the eyes, its folded cuff a deeper vermillion band of knit

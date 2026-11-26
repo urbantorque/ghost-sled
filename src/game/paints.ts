@@ -42,7 +42,6 @@ export const PAINTS: readonly Paint[] = [
   { id: 'cocoa', name: 'Burnt Scroll', blurb: 'Walnut stain with scrolls burnt into the slats\' ends', hex: '#8A5534', price: 250, motif: 'scroll', accent: 'ink', source: SHOP },
   { id: 'snow', name: 'Snowfield Frame', blurb: 'Snow-white slats in a dark walnut frame', hex: '#EEF0F6', price: 310, motif: 'twotone', accent: 'ink', source: SHOP },
   { id: 'ash', name: 'Basalt Hex', blurb: 'Dark slate under a fine cream hex lattice', hex: '#6B6570', price: 380, motif: 'hex', accent: 'cream', source: SHOP },
-  { id: 'gilt', name: 'Gilt Scroll', blurb: 'Oxblood lacquer, cream scrollwork along the rails', hex: '#5E2430', price: 650, motif: 'gilt', accent: 'cream', source: SHOP },
   { id: 'almanacdusk', name: 'Almanac Pages', blurb: 'A parchment deck ruled in ink like a page of the Almanac', hex: '#C49A5E', price: 0, motif: 'ruled', accent: 'ink', source: { kind: 'almanac', page: 38 } },
 ];
 

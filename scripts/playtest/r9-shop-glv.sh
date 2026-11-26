@@ -24,7 +24,7 @@ job base "$BASE0" null
 job stock "$BASE" null
 job base2 "$BASE0" null
 job stock2 "$BASE" null
-job dressed "$BASE" "{ scarf: 'double', hat: 'floppeak', finish: 'snow', tiers: 5, trail: 'kitetails' }"
+job dressed "$BASE" "{ scarf: 'ch6scarf', hat: 'twintails', finish: 'snow', tiers: 5, trail: 'kitetails' }"
 job pom "$BASE" "{ scarf: 'pomtails', tiers: 4, trail: 'stardust' }"
 job comet "$BASE" "{ scarf: 'almanacknot', tiers: 3, trail: 'comet' }"
 playwright-cli -s="$S" close >/dev/null 2>&1

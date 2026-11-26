@@ -303,7 +303,7 @@ export class GarageScene {
     this.add(merged(room), 'room');
     this.add(merged(stand), 'props');
     // The hat wall: shelves on the left wall, each hat on a wooden block (Low: one shelf of six).
-    const hats: HatId[] = ['beanie', 'watch', 'twinpom', 'trapper', 'bobbles', 'chullo', 'longcap', 'muffs', 'downcap', 'twintails', 'floppeak'];
+    const hats: HatId[] = ['beanie', 'watch', 'twinpom', 'trapper', 'bobbles', 'chullo', 'longcap', 'muffs', 'downcap', 'twintails'];
     const wall: BufferGeometry[] = [];
     const rows = low ? 1 : 2;
     for (let r = 0; r < rows; r++) wall.push(box(0.36, 0.05, 3.9, WOOD_DARK, 4.78, 1.45 + r * 0.75, 2.45));

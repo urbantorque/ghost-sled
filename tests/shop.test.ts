@@ -100,9 +100,9 @@ describe('the shelves', () => {
     expect(ALMANAC[4].rewards.some((r) => r.kind === 'sled' && r.sled === 1)).toBe(true);
   });
 
-  it('has eleven hats (the Crest Knit cut), every one of them sold or free, and none of The Twelve\'s', () => {
-    expect(HATS).toHaveLength(11);
-    expect(new Set(HATS.map((h) => h.id)).size).toBe(11);
+  it('has ten hats (the Crest Knit and the Flop Peak cut), every one of them sold or free, and none of The Twelve\'s', () => {
+    expect(HATS).toHaveLength(10);
+    expect(new Set(HATS.map((h) => h.id)).size).toBe(10);
     for (const h of HATS) expect(h.name).not.toMatch(/crown|antler|horn|fox|stovepipe|topknot/i);
   });
 

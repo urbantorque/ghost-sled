@@ -79,7 +79,7 @@ export interface ScarfDef {
 }
 
 /** A hat's silhouette (meshes.ts playerHat builds each). */
-export type HatId = 'beanie' | 'watch' | 'twinpom' | 'trapper' | 'bobbles' | 'chullo' | 'longcap' | 'muffs' | 'downcap' | 'twintails' | 'floppeak';
+export type HatId = 'beanie' | 'watch' | 'twinpom' | 'trapper' | 'bobbles' | 'chullo' | 'longcap' | 'muffs' | 'downcap' | 'twintails';
 
 export interface HatDef {
   id: HatId;
@@ -231,7 +231,6 @@ export const HATS: readonly HatDef[] = [
   { id: 'muffs', name: 'Pom Muffs', blurb: 'A broad knit band over the crown and two big fur muffs', price: 440, source: SHOP },
   { id: 'downcap', name: 'Down Cap', blurb: 'A big puffed dome in fat quilted rings, a real brim', price: 580, source: SHOP },
   { id: 'twintails', name: 'Twin Tails', blurb: 'Two long knit tails streaming back off the crown, poms at their ends', price: 700, source: SHOP },
-  { id: 'floppeak', name: 'Flop Peak', blurb: 'A tall felt peak flopped over to one side, a cream pom at its tip', price: 850, source: SHOP },
 ];
 
 // ---------------------------------------------------------------- trails
