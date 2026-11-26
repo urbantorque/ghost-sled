@@ -450,7 +450,9 @@ async (page) => {
     // Three passes, so the pad never puts its glyphs into a shot: every sheet and popover shot (the garage's every
     // shelf), then each closed with Escape, then (a scripted pad plugged in) each closed with B.
     const found = [];
-    for (const [name, sel] of openers) {
+    // (Round 9, the u4 lane: `skip` leaves surfaces out, the garage's every shelf for one; `extra` adds openers.)
+    const skip = new Set(c.skip || []);
+    for (const [name, sel] of [...openers, ...(c.extra || [])].filter(([n]) => !skip.has(n))) {
       await closeAny();
       if (!(await open(sel))) {
         report.sheets.push({ name, stage: st, opened: false });

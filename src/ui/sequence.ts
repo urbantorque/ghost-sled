@@ -410,7 +410,7 @@ export class Story {
       rankInKicker = !reward.reward.chapter && !reward.reward.from;
       const n = h('span', 'gs9-got-n', reward.name);
       n.setAttribute('translate', 'no');
-      got.append(h('span', 'gs9-got-art is-gift', ico9(rewardGlyph(reward.reward.kind))), h('span', 'gs9-got-k', reward.kicker), n);
+      got.append(h('span', 'gs9-got-art is-gift', ico9(rewardGlyph(reward.reward.kind, reward.reward))), h('span', 'gs9-got-k', reward.kicker), n);
       if (reward.line) got.append(h('span', 'gs9-got-l', reward.line));
     } else if (reward?.kind === 'sled') {
       const n = h('span', 'gs9-got-n', reward.name);

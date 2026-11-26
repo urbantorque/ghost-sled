@@ -54,7 +54,11 @@ export type IconName =
   | 'grid'
   | 'focus'
   | 'reset'
-  | 'clip';
+  | 'clip'
+  | 'scarf'
+  | 'trail'
+  | 'ornament'
+  | 'brush';
 
 const STROKE = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
 const FILL = 'fill="currentColor"';
@@ -173,6 +177,11 @@ const GLYPHS: Record<IconName, string> = {
   // Round 8, G11 (the share lane): a clip, a frame of film with its sprockets and the play mark (never the camcorder,
   // which is the ad offers').
   clip: `<g ${STROKE}><rect x="3.5" y="5" width="17" height="14" rx="2.2"/><path d="M7.6 5v2.6M12 5v2.6M16.4 5v2.6M7.6 16.4V19M12 16.4V19M16.4 16.4V19"/></g><path ${FILL} d="M10.5 10.1v3.8l3.3-1.9z"/>`,
+  // Round 9 (U4): the garage's shelves, so a piece is drawn as what it is (a scarf, a trail, an ornament, a finish).
+  scarf: `<g ${STROKE}><path d="M5 7.4c2.4-2.6 11.6-2.6 14 0-2.4 2.2-11.6 2.2-14 0z"/><path d="M14.6 9.2l1.8 9.8M11 9.6l-1.4 9.2"/><path d="M8.6 19.2h2.2M15.6 19.4l2.2-.4"/></g>`,
+  trail: `<path ${STROKE} d="M3.5 18.5c4.2-.6 7.6-3 10-6.4s5-5.8 7-6.6"/><g ${FILL}><circle cx="6.6" cy="21" r="1.2"/><circle cx="11.6" cy="18.6" r="1.2"/><circle cx="16" cy="14.8" r="1.2"/></g>`,
+  ornament: `<g ${STROKE}><path d="M12 21V10.2M8.4 21h7.2M12 3.2v2"/><path d="M9.4 5.2h5.2l.9 5H8.5z"/></g>`,
+  brush: `<g ${STROKE}><path d="M14.2 4.6l5.2 5.2-6.6 6.6-5.2-5.2z"/><path d="M7.6 11.2c-2.2.6-3.4 2.4-3.4 4.6 0 1.6-.6 2.6-1.4 3.2 2.8.4 6.6-.4 7.8-3.2"/></g>`,
 };
 
 /** Raw SVG markup for a glyph (24 x 24 viewBox). */

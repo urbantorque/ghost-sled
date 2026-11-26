@@ -323,9 +323,10 @@ export class UI implements GameUI {
       if (menu === this.menus.pause.el) menu.querySelector<HTMLElement>('[data-fk="resume"]')?.click();
       return true;
     }
-    // (Round 9: a room over the title or Details over the results is the scope, and modal: B closes it.)
+    // (Round 9: a room over the title or Details over the results is the scope, and modal: B closes it. U4: so do the
+    // books and settings, through the same back(), so an album page over its contents goes first.)
     const sheet = menu ? null : topSheet();
-    if (sheet && p.b) {
+    if (p.b && (sheet || menu === this.menus.books.el || menu === this.menus.settings.el)) {
       this.back();
       return false;
     }

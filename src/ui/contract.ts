@@ -38,8 +38,9 @@ export interface MountainCard {
   /** You have beaten the top of this ladder. */
   top?: boolean;
   medals?: MedalSet;
-  /** Mastery stars held of the mountain's board. */
-  stars?: { got: number; of: number };
+  /** Mastery stars held of the mountain's board. Round 9 (U4): and the board itself, each star's goal and whether it
+   *  is held (mastery.ts masteryBoard), for the medal wall's board of each mountain. */
+  stars?: { got: number; of: number; board?: Array<{ label: string; group: 'medal' | 'gate' | 'moment' | 'rider' | 'clean'; done: boolean }> };
 }
 
 /** Your medals on a mountain: 0 none, 1 bronze, 2 silver, 3 gold, one per stage and the whole run. */
@@ -644,6 +645,8 @@ export interface RewardCard {
   mountain?: string;
   /** Round 9, the shop lane: where a piece that is no page's came from ("Pinecrest's set"); shown instead of the page. */
   from?: string;
+  /** Round 9 (U4): a garage piece's shelf ('scarf', 'trail', 'paint', 'ornament'), so it is drawn with its shelf's glyph. */
+  shelf?: string;
 }
 
 /** Rider Rank's bar: the page turned, the XP into the next and what it still needs, and the next page's rewards. */

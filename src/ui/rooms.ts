@@ -1,12 +1,15 @@
 import type { MountainCard, TitleDoor, TitleModel, UIHandlers } from './contract';
 import { clock } from '../game/standing';
 import { DIVISIONS, LEAGUE_MOVE, LEAGUE_SIZE } from '../game/league';
+import { LEGS } from '../game/modes';
+import { SETS, SET_SHARES } from '../game/garage';
+import { STAR_GIFTS } from '../game/mastery';
 import { riderBust } from './art';
 import { barShare } from './almanac';
-import { h, type Ctx } from './dom';
+import { h, sr, type Ctx } from './dom';
 import { fmt, progFigures } from './fmt';
 import { b9, ico9, medalDisc, openSheet, ordinal9, sheetFrame } from './kit9';
-import { medalDots, medalWords } from './title';
+import { medalDots, medalWords, pickerOrder } from './title';
 import { curly, lowerFirst, prizesLine } from './words';
 import './rooms.css';
 
@@ -155,8 +158,10 @@ function eventsRoom(f: Fill): void {
     const list = h('ul', 'gs9-list');
     for (const c of sp.contracts) list.append(row([check(c.done), c.text], c.done ? 'Done' : `${fmt(c.xp)} XP`, c.done ? 'is-done' : ''));
     if (sp.form) list.append(row([check(sp.form.done), `Your form: ${lowerFirst(sp.form.text)}`], sp.form.done ? 'Done' : `${fmt(sp.form.xp)} XP`, sp.form.done ? 'is-done' : ''));
-    const done = sp.contracts.filter((c) => c.done).length;
-    body.append(block('Today’s Contracts', `${done} of ${sp.contracts.length} done. New ones come each day.`, null, list));
+    // (Round 9, U4: the count says what is listed, the form contract with the day's three.)
+    const done = sp.contracts.filter((c) => c.done).length + (sp.form?.done ? 1 : 0);
+    const of = sp.contracts.length + (sp.form ? 1 : 0);
+    body.append(block('Today’s Contracts', `${done} of ${of} done. New ones come each day.`, null, list));
   }
   body.append(sep());
   // This week's Cup and its league.
@@ -215,7 +220,8 @@ function leagueTable(body: HTMLElement, m: TitleModel): void {
   const list = h('ol', 'gs9-list gs9-order');
   list.setAttribute('aria-label', 'The league table');
   lg.rows.forEach((r, i) => {
-    const n = h('span', '', r.you ? 'You' : r.name);
+    // (Round 9, U4: the others are the week's records, each a ghost's run: their names in the ghosts' mint.)
+    const n = h('span', r.you ? '' : 'gs9-who is-ghost', r.you ? 'You' : r.name);
     if (!r.you) n.setAttribute('translate', 'no');
     const li = row([h('span', 'gs9-order-n gs9-num', String(i + 1)), n], clock(r.time), `${r.you ? 'is-you' : ''}${i === LEAGUE_MOVE - 1 ? ' is-line' : ''}`);
     if (r.you) li.setAttribute('aria-current', 'true');
@@ -274,14 +280,14 @@ function progressRoom(f: Fill): void {
         o.hd.onRideMode?.({ kind: 'night' });
       },
     });
-    body.append(block('The Long Night', `${ln.legs} mountains back to back. ${deep}`, go));
+    body.append(block('The Long Night', `${nightLegs(ln.legs)} ${deep}`, go));
   }
   // The Spirit Album.
   if (sp?.album) body.append(block('Spirit Album', `${fmt(sp.album.got)} of ${fmt(sp.album.of)} stickers found.`, b9(o.ctx, 'secondary', 'Album', { icon: 'sticker', fk: 'album', onClick: () => o.hd.onOpenAlbum?.() })));
   // The medals: each mountain's, its ladder and its stars, the Cup's and the Trial's.
   const golds = m.mountains.reduce((n, c) => n + (c.medals ? c.medals.stages.filter((x) => x >= 3).length + (c.medals.run >= 3 ? 1 : 0) : 0), 0);
-  const md = b9(o.ctx, 'secondary', 'Medals', { icon: 'trophy', fk: 'medals', onClick: () => f.push('Medals', (b) => medalWall(b, m), md) });
-  body.append(block('Medals', `${golds} of ${m.mountains.length * 4} golds. Each mountain’s ladder and mastery stars are inside.`, md));
+  const md = b9(o.ctx, 'secondary', 'Medals', { icon: 'trophy', fk: 'medals', onClick: () => f.push('Medals', (b) => medalWall(b, m, f), md) });
+  body.append(block('Medals', `${golds} of ${m.mountains.length * 4} golds. Each mountain’s ladder and its board of stars are inside.`, md));
   // The missions.
   if (m.missions.length > 0) {
     const list = h('ul', 'gs9-list');
@@ -292,6 +298,15 @@ function progressRoom(f: Fill): void {
     const left = m.missions.filter((x) => !x.done).length;
     body.append(block('Missions', left > 0 ? `${left} to finish. Each pays gifts.` : 'All done. New ones come with the next run.', null, list));
   }
+}
+
+/** The Long Night's legs in words, however many are open (round 9, U4: the night is every mountain in the order they
+ *  open, then the same mirrored, so three new mountains make sixteen legs with no second pass here). */
+export function nightLegs(legs: number): string {
+  const half = LEGS.length / 2;
+  if (legs <= half) return `${legs} mountains back to back.`;
+  const more = legs - half;
+  return `${legs} legs: every mountain back to back, then ${more >= half ? 'all of them' : more === 1 ? 'the first' : `the first ${more}`} mirrored.`;
 }
 
 /** All twelve, gentlest first: each one's bust, home ground and time there, and who has fallen. The one that rides
@@ -320,27 +335,65 @@ function ladder(body: HTMLElement, m: TitleModel, f: Fill): void {
         f.o.travel(n.mountainId, n.mountain, () => f.o.hd.onSelectMountain(n.mountainId));
       } });
     }
-    const li = h('li', `gs9-rung is-${r.state}`, h('span', 'gs9-order-n gs9-num', String(i + 1)), bust, h('span', 'gs9-rung-t', name, h('span', 'gs9-rung-b', r.bio), meta), tag);
+    // (Round 9, U4: the one who rides next says their line; the rest their name, home and time, so the twelve read as
+    // a ladder at a glance and not twelve paragraphs; a reader still hears each one's line.)
+    const li = h('li', `gs9-rung is-${r.state}`, h('span', 'gs9-order-n gs9-num', String(i + 1)), bust, h('span', 'gs9-rung-t', name, r.state === 'next' ? h('span', 'gs9-rung-b', r.bio) : sr(r.bio), meta), tag);
     list.append(li);
   });
   body.append(list);
 }
 
-/** The medal wall: every mountain's place on its ladder, its medals and its mastery stars; the week's Cup and Trial. */
-function medalWall(body: HTMLElement, m: TitleModel): void {
-  body.append(h('p', 'gs9-block-p', 'Three stages, then the whole run. Stars: medals, sky gates, set pieces swept clean, home riders beaten, a clean finish.'));
+/** The medal wall: every mountain's place on its ladder, its medals and its mastery stars, in the picker's order; the
+ *  week's Cup and Trial. Round 9 (U4): an open mountain's row opens its mastery board. */
+function medalWall(body: HTMLElement, m: TitleModel, f: Fill): void {
+  body.append(h('p', 'gs9-block-p', 'Three stages, then the whole run. A mountain’s stars are on its board.'));
   const list = h('ul', 'gs9-list gs9-wall');
-  const place = (c: MountainCard): string => (c.locked ? 'Locked' : c.top ? 'Top of its ladder' : typeof c.rank === 'number' ? `${ordinal9(c.rank)} of ${c.rankOf ?? c.rank} on its ladder` : 'No run yet');
-  for (const c of m.mountains) {
+  const place = (c: MountainCard): string => (c.top ? 'Top of its ladder' : typeof c.rank === 'number' ? `${ordinal9(c.rank)} of ${c.rankOf ?? c.rank} on its ladder` : 'No run yet');
+  for (const c of pickerOrder(m.mountains)) {
     const name = h('span', 'gs9-wall-n', c.name);
     name.setAttribute('translate', 'no');
-    // (A mountain's stars are counted only here: a board builds its whole course.)
-    const stars = !c.locked && c.stars ? `, ${c.stars.got} of ${c.stars.of} stars` : '';
-    const li = h('li', `gs9-row${c.locked ? ' is-done' : ''}`, h('span', 'gs9-row-t', name, h('span', 'gs9-wall-p', `${place(c)}${stars}`)), !c.locked && c.medals ? medalDots(c.medals) : null);
-    if (!c.locked && c.medals) li.setAttribute('aria-label', `${c.name}. ${place(c)}${stars}. ${medalWords(c.medals)}`);
-    list.append(li);
+    if (c.locked) {
+      list.append(h('li', 'gs9-row is-done', h('span', 'gs9-row-t', name), h('span', 'gs9-tag', ico9('lock'), 'Locked')));
+      continue;
+    }
+    // (A mountain's stars are counted only here, once: a board builds its whole course.)
+    const st = c.stars ?? null;
+    const stars = st ? `${st.got} of ${st.of} stars` : '';
+    const words = h('span', 'gs9-row-t', name, h('span', 'gs9-wall-p', `${place(c)}${stars ? `, ${stars}` : ''}`));
+    const dots = c.medals ? medalDots(c.medals, [], true) : null;
+    const aria = `${c.name}. ${place(c)}${stars ? `, ${stars}` : ''}. ${c.medals ? medalWords(c.medals) : 'No medals yet'}. Its board`;
+    const b: HTMLButtonElement = b9(f.o.ctx, 'quiet', [words, dots ?? '', ico9('chevR', 'gs9-wall-chev')], { fk: `board-${c.id}`, aria, cls: 'gs9-wall-b', onClick: () => f.push(`${c.name}’s Board`, (bb) => masteryBoard(bb, c, st), b) });
+    list.append(h('li', '', b));
   }
-  if (m.cup) list.append(h('li', 'gs9-row', h('span', 'gs9-row-t', h('span', 'gs9-wall-n', `Week ${m.cup.week} Cup`), h('span', 'gs9-wall-p', m.cup.best > 0 ? `Best ${clock(m.cup.best)}` : 'No run yet')), medalDots({ stages: [], run: m.cup.medal })));
-  if (m.trial) list.append(h('li', 'gs9-row', h('span', 'gs9-row-t', h('span', 'gs9-wall-n', `Week ${m.trial.week} Trial`), h('span', 'gs9-wall-p', m.trial.best ? `Best ${m.trial.best}` : 'No run yet')), medalDots({ stages: [], run: m.trial.medal })));
+  // (A week's medal with no figure kept for it says the medal, not "No run yet" beside a disc.)
+  const week = (medal: number, best: string | null): string => (best ? `Best ${best}` : medal > 0 ? `${MEDAL[medal]} this week` : 'No run yet');
+  if (m.cup) list.append(h('li', 'gs9-row', h('span', 'gs9-row-t', h('span', 'gs9-wall-n', `Week ${m.cup.week} Cup`), h('span', 'gs9-wall-p', week(m.cup.medal, m.cup.best > 0 ? clock(m.cup.best) : null))), medalDots({ stages: [], run: m.cup.medal })));
+  if (m.trial) list.append(h('li', 'gs9-row', h('span', 'gs9-row-t', h('span', 'gs9-wall-n', `Week ${m.trial.week} Trial`), h('span', 'gs9-wall-p', week(m.trial.medal, m.trial.best ?? null))), medalDots({ stages: [], run: m.trial.medal })));
   body.append(list);
+}
+
+const BOARD_ROWS: ReadonlyArray<[NonNullable<NonNullable<MountainCard['stars']>['board']>[number]['group'], string]> = [
+  ['medal', 'Medals for the Whole Run'],
+  ['gate', 'Sky Gates'],
+  ['moment', 'Set Pieces'],
+  ['rider', 'Home Riders'],
+  ['clean', 'A Clean Finish'],
+];
+
+/** A mountain's mastery board (round 9, U4: drawn for the first time): every star and its goal, held or not, in the
+ *  board's rows, and where its set in the garage opens. */
+function masteryBoard(body: HTMLElement, c: MountainCard, st: MountainCard['stars'] | null): void {
+  const board = st?.board ?? [];
+  const set = SETS[c.id] ? SET_SHARES.map((s) => Math.ceil(s * board.length - 1e-9)) : null;
+  const left = board.length - (st?.got ?? 0);
+  const line = left > 0 ? `${st?.got ?? 0} of ${board.length} stars. Each pays ${STAR_GIFTS} gifts, once.` : `All ${board.length} stars held.`;
+  body.append(h('p', 'gs9-block-p', line, set ? ` Its set opens in the garage at ${set[0]}, ${set[1]} and ${set[2]} stars.` : ''));
+  for (const [g, title] of BOARD_ROWS) {
+    const stars = board.filter((s) => s.group === g);
+    if (stars.length === 0) continue;
+    const ul = h('ul', 'gs9-list');
+    // (Held is the check, in the gifts' marigold as a mission done; a reader hears it.)
+    for (const s of stars) ul.append(row([check(s.done), curly(s.label), sr(s.done ? ', held' : ', not yet')], null, s.done ? 'is-done' : ''));
+    body.append(h('section', '', h('h3', 'gs9-cap', title), ul));
+  }
 }

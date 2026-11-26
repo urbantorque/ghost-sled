@@ -61,6 +61,9 @@ export class Results {
   private prev: ResultsModel | null = null;
   private story: Story | null = null;
   private det: { el: HTMLElement; close: () => void } | null = null;
+  /** Round 9 (U4): Details' Watch Your Run or Save Clip was pressed (its focus key): the reel hides the results, and
+   *  they come back to Details. */
+  private backTo: string | null = null;
   /** Offers waiting on the game's answer, and offers pressed on these results (a withdrawn one keeps its slot). */
   private pending = new Set<string>();
   private pressed = new Set<string>();
@@ -107,14 +110,24 @@ export class Results {
   }
 
   show(m: ResultsModel): void {
+    // (Round 9, U4: back from the reel or a clip asked for in Details, the same results come back landed, with Details
+    // open again and focus on what was pressed: one Escape skipped the reel and did nothing else.)
+    const back = this.backTo && m === this.prev ? this.backTo : null;
+    this.backTo = null;
     this.prev = null;
     this.stamped.clear();
     this.landedRows.clear();
     this.pending.clear();
-    this.pressed.clear();
+    if (!back) this.pressed.clear();
     this.closeDetails();
     this.render(m, true);
     this.layer.show();
+    if (back) {
+      this.story?.finish();
+      this.openDetails(false);
+      this.det?.el.querySelector<HTMLElement>(`[data-fk="${back}"]`)?.focus({ preventScroll: true });
+      return;
+    }
     this.story?.play();
     this.focusDefault();
   }
@@ -237,8 +250,18 @@ export class Results {
     detailsBody(f.body, m, this.ctx, this.hd, {
       mode: this.inputMode,
       garage: (piece) => this.hooks.openGarage(piece),
-      watch: this.hd.onWatchReel ? () => this.hd.onWatchReel?.() : null,
-      clip: this.hd.onSaveClip ? () => this.hd.onSaveClip?.() : null,
+      watch: this.hd.onWatchReel
+        ? () => {
+            this.backTo = 'reel';
+            this.hd.onWatchReel?.();
+          }
+        : null,
+      clip: this.hd.onSaveClip
+        ? () => {
+            this.backTo = 'clip';
+            this.hd.onSaveClip?.();
+          }
+        : null,
       challenge: m.canChallenge ? this.rewarded('challenge', 'link', m.sendItBack ? 'Send It Back' : 'Challenge a Friend', false, () => this.hd.onChallenge()) : null,
       swap: m.spine?.swap && this.hd.onSwapMission ? m.spine.swap : null,
       swapped: this.pressed.has('swap'),

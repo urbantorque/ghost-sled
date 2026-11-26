@@ -1,5 +1,6 @@
 import type { GhostKind, MountainCard, ToastTone } from './contract';
 import { ChaosEvent, eventInfo } from '../sim/chaos';
+import { skyOf } from './art';
 import { h, type Kid } from './dom';
 import { fmt, kindCls, ordinal } from './fmt';
 import { icon, type IconName } from './icons';
@@ -639,8 +640,9 @@ function render(s: Spec): HTMLElement {
     return h('div', `gs-pass gs-panel k-grudge${s.nemesis ? ' is-nemesis' : ''}`, ico, txt, pay, s.said ? srWithName(s.said, s.name) : null);
   }
   const ic = TOAST_ICON[s.tone];
-  // An unlocked mountain's snowflake sits on a swatch of that mountain's own sky.
-  const glyph = ic ? (s.biome ? h('span', `gs-toast-sky b-${s.biome}`, icon(ic)) : icon(ic)) : null;
+  // An unlocked mountain's snowflake sits on a swatch of that mountain's own sky (round 9: art.ts skyOf, every look's).
+  const glyph = ic ? (s.biome ? h('span', 'gs-toast-sky', icon(ic)) : icon(ic)) : null;
+  if (glyph && s.biome) glyph.style.background = skyOf(s.biome);
   // A mountain's name is never machine-translated, as on the title.
   let body: Kid[] = [s.text];
   if (s.tone === 'unlock' && s.name && s.text.startsWith(s.name)) {

@@ -1,8 +1,9 @@
 import type { MountainCard } from './contract';
+import { MOUNTAINS, biomeForSeed } from '../sim/mountains';
 
-// Tiny flat illustrations for cards: biome ridgelines over the biome sky gradient (the gradient
-// itself is CSS), and sled side views. Vermillion appears only on the rider's scarf and beanie and
-// on sled runners: the sled is you.
+// Tiny flat illustrations for cards: biome ridgelines over the biome sky gradient (round 9: the sky drawn here too,
+// skyOf), and sled side views. Vermillion appears only on the rider's scarf and beanie and on sled runners: the sled is
+// you.
 
 const SIGNAL = '#FF4D2E';
 
@@ -48,8 +49,39 @@ const RIDGES: Record<MountainCard['biome'], string> = {
     '<path d="M18 80c22-10 52-8 66-18s34-12 52-10" fill="none" stroke="#BDE3FF" stroke-width="1.6" stroke-linecap="round" opacity=".7"/>',
 };
 
+/**
+ * Each look's sky, zenith to horizon (round 9, U4): the one place a mountain's sky is written, so every surface that
+ * draws a mountain (the picker's chips, the results' new mountain, an album page and its stickers, a toast's disc) gets it
+ * from its biome with no rule of its own. A new mountain adds its sky here beside its ridges; a look this table does not
+ * know yet is an ink dusk, never another mountain's sky.
+ */
+const SKY: Readonly<Record<string, string>> = {
+  alpine: 'linear-gradient(180deg, #2b4c9b 0%, #ffb38a 100%)',
+  glacier: 'linear-gradient(180deg, #2b5fa8 0%, #ffd9c4 100%)',
+  volcanic: 'linear-gradient(180deg, #2a1e3a 0%, #ff8a50 100%)',
+  blossom: 'linear-gradient(180deg, #3a5ba8 0%, #ffc4d6 100%)',
+  // Lanternfall: the end of night, deep indigo to a violet that holds the lamps' marigold.
+  lantern: 'linear-gradient(180deg, #120e3f 0%, #3a2a88 62%, #7a5cc0 100%)',
+  // The Old Run: a low late sun, deep blue down to the amber it lays on the ice.
+  oldrun: 'linear-gradient(180deg, #2a3a86 0%, #ffa86a 100%)',
+};
+const SKY_ANY = 'linear-gradient(180deg, #1e2650 0%, #6a6aa8 100%)';
+
+/** A look's sky as a CSS background. */
+export function skyOf(biome: string): string {
+  return SKY[biome] ?? SKY_ANY;
+}
+
+/** A mountain's look by its id (the card art the title gives it: the finale's own night, else its course's biome), or
+ *  null for an id that is no mountain (an album page of tricks or charms). */
+export function mountainBiome(id: string): MountainCard['biome'] | null {
+  const m = MOUNTAINS.find((x) => x.id === id);
+  return m ? (m.finale ? 'lantern' : (biomeForSeed(m.seed) as MountainCard['biome'])) : null;
+}
+
+/** A look's picture: its sky, and its ridges over it. */
 export function biomeArt(biome: MountainCard['biome']): string {
-  return `<svg viewBox="0 0 160 80" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">${RIDGES[biome] ?? RIDGES.alpine}</svg>`;
+  return `<svg viewBox="0 0 160 80" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false" style="background:${skyOf(biome)}">${RIDGES[biome] ?? RIDGES.alpine}</svg>`;
 }
 
 // Each body has a lit top edge so the art still reads when the shop shows it large.

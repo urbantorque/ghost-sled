@@ -602,32 +602,6 @@
   height: 100%;
 }
 
-.b-alpine .gs-mtn-sky {
-  background: linear-gradient(180deg, #2b4c9b 0%, #ffb38a 100%);
-}
-
-.b-glacier .gs-mtn-sky {
-  background: linear-gradient(180deg, #2b5fa8 0%, #ffd9c4 100%);
-}
-
-.b-volcanic .gs-mtn-sky {
-  background: linear-gradient(180deg, #2a1e3a 0%, #ff8a50 100%);
-}
-
-.b-blossom .gs-mtn-sky {
-  background: linear-gradient(180deg, #3a5ba8 0%, #ffc4d6 100%);
-}
-
-/* The Old Run: a low late sun, deep blue down to the amber it lays on the ice. */
-.b-oldrun .gs-mtn-sky {
-  background: linear-gradient(180deg, #2a3a86 0%, #ffa86a 100%);
-}
-
-/* Lanternfall: the end of night, indigo down to a violet that holds the lamps' marigold at its foot. */
-.b-lantern .gs-mtn-sky {
-  background: linear-gradient(180deg, #0b0a3e 0%, #4a388e 62%, #c88a70 100%);
-}
-
 .gs-title.is-first {
   grid-template-areas:
     'main . .'
@@ -3315,30 +3289,6 @@
   width: 1.2em;
   height: 1.2em;
   filter: drop-shadow(0 1px 1px rgba(18, 25, 51, 0.7));
-}
-
-.gs-toast-sky.b-alpine {
-  background: linear-gradient(180deg, #2b4c9b 0%, #ffb38a 100%);
-}
-
-.gs-toast-sky.b-glacier {
-  background: linear-gradient(180deg, #2b5fa8 0%, #ffd9c4 100%);
-}
-
-.gs-toast-sky.b-volcanic {
-  background: linear-gradient(180deg, #2a1e3a 0%, #ff8a50 100%);
-}
-
-.gs-toast-sky.b-blossom {
-  background: linear-gradient(180deg, #3a5ba8 0%, #ffc4d6 100%);
-}
-
-.gs-toast-sky.b-lantern {
-  background: linear-gradient(180deg, #0b0a3e 0%, #4a388e 62%, #c88a70 100%);
-}
-
-.gs-toast-sky.b-oldrun {
-  background: linear-gradient(180deg, #2a3a86 0%, #ffa86a 100%);
 }
 
 /* An event's finale: the round it ends on, in the event's role colour (the hazards ice blue, the Gift

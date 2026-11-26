@@ -161,3 +161,29 @@
   color: var(--text-dim);
   font-size: var(--fs-s);
 }
+
+/* Round 9 (U4): an open mountain's row is a button onto its mastery board: its words, its medals, a chevron. */
+.gs9-wall-b.gs9-b {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 52px;
+  padding: 4px var(--sp-3);
+  border-radius: var(--r-card);
+  font-size: var(--fs-m);
+  text-align: left;
+  white-space: normal;
+}
+
+.gs9-wall-b .gs9-row-t {
+  flex: 1;
+  min-width: 0;
+}
+
+/* (A week's row, the Cup's or the Trial's, lines up with the mountains' buttons over it.) */
+.gs9-wall > .gs9-row {
+  padding: 0 var(--sp-3);
+}
+
+.gs9-wall-chev {
+  color: var(--text-dim);
+}

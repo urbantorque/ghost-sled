@@ -139,13 +139,6 @@
   }
 }
 
-/* ------------------------------------------------------------------ Title: the finale's card */
-
-.b-lantern .gs-mtn-sky,
-.gs-toast-sky.b-lantern {
-  background: linear-gradient(180deg, #120e3f 0%, #3a2a88 62%, #7a5cc0 100%);
-}
-
 /* ------------------------------------------------------------------ Title: The Twelve's card */
 
 .gs-title {
