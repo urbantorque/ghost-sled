@@ -38,6 +38,8 @@ export interface NextGoal {
   /** Round 9: a contract another mountain serves (false): Run Again rides this one, so the button names one served here
    *  first. Absent: served wherever you ride. */
   here?: boolean;
+  /** Round 9: a contract on the Daily, with the Daily's field in: its button is the Daily's. */
+  toDaily?: boolean;
 }
 
 export interface PrimaryButton {
@@ -181,7 +183,7 @@ export function nextGoals(d: SaveData, ctx: GoalContext): NextGoal[] {
   const c = d.contracts;
   if (c && c.day === ctx.day) c.list.forEach((k, i) => {
     if (c.done & (1 << i)) return;
-    out.push({ kind: 'contract', text: contractText(k), short: '', reachable: contractInReach(k, recent), gap: 0.2, names: [contractText(k)], here: servedHere(k.on, ctx.key) });
+    out.push({ kind: 'contract', text: contractText(k), short: '', reachable: contractInReach(k, recent), gap: 0.2, names: [contractText(k)], here: servedHere(k.on, ctx.key), toDaily: k.on === 'daily' && ctx.dailyReady });
   });
   if (c?.form) out.push({ kind: 'form', text: contractText(c.form), short: '', reachable: contractInReach(c.form, recent), gap: 0.3, names: [contractText(c.form)], here: servedHere(c.form.on, ctx.key) });
   return out;
@@ -241,6 +243,14 @@ export function primaryButton(goals: readonly NextGoal[]): PrimaryButton {
   if (daily) return { kind: 'daily', text: "Today's Daily", sub: 'Keeps your flame lit', aria: "Ride today's Daily", goal: said(daily) };
   // (A goal this mountain serves before one only another can: Run Again rides this one.)
   const near = goals.filter((g) => g.reachable && (g.kind === 'page' || g.kind === 'rung' || g.kind === 'gold' || g.kind === 'contract' || g.kind === 'form' || g.kind === 'mission')).sort((a, b) => Number(a.here === false) - Number(b.here === false) || a.gap - b.gap)[0];
+  // (Round 9: never a goal only another place serves as Run Again's reason, which read as this run serving it, as
+  // "Run Again / Contract: pass 5 ghosts on the Daily" after a Cup did. A contract on the Daily is the Daily's button,
+  // said without the place its words already name; any other waits in the title's rooms.)
+  if (near?.here === false) {
+    if (!near.toDaily) return { kind: 'again', text: 'Run Again', sub: null, aria: 'Run Again', goal: null };
+    const words = goalWords(near).replace(/ on the Daily\.$/, '.');
+    return { kind: 'daily', text: "Today's Daily", sub: words, aria: `Ride today's Daily. ${words}`, goal: said(near) };
+  }
   if (near) return { kind: 'again', text: 'Run Again', sub: goalWords(near), aria: `Run Again. ${goalWords(near)}`, goal: said(near) };
   return { kind: 'again', text: 'Run Again', sub: null, aria: 'Run Again', goal: null };
 }

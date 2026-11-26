@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MountainCard, ResultsModel, TitleModel, TitleTwelve, TwelveRung } from '../src/ui/contract';
 import { bareFigures } from '../scripts/playtest/r9-screenbars';
+import { type NextGoal, primaryButton } from '../src/game/goals';
 import { rankBar } from '../src/game/spineview';
 import { factText, resultsMoment, storyButton, storyReward } from '../src/ui/sequence';
 import { pickerOrder, shortName, titleAim, titleRide } from '../src/ui/title';
@@ -180,5 +181,19 @@ describe("the results' words", () => {
   it('name every prize of a page in words', () => {
     expect(storyReward(cases[0])).toMatchObject({ name: 'A new sled' });
     expect(storyReward(cases[2])).toMatchObject({ name: 'The Kite String charm' });
+  });
+});
+
+describe("the results' button and where its reason is served", () => {
+  const contract = (text: string, here: boolean, toDaily = false): NextGoal => ({ kind: 'contract', text, short: '', reachable: true, gap: 0.2, names: [text], here, toDaily });
+
+  it("never gives Run Again a reason only another place serves: a contract on the Daily is the Daily's button", () => {
+    // (A Cup's results said "Run Again / Contract: pass 5 ghosts on the Daily.", and Run Again rides the Cup.)
+    expect(primaryButton([contract('Pass 5 ghosts on the Daily.', false, true)])).toMatchObject({ kind: 'daily', text: "Today's Daily", sub: 'Contract: pass 5 ghosts.' });
+    expect(primaryButton([contract('Pass 3 ghosts on Frostfang.', false)])).toMatchObject({ kind: 'again', text: 'Run Again', sub: null });
+  });
+
+  it('names a goal served here before one served elsewhere', () => {
+    expect(primaryButton([contract('Pass 5 ghosts on the Daily.', false, true), contract('Land a trick.', true)])).toMatchObject({ kind: 'again', sub: 'Contract: land a trick.' });
   });
 });
