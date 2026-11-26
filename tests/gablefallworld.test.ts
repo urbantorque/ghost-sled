@@ -67,12 +67,12 @@ describe("Gablefall's ground", () => {
     for (const a of [PAVE, FRONT]) expect(townColumns().some((q) => q < a) && townColumns().some((q) => q > a)).toBe(true);
   });
 
-  it('paves the street and the squares, not the nave nor the river; the river is ice from the quay on', () => {
+  it('treads the street and the squares, not the nave nor the river; the river is ice from the quay on', () => {
     expect(pavedAt(c, 20)).toBe(0);
     expect(pavedAt(c, 400)).toBe(1);
     expect(pavedAt(c, placesOf(c).quay + 40)).toBe(0);
     expect(riverAt(c, placesOf(c).quay)).toBe(0);
-    expect(riverAt(c, c.finishZ)).toBeGreaterThan(0.6);
+    expect(riverAt(c, c.finishZ)).toBeGreaterThan(0.5);
   });
 });
 

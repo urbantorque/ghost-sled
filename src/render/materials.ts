@@ -1654,37 +1654,13 @@ export function makeSnowMaterial(track = false, street = false): ShaderMaterial 
           col = mix(col, col * coolG, gk * (0.14 + 0.2 * fineG * mix(0.0, 1.0, uSnowFx) + 0.12 * broadG * (1.0 - smoothstep(0.5, 1.2, fwz))));
         }
         #ifdef STREET
-          // Round 9, Gablefall's street (terrain.ts aPaint.w, the street's share at the street's level): trodden snow over
-          // cobbles. Where the traffic has worn the snow (two wheel ruts, the crown, broad patches) the setts show through,
-          // grey-violet stone in rows across the street with snow lying in their joints; along the fronts the snow lies
-          // whole in the gutters. Far off the setts are a grey wash: a dull, trodden street between white roofs, the slow way.
+          // Round 9, Gablefall's street (terrain.ts aPaint.w, the street's share at the street's level): the snow trodden
+          // down by the town, a step cooler and duller than the roofs' fresh snow, the slow way. (Setts showing through it
+          // were tried in four passes: as bare stone on the line a sled rides they broke ART.md 4, and read to every critic
+          // as a grid, tiles or a lane of their own.)
           if (vPaint.w > 0.002) {
-            float cu = vSnow.x;
-            float cv = vWorldPos.z;
-            // (Worn in patches where the traffic has scuffed it, never in ruts: a long line down the street read as the
-            // fall line's speed lines, ART.md 4.)
-            float wornN = vnoise(vec2(cu * 0.42, cv * 0.11) + 2.3) * 0.6 + vnoise(vec2(cu * 1.1, cv * 0.37) + 7.1) * 0.4;
-            // (In scuffed patches only, a sixth of the street: a whole floor of setts read to the first critic as graph paper.)
-            float worn = smoothstep(0.66, 0.9, wornN) * (1.0 - smoothstep(2.0, 3.6, abs(cu)));
-            // (Never right under the lens, where a sett is a hand across and their joints rule the frame's foot as a grid.)
-            worn *= smoothstep(5.0, 10.0, dist);
-            // (Setts laid by hand in arcs across the street, each row its own depth and stagger, each stone its own width and
-            // rounded, the snow lying in wide joints between them: stones, never a ruled grid.)
-            cv += 0.55 * (1.0 - cos(clamp(cu, -4.0, 4.0) * 0.55));
-            float row = floor(cv / 0.34);
-            float rh = 0.3 + 0.08 * hash13(vec3(row, 7.0, 1.0));
-            float lv = fract(cv / 0.34) * 0.34;
-            float sw = 0.24 + 0.08 * hash13(vec3(row, 3.0, 2.0));
-            float su = cu / sw + hash13(vec3(row, 5.0, 4.0)) + 0.12 * vnoise(vec2(cu * 2.1, cv * 1.7));
-            vec2 qd = abs(vec2((fract(su) - 0.5) * sw, lv - rh * 0.5)) - (vec2(sw, rh) * 0.5 - 0.035 - 0.06);
-            float sdS = length(max(qd, vec2(0.0))) + min(max(qd.x, qd.y), 0.0) - 0.06;
-            float fineC = 1.0 - smoothstep(0.03, 0.1, footprint);
-            float sett = mix(0.45, 1.0 - smoothstep(-0.006 - footprint * 0.5, 0.006 + footprint * 0.5, sdS), fineC);
-            float tone = 0.84 + 0.32 * hash13(vec3(floor(su), row, 3.0));
-            vec3 stoneC = vec3(0.6, 0.58, 0.68) * mix(1.0, tone, fineC);
-            // (A thin trodden layer over the whole street: a step cooler than the roofs' fresh snow.)
-            col = mix(col, col * mix(vec3(0.92), uSnowShade / max(uSnowLit, vec3(0.05)), 0.35), vPaint.w * 0.32);
-            col = mix(col, col * stoneC, vPaint.w * worn * sett * 0.42);
+            float tro = vnoise(vec2(vSnow.x * 0.4, vWorldPos.z * 0.1) + 2.3) * 0.6 + vnoise(vec2(vSnow.x * 1.1, vWorldPos.z * 0.33) + 7.1) * 0.4;
+            col = mix(col, col * mix(vec3(0.9), uSnowShade / max(uSnowLit, vec3(0.05)), 0.4), vPaint.w * (0.3 + 0.12 * tro));
           }
         #endif
         col += uHemi * 0.07 * (0.5 + 0.5 * n.y);

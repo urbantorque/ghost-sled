@@ -1143,7 +1143,9 @@ export class World {
     } else if (p.wisps > 0) {
       this.weather.configure({ density: cap * 0.12, kind: 3, color: p.ghost, streak: 0, size: 0.18, alpha: 0.7, fall: new Vector3(0.4, 0.3, 0.2), additive: true });
     } else {
-      this.weather.configure({ density: cap * p.snowfall, kind: 0, color: new Color('#FFFFFF'), streak: 0, size: 0.08, alpha: 0.85, fall: new Vector3(0.5, -1.6, 0.4), additive: false });
+      // (Round 9, Gablefall: its snowfall falls all run, and its big flakes at the lens, drawn at the five's size, read to
+      // its critics as smudges on the glass: smaller there.)
+      this.weather.configure({ density: cap * p.snowfall, kind: 0, color: new Color('#FFFFFF'), streak: 0, size: this.course.kit?.id === 'gablefall' ? 0.055 : 0.08, alpha: 0.85, fall: new Vector3(0.5, -1.6, 0.4), additive: false });
     }
   }
 

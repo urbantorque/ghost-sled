@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Color, Mesh, Object3D, PerspectiveCamera, ShaderMaterial } from 'three';
+import { BufferAttribute, BufferGeometry, Color, Mesh, Object3D, PerspectiveCamera, ShaderMaterial, Vector2 } from 'three';
 import type { Snap } from '../game/run';
 import type { Beat } from '../game/beats';
 import type { Course } from '../sim/course';
@@ -251,7 +251,7 @@ interface Piece3 {
  *  world. */
 function hazeMaterial(): ShaderMaterial {
   return new ShaderMaterial({
-    uniforms: { uHaze: { value: new Color('#CCCAD6') }, uNear: { value: 150 }, uFar: { value: 2600 }, uMax: { value: 0.94 }, uSunDir: shared.uSunDir, uWarm: { value: new Color('#FFB45E') }, uGlowK: { value: 0.7 }, uLight: { value: new Color(1, 1, 1) } },
+    uniforms: { uHaze: { value: new Color('#CCCAD6') }, uNear: { value: 150 }, uFar: { value: 2600 }, uMax: { value: 0.6 }, uGone: { value: new Vector2(2400, 3300) }, uSunDir: shared.uSunDir, uWarm: { value: new Color('#FFB45E') }, uGlowK: { value: 0.7 }, uLight: { value: new Color(1, 1, 1) } },
     vertexShader: /* glsl */ `
       attribute vec3 color;
       varying vec3 vCol;
@@ -274,6 +274,7 @@ function hazeMaterial(): ShaderMaterial {
       uniform float uNear;
       uniform float uFar;
       uniform float uMax;
+      uniform vec2 uGone;
       uniform vec3 uWarm;
       uniform float uGlowK;
       uniform vec3 uLight;
@@ -282,7 +283,10 @@ function hazeMaterial(): ShaderMaterial {
       varying float vLit;
       varying float vGlow;
       void main() {
-        float k = smoothstep(uNear, uFar, vDist) * uMax;
+        // (A soft air over the near valley, and past uGone.x the far side lets go into the snow altogether: so the
+        // viaduct stands clear from Church Hill down, and from the head of the town, three kilometres off, it is not a
+        // dotted seam across the run.)
+        float k = max(smoothstep(uNear, uFar, vDist) * uMax, smoothstep(uGone.x, uGone.y, vDist));
         vec3 c = mix(vCol * vLit * uLight, uHaze, k);
         c = mix(c, mix(uWarm, uHaze, k * 0.7), vGlow * uGlowK);
         gl_FragColor = vec4(c, 1.0);
@@ -518,6 +522,19 @@ export class GablefallWorld {
           s.tri([xi, yi, zi - 0.06], [xi, yi, zi + 0.06], [xi + o * 0.02, yi - len, zi], ICE, out);
           s.tri([xi - o * 0.06, yi, zi], [xi + o * 0.04, yi, zi], [xi + o * 0.02, yi - len, zi], ICE, [0, 0, -1]);
         }
+      }
+    }
+    // Bunting along some fronts under the eaves (Medium and High), swagged between the upper windows, close to the wall and
+    // over anything a sled in the street can reach: the town is out for the race.
+    if (front && !low && hash(id, 31) < 0.4) {
+      const n2 = Math.max(4, Math.floor(L / 0.75));
+      for (let i = 0; i < n2; i++) {
+        const u = (i + 0.5) / n2;
+        const z = p.z0 + 0.4 + (L - 0.8) * u;
+        const sw = Math.abs(Math.sin(Math.PI * u * Math.max(1, Math.round(L / 6))));
+        const y = eave(z) - 0.55 - 0.45 * sw;
+        const x = at(z, 0.08);
+        s.tri([x, y, z - 0.22], [x, y, z + 0.22], [x, y - 0.42, z], BUNTING[(i + id) % BUNTING.length], out);
       }
     }
     // Windows in bays along the wall, two storeys; on the front one bay is the door, and on Medium and High a lamp on a
@@ -1091,7 +1108,9 @@ export class GablefallWorld {
       const xb = c.centerX(zb) - c.halfWidth(zb) - c.edgeLimit(zb) - 0.05;
       const ya = c.baseY(z);
       const yb = c.baseY(zb);
-      s.quad([xa, ya - 0.6, z], [xb, yb - 0.6, zb], [xb, yb + QUAY_TOP, zb], [xa, ya + QUAY_TOP, z], Math.floor(z / 4) % 2 ? WALL_STONE : WALL_STONE_D, [1, 0, 0]);
+      // (One stone, its courses drawn: alternate lengths in two values read to the fourth critic as even diagonal bands.)
+      s.quadV([xa, ya - 0.6, z], [xb, yb - 0.6, zb], [xb, yb + QUAY_TOP, zb], [xa, ya + QUAY_TOP, z], WALL_STONE_D, WALL_STONE, [1, 0, 0]);
+      for (const yc of [0.9, 1.8]) s.quad([xa + 0.02, ya + yc, z], [xb + 0.02, yb + yc, zb], [xb + 0.02, yb + yc + 0.06, zb], [xa + 0.02, ya + yc + 0.06, z], WALL_STONE_D, [1, 0, 0]);
       s.quad([xa, ya + QUAY_TOP, z], [xb, yb + QUAY_TOP, zb], [xb - 1.2, yb + QUAY_TOP + 0.12, zb], [xa - 1.2, ya + QUAY_TOP + 0.12, z], SNOW, [0, 1, 0]);
       if (!low && Math.floor(z / 4) % 3 === 0) s.box(xa - 0.8, ya + QUAY_TOP, z + 2, 0.4, 0.6, 0.4, IRON, 0);
     }
@@ -1464,8 +1483,8 @@ export class GablefallWorld {
     (this.haze.uniforms.uLight.value as Color).copy(p.snowLit);
     this.haze.uniforms.uGlowK.value = 0.45 + 0.4 * lampK;
     // The lamps' light on the snow by them: a street of soft amber pools with the grey between, stronger as the day goes.
-    const pool = 0.1 + 0.12 * Math.max(0, Math.min(1, (lampHour - 0.4) / 1));
-    for (const [x, y, z, r] of this.lamps) if (z > s.z - 20 && z < s.z + 120) pushLocalLight(x, y, -z, LAMP_LIN.r, LAMP_LIN.g, LAMP_LIN.b, r * 0.6, pool);
+    const pool = 0.12 + 0.18 * Math.max(0, Math.min(1, (lampHour - 0.4) / 1));
+    for (const [x, y, z, r] of this.lamps) if (z > s.z - 20 && z < s.z + 120) pushLocalLight(x, y, -z, LAMP_LIN.r, LAMP_LIN.g, LAMP_LIN.b, r * 0.7, pool);
     // (A step under the sky's own grey, so it reads against it: in the clouds' pale it did not show at all.)
     (this.smokeMat.uniforms.uLit.value as Color).copy(p.fog).lerp(p.snowShade, 0.2);
     (this.smokeMat.uniforms.uShade.value as Color).copy(p.snowShade).lerp(p.snowDeep, 0.25);
