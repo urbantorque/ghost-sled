@@ -80,7 +80,7 @@ export function almanacBody(m: AlmanacModel, ctx: Ctx, ride?: (mode: RideMode) =
       else li.setAttribute('aria-label', `Rider Rank ${p.n}, ahead: ${prizesLine(p.rewards)}`);
       list.append(li);
     }
-    out.append(h('section', 'gs9-bk-sec', h('h3', 'gs9-cap', `Rider Ranks ${rows[0].n} to ${rows[rows.length - 1].n}`), list));
+    out.append(h('section', 'gs9-bk-sec', h('h3', 'gs9-cap', `Ranks ${rows[0].n} to ${rows[rows.length - 1].n}`), list));
   }
   return out;
 }

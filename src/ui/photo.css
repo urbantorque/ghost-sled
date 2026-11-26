@@ -71,7 +71,7 @@
   left: var(--sl);
   display: grid;
   gap: 8px;
-  max-width: min(420px, 70vw);
+  max-width: min(680px, 80vw);
   pointer-events: none;
   text-shadow: var(--halo);
   transition: opacity 220ms ease;

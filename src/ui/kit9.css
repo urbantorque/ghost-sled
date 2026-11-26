@@ -261,6 +261,13 @@
   visibility: hidden;
 }
 
+/* A sheet's scrolling body fades at its edges, so a row cut by the head or the foot reads as more to scroll, not as
+   broken (round 9, U4; Details keeps its button at its foot, unfaded). */
+.gs9-sheet:not(.gs9-det) > .gs9-sheet-body {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 18px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 18px), transparent 100%);
+}
+
 /* ---- a sheet over the title: the title's own column steps out (its logo, picker, Ride, quiet line and doors), so only
    the sheet and the scene are left and nothing reads through the sheet's ink (round 9, U4: both critics' worst fault).
    The column is inert under a room, and the whole title under settings, the books or the garage. ---- */
@@ -441,10 +448,6 @@
 }
 
 /* ---- settings (settings.ts): three blocks, each its heading and its controls ---- */
-.gs9-settings {
-  width: min(480px, 40vw);
-}
-
 .gs9-set {
   display: grid;
   gap: var(--sp-4);
@@ -480,6 +483,18 @@
 .gs9-set-seg .gs9-b {
   flex: 1;
   min-height: 40px;
+}
+
+.gs9-set-seg .gs9-b[aria-pressed='true'] {
+  background: rgba(245, 243, 255, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.5);
+}
+
+.gs9-switch-v {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: var(--fs-s);
+  font-weight: var(--fw-label);
 }
 
 .gs9-set-g > .gs9-block-p {

@@ -175,7 +175,7 @@ function eventsRoom(f: Fill): void {
     let league: HTMLElement;
     if (lg && lg.place) {
       const tb = b9(o.ctx, 'secondary', 'League Table', { icon: 'trophy', fk: 'league', aria: `The league table: division ${lg.division}`, onClick: () => f.push('This Week’s League', (b) => leagueTable(b, m), tb) });
-      league = h('div', 'gs9-det-act', h('p', 'gs9-block-p', `Division ${lg.division} of ${DIVISIONS}: you are ${ordinal9(lg.place)} of ${LEAGUE_SIZE}. ${leagueMoves(lg.division)}`), tb);
+      league = h('div', 'gs9-det-act', h('p', 'gs9-block-p', `${divisionWords(lg.division)}: you are ${ordinal9(lg.place)} of ${LEAGUE_SIZE}. ${leagueMoves(lg.division)}`), tb);
     } else league = h('p', 'gs9-block-p', 'Ride it once to join a league of the week’s records.');
     body.append(block('This Week’s Cup', line, choose(f, 'cup'), league));
   }
@@ -217,6 +217,11 @@ function choose(f: Fill, kind: 'daily' | 'cup' | 'trial'): HTMLElement | null {
 
 /** Who moves at the week's turn, said only for the moves this division has (the top one has none above, the last none
  *  below). */
+/** A division and where it stands: "Division 5 of 5, the first" (a new rider's), "Division 1 of 5, the top". */
+function divisionWords(division: number): string {
+  return `Division ${division} of ${DIVISIONS}${division === DIVISIONS ? ', the first' : division === 1 ? ', the top' : ''}`;
+}
+
 function leagueMoves(division: number): string {
   const up = division > 1;
   const down = division < DIVISIONS;
@@ -227,7 +232,7 @@ function leagueMoves(division: number): string {
 function leagueTable(body: HTMLElement, m: TitleModel): void {
   const lg = m.spine?.league ?? null;
   if (!lg) return;
-  body.append(h('p', 'gs9-block-p', `Division ${lg.division} of ${DIVISIONS}. ${leagueMoves(lg.division)} The others are this week’s runs on the Cup, each one a ghost.`));
+  body.append(h('p', 'gs9-block-p', `${divisionWords(lg.division)}. ${leagueMoves(lg.division)} The others are this week’s runs on the Cup, each one a ghost.`));
   const list = h('ol', 'gs9-list gs9-order');
   list.setAttribute('aria-label', 'The league table');
   lg.rows.forEach((r, i) => {
@@ -335,21 +340,20 @@ function ladder(body: HTMLElement, m: TitleModel, f: Fill): void {
     name.setAttribute('translate', 'no');
     name.style.setProperty('--rider', r.accent);
     // (Their time on their home ground, said as theirs: a bare time beside a name read as anyone's.)
-    const meta = h('span', 'gs9-rung-m', `${r.mountain}${r.time ? `, in ${r.time}` : ''}`);
+    const meta = h('span', 'gs9-rung-m', r.time ? `Rides ${r.mountain} in ${r.time}` : r.mountain);
     meta.setAttribute('translate', 'no');
     let tag: HTMLElement | null = null;
     if (r.state === 'beaten') tag = h('span', 'gs9-tag', ico9('check'), 'Beaten');
     else if (r.state === 'locked') tag = h('span', 'gs9-tag', ico9('lock'), 'Locked');
     else if (r.state === 'next' && tw.next) {
       const n = tw.next;
-      tag = n.here ? h('span', 'gs9-tag is-now', 'Rides Now') : b9(f.o.ctx, 'secondary', 'Go', { icon: 'arrowR', fk: 'twelve-go', aria: `Go to ${n.mountain} to duel ${n.name}`, onClick: () => {
+      tag = n.here ? h('span', 'gs9-tag', 'Rides Now') : b9(f.o.ctx, 'secondary', 'Go', { icon: 'arrowR', fk: 'twelve-go', aria: `Go to ${n.mountain} to duel ${n.name}`, onClick: () => {
         f.close();
         f.o.travel(n.mountainId, n.mountain, () => f.o.hd.onSelectMountain(n.mountainId));
       } });
     }
     // (Round 9, U4: the one who rides next says their line; the rest their name, home and time, so the twelve read as
     // a ladder at a glance and not twelve paragraphs; a reader still hears each one's line.)
-    tag?.style.setProperty('--rider', r.accent);
     const next = r.state === 'next';
     const li = h('li', `gs9-rung is-${r.state}`, h('span', 'gs9-order-n gs9-num', String(i + 1)), bust, h('span', 'gs9-rung-t', name, r.state === 'next' ? h('span', 'gs9-rung-b', r.bio) : sr(r.bio), meta), tag);
     if (next) li.dataset.next = '';

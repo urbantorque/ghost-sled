@@ -61,9 +61,11 @@
   --m-rim: #7c879e;
 }
 
+/* (Round 9, U4: gold is the tokens' gold, your best's gold-white, as every other medal disc of the round; marigold is
+   the gifts'.) */
 .gs-mdot.m-3 {
-  --m: var(--gift);
-  --m-rim: #a8791a;
+  --m: var(--c-gold, #ffe08a);
+  --m-rim: #a8873a;
 }
 
 /* ------------------------------------------------------------------ Reveal */

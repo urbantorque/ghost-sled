@@ -113,7 +113,8 @@ export class SettingsPanel {
 
   /** A switch with its words: the name, and (when it needs one) what it changes. */
   private switchRow(fk: string, label: string, line: string | null, flip: () => void): HTMLButtonElement {
-    const b = h('button', 'gs9-switch-row', h('span', 'gs9-set-st', h('span', 'gs9-set-l', label), line ? h('span', 'gs9-set-sub', line) : null), h('span', 'gs9-switch'));
+    const b = h('button', 'gs9-switch-row', h('span', 'gs9-set-st', h('span', 'gs9-set-l', label), line ? h('span', 'gs9-set-sub', line) : null), h('span', 'gs9-switch-v'), h('span', 'gs9-switch'));
+    b.querySelector('.gs9-switch-v')?.setAttribute('aria-hidden', 'true');
     b.type = 'button';
     b.dataset.fk = fk;
     b.setAttribute('role', 'switch');
@@ -148,6 +149,11 @@ export class SettingsPanel {
   private paintSwitches(): void {
     this.hintsBtn.setAttribute('aria-checked', String(this.m.hints));
     this.rumbleBtn.setAttribute('aria-checked', String(this.m.rumble));
+    // (Its state in words beside the pill: a pill alone read as a form's control with no state.)
+    for (const [b, on] of [[this.hintsBtn, this.m.hints], [this.rumbleBtn, this.m.rumble]] as const) {
+      const v = b.querySelector('.gs9-switch-v');
+      if (v) v.textContent = on ? 'On' : 'Off';
+    }
   }
 }
 
