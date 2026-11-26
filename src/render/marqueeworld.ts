@@ -693,8 +693,8 @@ export class MarqueeWorld {
         if (active) this.kept.set(p.index, mo.mask);
         const mask = this.kept.get(p.index) ?? 0;
         // (Lanternfall's three are drawn by its own world, lanternworld.ts: the lanternworld lane; round 9, the Old Run's
-        // by its own, oldrunworld.ts.)
-        if (p.verb === 'follow' || p.verb === 'kindle' || p.verb === 'carry' || p.verb === 'peal' || p.verb === 'split' || p.verb === 'glaze') continue;
+        // by its own, oldrunworld.ts, and Gullhaven's by its own, gullhavenpieces.ts.)
+        if (p.verb === 'follow' || p.verb === 'kindle' || p.verb === 'carry' || p.verb === 'peal' || p.verb === 'split' || p.verb === 'glaze' || p.verb === 'beam' || p.verb === 'soar' || p.verb === 'stacks') continue;
         switch (p.verb) {
           case 'shatter':
             // r7 stand-in: a bell is a bronze orb hung where the sled must be, over a pool on the snow.

@@ -126,6 +126,28 @@ export function momentLine(verb: MomentVerb, key: string, phase: MomentPhase, n:
       if (phase === 'won') return 'Beat the split';
       if (phase === 'lost') return 'Missed the split';
       return null;
+    // Round 9, Gullhaven.
+    case 'beam':
+      if (phase === 'start') return `Mark 0 of ${of}`;
+      if (phase === 'step') return `In the beam, ${n} of ${of}`;
+      if (phase === 'miss') return 'Out of the beam';
+      if (phase === 'won') return `Every mark, ${of} of ${of}`;
+      if (phase === 'lost') return 'Not every mark';
+      return null;
+    case 'soar':
+      if (phase === 'start') return 'The Great Geo: soar it';
+      if (phase === 'step') return 'On the wind';
+      if (phase === 'miss') return 'Down in the geo';
+      if (phase === 'won') return 'Soared the Great Geo';
+      if (phase === 'lost') return 'The Great Geo got away';
+      return null;
+    case 'stacks':
+      if (phase === 'start') return `Gap 0 of ${of}`;
+      if (phase === 'step') return `Gap ${n} of ${of}`;
+      if (phase === 'miss') return 'Missed a gap';
+      if (phase === 'won') return `Every gap, ${of} of ${of}`;
+      if (phase === 'lost') return `${n} of ${of} gaps`;
+      return null;
     case 'glaze':
       // (n is quarters of the hold.)
       if (phase === 'start') return 'Hold the glaze';

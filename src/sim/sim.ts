@@ -495,6 +495,8 @@ export class Sim {
     this.course = courseFor(config.seed);
     // (Round 9: the Old Run's track. Read once here, so the five's paths test a constant false and nothing else.)
     this.trackOn = this.course.layout.grammar === 'oldrun';
+    // (Round 9, Gullhaven: air that lifts a sled over a gully's mouth. Read once here, false on every other course.)
+    this.liftOn = this.course.hasLift;
     this.sled = sledById(config.sled);
     this.mood = moodInfo(config.chaos.mood).params;
     this.combo = new Combo(this.sled.comboWindow * this.mood.comboWindow);
@@ -669,6 +671,9 @@ export class Sim {
   /** The Old Run's track: gravity along the runners, the bank's yaw, the damped swing, the launch off a wall's plane and
    *  the turn-back square to the channel (round 9). False on every other course. */
   private readonly trackOn: boolean;
+  /** Gullhaven's lift: the sea wind climbing a gully holds a sled in the air over its mouth (round 9, notes/r9-ground.md
+   *  section 3, C). False on every other course. */
+  private readonly liftOn: boolean;
   readonly charms: number[] = [];
   charmMask = 0;
   synergyMask = 0;
@@ -1619,6 +1624,12 @@ export class Sim {
     else s.airHold = 0;
     this.airTricks(action, pressed, released, steerTarget);
     s.vy -= this.gravity * DT;
+    // (Round 9, Gullhaven: the wind climbing a gully, upward at under gravity's pull, scaled by the mood's gravity so
+    // Comet Night's lift keeps its share; pure in where the sled is, the same for every rider and every replay.)
+    if (this.liftOn) {
+      const a = c.liftAt(s.x, s.y, s.z);
+      if (a > 0) s.vy += a * this.mood.gravity * DT;
+    }
 
     // Air control: a gentle lateral nudge.
     // (Will-o'-Wisp: both hands off, no air control while it is held.)
@@ -1698,10 +1709,34 @@ export class Sim {
    *  ticks along the way (one sample at the end misses a mogul crest in between). */
   private landingWithin(ticks: number): boolean {
     const s = this.s;
+    // (Round 9, Gullhaven: where the air lifts, the flight is stepped tick by tick as airStep steps it.)
+    if (this.liftOn) return this.liftLandingWithin(ticks);
     for (let k = 4; k <= ticks; k += 4) {
       const t = k * DT;
       const y = s.y + s.vy * t - 0.5 * this.gravity * t * t;
       if (y <= this.course.ground(s.x + s.vx * t, s.z + s.vz * t)) return true;
+    }
+    return false;
+  }
+
+  /** landingWithin over a course whose air lifts: the flight stepped tick by tick with the lift, as airStep steps it
+   *  (without the steer's nudge or the air's drag, as the closed form leaves them), the ground sampled every 4 ticks. */
+  private liftLandingWithin(ticks: number): boolean {
+    const s = this.s;
+    const c = this.course;
+    const g = this.gravity;
+    let x = s.x;
+    let y = s.y;
+    let z = s.z;
+    let vy = s.vy;
+    for (let k = 1; k <= ticks; k++) {
+      vy -= g * DT;
+      const a = c.liftAt(x, y, z);
+      if (a > 0) vy += a * this.mood.gravity * DT;
+      x += s.vx * DT;
+      z += s.vz * DT;
+      y += vy * DT;
+      if ((k & 3) === 0 && y <= c.ground(x, z)) return true;
     }
     return false;
   }
@@ -2263,6 +2298,8 @@ export class Sim {
       this.events.push({ type: 'moment', index: p.index, phase, n, of: mo.of });
     };
     switch (p.verb) {
+      // (Round 9, Gullhaven: the sea stacks' gaps are passed as the bend bells are rung.)
+      case 'stacks':
       case 'peal': {
         // (Round 9, the Old Run.) Under each bell as the sled passes it, on the glaze or over it, within its reach across.
         while (mo.at < p.targets.length && p.targets[mo.at].z <= s.z) {
@@ -2294,6 +2331,37 @@ export class Sim {
           mo.n = ticks <= p.need ? 1 : 0;
           this.momentEnd(p, ticks <= p.need);
         } else if (ticks > p.need) this.momentEnd(p, false);
+        break;
+      }
+      case 'soar': {
+        // (Round 9, Gullhaven.) A flight off the Great Geo's lip (`aux` 1 in the air, 2 down clean and a stomp still to
+        // come), won by coming down past its mouth, by its time in the air, or by its stomp.
+        for (const e of this.events) {
+          if (e.type === 'takeoff' && mo.aux === 0 && s.z >= p.lip - 15 && s.z <= p.lip + 5) {
+            mo.aux = 1;
+            say('step', 0);
+          } else if (e.type === 'land' && mo.aux === 2 && e.late && e.quality === 'perfect') {
+            mo.n = 1;
+            this.momentEnd(p, true);
+            return;
+          } else if (e.type === 'land' && mo.aux === 1 && !e.late) {
+            const good = e.quality !== 'sketchy' && e.botched !== true && e.airtime >= 1;
+            if (p.row && good && e.quality === 'clean' && e.airtime >= 4) {
+              mo.aux = 2;
+              mo.at = this.tick;
+              continue;
+            }
+            const won = good && (p.row ? e.quality === 'perfect' && e.airtime >= 4 : p.need > 0 ? e.airtime * TICK_RATE >= p.need : s.z >= p.far);
+            if (!won) say('miss', 0);
+            mo.n = won ? 1 : 0;
+            this.momentEnd(p, won);
+            return;
+          }
+        }
+        if (mo.aux === 2 && this.tick - mo.at > 10) {
+          say('miss', 0);
+          this.momentEnd(p, false);
+        } else if (s.z >= p.z1 && mo.aux !== 1) this.momentEnd(p, false);
         break;
       }
       case 'glaze': {
@@ -2387,6 +2455,8 @@ export class Sim {
         } else if (s.z >= p.z1) this.momentEnd(p, true);
         break;
       }
+      // (Round 9, Gullhaven: the lighthouse's marks are a gate on a clock, as the swinging lanterns are.)
+      case 'beam':
       case 'gates': {
         while (mo.at < p.gates.length && p.gates[mo.at].z <= s.z) {
           const g = p.gates[mo.at++];
@@ -3415,6 +3485,13 @@ function momentCount(p: MomentPlay): number {
       return 1;
     case 'glaze':
       return 4;
+    // (Round 9, Gullhaven: the lighthouse's marks, the Great Geo won or not, the sea stacks' gaps.)
+    case 'beam':
+      return p.gates.length;
+    case 'soar':
+      return 1;
+    case 'stacks':
+      return p.targets.length;
     default:
       return 1;
   }

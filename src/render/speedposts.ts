@@ -83,6 +83,8 @@ const STYLES: Record<BiomeId, Style> = {
   blossom: { weights: [2, 2, 4, 2], shaft: '#EFE7D8', band: '#9C86CC', fence: '#E0D6C4', flags: ['#EDBFD8', '#B09EE8'] },
   // Lanternfall: pale wands banded in violet, silver-grey rails, lilac and cream flags.
   lantern: { weights: [3, 3, 3, 1], shaft: '#DCD6EE', band: '#7462C4', fence: '#B8B0D4', flags: ['#A894EA', '#E6E0F6'] },
+  // (Gullhaven, round 9: Pinecrest's, never read: it stands no stakes, its fence is the run's strobe, gullhavenworld.ts.)
+  gullhaven: { weights: [3, 2, 3, 2], shaft: '#F2EADB', band: '#5C7BD0', fence: '#D8C6AC', flags: ['#5F8FE6', '#E4ECFB'] },
 };
 
 /** Every colour a post can wear (a test holds them clear of the locked roles). */
@@ -359,8 +361,9 @@ export class SpeedPosts {
    *  after a cut (a new run, a revive far off, the title reel moving to another rider). */
   update(z: number): void {
     // (Round 9: the Old Run's strobe is its parapet's posts and iron lamps along the lip, oldrunworld.ts; nothing of
-    // the five's stakes and slalom flags stands on its crest.)
-    if (this.cap <= 0 || this.course.kit?.id === 'oldrun') return;
+    // the five's stakes and slalom flags stands on its crest. Gullhaven's is its snow fence along the cliff's edge and the
+    // wall on the moor, gullhavenworld.ts.)
+    if (this.cap <= 0 || this.course.kit?.id === 'oldrun' || this.course.kit?.id === 'gullhaven') return;
     // (Reduced motion: they stand still, no flap and no whip.)
     (this.mesh.material as ShaderMaterial).uniforms.uPostLive.value = reduced() ? 0 : 1;
     if (!(Math.abs(z - this.lastZ) < 120)) this.seek(z);

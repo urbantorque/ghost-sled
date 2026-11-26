@@ -110,6 +110,8 @@ const CUT: Record<BiomeId, { coat: [number, number, number, number]; sleeve: [nu
   blossom: { coat: [0.2, 0.28, 0.82, 0.58], sleeve: [0.06, 0.13] },
   // The lamplighters' robe: narrow at the shoulder, a full bell to the snow, a wide sleeve.
   lantern: { coat: [0.19, 0.34, 0.96, 0.5], sleeve: [0.07, 0.14] },
+  // (Gullhaven, round 9: Pinecrest's, built with the crowd's figure and never stood: it has no stands, and its folk on the quay are still figures in knitwear and oilskins, stillCrowd and DRESS below, gullhavenworld.ts.)
+  gullhaven: { coat: [0.2, 0.27, 0.62, 0.68], sleeve: [0.06, 0.075] },
 };
 
 /** What a prop holder does with it, per mountain: the right arm's rest (side raise, forward raise,
@@ -123,6 +125,8 @@ const PROP_REST: Record<BiomeId, [number, number, number, number]> = {
   blossom: [3.15, -0.3, 0, 2],
   // A lighting pole held up at arm's length, its flame over the heads, turned in the hand.
   lantern: [2.95, -0.2, 0, 2],
+  // (Gullhaven, round 9: Pinecrest's, never seen: it has no stands, so no prop holder.)
+  gullhaven: [0.35, 0.3, 0.1, 0],
 };
 
 /** The prop holders' style, shared by the one crowd material (set by restyleCrowd). */
@@ -300,6 +304,10 @@ const DRESS: Record<BiomeId, { coats: string[]; hats: string[] }> = {
   // Lamplighters: robes in the night's own colours (indigo, plum, slate violet, a deep teal, undyed wool)
   // with hoods and sashes in pale lilac, silver and cream. The only warm thing on them is the flame they carry.
   lantern: { coats: ['#3A3478', '#54407E', '#2E2C5C', '#6A5C9C', '#2F5A70', '#C9C2DC', '#463A6A', '#7A6CA8'], hats: ['#DAD2F2', '#F0ECF8', '#B4A8E0', '#8E86C8', '#E6E0D2', '#5E5490'] },
+  // Gullhaven's harbour folk (round 9, notes/r9-gullhaven-world.md): fishermen's knitwear and oilskins in navy wool, a
+  // weathered dark green, slate, peat brown, undyed cream and grey; knit caps in the same. Never a signal colour (an
+  // oilskin's yellow would be the gifts' marigold).
+  gullhaven: { coats: ['#2E3A5C', '#3E5A4A', '#4A5068', '#5A4638', '#D2C6B0', '#6A6E78', '#34404E', '#5E6A5A'], hats: ['#3A4660', '#D8CCB4', '#5E5A50', '#8A7A62', '#2E3448', '#A8A49C'] },
 };
 
 /** A crowd's colour range for a biome: coats and accents. */

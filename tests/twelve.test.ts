@@ -195,7 +195,8 @@ describe('Lanternfall opens by The Twelve, not by ghosts passed', () => {
   });
 
   it('the ghost ladder never names the finale: no "next unlock", no mid-run pop, no tease', () => {
-    const d = { ...defaultSave('Rider'), runs: 9, ghostsPassed: 30 };
+    // (Round 9: past every mountain the ladder opens, Gullhaven's 32 the last before the finale.)
+    const d = { ...defaultSave('Rider'), runs: 9, ghostsPassed: 34 };
     d.ownedSleds = [0, 1, 2, 3, 4, 5];
     expect(nextUnlock(d)?.kind).not.toBe('mountain');
     expect(unlockCrossed(40, 60)).toBeNull();

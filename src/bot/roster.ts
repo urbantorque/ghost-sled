@@ -144,6 +144,22 @@ export const HOME_RIDERS: readonly Rider[] = [
     bio: 'The bellringer’s daughter. Rings every bell on the way down, and counts them.',
     says: { pass: ['Ding!', 'Six bells!'], passed: ['Oh!', 'You missed one.'], won: ['Every bell!'], lost: ['Again? Again!'] },
   },
+  // Gullhaven (index 6): the cape's own.
+  {
+    key: 'ina', name: 'Ina Corrie', hat: 'aviator', emblem: 'feather', accent: '#DCE8EE', sled: 3, style: 'sky', skill: 0.87, home: 6,
+    bio: 'Learned to fly the geos before she could ride the path. Has never ridden the path.',
+    says: { pass: ['The wind has me.', 'Up you come.'], passed: ['Nice lift.', 'Hm.'], won: ['Nine gullies, nine flights.'], lost: ['You read the wind.'] },
+  },
+  {
+    key: 'tam', name: 'Tam Skerry', hat: 'brim', emblem: 'wave', accent: '#E6DCC8', sled: 1, style: 'liner', skill: 0.74, home: 6,
+    bio: 'Lights the beacon every storm night. Rides the clifftop path the way he walks it.',
+    says: { pass: ['Mind the fence.', 'Steady on.'], passed: ['Fair wind.', 'Go on, then.'], won: ['The path knows me.'], lost: ['Well flown.'] },
+  },
+  {
+    key: 'grizel', name: 'Grizel Ness', hat: 'bobble', emblem: 'moon', accent: '#F0E6F6', sled: 0, style: 'collector', skill: 0.6, home: 6,
+    bio: 'Mends nets in the sheds all winter. Counts the gulls in every gully on the way down.',
+    says: { pass: ['Gulls!', 'Hold on!'], passed: ['Oh, the wind!', 'Watch the lip.'], won: ['Every gull counted.'], lost: ['Next storm.'] },
+  },
 ];
 
 const BY_NAME = new Map([...ROSTER, ...HOME_RIDERS].map((r) => [r.name, r]));

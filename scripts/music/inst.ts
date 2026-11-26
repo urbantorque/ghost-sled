@@ -3,8 +3,8 @@ import { Biquad, type EqBand, Pulse, Rng, SR, Saw, type Stereo, Svf, TAU, adsr, 
 // The renderer's pitched instruments (round 7). Each is a function from one note to its sound, mono or
 // stereo, starting at the note's first sample: physical models where a model is the sound (plucked
 // strings), source and body where it is a player's gesture (the fiddle's bow, a brass attack that
-// brightens as it swells, breath in a flute), modal and FM bells, additive piano, pads and a choir of
-// formants. None of them is a recording or a copy of one.
+// brightens as it swells, breath in a flute, a squeezebox's reeds and bellows), modal and FM bells,
+// additive piano, pads and a choir of formants. None of them is a recording or a copy of one.
 
 export interface Note {
   /** Seconds from the section's first beat. */
@@ -328,6 +328,87 @@ export function wind(o: WindOpts): Inst {
     }
     eqMono(out, o.kind === 'shaku' ? [['hp', 180, 0.7], ['peak', 1100, 1.2, 3], ['lp', 7500, 0.7]] : [['hp', 220, 0.7], ['lp', 9500, 0.7]]);
     return fadeTail(out);
+  };
+}
+
+// ------------------------------------------------------------------- free reeds
+
+export interface ReedOpts {
+  /** Each reed a note sounds: cents off the note and octaves over it. A wet box's two middle reeds beat
+   *  against each other a few cents apart; a bass button sounds its note in two octaves. */
+  reeds: ReadonlyArray<readonly [cents: number, octave: number]>;
+  /** 0 dark to 1 bright: how hard the reeds are pushed and how open the box is. */
+  bright: number;
+  /** Seconds for a middle reed to speak (a low reed takes longer, a hard push less). */
+  attack: number;
+  /** How far the bellows sway the tone on a held note, 0..1. */
+  sway?: number;
+  body: 'treble' | 'bass';
+}
+
+const REED_BODY: Record<ReedOpts['body'], readonly EqBand[]> = {
+  treble: [['hp', 150, 0.7], ['peak', 700, 1.4, 2], ['peak', 1750, 1.6, 4], ['peak', 3300, 2, 2], ['lp', 8500, 0.7]],
+  bass: [['hp', 36, 0.7], ['peak', 160, 1.2, 3], ['peak', 850, 1.5, 2], ['lp', 3600, 0.7]],
+};
+
+/**
+ * A free reed, the squeezebox: a brass tongue swinging through its slot chops the air into a narrow pulse
+ * rich in harmonics, so a pulse is the source. The reeds of a note sound together a few cents apart and
+ * beat (a wet box's shimmer); a reed takes a moment to speak, a low one longer and a hard push sooner, and
+ * the pallet's knock comes with it; the bellows sway the tone a little on a held note, and more pressure
+ * is a brighter tone; the reed block and the box are a body of fixed resonances.
+ */
+export function reed(o: ReedOpts): Inst {
+  return (n, rng) => {
+    const held = secs(n.dur);
+    const len = held + secs(0.08);
+    const out = stereo(len);
+    const f0 = mtof(n.m);
+    const att = o.attack * (1.25 - 0.5 * n.v) * clamp(Math.sqrt(330 / f0), 0.7, 2.2);
+    const env = adsr(len, att, 0.1, 0.9, 0.03, n.dur);
+    const sway = o.sway ?? 0.3;
+    const swayHz = 0.45 + rng.next() * 0.4;
+    const swayPh = rng.next() * TAU;
+    const k = o.reeds.length;
+    for (let r = 0; r < k; r++) {
+      const rr = rng.fork(r);
+      const [cents, oct] = o.reeds[r];
+      const f = f0 * Math.pow(2, oct) * bend(cents + rr.bip() * 1.2);
+      if (f > SR * 0.45) continue;
+      const pu = new Pulse(rr.next());
+      const lp = new Svf();
+      const w = 0.24 + 0.08 * rr.next();
+      const [gl, gr] = panGains(k > 1 ? ((r / (k - 1)) * 2 - 1) * 0.22 : 0);
+      const g = (oct === 0 ? 1 : oct < 0 ? 0.75 : 0.5) / Math.sqrt(k);
+      const late = Math.floor(rr.next() * secs(0.004));
+      for (let i = late; i < len; i++) {
+        const t = (i - late) / SR;
+        const e = env[i - late];
+        const press = e * (1 + sway * 0.05 * Math.sin(swayPh + TAU * swayHz * t) * clamp(t / 0.5, 0, 1));
+        const fc = clamp(f * (1.8 + 9 * o.bright * (0.45 + 0.55 * n.v) * press), 250, 11000);
+        const x = lp.tick(pu.tick(f / SR, w), fc, 0.75) * press;
+        out.l[i] += x * gl * g;
+        out.r[i] += x * gr * g;
+      }
+    }
+    // The pallet's knock as the key opens.
+    const knock = Biquad.design('bp', o.body === 'bass' ? 700 : 2200, 1.2);
+    const kn = Math.min(len, secs(0.012));
+    for (let i = 0; i < kn; i++) {
+      const x = knock.tick(rng.bip()) * 0.08 * (0.4 + 0.6 * n.v) * Math.exp(-i / secs(0.003));
+      out.l[i] += x;
+      out.r[i] += x;
+    }
+    const v = 0.4 + 0.6 * n.v;
+    for (let i = 0; i < len; i++) {
+      out.l[i] *= v;
+      out.r[i] *= v;
+    }
+    eqMono(out.l, REED_BODY[o.body]);
+    eqMono(out.r, REED_BODY[o.body]);
+    fadeTail(out.l);
+    fadeTail(out.r);
+    return out;
   };
 }
 

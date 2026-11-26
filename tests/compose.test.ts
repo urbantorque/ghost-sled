@@ -11,6 +11,7 @@ import { OverlookPlan } from '../src/render/overlook';
 import { framingGeometry } from '../src/render/framing';
 import { getPalette } from '../src/render/palette';
 import { START_HOUSE, TIMING, oldrunClearings } from '../src/render/oldrunplan';
+import { BEACON, gullhavenClearings } from '../src/render/gullhavenplan';
 import type { Clearing } from '../src/render/dressing';
 import { Mood } from '../src/sim/chaos';
 
@@ -45,6 +46,19 @@ describe('the composed places', () => {
       // (Round 9: a mountain laid by its own kit composes none of the five's places: the Old Run's banks are its
       // parapet's crest of snow, and its places are its own world's, the start house over its first metres and the
       // timing house at its line, oldrunplan.ts.)
+      // (Gullhaven composes none either: its banks are the fence over the cliff and the moor's bank, and its places are its
+      // world's, the old beacon on its knoll at the head and the harbour round its line, with the ground past both edges
+      // its world's own, gullhavenplan.ts.)
+      if (c.kit?.id === 'gullhaven') {
+        expect(list).toEqual([]);
+        expect(c.section(BEACON.z).kind).toBe('beacon');
+        expect(c.section(c.finishZ).kind).toBe('harbour');
+        const fz = c.finishZ;
+        const keep: Clearing[] = [];
+        gullhavenClearings(c, fz - 10, fz + 10, keep);
+        for (const side of [-1, 1]) expect(keep.some((k) => k.side === side && k.z0 < fz && k.z1 > fz && k.e - k.w <= 0)).toBe(true);
+        return;
+      }
       if (c.kit) {
         expect(list).toEqual([]);
         expect(START_HOUSE.z0).toBeLessThan(0);
@@ -133,12 +147,17 @@ describe('the composed places', () => {
     expect(new Set(firsts).size).toBe(5);
     expect(opening('alpine')).toBeDefined();
     // ...and a kit's mountain has a look of its own past its banks instead: the Old Run's low wooded hills with no
-    // hero peak, and its lake far below where the five have a sea of cloud (palette.ts).
+    // hero peak, and its lake far below where the five have a sea of cloud; Gullhaven's coast, and the sea itself to the
+    // horizon (palette.ts). No two kits share one.
     const peaks = new Set(NAMED.filter((m) => !courseFor(m.seed).kit).map((m) => getPalette(courseFor(m.seed).biome, Mood.None).massif.peak));
+    const kits = new Set<string>();
     for (const m of NAMED.filter((q) => courseFor(q.seed).kit)) {
       const own = getPalette(courseFor(m.seed).biome, Mood.None).massif;
       expect(peaks.has(own.peak), m.id).toBe(false);
-      expect(own.seaLake, m.id).toBe(1);
+      expect(kits.has(own.peak), m.id).toBe(false);
+      kits.add(own.peak);
+      if (courseFor(m.seed).kit?.id === 'gullhaven') expect(own.seaOcean, m.id).toBe(1);
+      else expect(own.seaLake, m.id).toBe(1);
     }
   });
 

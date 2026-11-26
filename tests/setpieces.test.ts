@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BufferAttribute, Mesh, Vector3 } from 'three';
+import { BufferAttribute, InstancedMesh, Mesh, Vector3 } from 'three';
 import { Mood } from '../src/sim/chaos';
 import { CHUNK_LEN, Course, RUN_OUT, Section, courseFor } from '../src/sim/course';
 import { MOUNTAINS, dailySeed } from '../src/sim/mountains';
@@ -14,6 +14,9 @@ import { OverlookPlan } from '../src/render/overlook';
 import { HOTEL, START_HOUSE, TIMING, oldrunClearings } from '../src/render/oldrunplan';
 import { OldRunWorld } from '../src/render/oldrunworld';
 import type { Clearing } from '../src/render/dressing';
+import { GullhavenWorld } from '../src/render/gullhavenworld';
+import { BEACON, lighthouseZ } from '../src/render/gullhavenplan';
+import { makeSeaUniforms } from '../src/render/massif';
 
 // The course's sections are the plan: a street is a town, a tunnel an enclosure, a bridge a bridge, and
 // nothing stands in the run. Every vertex of every piece is past the course's own edge limit there (the
@@ -73,6 +76,21 @@ describe('the plan is the course', () => {
         // (Round 9: a mountain laid by its own kit plans none of the five's places; its sections are its own, and so
         // are the places on them. The Old Run's house section holds its start house over z = 0 and the grand hotel
         // beside its straight; its outrun holds the line and the whole run-out, its timing house beside the line.)
+        // (Gullhaven's sections are its own too: the old beacon's head over its start, the clifftop path and its geos, the
+        // descent, the sheds, and the harbour holding the line and the whole run-out; its world stands the beacon on its
+        // knoll at the head and the line between its pier heads, gullhavenworld.ts.)
+        if (c.kit?.id === 'gullhaven') {
+          expect(list).toEqual([]);
+          const secs = sections(c);
+          expect(secs[0].kind).toBe('beacon');
+          expect(secs[0].z0).toBeLessThanOrEqual(BEACON.z);
+          expect(secs[0].z1).toBeGreaterThan(BEACON.z);
+          expect(secs.filter((q) => q.kind === 'geo').length).toBeGreaterThanOrEqual(5);
+          const harbour = secs.find((q) => q.kind === 'harbour')!;
+          expect(harbour.z0).toBeLessThan(c.finishZ - 50);
+          expect(harbour.z1).toBeGreaterThanOrEqual(c.finishZ + c.runOut);
+          return;
+        }
         if (c.kit) {
           expect(list).toEqual([]);
           const secs = sections(c);
@@ -344,6 +362,22 @@ function oldrunPlaces(c: Course, low: boolean): Map<string, BufferAttribute[]> {
   return out;
 }
 
+/** Gullhaven's own places as its world draws them on a tier (gullhavenworld.ts, by name): world positions (its merged
+ *  meshes only; its instanced ones, the fence, the walls, the stacks and the gulls, are not places). */
+function gullhavenPlaces(c: Course, low: boolean): Map<string, BufferAttribute[]> {
+  const w = new GullhavenWorld(null, makeSeaUniforms());
+  w.setDetail(low ? 'low' : 'high');
+  w.setCourse(c);
+  const out = new Map<string, BufferAttribute[]>();
+  for (const o of w.root.children) {
+    if (!(o instanceof Mesh) || o instanceof InstancedMesh || !o.name) continue;
+    const list = out.get(o.name) ?? [];
+    list.push(o.geometry.getAttribute('position') as BufferAttribute);
+    out.set(o.name, list);
+  }
+  return out;
+}
+
 const trisOf = (list: readonly BufferAttribute[] | undefined): number => (list ?? []).reduce((n, p) => n + p.count / 3, 0);
 
 describe('the start', () => {
@@ -353,6 +387,29 @@ describe('the start', () => {
       // (Round 9: a kit's mountain has no stands. The Old Run's occasion is its own on every tier: the start house over
       // its first metres and the grand hotel beside its straight, its guests out on the terrace, Low paying for them in
       // triangles alone, the same places and the guests half as many.)
+      // (Gullhaven has no stands either. Its occasions are its world's on every tier: the old beacon burning on its knoll
+      // past the fence at the head, the lighthouse on its point, the harbour, and its folk on the quay at the line; Low
+      // pays for them in triangles, the same places and the folk half as many.)
+      if (c.kit?.id === 'gullhaven') {
+        const full = gullhavenPlaces(c, false);
+        const low = gullhavenPlaces(c, true);
+        for (const name of ['beacon', 'lighthouse', 'harbour', 'onlookers']) {
+          expect(trisOf(low.get(name)), `${m.name} ${name} low`).toBeGreaterThan(0);
+          expect(trisOf(low.get(name)), `${m.name} ${name}`).toBeLessThan(trisOf(full.get(name)));
+        }
+        const within = (pl: Map<string, BufferAttribute[]>, name: string, z0: number, z1: number) => {
+          for (const p of pl.get(name) ?? []) for (let v = 0; v < p.count; v++) expect(-p.getZ(v), name).toBeGreaterThan(z0), expect(-p.getZ(v), name).toBeLessThan(z1);
+        };
+        for (const pl of [full, low]) {
+          within(pl, 'beacon', BEACON.z - BEACON.r - 2, BEACON.z + BEACON.r + 2);
+          within(pl, 'lighthouse', lighthouseZ(c) - 12, lighthouseZ(c) + 12);
+          within(pl, 'onlookers', c.finishZ - 100, c.finishZ + 20);
+        }
+        const folk = (pl: Map<string, BufferAttribute[]>) => (pl.get('onlookers') ?? []).reduce((n, p) => n + p.count, 0);
+        expect(folk(low), m.name).toBeGreaterThan(folk(full) * 0.35);
+        expect(trisOf(full.get('harbour')) + trisOf(full.get('lighthouse')) + trisOf(full.get('beacon')), m.name).toBeLessThanOrEqual(42000);
+        continue;
+      }
       if (c.kit) {
         const full = oldrunPlaces(c, false);
         const low = oldrunPlaces(c, true);
@@ -404,6 +461,18 @@ describe('the start', () => {
       // (Round 9: a kit's mountain has no stands and no gate. The Old Run's watchers, its hotel and its timing house
       // stand past its limit, never on the ice; its start house stands on its crests either side and over the run
       // only as high as its eaves, a roof a sled leaves from under.)
+      // (Gullhaven's folk on the quay, its beacon and its lighthouse stand past its limit, never on the run.)
+      if (c.kit?.id === 'gullhaven') {
+        for (const low of [false, true]) {
+          const pl = gullhavenPlaces(c, low);
+          for (const name of ['onlookers', 'beacon', 'beacon-fire', 'lighthouse', 'lighthouse-lamp']) {
+            const list = pl.get(name) ?? [];
+            expect(list.length, `${m.name} ${name}`).toBeGreaterThan(0);
+            for (const p of list) for (let v = 0; v < p.count; v++) expect(c.edgeExcess(p.getX(v), -p.getZ(v)), `${name} at ${Math.round(-p.getZ(v))}`).toBeGreaterThanOrEqual(c.edgeLimit(-p.getZ(v)));
+          }
+        }
+        continue;
+      }
       if (c.kit) {
         for (const low of [false, true]) {
           const pl = oldrunPlaces(c, low);

@@ -275,6 +275,27 @@ export const CLEAR: Record<BiomeId, Style> = {
     verb: 0.7,
     kit: { kick: 'tight', snare: 'clap', pump: 0.22 },
   },
+  // Gullhaven (round 9): a reel in E dorian at 104 for squeezebox and fiddle over a deep drum, the harbour's band out on
+  // the cape. A bass on the root and the fifth, a deep soft kick on the one and the three, a fiddle-bright pluck running
+  // in 8ths, a reedy square lead, and the sea's long reverb.
+  gullhaven: {
+    tonic: 52,
+    bpm: 104,
+    mode: 'dorian',
+    penta: MINOR_PENTA,
+    bright: 2,
+    swing: 0.04,
+    pad: { cutoff: 2200, attack: 1.1, detune: 10, wobble: 0 },
+    bass: [0, _, 0, _, 7, _, 0, _, 0, _, 0, _, 10, _, 7, _],
+    arp: { kind: 'up', rate: 1, timbre: 'pluck', prob: 0.9, oct: 1 },
+    kick: [1, 0, 0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, 0],
+    hat: [0.25, 0.1, 0.4, 0.1, 0.25, 0.1, 0.4, 0.1, 0.25, 0.1, 0.4, 0.1, 0.25, 0.1, 0.4, 0.2],
+    clap: [0, 0, 0, 0, 0.7, 0, 0, 0, 0, 0, 0, 0, 0.7, 0, 0, 0],
+    sparkle: { prob: 0.05, timbre: 'glass' },
+    lead: 'square',
+    verb: 1.2,
+    kit: { kick: 'soft', snare: 'clap', pump: 0.14 },
+  },
   // Lanternfall: Bb major at 92 (the produced score's key, a slow pulse), a music-box arp rising and falling,
   // a bass that only marks the bar, no clap until the lanterns: a hush that keeps moving.
   lantern: {
@@ -405,6 +426,8 @@ export const ACCENTS: Record<BiomeId, Accent> = {
   glacier: { padCut: 1.15, pluckBright: 1.1, sparkleMul: 1.6, sub: false, koto: false, shimmer: true },
   volcanic: { padCut: 0.72, pluckBright: 0.9, sparkleMul: 0.8, sub: true, koto: false, shimmer: false },
   blossom: { padCut: 1, pluckBright: 1, sparkleMul: 1.1, sub: false, koto: true, shimmer: false },
+  // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+  gullhaven: { padCut: 1, pluckBright: 0.8, sparkleMul: 1, sub: false, koto: false, shimmer: false },
 };
 
 export function styleFor(mood: Mood): Style {

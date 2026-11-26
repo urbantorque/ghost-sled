@@ -83,8 +83,10 @@ export interface Palette {
    *  deck's glow colour (Lanternfall: the valley of lanterns under the cloud). bands lays mist in three
    *  layers across the panorama's lower slopes (Sakura's run-in: the mist lifting off the cone). seaLava 1 paints
    *  the sea as a lake of lava, crust on cracks of the seaWarm glow (Ember's Caldera Leap; 0 everywhere else). seaLake 1
-   *  paints it as open water, a lake far below with the sky and the low sun in it (the Old Run, round 9; 0 elsewhere). */
-  massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number; flow: number; heroAz: number; seaIce: number; seaWarm: number; seaLava: number; bands: number; seaLake: number };
+   *  paints it as open water, a lake far below with the sky and the low sun in it (the Old Run, round 9; 0 elsewhere).
+   *  seaOcean 1 paints it as the open sea at its own level (Gullhaven, round 9: sky.ts setSeaLevel), its swell rolling
+   *  in, the sun's path broken on it and whitecaps under the storm, in the water's own colour (0 elsewhere). */
+  massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number; flow: number; heroAz: number; seaIce: number; seaWarm: number; seaLava: number; bands: number; seaLake: number; seaOcean: number; water: Color };
   /** grain: film grain strength (night moods run light, where grain reads as digital noise in the
    *  dark). foot: how much the bottom edge of the frame darkens and cools (see post.ts). */
   grade: Grade;
@@ -98,8 +100,10 @@ export interface Palette {
    *  shadow: how strongly their slow shadows drift over the snow (materials.ts, 0 for none). */
   clouds: { low: number; high: number; top: number; lit: Color; shade: Color; rim: Color; shadow: number };
   /** A ceiling of cloud across the whole dome (sky.ts): k is its cover (0 none, 1 unbroken), lit and
-   *  shade its billows, glow the light on its underside, strongest low in the sky toward the hero. */
-  deck: { k: number; lit: Color; shade: Color; glow: Color };
+   *  shade its billows, glow the light on its underside, strongest low in the sky toward the hero. edge (round 9,
+   *  Gullhaven): the sine of the height its lower edge stands at, under which the sky is clear down to the horizon
+   *  (0 or left out: the deck runs down to the horizon, as Ember's does). */
+  deck: { k: number; lit: Color; shade: Color; glow: Color; edge?: number };
   /** Round 7, the air between the planes (materials.ts fogColor, midground.ts, massif.ts). far: what the
    *  haze turns to with distance, so the far plane is the mountain's blue (or its own air) and not only a
    *  paler near plane; cool: what the air is multiplied by looking away from the sun; low: how much thicker
@@ -266,7 +270,7 @@ export function filmValue(x: number): number {
 /** Each biome's signature mountain (massif.ts): a classic snow-capped summit, an ice fang, a
  *  smoking volcano or a symmetrical snow-capped cone. Round 9: or none, 'hills', the Old Run's low wooded ridges round
  *  its lake, with no hero at the track's vanishing point. */
-export type HeroPeak = 'summit' | 'fang' | 'volcano' | 'cone' | 'hills';
+export type HeroPeak = 'summit' | 'fang' | 'volcano' | 'cone' | 'hills' | 'coast';
 
 const c = (hex: string) => new Color(hex);
 
@@ -322,10 +326,10 @@ function base(): Palette {
     ridge: [c('#C8B4DE'), c('#9A8AC6'), c('#6660A6')],
     mist: null,
     mistK: 0,
-    massif: { peak: 'summit', rock: c('#5A4E7A'), glow: c('#FF9AA2'), glowK: 0, glowLine: -6000, veil: 0, sea: 1, lava: 0, flow: 0, heroAz: 0, seaIce: 0, seaWarm: 0, seaLava: 0, bands: 0, seaLake: 0 },
+    massif: { peak: 'summit', rock: c('#5A4E7A'), glow: c('#FF9AA2'), glowK: 0, glowLine: -6000, veil: 0, sea: 1, lava: 0, flow: 0, heroAz: 0, seaIce: 0, seaWarm: 0, seaLava: 0, bands: 0, seaLake: 0, seaOcean: 0, water: c('#2C4A5E') },
     grade: { lift: c('#0A0F2A'), gain: c('#FFF8F0'), saturation: 1.08, contrast: 1.04, grain: 1, foot: 0.3, shafts: 1, lens: 1, focal: 1, gust: 0, glitter: 0.15 },
     clouds: { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFE6CF'), shade: c('#A48CC0'), rim: c('#FFB088'), shadow: 0.3 },
-    deck: { k: 0, lit: c('#FFFFFF'), shade: c('#FFFFFF'), glow: c('#FFFFFF') },
+    deck: { k: 0, lit: c('#FFFFFF'), shade: c('#FFFFFF'), glow: c('#FFFFFF'), edge: 0 },
     atmo: { rays: 1, halo: 0, meteors: 0, banner: 0.8, slide: 1, sweep: 1, valley: 0.7, valleyColor: c('#E8C4C8'), drift: 0.3 },
     air: { far: c('#9A8AC6'), cool: c('#F0F2FF'), low: 0.35, scatter: 1 },
     key2: { color: c('#58E0A8'), k: 0, shade: c('#5A46B0') },
@@ -376,6 +380,31 @@ function biomeBase(biome: BiomeId): Palette {
   const p = base();
   switch (biome) {
     case 'alpine':
+      return p;
+    case 'gullhaven':
+      // What the chaos moods stand on at Gullhaven (round 9, notes/r9-gullhaven-world.md): white snow with a slate shade,
+      // dark slate rock in the sea cliffs, no trees (a moor), and no hero and no sea of cloud: the open sea below at its
+      // own level, the coast's headlands the far plane on the land side only.
+      p.snowLit = c('#FFF8F2');
+      p.snowShade = c('#7486C2');
+      p.snowDeep = c('#3E4C8C');
+      p.tall = c('#3E4A58');
+      p.tallDark = c('#262E3C');
+      p.low = c('#3E4258');
+      p.lowLit = c('#6E7290');
+      // (The props' accent is a fishing harbour's weathered blue paint, never the rider's vermillion.)
+      p.accentProp = c('#2E5A70');
+      p.ridge = [c('#C8CEDE'), c('#929EC2'), c('#5A6A96')];
+      p.massif.peak = 'coast';
+      p.massif.rock = c('#464A66');
+      p.massif.sea = 1;
+      p.massif.seaOcean = 1;
+      p.massif.water = c('#26465A');
+      p.atmo.banner = 0;
+      p.atmo.slide = 0;
+      // (No valley mist: under the cliff is the sea, and mist over it read as the five's sea of cloud.)
+      p.atmo.valley = 0;
+      p.atmo.valleyColor = c('#C8CCDA');
       return p;
     case 'oldrun':
       // What the chaos moods stand on at the Old Run (round 9): cream snow, slate-lavender shade, a bare wood in
@@ -937,6 +966,47 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.snowfall = 0.02;
       p.sparkle = 0.85;
       return;
+    case 'gullhaven':
+      // Gullhaven (round 9, notes/r9-gullhaven-world.md): storm light on a sea coast. A slate storm deck over the sea
+      // and the cape, its lower edge lifted off the horizon, and the low sun under that edge ahead and to the right,
+      // over the sea: it lights the cliffs and the snow warm against the dark of the deck, lays its path down the sea
+      // toward the lens, and throws the fence's and the walls' shadows long across the path toward the moor.
+      setSun(p, 34, 3.2, 24, 8);
+      p.sunColor = c('#FFEEDA');
+      p.sunCore = new Color(2.9, 2.55, 1.9);
+      p.sunTint = 0.7;
+      p.sunSize = 1.25;
+      p.sunGlow = 1.05;
+      p.sunSoft = 0.12;
+      p.skyZenith = c('#2A3450');
+      p.skyMid = c('#4E5A7A');
+      p.skyHorizon = c('#E4DACA');
+      p.skyBand = { color: c('#FFE4B8'), fade: 36, k: 0.9 };
+      p.skyBelow = c('#3A5064');
+      p.skySpread = 0.55;
+      p.skyCurve = 0.7;
+      p.rim = c('#FFE2C0');
+      // (The air under a storm deck is clear: the cliff's foot and the sea far below it keep their forms.)
+      p.fog = c('#B8BECE');
+      p.fogNear = 120;
+      p.fogFar = 2400;
+      p.hemiSky = c('#8494BC');
+      p.massif.glow = c('#FFC890');
+      p.massif.glowK = 0.4;
+      p.massif.glowLine = -200;
+      p.massif.heroAz = 34;
+      // The storm deck: slate billows over the whole sky, their undersides lit gold low toward the sun, and under its
+      // edge (a little over three degrees up) the clear band the sun shines through.
+      p.deck = { k: 0.82, lit: c('#5E6A86'), shade: c('#2E3448'), glow: c('#A89A98'), edge: 0.058 };
+      // (A few squall banks on the far horizon under the deck; no high wisps, the deck is the sky.)
+      p.clouds = { low: 0.32, high: 0, top: 0.1, lit: c('#EAE0D4'), shade: c('#5A6482'), rim: c('#FFD8A8'), shadow: 0.28 };
+      p.grade = { lift: c('#0A1022'), gain: c('#FFF8EE'), saturation: 1.06, contrast: 1.12, grain: 0.7, foot: 0.34, shafts: 0.35, lens: 0.25, focal: 0.5, gust: 0, glitter: 0.3 };
+      p.poster.shafts = 0.4;
+      p.atmo = { rays: 0.75, halo: 0, meteors: 0, banner: 0, slide: 0, sweep: 0.5, valley: 0, valleyColor: c('#C8CCDA'), drift: 0.4 };
+      p.bloom = 0.38;
+      p.snowfall = 0.03;
+      p.sparkle = 0.9;
+      return;
     case 'alpine':
       // A bright ski day: a high white sun off to the right, deep cobalt over pale blue, teal pines and
       // short, sharp blue shadows.
@@ -1251,6 +1321,20 @@ function round7(p: Palette, biome: BiomeId): void {
       p.posterSunSat = 0.55;
       p.poster.foot = 0.45;
       return;
+    case 'gullhaven':
+      // The far plane is the coast's slate blue over the sea, warm toward the sun under the deck and cool away from it;
+      // the air thin below the lens (it is the sea down there, not a valley that fills with haze).
+      p.air = { far: c('#6A7CA6'), cool: c('#E2E8FF'), low: 0.04, scatter: 1.3 };
+      p.lamps = 0.3;
+      p.grade.exposure = 0.98;
+      p.grade.hi = c('#FFF4E2');
+      p.grade.lo = c('#DEE4FF');
+      p.grade.posterKey = 0.92;
+      p.grade.posterCool = 0.18;
+      p.posterSnowSat = 0.5;
+      p.posterSunSat = 0.6;
+      p.poster.foot = 0.42;
+      return;
     case 'alpine':
       p.air = { far: c('#6E9AE2'), cool: c('#E4ECFF'), low: 0.5, scatter: 1.1 };
       p.lamps = 0.2;
@@ -1437,6 +1521,10 @@ function visualLift(p: Palette, biome: BiomeId): void {
     case 'oldrun':
       // (The low sun's sheen on the snow and the ice seen toward it; the bare wood lets a little light through.)
       p.lift = { bounce: 0.4, sun: 0.7, tint: c('#FFF8EE'), sky: 0.42, through: 0.4, sheen: 0.85 };
+      return;
+    case 'gullhaven':
+      // (The low sun's sheen on the wind-packed shelf seen toward it; under a storm deck the sky's fill is its slate.)
+      p.lift = { bounce: 0.4, sun: 0.72, tint: c('#FFF6EA'), sky: 0.4, through: 0.4, sheen: 0.9 };
       return;
     case 'alpine':
       p.lift = { bounce: 0.42, sun: 0.75, tint: c('#FFFFFF'), sky: 0.48, through: 0.6, sheen: 0.8 };
@@ -2283,6 +2371,117 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       },
     },
   ],
+  // Gullhaven (round 9, notes/r9-gullhaven-world.md): a storm coast's afternoon. Over the Cape the sun shines under the
+  // deck's edge; over the Geos a squall comes in off the sea and veils it, the deck lower, snow on the wind (the Great
+  // Geo's own light breaks through it, PLACES); down the Harbour Road the squall has passed and the sun sets rose under
+  // the deck; the line is crossed at dusk on the harbour's ice, the pier-head lights and the sheds' windows lit.
+  gullhaven: [
+    {
+      // The squall over the Geos: the deck lowers, its edge comes down on the sun, snow drives in on the wind.
+      from: 1450, at: 2050, dusk: 0.3,
+      edit: (p) => {
+        setSun(p, 32, 2.6, 23, 8);
+        p.sunSoft = 0.4;
+        p.sunGlow = 0.85;
+        // (The snow takes only a trace of the light's colour: at a peach key the moor seen from a flight read as sand.)
+        p.sunColor = c('#EEE8E4');
+        p.skyZenith = c('#2C3450');
+        p.skyMid = c('#52607E');
+        p.skyHorizon = c('#D8C8B8');
+        p.skyBand = { color: c('#F4D2A8'), fade: 28, k: 0.7 };
+        p.deck = { k: 0.9, lit: c('#646E88'), shade: c('#30364C'), glow: c('#DCAE8A'), edge: 0.045 };
+        p.fog = c('#B4B8C8');
+        p.fogFar = 1700;
+        p.snowShade = c('#6478C6');
+        p.rim = c('#F0DCC8');
+        p.clouds.shadow = 0.4;
+        p.air.far = c('#5E6E98');
+        p.atmo.rays = 0.45;
+        p.grade.shafts = 0.25;
+        p.snowfall = 0.18;
+        p.lamps = 0.35;
+      },
+    },
+    {
+      // The squall passes and the sun sets under the deck in rose: the band and the deck's underside rose-gold, the sea
+      // a path of fire toward the lens, the shade a deepening slate-violet.
+      from: 2800, at: 3500, dusk: 0.6,
+      edit: (p) => {
+        setSun(p, 30, 1.6, 21, 8);
+        p.sunSoft = 0.1;
+        p.sunGlow = 1.1;
+        p.sunColor = c('#FFDCC2');
+        p.sunCore.setRGB(3, 2.05, 1.2);
+        p.skyZenith = c('#2A2C52');
+        p.skyMid = c('#6A5C86');
+        p.skyHorizon = c('#F4B08C');
+        p.skyBand = { color: c('#FFAE80'), fade: 22, k: 0.95 };
+        p.deck = { k: 0.82, lit: c('#6A6482'), shade: c('#32304A'), glow: c('#F49E7C'), edge: 0.05 };
+        p.snowLit = c('#FFF6F2');
+        p.snowShade = c('#5E6CBC');
+        p.snowDeep = c('#343C8C');
+        // (The sea's haze a cool lilac-grey: warmer, the descent's frame came within a hair of Pinecrest's dusk.)
+        p.fog = c('#A8A4C6');
+        p.fogFar = 2200;
+        p.rim = c('#FFC49C');
+        p.hemiSky = c('#8C8CC2');
+        p.air.far = c('#6C70A2');
+        p.clouds.lit = c('#FFD4B4');
+        p.clouds.shade = c('#5E5A82');
+        p.clouds.rim = c('#FFA474');
+        p.clouds.shadow = 0.24;
+        p.massif.glowK = 0.65;
+        p.atmo.rays = 0.85;
+        p.grade.shafts = 0.4;
+        p.grade.saturation = 1.1;
+        p.grade.hi = c('#FFEEDC');
+        p.snowfall = 0.03;
+        p.hazardDim = 0.95;
+        p.lamps = 0.75;
+        p.bloom = 0.42;
+      },
+    },
+    {
+      // Dusk on the harbour's ice: the sun gone under the sea's rim, an amber band under the deck, the snow in the sky's
+      // cool light, and the pier-head lights and the sheds' windows the light at the line.
+      from: 4050, at: 4750, dusk: 0.9,
+      edit: (p) => {
+        setSun(p, 28, 0.6, 19, 8);
+        p.sunDisc = 0.3;
+        p.sunGlow = 0.75;
+        p.sunColor = c('#E4C2AE');
+        p.sunCore.setRGB(2.4, 1.55, 1.05);
+        p.skyZenith = c('#18203E');
+        p.skyMid = c('#4A4E7C');
+        p.skyHorizon = c('#E89A62');
+        p.skyBand = { color: c('#F0A06C'), fade: 22, k: 0.7 };
+        p.skyBelow = c('#2C3A54');
+        p.deck = { k: 0.8, lit: c('#4A4A68'), shade: c('#22243A'), glow: c('#D88A68'), edge: 0.05 };
+        p.snowLit = c('#CCD4EC');
+        p.snowShade = c('#44549A');
+        p.snowDeep = c('#262E78');
+        p.rim = c('#F0C2A6');
+        p.fog = c('#5E6E9E');
+        p.fogFar = 1800;
+        p.hemiSky = c('#6A76BE');
+        p.air.far = c('#444C8E');
+        p.clouds.lit = c('#C89CA8');
+        p.clouds.shade = c('#3C3E66');
+        p.clouds.rim = c('#F0A07C');
+        p.massif.water = c('#1E3248');
+        p.atmo.rays = 0.3;
+        p.grade.shafts = 0.15;
+        p.grade.hi = c('#FFEEDA');
+        p.grade.lo = c('#D8DCFF');
+        p.hazardDim = 0.88;
+        p.lamps = 1.4;
+        p.sparkle = 0.4;
+        p.lanternGlow = 0.4;
+        p.ghostGlow = 1.4;
+        p.bloom = 0.48;
+      },
+    },
+  ],
 };
 
 /** Round 8, the light lane: a mountain's other hour (the Almanac's `hourOpen`, G4's reward: a second Clear Skies
@@ -2769,6 +2968,83 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
           p.stars = 0.5;
           p.fog = c('#323A7C');
           p.fogFar = 460;
+        },
+      },
+    ],
+  },
+  // Gullhaven at Moonrise (round 9, notes/r9-gullhaven-world.md): the night after the storm. The deck has broken into
+  // rafts drifting off over the cape, a full moon rises out of the sea ahead and to the right and lays its silver path
+  // down the swell toward the lens, stars between the rafts; the snow silver under it, the shade a deep sea blue. The
+  // lighthouse's beam is the light that turns, and the harbour's windows and the pier-head lights wait at the line.
+  gullhaven: {
+    name: 'Moonrise',
+    phrase: 'at Moonrise',
+    dusk: 1,
+    start: (p) => {
+      setSun(p, 30, 5, 36, 18);
+      p.moon = true;
+      p.moonPhase = 0;
+      p.sunDisc = 1;
+      p.sunColor = c('#D2DAF4');
+      p.sunCore.setRGB(1.95, 2, 2.2);
+      p.sunTint = 0.9;
+      p.sunSize = 1.45;
+      p.sunGlow = 0.85;
+      p.sunSoft = 0;
+      p.skyZenith = c('#0A1236');
+      p.skyMid = c('#1C2A60');
+      p.skyHorizon = c('#4E5A94');
+      p.skyBand = { color: c('#8C96CC'), fade: 26, k: 0.45 };
+      p.skyBelow = c('#1A2448');
+      p.snowLit = c('#B8C4E8');
+      p.snowShade = c('#3A4894');
+      p.snowDeep = c('#1A2260');
+      p.rim = c('#DCE4FF');
+      p.fog = c('#2A3470');
+      p.fogFar = 560;
+      p.hemiSky = c('#465AB0');
+      p.air = { far: c('#1E2A62'), cool: c('#D8DEFF'), low: 0.3, scatter: 1.1 };
+      // (The storm's deck broken into rafts lit silver from under by the moon, the stars between them.)
+      p.deck = { k: 0.42, lit: c('#5A6496'), shade: c('#1C2250'), glow: c('#A8B4E4'), edge: 0.09 };
+      p.clouds = { low: 0.2, high: 0, top: 0.1, lit: c('#6870A8'), shade: c('#22285A'), rim: c('#C8D2FF'), shadow: 0 };
+      p.ridge = [c('#3C4680'), c('#2A3268'), c('#1A2050')];
+      p.massif.rock = c('#1C2048');
+      p.massif.water = c('#142442');
+      p.massif.glow = c('#B8C4F0');
+      p.massif.glowK = 0.2;
+      p.massif.glowLine = 600;
+      p.atmo = { rays: 0, halo: 0, meteors: 0.3, banner: 0, slide: 0, sweep: 0.1, valley: 0, valleyColor: c('#3A4286'), drift: 0.3 };
+      p.stars = 0.85;
+      p.hazardDim = 0.85;
+      p.lamps = 1.5;
+      p.lampAir = 0.04;
+      p.lanternGlow = 0.85;
+      p.giftGlow = 0.5;
+      p.ghostGlow = 1.5;
+      p.heroRim = 1.45;
+      p.bloom = 0.58;
+      p.sparkle = 1.2;
+      p.snowfall = 0;
+      p.grade = { ...p.grade, shafts: 0, saturation: 1.04, contrast: 1.12, exposure: 1.04, glitter: 0.25, hi: c('#F2F0FF'), lo: c('#DCE0FF'), flash: 0.4 };
+      Object.assign(p.poster, { steps: 2, bands: 6, stripe: 0, rim: 0.6, vignette: 0.24, shadow: c('#243070'), shadowK: 0.35 });
+    },
+    journey: [
+      {
+        // The moon climbs over the Geos and the last of the deck drifts inland off the sea.
+        from: 1400, at: 2600, dusk: 1,
+        edit: (p) => {
+          setSun(p, 28, 9, 38, 20);
+          p.deck.k = 0.3;
+          p.stars = 1;
+          p.sunGlow = 0.75;
+        },
+      },
+      {
+        // The harbour: its windows and the pier-head lights the warm light under the moon.
+        from: 4000, at: 4700, dusk: 1,
+        edit: (p) => {
+          p.lamps = 1.7;
+          p.lampAir = 0.06;
         },
       },
     ],
@@ -3701,6 +3977,56 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.grade.hi = c('#FFE8CC');
         p.bloom -= 0.2;
         p.grade.exposure! *= 0.94;
+      },
+    },
+  ],
+  // Gullhaven (round 9, notes/r9-gullhaven-world.md): its places graded over the hour's light. The beacon's slope on
+  // the cape's head in the open light off the sea; the Great Geo, where the squall breaks and the sun comes through
+  // under the deck onto the widest gully; the fish sheds' lane, its windows telling; the harbour's ice at dusk, the
+  // pier-head lights the light at the line.
+  gullhaven: [
+    {
+      kind: 'beacon',
+      edit: (p) => {
+        p.grade.hi = c('#FFF4E0');
+        p.lift.sun = 0.78;
+        p.grade.contrast += 0.02;
+      },
+    },
+    {
+      // (The fifth gully down the run is the Great Geo, gullhaven.ts: its section is the fifth 'geo'.)
+      kind: 'geo',
+      nth: 4,
+      edit: (p) => {
+        p.sunSoft = 0;
+        p.sunGlow = 1.15;
+        p.atmo.rays = 1;
+        p.grade.shafts = 0.55;
+        p.lift.sun = 0.82;
+        p.snowfall = 0.05;
+        p.grade.hi = c('#FFF6EC');
+        p.grade.contrast += 0.04;
+        p.bloom += 0.04;
+      },
+    },
+    {
+      kind: 'sheds',
+      edit: (p) => {
+        lamps(p, 1);
+        p.lampAir = Math.max(p.lampAir, 0.02);
+        p.lift.tint = c('#FFE8C8');
+        p.grade.hi = c('#FFEEDA');
+      },
+    },
+    {
+      kind: 'harbour',
+      nth: 0,
+      edit: (p) => {
+        // (A breath of the lamps' haze only: the pier heads and the sheds' windows in a haze of it washed the line's ice
+        // to one gold glare.)
+        lamps(p, 1.3);
+        p.lampAir = Math.max(p.lampAir, 0.02);
+        p.grade.hi = c('#FFEEDA');
       },
     },
   ],

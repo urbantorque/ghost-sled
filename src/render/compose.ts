@@ -263,8 +263,9 @@ export class ComposePlan {
     if (this.done) return;
     this.done = true;
     const c = this.course;
-    // (Round 9: the Old Run composes its own places in its own world, oldrunworld.ts: its banks are never reshaped.)
-    if (c.kit?.id === 'oldrun') return;
+    // (Round 9: the Old Run composes its own places in its own world, oldrunworld.ts: its banks are never reshaped. So
+    // does Gullhaven, gullhavenworld.ts.)
+    if (c.kit?.id === 'oldrun' || c.kit?.id === 'gullhaven') return;
     const secs: Section[] = [];
     for (let z = 0; z < c.finishZ; ) {
       const s = c.section(z);

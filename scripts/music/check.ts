@@ -17,6 +17,8 @@ const pitched: Array<[string, I.Inst, number[]]> = [
   ['lowbrass', I.brass({ kind: 'trombone', voices: 3 }), [40, 52]],
   ['flute', I.wind({ kind: 'flute', breath: 0.3, vib: 0, scoop: 0 }), [72, 84]],
   ['shaku', I.wind({ kind: 'shaku', breath: 0.6, vib: 0, scoop: 0 }), [62, 74]],
+  ['squeezebox', I.reed({ reeds: [[-7, 0], [9, 0]], bright: 0.55, attack: 0.02, body: 'treble' }), [59, 71, 83]],
+  ['bassreeds', I.reed({ reeds: [[0, 0], [3, 1]], bright: 0.4, attack: 0.03, body: 'bass' }), [33, 40, 47]],
   ['fmbell', I.fmBell({ ratio: 3.5, index: 1.2, decay: 2 }), [72, 84]],
   ['musicbox', I.musicBox(), [72, 84, 96]],
   ['bell', I.churchBell(), [60, 72]],

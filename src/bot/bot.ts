@@ -299,8 +299,10 @@ class Channel {
 }
 
 type Mode = 'ride' | 'crouch' | 'drift' | 'land' | 'air';
-type Purpose = 'pop' | 'kicker' | 'hop' | 'drift';
-type GoalKind = 'light' | 'kicker' | 'smash' | 'hop';
+type Purpose = 'pop' | 'kicker' | 'hop' | 'drift' | 'lip';
+/** Round 9: `lip`, a place the ground falls away under the line (kit.ts lips: Gullhaven's gully lips, Gablefall's roofs'
+ *  ends), crouched into and sprung at its edge. */
+type GoalKind = 'light' | 'kicker' | 'smash' | 'hop' | 'lip';
 
 /** A detour: ride straight into (xIn, zIn), on to (xOut, zOut), then ease back onto the line. */
 interface Goal {
@@ -418,6 +420,10 @@ export class Bot {
   private readonly kitLine: boolean;
   private readonly onTrack: boolean;
   private readonly rider: KitRider = { x: 0, y: 0, z: 0, v: 0, skill: 0, nerve: 0 };
+  /** Round 9: a course with lips to spring from (kit.ts lips), and air that lifts (Gullhaven's columns: Course.liftAt,
+   *  passed to the flight model, undefined elsewhere so the five's flights are stepped exactly as before). */
+  private readonly kitLips: boolean;
+  private readonly lift: ((x: number, y: number, z: number) => number) | undefined;
   private readonly grad = { x: 0, z: 0 };
 
   constructor(
@@ -437,6 +443,8 @@ export class Bot {
     this.nextThink = this.rng.int(2, 12);
     this.kitLine = this.course.kit?.lineFor !== undefined;
     this.onTrack = this.course.layout.grammar === 'oldrun';
+    this.kitLips = this.course.kit?.lips !== undefined;
+    this.lift = this.course.hasLift ? (x, y, z) => this.course.liftAt(x, y, z) : undefined;
     this.rider.skill = this.t.skill;
     // (The fork coin's own odds, read, never drawn: a new mountain's bold choices are made by nerve as the rider goes.)
     this.rider.nerve = this.t.ambition * (0.2 + 0.8 * this.t.skill);
@@ -496,7 +504,7 @@ export class Bot {
   /** Whether the next set piece is ridden on the snow from its first metre (a line, not a leap or a pop). */
   private wantsSnow(): boolean {
     const p = this.sim.plays[this.sim.mo.next];
-    return !!p && (p.verb === 'gates' || p.verb === 'follow' || p.verb === 'kindle' || p.verb === 'slide' || p.verb === 'peal' || p.verb === 'glaze');
+    return !!p && (p.verb === 'gates' || p.verb === 'follow' || p.verb === 'kindle' || p.verb === 'slide' || p.verb === 'peal' || p.verb === 'glaze' || p.verb === 'beam' || p.verb === 'stacks');
   }
 
   /** Read what happened on the tick just simulated. */
@@ -694,7 +702,9 @@ export class Bot {
       const rel = x - L.safeX(z);
       // Steeper than about 17 degrees off the line is not a line anyone rides. (Round 9, the Old Run: its racing line
       // crosses the channel from wall to wall at a bend's entry, about 30 degrees off its floor's middle.)
-      const steep = this.onTrack ? 1.2 : 0.6;
+      // (Round 9, Gullhaven: its bold line leaves the path as the path swings inland round a gully's head, up to 0.32 a
+      // metre at the Great Geo.)
+      const steep = this.onTrack ? 1.2 : this.kitLips ? 0.8 : 0.6;
       if (rel - prevRel > steep || rel - prevRel < -steep) {
         worst = -1;
         break;
@@ -736,7 +746,12 @@ export class Bot {
     const p = sim.plays[mo.active];
     if (!this.tries(p)) return null;
     const z = sim.s.z;
-    if (p.verb === 'gates') {
+    // (Round 9, Gullhaven: the lighthouse's marks are gates on a clock; the sea stacks' gaps are threaded in turn.)
+    if (p.verb === 'stacks') {
+      const t = p.targets[mo.at];
+      return t && t.z - z < 70 ? t.x - this.lines.safeX(t.z) : null;
+    }
+    if (p.verb === 'gates' || p.verb === 'beam') {
       // (Sitting gates are one line from the set piece's first metre to its last gate: a rider who left it
       // between gates popped there, and flew the next three.)
       if (p.style === 'sit') return p.gates.length && z < p.gates[p.gates.length - 1].z + 1 ? this.slalomOff(p, z) : null;
@@ -901,14 +916,14 @@ export class Bot {
   private updateWander(now: number): void {
     const mOff = this.momentOff();
     const verb = mOff !== null ? this.sim.plays[this.sim.mo.active]?.verb : undefined;
-    this.inGates = verb === 'gates';
+    this.inGates = verb === 'gates' || verb === 'beam' || verb === 'stacks';
     const piece = this.inGates ? this.sim.plays[this.sim.mo.active] : null;
     this.slalom = piece && piece.style === 'sit' ? piece : null;
     this.wake = verb === 'follow' ? this.sim.plays[this.sim.mo.active].path : null;
     // (A line to ride wants the runners on the snow: no pops for the fun of it meanwhile.)
     // (And a low flame not yet fed is carried on the snow to its brazier: no pop flies past it.)
     const feeding = verb === 'carry' && !(this.sim.mo.mask & 1);
-    this.onLine = verb === 'gates' || verb === 'follow' || verb === 'kindle' || verb === 'peal' || verb === 'glaze' || feeding;
+    this.onLine = verb === 'gates' || verb === 'follow' || verb === 'kindle' || verb === 'peal' || verb === 'glaze' || verb === 'beam' || verb === 'stacks' || feeding;
     this.feed = feeding ? (this.sim.plays[this.sim.mo.active].relight ?? null) : null;
     this.momentLine = mOff !== null;
     if (mOff !== null) {
@@ -917,7 +932,10 @@ export class Bot {
       if (this.inGates) this.goal = null;
       this.offTarget = mOff;
       const d = mOff - this.off;
-      this.off += d > 1.4 ? 1.4 : d < -1.4 ? -1.4 : d;
+      // (Round 9, Gullhaven: down the sea stacks the next gap is on the other side and a second and a half away: the whole
+      // way across at once.)
+      const most = verb === 'stacks' ? 6 : 1.4;
+      this.off += d > most ? most : d < -most ? -most : d;
       this.offRetarget = now + 30;
       return;
     }
@@ -934,7 +952,8 @@ export class Bot {
     this.px0 = xp;
     this.pz0 = zp;
     // (A slalom is joined at once: eased onto over a second, the line aimed at is a gate out of step.)
-    this.join = this.slalom ? 4 : Math.max(10, speed * 0.9);
+    // (Round 9, Gullhaven: so is a run of the sea stacks' gaps, a gap every second and a half at the shore road's speed.)
+    this.join = this.slalom ? 4 : this.inGates && this.sim.plays[this.sim.mo.active]?.verb === 'stacks' ? 12 : Math.max(10, speed * 0.9);
     const zEnd = zp + speed * 2.2 + 10;
     const g = this.goal;
     if (g) {
@@ -962,7 +981,30 @@ export class Bot {
       this.offTarget = bestOff;
       this.offRetarget = now + 90;
     }
+    // (Round 9: a lip on the line is sprung whatever else the rider is about: it is the line.)
+    if (this.kitLips && !this.goal && !this.inGates) this.lookForLip(zp, speed, zEnd);
     if (!this.goal && !this.cooling && !this.inGates && !this.onLine && this.thinks % 2 === 0) this.lookForGoals(zp, speed, zEnd);
+  }
+
+  /** Round 9: a lip on this rider's line (kit.ts lips) a second or two ahead, crouched into and sprung at its edge, if
+   *  the flight a pop there would take (popFlight, with the course's air) comes down inside the corridor clear of
+   *  everything. General: a lip is a z where the ground falls away under a line, x0 to x1 across it. */
+  private lookForLip(zp: number, speed: number, zEnd: number): void {
+    const c = this.course;
+    for (const l of c.lips(zp + Math.max(4, speed * 0.4), zp + speed * 2.5)) {
+      const x = this.lineX(l.z);
+      if (x < l.x0 - 1 || x > l.x1 + 1) continue;
+      const z = l.z - 1;
+      const dir = datan2(this.lineX(l.z + 4) - this.lineX(l.z - 4), 8);
+      const f = this.popFrom((l.x0 + l.x1) / 2, z, speed * dsin(dir), speed * dcos(dir), 36);
+      if (f.clearance < 0.3 || this.lines.edgeExcess(f.x, f.z) > -2) continue;
+      // (Into the lip's middle, wherever this rider's wander had it: the lift is narrower than the gully.)
+      const mid = (l.x0 + l.x1) / 2;
+      const g: Goal = { kind: 'lip', zIn: l.z - Math.max(6, speed * 0.9), xIn: mid, zOut: l.z, xOut: mid, ret: speed, ramp: null, skip: -1, pop: true, squeeze: false };
+      if (this.pathClear(g, Math.max(zEnd, l.z + 8)) < 0.3) continue;
+      this.goal = g;
+      return;
+    }
   }
 
   private lookForGoals(zp: number, speed: number, zEnd: number): void {
@@ -1042,7 +1084,7 @@ export class Bot {
     const lz = r.z + r.len - 0.05;
     const y = c.ground(r.x, lz);
     const vy = (y - c.ground(r.x, lz - speed * DT)) / DT;
-    const f = predictFlight(c, this.scene, this.sim.gravity, r.x, y, lz, 0, vy, speed);
+    const f = predictFlight(c, this.scene, this.sim.gravity, r.x, y, lz, 0, vy, speed, -Infinity, 480, this.lift, this.sim.mood.gravity);
     return f.clearance >= this.t.margin && this.lines.edgeExcess(f.x, f.z) < -2.5;
   }
 
@@ -1090,7 +1132,7 @@ export class Bot {
     const releasing = this.releasedAt >= now;
     // Lining up a pop: aim at where the line will be at touchdown, since the flight is straight.
     // Rolling off a drop is a flight too, so line it up the same way.
-    const flying = (this.mode === 'crouch' && this.purpose !== 'kicker') || this.dropAhead(s.z, s.speed * 1.3);
+    const flying = (this.mode === 'crouch' && this.purpose !== 'kicker' && this.purpose !== 'lip') || this.dropAhead(s.z, s.speed * 1.3);
     // Moguls keep the runners off the snow, so steering has to be done before them: aim through
     // the whole field at the line where it comes out.
     const aim = Math.max(flying ? s.speed * 2 : 0, this.mogulExit(s.z, s.speed) - zp);
@@ -1401,6 +1443,15 @@ export class Bot {
     if (this.act.last === 1 || now < this.releasedAt + 4) return cmd;
     // (A set piece is played whatever the combo holds: riding calm to bank it is for open snow.)
     if (this.momentRide(now, apply, zp)) return cmd;
+    // (Round 9: a lip is the line, sprung whatever the combo holds: crouch in, a full charge, and spring on its last metre.)
+    const lg = this.goal;
+    if (lg && lg.kind === 'lip') {
+      if (zp > lg.zIn) {
+        this.press(apply, 'crouch', 'lip');
+        this.releaseAt = this.tickAtZ(now, lg.zOut - 0.6) + Math.round(gauss(this.rng) * this.t.timingSd);
+      }
+      return cmd;
+    }
     if (this.cooling) return cmd;
     // (Nor a pop for the fun of it on the way into a set piece that wants the runners on the snow.)
     if (this.onLine || (this.sim.mo.active < 0 && this.holdsDash() && this.wantsSnow())) return cmd;
@@ -1485,8 +1536,8 @@ export class Bot {
       this.release(R);
       return needTurn ? cmd : tuck;
     }
-    const f = this.popFlight(now, R, this.pressAt, this.purpose === 'kicker' ? 0.2 : this.t.margin);
-    if (this.flightClear(f) || (this.purpose === 'kicker' && f.clearance > 0.2)) {
+    const f = this.popFlight(now, R, this.pressAt, this.purpose === 'kicker' || this.purpose === 'lip' ? 0.2 : this.t.margin);
+    if (this.flightClear(f) || ((this.purpose === 'kicker' || this.purpose === 'lip') && f.clearance > 0.2)) {
       this.release(R);
       return 0;
     }
@@ -1594,7 +1645,7 @@ export class Bot {
     // The bot's feel for the pop, mirroring the sim's charge rule.
     let v = (3.0 + 2.6 * clamp(hold / 36, 0, 1)) * sim.sled.pop * sim.mood.pop;
     if (this.rampTop(x, z)) v *= 1.3;
-    return predictFlight(c, this.scene, sim.gravity, x, y, z, vx, Math.max(vyG, 0) + v, vz, giveUp);
+    return predictFlight(c, this.scene, sim.gravity, x, y, z, vx, Math.max(vyG, 0) + v, vz, giveUp, 480, this.lift, sim.mood.gravity);
   }
 
   private rampTop(x: number, z: number): boolean {
@@ -1737,7 +1788,7 @@ export class Bot {
       return;
     }
     if (first) this.perceive();
-    const f = predictFlight(this.course, first ? this.scene : null, sim.gravity, s.x, s.y, s.z, s.vx, s.vy, s.vz);
+    const f = predictFlight(this.course, first ? this.scene : null, sim.gravity, s.x, s.y, s.z, s.vx, s.vy, s.vz, -Infinity, 480, this.lift, sim.mood.gravity);
     const nEst = Math.max(1, Math.round(f.ticks * (1 + a.bias)));
     if (first && s.airTicks + f.ticks <= 16) {
       // Just a bump: keep the line's steering, but out of the spin zone so it lands straight.
@@ -1755,6 +1806,14 @@ export class Bot {
     // Air control: steer gently (inside the spin dead zone) so the touchdown lands on the line and
     // runs along it, allowing for the sideways push the rest of the trick will add.
     const r0 = this.rot();
+    // (Round 9, Gullhaven: over a gully's column the nudge holds its middle, as it holds a ring's line.)
+    const lx = this.lift ? this.course.liftX(s.z) : null;
+    if (lx !== null) {
+      const off = s.x - lx + s.vx * 0.5;
+      a.cruise = off > 0.5 ? -0.25 : off < -0.5 ? 0.25 : 0;
+      this.writeAirPlan(now);
+      return;
+    }
     let best = a.cruise;
     let bestC = this.landingCost(f, this.planNow(now, a.cruise), r0, f.ticks) - 0.3;
     for (let cr = -0.25; cr <= 0.25; cr += 0.25) {
@@ -1805,7 +1864,8 @@ export class Bot {
     const s = this.sim.s;
     const L = this.lines;
     const d = runPlan(r0, plan, n, n, this.rotP, this.res);
-    const aim = this.feed && this.feed.z > f.z ? this.feed.x - L.safeX(this.feed.z) : 0;
+    // (Round 9: on a kit's course, down on the line this rider rides, a gully's far shelf off its bold line.)
+    const aim = this.feed && this.feed.z > f.z ? this.feed.x - L.safeX(this.feed.z) : this.lift ? this.lineX(f.z) - L.safeX(f.z) : 0;
     const off = f.x + d.lat - L.safeX(f.z) - aim;
     const ahead = off + (s.vx + d.vlat - s.vz * L.dir(f.z)) * 0.5;
     let cost = (off < 0 ? -off : off) + (ahead < 0 ? -ahead : ahead);

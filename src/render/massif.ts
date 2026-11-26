@@ -36,10 +36,10 @@ const HERO_AZ = 24;
 export const VOLCANO_TOP = 1040;
 /** The sea of clouds' level relative to the lens (metres). */
 const SEA_Y = -330;
-const PEAK_ID: Record<HeroPeak, number> = { summit: 0, fang: 1, volcano: 2, cone: 3, hills: 3 };
+const PEAK_ID: Record<HeroPeak, number> = { summit: 0, fang: 1, volcano: 2, cone: 3, hills: 3, coast: 3 };
 /** How much of each hero's patch is ever above the sea of clouds (see the hero in VERT). */
-// (The Old Run's hills have no hero: its patch closes to a point and draws nothing.)
-const HERO_REACH: Record<HeroPeak, number> = { summit: 0.86, fang: 0.6, volcano: 0.72, cone: 0.56, hills: 0 };
+// (The Old Run's hills and Gullhaven's coast have no hero: its patch closes to a point and draws nothing.)
+const HERO_REACH: Record<HeroPeak, number> = { summit: 0.86, fang: 0.6, volcano: 0.72, cone: 0.56, hills: 0, coast: 0 };
 /** How far Frostfang's needle curves over at its tip (metres), away from the sun's side. */
 const FANG_LEAN = 360;
 /** How each mountain's ranges stand round its hero: crest height, how sharply the peaks rise out of
@@ -54,6 +54,8 @@ const RANGE: Record<HeroPeak, [number, number, number, number]> = {
   cone: [0.5, 0.85, 1.5, 0.22],
   // (Round 9: the Old Run's low wooded ridges round its lake, long and rounded, no peak standing out of them.)
   hills: [0.34, 0.75, 1.9, 0.2],
+  // (Round 9: Gullhaven's coast, massif.ts VERT's coast: the moors and the hills behind them, broad and low.)
+  coast: [0.4, 1.1, 1.7, 0.3],
 };
 
 /** 2D simplex noise (Ashima Arts / Stefan Gustavson, MIT), shared by the panorama, the sky dome's
@@ -104,6 +106,8 @@ export const SEA_GLSL = /* glsl */ `
   uniform vec3 uSeaWarm;
   uniform float uSeaLava;
   uniform float uSeaLake;
+  uniform float uSeaOcean;
+  uniform vec3 uSeaWater;
   ${NOISE}
   float seaBillow(vec2 p, float detail) {
     vec2 q = p * 0.0009 + vec2(uTime * 0.0032, uTime * 0.0011);
@@ -213,9 +217,70 @@ export const SEA_GLSL = /* glsl */ `
     col = mix(col, uSeaHaze, smoothstep(1200.0, 12000.0, t) * 0.92);
     return vec4(col, step(0.001, uSea));
   }
+  // Round 9, Gullhaven: the open sea at its own level (sky.ts setSeaLevel), seen from the cliff tops or the harbour.
+  // Water, never cloud or ground: a dark body in the water's own colour that mirrors more of the sky toward the
+  // horizon; the swell rolling in on the coast at a slant from the storm's side, its crests broken into strokes of
+  // light with a cool step behind each; whitecaps under the wind riding it; the low sun's path down it toward the lens
+  // in broken glints; the far sea lit where the sun reaches under the deck, the near sea in its shade; the far water
+  // melting into the horizon's haze. SEA_Q 0 (Low) drops the second swell and the fine octaves.
+  vec4 seaOcean(vec3 d) {
+    float t = uSeaY / min(d.y, -0.0004);
+    vec2 p = d.xz * t;
+    vec2 pw = p + cameraPosition.xz;
+    float detail = 1.0 - smoothstep(1500.0, 6500.0, t);
+    float graze = 1.0 - clamp(-d.y * 5.0, 0.0, 1.0);
+    vec2 sxz = normalize(uSeaSun.xz + vec2(0.0001, 0.0));
+    vec2 ld = normalize(d.xz);
+    float toSun = max(dot(ld, sxz), 0.0);
+    float up = smoothstep(-0.03, 0.04, uSeaSun.y);
+    vec2 k1 = normalize(vec2(-0.8, 0.6));
+    float w1 = dot(pw, k1) * (6.2831853 / 130.0) + snoise(pw * 0.0019 + 1.7) * 2.6 - uTime * 0.8;
+    float s1 = sin(w1);
+    float brk = smoothstep(-0.1, 0.6, snoise(vec2(dot(pw, vec2(k1.y, -k1.x)) * 0.0055, dot(pw, k1) * 0.0022) + 4.1));
+    float crest = smoothstep(0.88, 0.985, s1) * brk;
+    float trough = smoothstep(-0.15, -0.9, s1);
+    #if SEA_Q > 0
+      vec2 k2 = normalize(vec2(-0.95, -0.3));
+      float s2 = sin(dot(pw, k2) * (6.2831853 / 52.0) + snoise(pw * 0.0055 + 5.3) * 1.9 - uTime * 1.3);
+      crest = max(crest, smoothstep(0.9, 0.99, s2) * 0.28 * brk * detail);
+    #endif
+    // (Far crests fade before they crowd into lines a pixel apart.)
+    crest *= 0.25 + 0.75 * detail;
+    trough *= 0.3 + 0.7 * detail;
+    float fr = 0.1 + 0.9 * pow(graze, 3.0);
+    vec3 sky = mix(uSeaShade, uSeaHaze, smoothstep(0.6, 1.0, graze));
+    vec3 col = mix(uSeaWater, sky, fr * 0.72);
+    float far = smoothstep(1200.0, 7000.0, t);
+    col = mix(col, mix(uSeaHaze, uSeaRim, 0.35), far * pow(toSun, 3.0) * up * 0.55);
+    // (A shallow step only: drawn deep, the troughs read as cracks in ice, the third critic.)
+    col = mix(col, col * 0.88, trough * 0.6);
+    col = mix(col, mix(uSeaLit, uSeaHaze, 0.5), crest * (0.16 + 0.42 * graze));
+    float wc = snoise(pw * vec2(0.028, 0.045) + vec2(uTime * 0.04, 0.0));
+    #if SEA_Q > 0
+      wc = wc * 0.7 + snoise(pw * 0.1 + 2.0) * 0.3;
+    #endif
+    float cap = smoothstep(0.74, 0.8, wc) * smoothstep(0.55, 0.98, s1 * 0.5 + 0.5) * detail;
+    col = mix(col, uSeaLit, cap * 0.55);
+    // Broad patches of light and shade under the deck, drifting with the wind.
+    float shoal = snoise(pw * 0.0006 + vec2(uTime * 0.004, 0.0)) * 0.6 + snoise(pw * 0.0017 + 3.3) * 0.4;
+    col *= 0.86 + 0.22 * smoothstep(-0.5, 0.6, shoal);
+    float across = ld.x * sxz.y - ld.y * sxz.x;
+    float path = exp(-across * across / (0.0012 + 0.006 * graze)) * step(0.0, dot(ld, sxz)) * up;
+    // (The path's glints from the water's own broken surface, not the swell's even crests: those laid a ladder of blobs.)
+    float gl = snoise(pw * vec2(0.021, 0.047) + vec2(uTime * 0.11, -uTime * 0.07)) * 0.5 + 0.5;
+    #if SEA_Q > 0
+      gl = gl * 0.55 + (snoise(pw * vec2(0.06, 0.13) + uTime * 0.2) * 0.5 + 0.5) * 0.3 + (s1 * 0.5 + 0.5) * 0.15;
+    #endif
+    col = mix(col, uSeaRim * 1.35, path * (0.25 + 0.75 * smoothstep(0.55, 0.9, gl)) * 0.9);
+    col = mix(col, mix(uSeaHaze, uSeaRim, 0.5), pow(toSun, 8.0) * 0.3 * up * graze);
+    // (The far sea goes to a haze a step under the sky's band, so the horizon stays a line under a low sun: in the
+    // sky's own colour the sea and the band were one cream, the first critic.)
+    col = mix(col, mix(uSeaHaze, uSeaShade, 0.3), smoothstep(2500.0, 18000.0, t) * 0.85);
+    return vec4(col, 1.0);
+  }
   // (One return a function: a lake's early return read to the D3D compiler as an unset result.)
   vec4 seaOfClouds(vec3 d) {
-    return uSeaLake > 0.0 ? seaLake(d) : seaClouds(d);
+    return uSeaOcean > 0.0 ? seaOcean(d) : uSeaLake > 0.0 ? seaLake(d) : seaClouds(d);
   }
 `;
 
@@ -234,6 +299,8 @@ export function makeSeaUniforms() {
     uSeaWarm: { value: new Color(0, 0, 0) },
     uSeaLava: { value: 0 },
     uSeaLake: { value: 0 },
+    uSeaOcean: { value: 0 },
+    uSeaWater: { value: new Color() },
   };
 }
 export type SeaUniforms = ReturnType<typeof makeSeaUniforms>;
@@ -255,6 +322,9 @@ export function paletteSea(u: SeaUniforms, p: Palette): void {
   u.uSeaWarm.value.copy(p.deck.glow).multiplyScalar(p.massif.seaWarm * 0.85);
   u.uSeaLava.value = p.massif.seaLava;
   u.uSeaLake.value = p.massif.seaLake;
+  // (Round 9, Gullhaven: the open sea's water.)
+  u.uSeaOcean.value = p.massif.seaOcean;
+  u.uSeaWater.value.copy(p.massif.water);
 }
 
 const VERT = /* glsl */ `
@@ -265,6 +335,8 @@ const VERT = /* glsl */ `
   uniform float uPeak;
   uniform vec4 uRange;
   uniform float uReach;
+  uniform float uCoast;
+  uniform float uSeaY;
   varying vec3 vPos;
   varying vec3 vHero;
   ${NOISE}
@@ -388,6 +460,26 @@ const VERT = /* glsl */ `
       float w = (1.0 - smoothstep(0.05, 0.2, angDiff(az, uSunAz))) * step(0.0, uSunCap);
       float cap = r * uSunCap;
       h = mix(h, min(h, cap + max(h - cap, 0.0) * 0.1), w);
+      if (uCoast > 0.5) {
+        // Round 9, Gullhaven: a coast, not a ring of ranges. The sea to the horizon on its side (+x) and ahead past a
+        // far headland; on the other the cape's moors and the hills behind them, falling down the coast as the run
+        // does and standing out of the sea at its own level (uSeaY) on cliffs, never hanging over it.
+        float fwd = -p.y;
+        float wob = snoise(vec2(fwd * 0.00042, 3.7 + layer)) * 360.0 + snoise(vec2(fwd * 0.0013, 7.1 + layer)) * 130.0;
+        float coastX = -30.0 + 0.45 * wob + 1900.0 * smoothstep(2400.0, 4800.0, fwd);
+        float inland = coastX - p.x;
+        float land = smoothstep(-20.0, 90.0, inland);
+        float moor = 40.0 + min(inland, 4000.0) * 0.09 + 460.0 * uRange.x * pow(clamp(rg, 0.0, 1.2), uRange.y) * smoothstep(150.0, 1500.0, inland);
+        float hl = -0.22 * clamp(fwd, -900.0, 7000.0) + moor;
+        hl = max(hl, uSeaY + 140.0 * smoothstep(0.0, 70.0, inland));
+        h = mix(uSeaY - 70.0, hl, land);
+        // An island out to sea, well round from the sun's bearing (one under the sun covered its disc), a low whaleback of
+        // moor on rock cliffs: the far shore the sea needs to read as a sea and not a plain.
+        vec2 i2 = p - vec2(3900.0, -1700.0);
+        float isl = 1.0 - smoothstep(260.0, 520.0, length(i2 * vec2(1.0, 1.5)));
+        float ih = uSeaY - 70.0 + (120.0 + 70.0 * clamp(rg, 0.0, 1.0)) * smoothstep(0.0, 0.35, isl) * sqrt(isl);
+        h = max(h, ih);
+      }
       P = vec3(p.x, h, p.y);
       vHero = vec3(layer, position.x, v);
     } else {
@@ -491,6 +583,7 @@ const FRAG = /* glsl */ `
   uniform float uSweep;
   uniform float uSlide;
   uniform float uFaceTh;
+  uniform float uCoast;
   varying vec3 vPos;
   varying vec3 vHero;
   ${SEA_GLSL}
@@ -512,9 +605,12 @@ const FRAG = /* glsl */ `
     #endif
     float slope = N.y;
     // Snow holds on the gentler faces above a ragged snow line; the steep faces show their rock.
-    float snowLine = uSnowY + n1 * 120.0;
+    // (Round 9, Gullhaven's coast: the snow lies down to a little over the sea, wherever the lens is.)
+    float snowLine = (uCoast > 0.5 ? uSeaY + 70.0 : uSnowY) + n1 * (uCoast > 0.5 ? 40.0 : 120.0);
     // Higher up it clings to steeper faces too.
-    float hold = 0.36 - 0.12 * smoothstep(snowLine, snowLine + 600.0, vPos.y);
+    // (Gullhaven's coast: snow lies only on the gentle tops, its sea cliffs bare rock: snow down a cliff's striations
+    // drew icicle teeth on a frosted cake, the second critic.)
+    float hold = uCoast > 0.5 ? 0.62 : 0.36 - 0.12 * smoothstep(snowLine, snowLine + 600.0, vPos.y);
     float snow = smoothstep(hold, hold + 0.06, slope + n2 * 0.08 + n1 * 0.04) * smoothstep(snowLine - 12.0, snowLine + 12.0, vPos.y);
     float ice = 0.0;
     float crater = 0.0;
@@ -611,7 +707,7 @@ const FRAG = /* glsl */ `
     // Aerial perspective: distance dissolves the far ranges into the haze, warmer toward the sun,
     // and the valleys fill with haze above the sea of clouds.
     float hz = (1.0 - exp(-max(dist - 1000.0, 0.0) / uHazeDist)) * (layer > 2.5 ? 0.62 : 1.0) * uHazeK;
-    hz = max(hz, (1.0 - smoothstep(uSeaY, uSeaY + 380.0, vPos.y)) * 0.5);
+    hz = max(hz, (1.0 - smoothstep(uSeaY, uSeaY + (uCoast > 0.5 ? 140.0 : 380.0), vPos.y)) * (uCoast > 0.5 ? 0.25 : 0.5));
     vec2 sxz = normalize(uSeaSun.xz + vec2(0.0001, 0.0));
     vec3 haze = mix(uHaze, uHazeSun, pow(max(dot(normalize(dir.xz), sxz), 0.0), 4.0) * 0.7);
     col = mix(col, haze, clamp(hz + uVeil, 0.0, 1.0));
@@ -628,10 +724,13 @@ const FRAG = /* glsl */ `
     }
     // The crater glows (stronger at night).
     col += uLavaColor * crater * uLava * (0.8 + 0.2 * sin(uTime * 1.3));
+    // (Round 9, Gullhaven: the coast's rock darkens to a wet foot at the waterline, so a shore stands on the sea.)
+    if (uCoast > 0.5) col = mix(col, col * 0.55, (1.0 - smoothstep(uSeaY + 6.0, uSeaY + 40.0, vPos.y)) * 0.8);
     // The sea of clouds swallows the mountains' feet, round a billowing surface.
     if (uSea > 0.0) {
-      float surf = uSeaY + seaBillow(vPos.xz, 1.0) * 60.0 + 25.0;
-      float under = smoothstep(surf + 22.0, surf - 22.0, vPos.y);
+      // (Gullhaven's coast stands out of the sea on a shore, not out of billows.)
+      float surf = uCoast > 0.5 ? uSeaY + 2.0 : uSeaY + seaBillow(vPos.xz, 1.0) * 60.0 + 25.0;
+      float under = uCoast > 0.5 ? smoothstep(surf + 3.0, surf - 3.0, vPos.y) : smoothstep(surf + 22.0, surf - 22.0, vPos.y);
       if (under > 0.0) {
         vec4 s = seaOfClouds(dir);
         col = mix(col, s.rgb, under * s.a);
@@ -835,6 +934,7 @@ export class Massif {
         uSweep: { value: 0 },
         uSlide: { value: 0 },
         uFaceTh: { value: 0 },
+        uCoast: { value: 0 },
       },
       defines: { SEA_Q: 1 },
       vertexShader: VERT,
@@ -892,6 +992,7 @@ export class Massif {
     u.uHeroAz.value = this.heroAz;
     this.peak = p.massif.peak;
     u.uPeak.value = PEAK_ID[this.peak];
+    u.uCoast.value = this.peak === 'coast' ? 1 : 0;
     (u.uRange.value as Vector4).set(...RANGE[this.peak]);
     u.uReach.value = HERO_REACH[this.peak];
     // The panorama's own light: the sun's bearing swung out to the side and lifted, so the faces
@@ -949,7 +1050,7 @@ export class Massif {
   }
 
   /** The hero summit's height (metres from the lens's level), where its banner leaves the ridge. */
-  private static readonly SUMMIT_Y: Record<HeroPeak, number> = { summit: 1500, fang: 2100, volcano: VOLCANO_TOP - 20, cone: 1300, hills: 400 };
+  private static readonly SUMMIT_Y: Record<HeroPeak, number> = { summit: 1500, fang: 2100, volcano: VOLCANO_TOP - 20, cone: 1300, hills: 400, coast: 400 };
 
   private placePlume(): void {
     const show = this.tier !== 'low' && this.banner > 0.01;

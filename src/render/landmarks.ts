@@ -110,6 +110,8 @@ const LAMP_LIGHT: Record<BiomeId, [number, number, number]> = {
   blossom: [1, 0.6, 0.26],
   // Marigold: here the course's fuel colour is the world's own light.
   lantern: [1, 0.66, 0.2],
+  // (Gullhaven, round 9: Pinecrest's, never read: its course plans none of the five's places, landmarks.ts SitePlan, and stands its own, gullhavenworld.ts; its lamplight is its world's, LAMP_HEX.)
+  gullhaven: [1, 0.56, 0.2],
 };
 /** How much of the day must have gone for the windows to glow (journeyDusk). */
 const DUSK_LIT = 0.45;
@@ -132,6 +134,8 @@ const SPAN_KINDS: Record<BiomeId, Kind[]> = {
   blossom: ['torii', 'bridge'],
   // (lanternkit.ts builds them: a bell frame, an arched bridge strung with lights.)
   lantern: ['gate', 'bridge'],
+  // (Gullhaven, round 9: Pinecrest's, never read: its course plans none of the five's places, landmarks.ts SitePlan, and stands its own, gullhavenworld.ts.)
+  gullhaven: ['gate', 'bridge'],
 };
 // (Ember's vents throw spans high, so it gets the most bank pieces, its basalt lodge among them.)
 const BANK_KINDS: Record<BiomeId, Kind[]> = {
@@ -143,6 +147,8 @@ const BANK_KINDS: Record<BiomeId, Kind[]> = {
   blossom: ['pagoda', 'guardian', 'hut'],
   // (A lamp tower, and a great standing lamp.)
   lantern: ['tower', 'guardian', 'tower'],
+  // (Gullhaven, round 9: Pinecrest's, never read: its course plans none of the five's places, landmarks.ts SitePlan, and stands its own, gullhavenworld.ts.)
+  gullhaven: ['hut', 'tower', 'jump'],
 };
 const ENC_KINDS: Record<BiomeId, Kind[]> = {
   alpine: ['gallery'],
@@ -152,10 +158,12 @@ const ENC_KINDS: Record<BiomeId, Kind[]> = {
   volcanic: ['lavatunnel', 'gallery'],
   blossom: ['toriirow', 'gallery'],
   lantern: ['gallery'],
+  // (Gullhaven, round 9: Pinecrest's, never read: its course plans none of the five's places, landmarks.ts SitePlan, and stands its own, gullhavenworld.ts.)
+  gullhaven: ['gallery'],
 };
 /** How likely a section's piece is to span the run: narrow ones mostly (a ravine's walls hide anything on
  *  its banks), wide ones mostly a bank piece. */
-const SPAN_CHANCE: Record<SectionKind, number> = { chute: 0.8, gully: 0.85, ravine: 1, treerun: 0.7, cruise: 0.55, switchbacks: 0.5, benches: 0.35, bowl: 0.3, split: 0.3, fork: 0.3, lake: 0.15, terraces: 0.2, leap: 0.15, start: 0, street: 0, bridge: 0, tunnel: 0, finish: 0, track: 0, labyrinth: 0, outrun: 0, house: 0 };
+const SPAN_CHANCE: Record<SectionKind, number> = { chute: 0.8, gully: 0.85, ravine: 1, treerun: 0.7, cruise: 0.55, switchbacks: 0.5, benches: 0.35, bowl: 0.3, split: 0.3, fork: 0.3, lake: 0.15, terraces: 0.2, leap: 0.15, start: 0, street: 0, bridge: 0, tunnel: 0, finish: 0, track: 0, labyrinth: 0, outrun: 0, house: 0, cliffpath: 0, geo: 0, beacon: 0, descent: 0, sheds: 0, harbour: 0 };
 /** Sections whose walls stand close: a tall bank piece behind one rears over the run. */
 const WALLED: ReadonlySet<SectionKind> = new Set<SectionKind>(['ravine', 'gully', 'tunnel', 'treerun']);
 /** Kinds that gather a crowd on the banks (both banks for spans, mostly their own side otherwise). */
@@ -508,8 +516,9 @@ export class SitePlan {
     const c = this.course;
     // (Round 9: the Old Run stands none of the five's pieces, no grandstands at its start, no lift line, no gate or
     // hut down its banks; its own world builds the hotel, the start and timing houses and the parapet's lamps,
-    // oldrunworld.ts.)
-    if (c.kit?.id === 'oldrun') return [];
+    // oldrunworld.ts. Nor Gullhaven: its beacon, its fence, the lighthouse and the harbour are its own world's,
+    // gullhavenworld.ts.)
+    if (c.kit?.id === 'oldrun' || c.kit?.id === 'gullhaven') return [];
     const end = c.finishZ + c.runOut;
     const seed = c.seed;
     const secs: Section[] = [];
