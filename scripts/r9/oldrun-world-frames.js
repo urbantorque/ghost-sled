@@ -9,7 +9,8 @@
 // lights the run at its other hour through palette.ts setHour, as the title's pick would once the mountain is
 // registered), mirror (true turns the picture over, World.setMirrored), spots ([{ name, z, line, v }]), skip (seconds
 // to wait at the first spot before shooting, for the world's on-demand module and the forest to settle), query (more of
-// the page's query, e.g. '&far=0&ghosts=0').
+// the page's query, e.g. '&far=0&ghosts=0'), m (ride the registered mountain by its index, MOUNTAINS[5], instead of
+// the seed switch: its title, hour and mirror switches then work as for the five).
 async (page) => {
   const c = Object.assign(
     {
@@ -42,7 +43,7 @@ async (page) => {
       localStorage.clear();
     } catch {}
   });
-  await page.goto(`${c.base}?platform=mock&debug&save=fresh&tier=${c.tier}&autoride=1&seed=9b05688c${c.query}`);
+  await page.goto(`${c.base}?platform=mock&debug&save=${c.save ?? 'fresh'}&tier=${c.tier}&autoride=1${c.m !== undefined ? '&m=' + c.m : '&seed=9b05688c'}${c.query}`);
   await page.waitForFunction(() => window.__gs && (window.__gs.phase === 'run' || window.__gs.dailyReady), null, { timeout: 300000 });
   await page.evaluate(() => window.__gs.phase === 'run' || window.__gs.ride());
   await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run' && window.__gs.run, null, { timeout: 120000 });

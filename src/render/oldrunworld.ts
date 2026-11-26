@@ -10,7 +10,11 @@ import { withChamfer } from './chamfer';
 import { makeToonMaterial, shared } from './materials';
 import { pushLocalLight } from './lights';
 import { HOTEL, START_HOUSE, TIMING, isOldRun } from './oldrunplan';
+import { OldRunPieces } from './oldrunpieces';
+import type { Particles } from './particles';
 import type { Detail } from './postfx/tiers';
+import type { Beat } from '../game/beats';
+import { reduced } from '../ui/motion';
 import type { ViewMode } from './world';
 
 // The Old Run's own world (round 9, notes/r9-oldrun-world.md), loaded with its course (world.ts imports this file on
@@ -94,8 +98,12 @@ export class OldRunWorld {
   /** The hotel's windows and the timing house's, lit as the day goes (world y, for their lights' pools). */
   private litZ: number[] = [];
 
-  constructor() {
+  /** The three set pieces' props (oldrunpieces.ts): the bells, the split's board, the Horseshoe's lanterns. */
+  private readonly pieces: OldRunPieces;
+
+  constructor(particles: Particles | null = null) {
     this.root.name = 'oldrun-world';
+    this.pieces = new OldRunPieces(particles);
     this.mat = makeToonMaterial({ coolShade: 0.5, stone: true });
     this.glow = makeToonMaterial({ coolShade: 0.4, emissive: LAMP_HEX.clone(), emissiveStrength: 0 });
   }
@@ -113,11 +121,17 @@ export class OldRunWorld {
   }
 
   reset(): void {
-    // (Nothing of a run is kept yet: the set pieces' props join here when the sim lands them.)
+    this.pieces.reset();
+  }
+
+  /** The set pieces' named moments this frame (a run's only). */
+  beats(list: readonly Beat[], s: Snap): void {
+    if (this.course && isOldRun(this.course)) this.pieces.beats(list, s);
   }
 
   private dispose(): void {
     for (const o of [...this.root.children]) this.root.remove(o);
+    this.pieces.clear();
     for (const o of this.owned) o.dispose();
     this.owned.length = 0;
     this.lamps = new Float32Array(0);
@@ -152,6 +166,7 @@ export class OldRunWorld {
       this.timingHouse(c, low);
       this.finishLine(c);
     });
+    this.root.add(this.pieces.root);
   }
 
   // ------------------------------------------------------------------ the parapet
@@ -597,8 +612,9 @@ export class OldRunWorld {
 
   // ------------------------------------------------------------------ each frame
 
-  update(_dt: number, _time: number, _mode: ViewMode, s: Snap, _sim: Sim | null, _camera: PerspectiveCamera): void {
+  update(_dt: number, time: number, mode: ViewMode, s: Snap, sim: Sim | null, _camera: PerspectiveCamera): void {
     if (!this.course || this.lampN === 0) return;
+    this.pieces.update(this.course, time, s, sim, mode === 'run', this.detail === 'low', reduced());
     // The lamps' glass and the windows light as the day goes (the palette's lamps, by the journey): dark glass by
     // day, the lamp's light at dusk and by Lamplight.
     const lampK = shared.uLampK.value as number;

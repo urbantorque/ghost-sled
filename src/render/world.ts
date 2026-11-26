@@ -895,7 +895,7 @@ export class World {
     if (this.oldrunLoading || !isOldRun(this.course)) return;
     this.oldrunLoading = true;
     void import('./oldrunworld').then((m) => {
-      const w = new m.OldRunWorld();
+      const w = new m.OldRunWorld(this.particles);
       w.setDetail(this.quality.detail);
       w.setCourse(this.course);
       this.oldrunRoot.add(w.root);
@@ -1185,6 +1185,7 @@ export class World {
     this.spirit.beats(beats);
     if (v.mode === 'run') this.marquee.beats(beats, s);
     if (v.mode === 'run') this.lantern.beats(beats, s);
+    if (v.mode === 'run') this.oldrun?.beats(beats, s);
     this.flash = Math.max(this.flash, this.spirit.takeFlash());
     this.moments.update(v, dt);
     this.setPieces.update(s.z, this.quality.viewChunks * CHUNK_LEN, tmpV.set(s.x, s.y, -s.z), v.time, v.mode === 'run' ? beats : NO_BEATS);
