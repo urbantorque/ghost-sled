@@ -6,6 +6,7 @@ import { addLightSource, pushLocalLight } from './lights';
 import { makeSnowMaterial, shared } from './materials';
 import { LIP, LIP_FROM, lipDrop, type OverlookPlan, type Overlooks } from './overlook';
 import { groomedAt } from './snowsurf';
+import { townColumns, townRows } from './gablefallplan';
 
 // Terrain chunks that bend with the corridor: each row of vertices is laid out relative to the
 // centreline at that z, so the playable lane gets dense vertices and the far forest floor is
@@ -106,6 +107,10 @@ export function lateralOffsets(course: Course, d: TerrainDetail): number[] {
   // Low (reach 60) keeps the original coarse columns.
   for (const s of d.reach > 60 ? OUTER_STEPS_FINE : OUTER_STEPS) if (s > 10 && s <= d.reach) out.push(-(hw + s), hw + s);
   for (let k = 0; k <= n; k++) out.push(-inner + (k * inner * 2) / n);
+  // (Round 9, Gablefall: a pair of columns either side of the house fronts, a corner drift's inner side and the rows'
+  // backs, so each is drawn sheer: at Low's 1.6 m a house front was a snow ramp reaching a metre and a half into the
+  // street. gablefallplan.ts townColumns.)
+  if (course.kit?.id === 'gablefall') for (const a of townColumns()) out.push(-a, a);
   out.sort((a, b) => a - b);
   return out;
 }
@@ -125,6 +130,8 @@ function rowPositions(course: Course, index: number, d: TerrainDetail): number[]
     for (const dr of zn.drops) for (let z = dr.z - 1; z <= dr.z + dr.len + 2; z += 0.6) if (z > z0 && z < z1) rows.add(z);
     for (const m of zn.moguls) for (let z = m.z0; z <= m.z1; z += 0.8) if (z > z0 && z < z1) rows.add(z);
   }
+  // (Round 9, Gablefall: a pair of rows at each end of a roof's step, so it is drawn sheer. gablefallplan.ts townRows.)
+  townRows(course, z0, z1, rows);
   return [...rows].sort((a, b) => a - b);
 }
 
@@ -162,6 +169,9 @@ class ChunkJob {
   /** Round 9, Gullhaven: its seaward side past the fence is the sea cliff (ground.ts cliffGround), bare rock where it
    *  falls, with no drifts on it. */
   private readonly cliff: boolean;
+  /** Round 9, Gablefall: its ground past the edges is its town's (lanes, paving, the hillside under the church), no drifts
+   *  heaped on it and no rock: its houses' walls are its world's (gablefallworld.ts), the snow on its roofs this terrain. */
+  private readonly town: boolean;
   private ramps: Ramp[] = [];
   private drift: [number, number] = [0, 0];
   row = 0;
@@ -188,6 +198,7 @@ class ChunkJob {
     this.track = course.kit?.id === 'oldrun' ? new Float32Array(n * 4) : null;
     this.gnd = groundOf(course);
     this.cliff = course.kit?.id === 'gullhaven';
+    this.town = course.kit?.id === 'gablefall';
   }
 
   get done(): boolean {
@@ -298,7 +309,7 @@ class ChunkJob {
         let gz = sz;
         this.snow[p * 2] = off;
         const sea = this.cliff && side > 0 && ed > CLIFF_FROM;
-        if (ed > DRIFT_FROM && !sea) {
+        if (ed > DRIFT_FROM && !sea && !this.town) {
           // Past the treeline: the drifts lift the snow, and their slope bends the normal too.
           let lift = snowDrift(x, z, ed, this.drift)[0];
           this.snow[p * 2 + 1] = this.drift[1];
@@ -377,7 +388,7 @@ class ChunkJob {
         // (Round 9: the Old Run's crest is snow all along. Where a bend sweeps it across a row, its face falls steeply
         // down the run, and the ledge-face test painted it as Pinecrest's strata: a blind critic read a dark slab of
         // rock on the bank.)
-        this.rock[rq] = tr ? 0 : Math.max(rockWeight(ridge, wall, fall, limit, ed, off, sx, sz, z, this.kick[kq] > 0), cRock, sea ? smoothK(0.7, 1.5, Math.sqrt(gx * gx + gz * gz)) : 0);
+        this.rock[rq] = tr || this.town ? 0 : Math.max(rockWeight(ridge, wall, fall, limit, ed, off, sx, sz, z, this.kick[kq] > 0), cRock, sea ? smoothK(0.7, 1.5, Math.sqrt(gx * gx + gz * gz)) : 0);
         this.rock[rq + 1] = led ? y - lipY : y - by;
         this.rock[rq + 2] = led ? x : z;
         // (A wall on one bank only ramps its own ice by its height: its crest casts on the floor only in a canyon.)

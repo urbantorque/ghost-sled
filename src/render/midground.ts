@@ -7,6 +7,7 @@ import { LIP_FROM, WIDE, flankMode, type OverlookPlan, type Overlooks } from './
 import { Palette } from './palette';
 import { MID_ROW, groundOf } from './ground';
 import { isGullhaven, seaLevelOf } from './gullhavenplan';
+import { isGablefall } from './gablefallplan';
 import { VILLAGE_SLOTS, buildHamlet, buildVillage, makeVillageMaterial, type VillageBuild, type VillageLight } from './village';
 
 // The middle of the world: the mountainside from the edge of the terrain mesh out to about a
@@ -513,6 +514,9 @@ export class Midground {
    *  and that sea's level (world y). */
   private coast = false;
   private sea = 0;
+  /** Round 9, Gablefall: a town on a valley side (its own world stands the houses near the run; past them the ground
+   *  rolls on at the town's level, no forest, no villages or hamlets of the five's, no mountain wall). */
+  private town = false;
   private cfg: TierCfg;
   /** Signed lateral offsets of the columns (from the corridor centre, at the reference frame) and how
    *  each is made: 0 outer (e = metres past the reference edge), 1 the tier's own terrain edge,
@@ -590,6 +594,7 @@ export class Midground {
     this.biome = course.biome;
     this.coast = isGullhaven(course);
     this.sea = this.coast ? seaLevelOf(course) : 0;
+    this.town = isGablefall(course);
     this.cfg = TIERS[tier];
     this.root.name = 'midground';
     this.shoulder = new Mesh(this.geo, this.shoulderMat);
@@ -629,6 +634,7 @@ export class Midground {
       this.biome = course.biome;
       this.coast = isGullhaven(course);
       this.sea = this.coast ? seaLevelOf(course) : 0;
+      this.town = isGablefall(course);
       this.villages.clear();
       this.hamlets.clear();
       this.clear();
@@ -785,7 +791,7 @@ export class Midground {
     v = null;
     const seed = this.course.seed;
     // (Round 9: Gullhaven has no valley under it, only the sea, and its harbour is its own world's.)
-    if (hashf(seed, k, 11) < 0.8 && !this.coast) {
+    if (hashf(seed, k, 11) < 0.8 && !this.coast && !this.town) {
       const z = STAIR * k + STAIR * FLAT * (0.42 + 0.16 * hashf(seed, k, 13));
       // On whichever side already falls away there (a coin toss where both do).
       const l = this.modeRaw(z, -1);
@@ -805,7 +811,7 @@ export class Midground {
     if (v !== undefined) return v;
     v = null;
     const seed = this.course.seed;
-    if (hashf(seed, j, 21) < 0.85 && !this.coast) {
+    if (hashf(seed, j, 21) < 0.85 && !this.coast && !this.town) {
       const z = HAMLET_STEP * j + HAMLET_STEP * (0.15 + 0.7 * hashf(seed, j, 22));
       const first = hashf(seed, j, 23) < 0.5 ? -1 : 1;
       for (let t = 0; t < 2 && !v; t++) {
@@ -824,6 +830,8 @@ export class Midground {
   private modeRaw(z: number, side: number): number {
     // (Round 9, Gullhaven: the sea cliff on the right falls all the way, the moor on the left always climbs.)
     if (this.coast) return side > 0 ? 0 : 1;
+    // (Gablefall: the valley side's town both ways, gently rolling, never a spur over the roofs.)
+    if (this.town) return 0.3;
     return flankMode(this.course.seed, z, side);
   }
 
@@ -900,6 +908,13 @@ export class Midground {
       out.yF = this.sea - 40;
       out.wall = 0;
       out.spur = 120 + 70 * noise1(seed ^ 0x4e3, z / 430);
+    }
+    if (this.town) {
+      // (Round 9, Gablefall: the valley side the town stands on rolls on past its houses at about the town's level, a
+      // little lower where it falls toward the river; no mountain wall over it, the far side of the valley its world's.)
+      out.yF = out.yE - 24;
+      out.wall = 0;
+      out.spur = 40 + 30 * noise1(seed ^ (side > 0 ? 0x6c1 : 0x4e3), z / 430);
     }
     out.vil = null;
     out.ham = null;
@@ -980,8 +995,8 @@ export class Midground {
     if (h) f *= 0.1 + 0.9 * smooth(HAMLET_R * 0.8, HAMLET_R + 40, Math.hypot(e - h.e, z - h.z));
     if (this.biome === 'volcanic') f *= 0.6;
     else if (this.biome === 'glacier') f *= 0.7;
-    // (Round 9: Gullhaven's moor has no forest.)
-    else if (this.coast) f = 0;
+    // (Round 9: Gullhaven's moor has no forest, nor Gablefall's town.)
+    else if (this.coast || this.town) f = 0;
     return f;
   }
 

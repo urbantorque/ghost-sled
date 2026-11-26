@@ -215,8 +215,9 @@ export class OverlookPlan {
     if (this.done) return;
     this.done = true;
     // (Round 9: the Old Run's banks are its parapet's crest and its forest; no bank opens over a panorama there. Gullhaven's
-    // seaward side is open all the way down, over the sea, never a panorama over a sea of cloud.)
-    if (this.course.kit?.id === 'oldrun' || this.course.kit?.id === 'gullhaven') return;
+    // seaward side is open all the way down, over the sea, never a panorama over a sea of cloud. Gablefall's banks are its
+    // town's houses, gablefallworld.ts: no panorama, ART.md 15.)
+    if (this.course.kit?.id === 'oldrun' || this.course.kit?.id === 'gullhaven' || this.course.kit?.id === 'gablefall') return;
     const end = this.course.finishZ + this.course.runOut;
     while (this.nextZ <= end) this.planNext(end);
     this.close(end);

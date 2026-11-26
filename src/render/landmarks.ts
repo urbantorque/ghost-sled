@@ -525,8 +525,9 @@ export class SitePlan {
     // (Round 9: the Old Run stands none of the five's pieces, no grandstands at its start, no lift line, no gate or
     // hut down its banks; its own world builds the hotel, the start and timing houses and the parapet's lamps,
     // oldrunworld.ts. Nor Gullhaven: its beacon, its fence, the lighthouse and the harbour are its own world's,
-    // gullhavenworld.ts.)
-    if (c.kit?.id === 'oldrun' || c.kit?.id === 'gullhaven') return [];
+    // gullhavenworld.ts. Nor Gablefall: its church, its market halls, its houses and the river's bridge are its own world's,
+    // gablefallworld.ts.)
+    if (c.kit?.id === 'oldrun' || c.kit?.id === 'gullhaven' || c.kit?.id === 'gablefall') return [];
     const end = c.finishZ + c.runOut;
     const seed = c.seed;
     const secs: Section[] = [];

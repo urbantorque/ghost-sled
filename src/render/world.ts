@@ -62,6 +62,8 @@ import type { OldRunWorld } from './oldrunworld';
 import { isOldRun, oldrunClearings } from './oldrunplan';
 import type { GullhavenWorld } from './gullhavenworld';
 import { gullhavenClearings, isGullhaven, seaLevelOf } from './gullhavenplan';
+import type { GablefallWorld } from './gablefallworld';
+import { gablefallClearings, isGablefall } from './gablefallplan';
 import { LanternRow } from './lanternrow';
 import type { Fireworks } from './fireworks';
 import type { TrailDef } from '../game/garage';
@@ -280,6 +282,12 @@ export class World {
   private gullhaven: GullhavenWorld | null = null;
   private gullhavenLoading = false;
   private readonly gullhavenRoot = new Object3D();
+  /** Round 9: Gablefall's own world (gablefallworld.ts: the houses under its roofs' snow, the town past its rows, the
+   *  church at its head, its market squares, the river and its bridge at its foot), loaded on demand the first time its
+   *  course is drawn, into its own root. Null until then and on every other mountain. */
+  private gablefall: GablefallWorld | null = null;
+  private gablefallLoading = false;
+  private readonly gablefallRoot = new Object3D();
   /** Round 8, the light lane: the Lantern Row's lit lanterns over the finish town and the title shot. */
   private readonly row = new LanternRow();
   /** The rails and the marks of the leaps and forks (rails.ts): one draw, on every tier. */
@@ -524,6 +532,8 @@ export class World {
       oldrunClearings(this.course, z0, z1, out);
       // (Gullhaven's sea cliff and moor, its world's alone: gullhavenplan.ts.)
       gullhavenClearings(this.course, z0, z1, out);
+      // (Gablefall's town, its world's alone: gablefallplan.ts.)
+      gablefallClearings(this.course, z0, z1, out);
     };
     this.spirit.setQuality(quality.particleBudget, quality.bloom);
     this.trailForms.setLow(quality.detail === 'low');
@@ -536,6 +546,7 @@ export class World {
       this.lantern.root,
       this.oldrunRoot,
       this.gullhavenRoot,
+      this.gablefallRoot,
       this.row.root,
       this.sky.root,
       this.terrain.root,
@@ -590,6 +601,7 @@ export class World {
     this.lakeMirror = new LakeMirror(this.renderer);
     this.syncOldRun();
     this.syncGullhaven();
+    this.syncGablefall();
     this.applyWeather();
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -763,6 +775,7 @@ export class World {
     this.lantern.setDetail(q.detail);
     this.oldrun?.setDetail(q.detail);
     this.gullhaven?.setDetail(q.detail);
+    this.gablefall?.setDetail(q.detail);
     this.row.setDetail(q.detail);
     this.charmGates.setLow(q.detail === 'low');
     this.life.setQuality(q.detail, q.forestDensity);
@@ -808,6 +821,7 @@ export class World {
     this.lantern.setCourse(c);
     this.syncOldRun();
     this.syncGullhaven();
+    this.syncGablefall();
     this.row.setCourse(c);
     this.sky.setPalette(this.palette);
     this.setGhostGlow(this.palette.ghostGlow);
@@ -949,6 +963,24 @@ export class World {
       w.setCourse(this.course);
       this.gullhavenRoot.add(w.root);
       this.gullhaven = w;
+    });
+  }
+
+  /** Round 9: Gablefall's world, loaded the first time its course is drawn (nothing of it is in the first download), and
+   *  handed every course after (it empties itself on any other mountain). */
+  private syncGablefall(): void {
+    if (this.gablefall) {
+      this.gablefall.setCourse(this.course);
+      return;
+    }
+    if (this.gablefallLoading || !isGablefall(this.course)) return;
+    this.gablefallLoading = true;
+    void import('./gablefallworld').then((m) => {
+      const w = new m.GablefallWorld();
+      w.setDetail(this.quality.detail);
+      w.setCourse(this.course);
+      this.gablefallRoot.add(w.root);
+      this.gablefall = w;
     });
   }
 
@@ -1145,6 +1177,7 @@ export class World {
     this.lantern.reset();
     this.oldrun?.reset();
     this.gullhaven?.reset();
+    this.gablefall?.reset();
     this.charmGates.reset();
     this.sdLook = null;
     this.dashK = 0;
@@ -1253,6 +1286,7 @@ export class World {
     this.lantern.update(dt, v.time, v.mode, s, v.sim, this.cam.camera, this.palette);
     this.oldrun?.update(dt, v.time, v.mode, s, v.sim, this.cam.camera);
     this.gullhaven?.update(dt, v.time, v.mode, s, v.sim, this.cam.camera, this.palette);
+    this.gablefall?.update(dt, v.time, v.mode, s, v.sim, this.cam.camera, this.palette);
     this.row.update(s.z, v.mode, this.palette);
     // Named moments after the raw events: the camera, the ghost layer, then the world's own.
     this.cam.beats(beats, feel);
@@ -1264,6 +1298,7 @@ export class World {
     if (v.mode === 'run') this.lantern.beats(beats, s);
     if (v.mode === 'run') this.oldrun?.beats(beats, s);
     if (v.mode === 'run') this.gullhaven?.beats(beats, s);
+    if (v.mode === 'run') this.gablefall?.beats(beats, s);
     this.flash = Math.max(this.flash, this.spirit.takeFlash());
     this.moments.update(v, dt);
     this.setPieces.update(s.z, this.quality.viewChunks * CHUNK_LEN, tmpV.set(s.x, s.y, -s.z), v.time, v.mode === 'run' ? beats : NO_BEATS);
