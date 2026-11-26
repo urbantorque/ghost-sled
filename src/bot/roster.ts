@@ -124,10 +124,32 @@ export const ROSTER: readonly Rider[] = [
   },
 ];
 
-const BY_NAME = new Map(ROSTER.map((r) => [r.name, r]));
-const BY_KEY = new Map(ROSTER.map((r) => [r.key, r]));
+/** Round 9: a new mountain's home riders (the brief's decision 7: The Twelve stays twelve, with homes 0 to 4). Named,
+ *  with looks, a style and a skill, riding their own mountain's pool alone (`home` its index in MOUNTAINS); never a
+ *  duel, so no showdown, page or ladder of The Twelve's knows them. The mastery board has a star for each. */
+export const HOME_RIDERS: readonly Rider[] = [
+  // The Old Run (index 5): the hotel's own.
+  {
+    key: 'orsolo', name: 'Count Orsolo', hat: 'stovepipe', emblem: 'moon', accent: '#E9DCC4', sled: 4, style: 'racer', skill: 0.86, home: 5,
+    bio: 'Rode the first race on the Old Run in a borrowed coat. Still wears it.',
+    says: { pass: ['After you. No, after me.', 'Mind the glaze.'], passed: ['Splendid.', 'Hm. Bold.'], won: ['As in the old days.'], lost: ['Well taken, well taken.'] },
+  },
+  {
+    key: 'fennick', name: 'Gus Fennick', hat: 'aviator', emblem: 'star', accent: '#D8E6F2', sled: 2, style: 'liner', skill: 0.76, home: 5,
+    bio: 'Kept the Old Run’s ice for forty winters. Knows where every bend wants him.',
+    says: { pass: ['High on the wall.', 'Too low.'], passed: ['Ice remembers.', 'Fair.'], won: ['Forty winters.'], lost: ['You rode it right.'] },
+  },
+  {
+    key: 'lotte', name: 'Lotte Bell', hat: 'bobble', emblem: 'bell', accent: '#F2E2FF', sled: 0, style: 'collector', skill: 0.58, home: 5,
+    bio: 'The bellringer’s daughter. Rings every bell on the way down, and counts them.',
+    says: { pass: ['Ding!', 'Six bells!'], passed: ['Oh!', 'You missed one.'], won: ['Every bell!'], lost: ['Again? Again!'] },
+  },
+];
 
-/** The signature rider behind a ghost's name, or null for the crowd. */
+const BY_NAME = new Map([...ROSTER, ...HOME_RIDERS].map((r) => [r.name, r]));
+const BY_KEY = new Map([...ROSTER, ...HOME_RIDERS].map((r) => [r.key, r]));
+
+/** The signature rider behind a ghost's name (one of The Twelve, or a mountain's home rider), or null for the crowd. */
 export function riderByName(name: string | null | undefined): Rider | null {
   return (name && BY_NAME.get(name)) || null;
 }

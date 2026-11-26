@@ -1,4 +1,4 @@
-import { ROSTER } from '../bot/roster';
+import { HOME_RIDERS, ROSTER } from '../bot/roster';
 import { MOUNTAINS } from '../sim/mountains';
 import type { Course } from '../sim/course';
 import { planMarquee } from './marquee';
@@ -65,7 +65,7 @@ export function masteryBoard(course: Course, mountainId: string, rec: MasteryRec
   // Each set piece's verb beaten, in any of its variants (the board's line is its goal). A round 5 sweep, and a
   // round 6 win of a set piece that has changed since, are still in the save and claim nothing.
   for (const mq of planMarquee(course, mountainId)) stars.push({ key: `mq:${mq.key}`, label: `${mq.name}: ${mq.goal}`, group: 'moment', done: momentDone(rec, mq.key, mq.verb) });
-  for (const r of ROSTER) if (r.home === m) stars.push({ key: `rider:${r.key}`, label: `Beat ${r.name} to the line`, group: 'rider', done: rec.riders.includes(r.key) });
+  for (const r of [...ROSTER, ...HOME_RIDERS]) if (r.home === m) stars.push({ key: `rider:${r.key}`, label: `Beat ${r.name} to the line`, group: 'rider', done: rec.riders.includes(r.key) });
   stars.push({ key: 'clean', label: 'Finish with no wipeout and no ward', group: 'clean', done: rec.clean });
   return stars;
 }

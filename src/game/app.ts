@@ -36,7 +36,7 @@ import { GhostEntry, GhostManager, GhostPose, RaceEvent, emptyPose, realStanding
 import { type CupMountain, type RideMountain, cupChaos, cupMountain, weekKey, weekNumber } from './cup';
 import { type Graveyard, bundledGraveyards, graveyards } from './graveyards';
 import { planMarquee } from './marquee';
-import { ROSTER, riderByName } from '../bot/roster';
+import { HOME_RIDERS, ROSTER, riderByName } from '../bot/roster';
 import { STAR_GIFTS, masteryBoard, readMastery, settleMastery } from './mastery';
 import { PAINTS, paintById } from './paints';
 import { SHELVES, type ShelfId, freeItem, hatById, scarfById, soundById, trailById } from './garage';
@@ -2758,7 +2758,7 @@ export class App {
       const rec = readMastery(d.mastery[key]);
       // (A mirror's board is its own, under its own key; its riders are the mountain's.)
       const pool = poolFor(this.mountain.id);
-      const riderTimes = new Map(ROSTER.filter((r) => r.home === mi).map((r) => {
+      const riderTimes = new Map([...ROSTER, ...HOME_RIDERS].filter((r) => r.home === mi).map((r) => {
         const g = pool.find((p) => p.name === r.name);
         return [r.key, g && (g.finishTick ?? -1) > 0 ? (g.finishTick as number) / 60 : null] as const;
       }));

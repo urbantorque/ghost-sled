@@ -52,7 +52,8 @@
 import { CHUNK_LEN, Course, type Ledge, type Obstacle, type SectionKind, courseFor } from '../../src/sim/course';
 import { MOUNTAINS, type MountainDef } from '../../src/sim/mountains';
 import { planLegends, planMoments, gateX, pathX, machineZ } from '../../src/sim/moments';
-import { Sim } from '../../src/sim/sim';
+import { Sim, TRACK_BANK, TRACK_DAMP, wallYaw } from '../../src/sim/sim';
+import { WALL_LOW, trackAt, wallU } from '../../src/sim/oldrun';
 import { type Kit, type Pilot, classic, clumsy, spenderFor, trickster } from './labpilots';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -423,8 +424,9 @@ export function courseFacts(def: MountainDef, smp?: Samples): CourseFacts {
 
 // ---------------------------------------------------------------- rides
 
-/** What lab.ts gives its pilots from moments.ts. */
-const KIT: Kit = { gateX, pathX, machineZ };
+/** What lab.ts gives its pilots from moments.ts (round 9: and the Old Run's track, so its skilled pilots hold a height on
+ *  its walls; a course with no kit never reads it). */
+const KIT: Kit = { gateX, pathX, machineZ, track: { wallYaw, damp: TRACK_DAMP, bank: TRACK_BANK } };
 
 /** The lab's seeds and rolls, exactly (lab.ts: seeds 1234 + i x 37, the roll's seed from the pilot's). */
 export const seedOf = (i: number): number => 1234 + i * 37;
@@ -440,7 +442,18 @@ export interface TickView {
 /** A new mountain's signature mechanic: in play on this tick or not. The mountain lanes write these, by id. */
 export type Mechanic = (t: TickView) => boolean;
 /** Filled by the mountain lanes in milestone 3 (one entry per new mountain id). Empty today: every mountain reads 0. */
-export const MECHANICS: Record<string, Mechanic> = {};
+export const MECHANICS: Record<string, Mechanic> = {
+  // The Old Run (notes/r9-oldrun.md section 1): on the snow, up a banked wall off the floor (a wall a bend has raised
+  // over a straight's 2.6 m), the line the mountain is about.
+  oldrun: ({ sim }) => {
+    const s = sim.s;
+    if (!s.grounded || s.tumble > 0) return false;
+    const w = wallU(sim.course, s.x, s.z);
+    if (w.u <= 0) return false;
+    const t = trackAt(sim.course, s.z);
+    return (w.side > 0 ? t.hr : t.hl) > WALL_LOW + 0.1;
+  },
+};
 
 export interface Flight {
   z0: number;

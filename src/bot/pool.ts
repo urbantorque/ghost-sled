@@ -3,11 +3,11 @@ import { clamp } from '../sim/dmath';
 import { Rng, hash32 } from '../sim/prng';
 import { RunRecord, recordToString, replayRecord } from '../sim/replay';
 import { Sim } from '../sim/sim';
-import { eventsFor } from '../sim/course';
+import { eventsFor, finishZFor } from '../sim/course';
 import { type Field, type Track, runBot } from './bot';
 import { ALL_CHARMS, STARTER_POOL } from '../sim/charms';
 import { uniqueGhostName } from './names';
-import { ROSTER, riderSkill } from './roster';
+import { HOME_RIDERS, ROSTER, riderSkill } from './roster';
 
 // Ghost pools: run bots across the skill range on one mountain, then keep a spread of results from the
 // weakest in the race to the best. Picking by result (not by skill) keeps the spread right even after
@@ -141,6 +141,16 @@ export function generatePool(seed: number, count: number, salt: number, opts: Po
       made.push({ skill, track, signature: true });
       signed.push({ skill, record, sim, selected: true });
     }
+    // (Round 9: a new mountain's home riders after them, each once, on draws of their own: none on the five, whose
+    // pools draw exactly what they drew.)
+    for (const rd of HOME_RIDERS) {
+      if (rd.home !== opts.mountain) continue;
+      const skill = riderSkill(rd, opts.mountain);
+      const chaos = { mood: Mood.None, event: ChaosEvent.None, seed: hash32(seed, salt, 0x40e1, HOME_RIDERS.indexOf(rd)) };
+      const { record, sim, track } = runBot(seed, chaos, { skill, seed: hash32(seed, salt, 0x40e2, HOME_RIDERS.indexOf(rd)), sled: rd.sled, name: rd.name, style: rd.style, charmPool: ALL_CHARMS }, maxTicks, fieldFor(made, skill));
+      made.push({ skill, track, signature: true });
+      signed.push({ skill, record, sim, selected: true });
+    }
   }
 
   for (let i = 0; i < budget; i++) {
@@ -189,11 +199,14 @@ export function generatePool(seed: number, count: number, salt: number, opts: Po
       if (sim.s.finished) tries.push({ skill, record, sim, selected: false });
     }
     tries.sort((a, b) => a.sim.s.finishTick - b.sim.s.finishTick);
+    // (Round 9: the gap in ticks, scaled to the course's length: the five's 4,500 m read FAST_GAP_S as it is, the Old Run's
+    // 3,000 m two thirds of it, or a run a third shorter keeps a third fewer of its quickest.)
+    const gap = FAST_GAP_S * 60 * (finishZFor(seed) / 4500);
     const taken = picked.filter((r) => r.sim.s.finished).map((r) => r.sim.s.finishTick);
     let kept = 0;
     for (const r of tries) {
       if (kept >= fast) break;
-      if (taken.some((t) => Math.abs(t - r.sim.s.finishTick) < FAST_GAP_S * 60)) continue;
+      if (taken.some((t) => Math.abs(t - r.sim.s.finishTick) < gap)) continue;
       r.selected = true;
       taken.push(r.sim.s.finishTick);
       picked.push(r);

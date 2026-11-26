@@ -108,8 +108,9 @@ describe('the Old Run: its descent', () => {
     expect(sim.dyn.triggerZ).toBe(Infinity);
   });
 
-  it('is no Daily, Cup or named mountain, to 2040', () => {
-    expect(MOUNTAINS.some((m) => m.seed === SEED)).toBe(false);
+  it('is the sixth named mountain, appended after the five, and no Daily or Cup, to 2040', () => {
+    expect(MOUNTAINS.findIndex((m) => m.seed === SEED)).toBe(5);
+    expect(MOUNTAINS[5].id).toBe('oldrun');
     const day0 = Date.UTC(2026, 0, 1);
     for (let d = 0; d < 365 * 15; d++) expect(dailySeed(new Date(day0 + d * 86400000).toISOString().slice(0, 10))).not.toBe(SEED);
     for (let y = 2026; y <= 2040; y++) for (let w = 1; w <= 53; w++) expect(cupSeed(`${y}-W${String(w).padStart(2, '0')}`)).not.toBe(SEED);

@@ -8,7 +8,7 @@ import { InputRecorder } from '../src/sim/input';
 import { RING_ID0, VERBS, climaxOf, fallPace, fallZ, gateX, legendFor, machineZ, momentPlays, pathX, planLegends, planMoments, rollForVariant, variantOf } from '../src/sim/moments';
 import { MOUNTAINS, dailySeed } from '../src/sim/mountains';
 import { type RunRecord, recordFromString, recordToString, replayRecord } from '../src/sim/replay';
-import { Sim } from '../src/sim/sim';
+import { Sim, TRACK_BANK, TRACK_DAMP, wallYaw } from '../src/sim/sim';
 import { momentLine } from '../src/ui/momentcopy';
 
 // Set pieces (round 6, DECISIONS 240; round 7, DECISIONS 277 and notes/r7-moments.md): each mountain's three
@@ -22,9 +22,12 @@ const VERBS_OF: Record<string, string[]> = {
   ember: ['race:sprint', 'surge', 'gates:swing'],
   sakura: ['steps:stair', 'flourish', 'shatter'],
   lanternfall: ['follow', 'kindle', 'carry'],
+  // Round 9: the Old Run's, appended to VERBS.
+  oldrun: ['peal', 'split', 'glaze'],
 };
 
-const KIT = { gateX, pathX, machineZ };
+// (Round 9: the Old Run's track, so the skilled pilots hold a height on its walls; nothing of it reaches the five.)
+const KIT = { gateX, pathX, machineZ, track: { wallYaw, damp: TRACK_DAMP, bank: TRACK_BANK } };
 const PLAIN: ChaosRoll = { mood: 0, event: 0, seed: 0x1234 };
 
 /** A lab pilot's whole ride on a roll (scripts/playtest/labpilots.ts: the pilots the lab's tables are made of),
@@ -303,8 +306,11 @@ describe('set pieces', () => {
       const last = planMoments(c)[2];
       expect(k.piece, m.id).toBe(last.index);
       expect(k.pieceZ0).toBe(last.z0);
-      expect(k.peakZ, m.id).toBeGreaterThan(c.stages[2].z0);
-      expect(k.landZ).toBeGreaterThan(k.peakZ + 40);
+      // (A mountain with no leaps, the Old Run, has no peak: its climax is the last set piece into the outrun.)
+      if (c.leaps.length) {
+        expect(k.peakZ, m.id).toBeGreaterThan(c.stages[2].z0);
+        expect(k.landZ).toBeGreaterThan(k.peakZ + 40);
+      }
       expect(k.townZ).toBeLessThan(k.lineZ);
       expect(k.lineZ).toBe(c.finishZ);
     }

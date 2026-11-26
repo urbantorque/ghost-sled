@@ -223,7 +223,8 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
   /** The set piece being played, as a rider who knows it rides it. Null between set pieces, for the careful
    *  line, and for a verb this pilot leaves alone. */
   const play = (s: AnySim): Act | null => {
-    if (skill === 'line') return null;
+    // (The floor line rides the floor's middle and nothing else: the lab's bar compares it with the glaze line.)
+    if (skill === 'line' || kit.floor) return null;
     const p = pieceNow(sim);
     if (!p) return null;
     const mo = sim.mo;
@@ -369,6 +370,15 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         if (!p.path || !kit.pathX) return null;
         const px = kit.pathX;
         return { x: (z: number) => px(c, p.path, z), noDrift: true };
+      }
+      case 'peal': {
+        // (Round 9, the Old Run.) Under the next bend bell: the line moved by as much as the bell hangs off it there.
+        if (!skilled) return null;
+        const t = p.targets.find((q: AnySim) => q.z > s.z + 1);
+        if (!t || t.z - s.z > Math.max(45, s.speed * 1.6)) return null;
+        // (Held at the bell's own height on its wall: its offset square to the channel, wherever the channel runs.)
+        const d = across(t.z, t.x);
+        return { x: (z: number) => c.centerX(z) + d * Math.sqrt(1 + c.channelSlope(z) ** 2), noDrift: true };
       }
       case 'kindle': {
         // Ride close along one row, then cross for the other: the next unlit lamp on the side being ridden,
@@ -641,7 +651,7 @@ export function spenderFor(name: string, sim: AnySim, seed: number): () => boole
     hold = 3;
     return true;
   };
-  const SPEED = new Set(['race', 'surge', 'carry', 'collapse']);
+  const SPEED = new Set(['race', 'surge', 'carry', 'collapse', 'split']);
   /** What the set pieces ask of the lantern now: 'go' (dash), 'hold' (do not), 'save' (keep one), or nothing. */
   const knows = (): 'go' | 'hold' | 'save' | '' => {
     const s = sim.s;
@@ -650,6 +660,8 @@ export function spenderFor(name: string, sim: AnySim, seed: number): () => boole
       const ticks = sim.tick - sim.mo.t0;
       if (p.verb === 'race') return ticks < 50 ? 'go' : '';
       if (p.verb === 'carry') return ticks < 50 ? 'go' : '';
+      // (Round 9: into the Labyrinth's split as it starts, as into a race.)
+      if (p.verb === 'split') return ticks < 50 ? 'go' : '';
       if (p.verb === 'collapse') return '';
       if (p.verb === 'surge') {
         const d = lipOf(p) - s.z;

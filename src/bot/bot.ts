@@ -6,6 +6,7 @@ import { Rng, hash32, hashFloat } from '../sim/prng';
 import { RunRecord, applyLogEvent } from '../sim/replay';
 import { type RiderPoint, RivalWatch, draftsOn, riderPoint } from '../sim/rivals';
 import { DT, LANTERN, Sim, TICK_RATE, TRACK_BANK, TRACK_DAMP, wallYaw } from '../sim/sim';
+import { FLOOR, WALL } from '../sim/oldrun';
 import type { KitRider } from '../sim/kit';
 import { Lines } from './lines';
 import type { RideStyle } from './roster';
@@ -488,14 +489,14 @@ export class Bot {
     if (!mo) return false;
     const p = mo.active >= 0 ? sim.plays[mo.active] : sim.plays[mo.next];
     if (!p || (mo.active < 0 && p.z0 - sim.s.z > sim.s.speed * 3)) return false;
-    if (p.verb === 'race' || p.verb === 'carry' || p.verb === 'collapse' || p.verb === 'surge') return false;
+    if (p.verb === 'race' || p.verb === 'carry' || p.verb === 'collapse' || p.verb === 'surge' || p.verb === 'split') return false;
     return this.tries(p);
   }
 
   /** Whether the next set piece is ridden on the snow from its first metre (a line, not a leap or a pop). */
   private wantsSnow(): boolean {
     const p = this.sim.plays[this.sim.mo.next];
-    return !!p && (p.verb === 'gates' || p.verb === 'follow' || p.verb === 'kindle' || p.verb === 'slide');
+    return !!p && (p.verb === 'gates' || p.verb === 'follow' || p.verb === 'kindle' || p.verb === 'slide' || p.verb === 'peal' || p.verb === 'glaze');
   }
 
   /** Read what happened on the tick just simulated. */
@@ -875,6 +876,8 @@ export class Bot {
       }
       case 'race':
       case 'carry':
+      // (Round 9: the Labyrinth's split is a race against its clock.)
+      case 'split':
         if (now - mo.t0 < 50) this.momentDash(now);
         return false;
       case 'surge':
@@ -905,7 +908,7 @@ export class Bot {
     // (A line to ride wants the runners on the snow: no pops for the fun of it meanwhile.)
     // (And a low flame not yet fed is carried on the snow to its brazier: no pop flies past it.)
     const feeding = verb === 'carry' && !(this.sim.mo.mask & 1);
-    this.onLine = verb === 'gates' || verb === 'follow' || verb === 'kindle' || feeding;
+    this.onLine = verb === 'gates' || verb === 'follow' || verb === 'kindle' || verb === 'peal' || verb === 'glaze' || feeding;
     this.feed = feeding ? (this.sim.plays[this.sim.mo.active].relight ?? null) : null;
     this.momentLine = mOff !== null;
     if (mOff !== null) {
@@ -1172,8 +1175,33 @@ export class Bot {
       return (x - c.centerX(z)) / Math.sqrt(1 + pz * pz);
     };
     const look = zp + v * 0.9;
-    const want = across(look, this.lineX(look));
-    const wantRate = (across(look + 1, this.lineX(look + 1)) - want) * s.vz;
+    // (The Old Run's set pieces, for a rider who tries them: at the next bend bell's height on its wall; through the
+    // Horseshoe held high, never under the share of the wall its hold asks.)
+    const line = (z: number): number => {
+      const x = this.lineX(z);
+      const p = this.triesMoment() ?? this.triesNext();
+      if (!p) return x;
+      if (p.verb === 'peal') {
+        const t = p.targets.find((q, i) => !(this.sim.mo.active === p.index && i < this.sim.mo.at) && q.z > zp - 2);
+        // (Held at the bell's own height on its wall, wherever the channel runs.)
+        if (t && t.z - zp < v * 1.6) {
+          const pz = c.channelSlope(z);
+          return c.centerX(z) + across(t.z, t.x) * Math.sqrt(1 + pz * pz);
+        }
+      } else if (p.verb === 'glaze' && p.hw > 0 && z >= p.z0 && z <= p.z1) {
+        const d = across(z, x);
+        const least = FLOOR + (p.hw + 0.08) * WALL;
+        if (d > FLOOR || d < -FLOOR) {
+          const pz = c.channelSlope(z);
+          const q = Math.sqrt(1 + pz * pz);
+          if (d > 0 && d < least) return c.centerX(z) + least * q;
+          if (d < 0 && d > -least) return c.centerX(z) - least * q;
+        }
+      }
+      return x;
+    };
+    const want = across(look, line(look));
+    const wantRate = (across(look + 1, line(look + 1)) - want) * s.vz;
     const k = clamp(0.45 / this.t.tau, 0.5, 1);
     const lateral = clamp(wantRate - 1.2 * k * (across(zp, xp) - want), -7, 7);
     const psi = Math.asin(clamp(lateral / v, -0.5, 0.5));

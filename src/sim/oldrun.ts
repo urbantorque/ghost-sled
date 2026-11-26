@@ -98,6 +98,11 @@ export interface Turn {
 /** What the kit laid on a course: its turns, in order. */
 interface Laid {
   turns: Turn[];
+  /** The acts' turns: the Hotel Straights', the Labyrinth's, the Horseshoe's lead and its hook. */
+  hotel: Turn[];
+  labyrinth: Turn[];
+  lead: Turn[];
+  hook: Turn[];
 }
 
 const LAID = new WeakMap<Course, Laid>();
@@ -286,6 +291,25 @@ export function turnsOf(c: Course): readonly Readonly<Turn>[] {
   return laid(c).turns;
 }
 
+/** The Old Run's places (moments.ts lays its set pieces and legends on them): each act's turns, first metre to last. */
+export type OldRunPlace = 'hotel' | 'labyrinth' | 'lead' | 'hook';
+export function placeOf(c: Course, place: OldRunPlace): { z0: number; z1: number; turns: readonly Readonly<Turn>[] } {
+  const ts = laid(c)[place];
+  return { z0: ts[0].z0, z1: endOf(ts), turns: ts };
+}
+
+/** The x of a point u of the way up the wall on `side` at z (u 0 the floor's edge, 1 the lip). */
+export function wallX(c: Course, z: number, side: 1 | -1, u: number): number {
+  const a = at(c, z);
+  return a.cx + side * (FLOOR + u * WALL) * Math.sqrt(1 + a.p * a.p);
+}
+
+/** Where a sled is up the wall it is on: 0 on the floor, 1 at the lip, and the side (+1 right). */
+export function wallU(c: Course, x: number, z: number): { u: number; side: 1 | -1 } {
+  const { d, side } = across(c, x, z);
+  return { u: d <= FLOOR ? 0 : (d - FLOOR) / WALL, side };
+}
+
 /** Where (x, z) is across the channel: the distance square to it from the middle, the side, that side's wall. */
 function across(c: Course, x: number, z: number): { d: number; side: 1 | -1; h: number; a: At; q: number } {
   const a = at(c, z);
@@ -344,7 +368,7 @@ export const OLDRUN_KIT: Kit = {
     const lead = act(g1b + 20, g1b + 330, 1, rng, [0.4, 0.5], [80, 100], [10, 25]);
     const hookSide = rng.chance(0.5) ? 1 : -1;
     const hook = sBend(out0 - 30 - (4 * MAX_SLOPE * HOOK_R) / RA, hookSide * MAX_SLOPE, HOOK_R, 0);
-    LAID.set(c, { turns: [...hotel, ...labyrinth, ...lead, ...hook] });
+    LAID.set(c, { turns: [...hotel, ...labyrinth, ...lead, ...hook], hotel, labyrinth, lead, hook });
     const beats: KitBeat[] = [];
     let prev: SectionKind | null = null;
     const push = (kind: SectionKind, len: number, gateOn = false): void => {
@@ -415,8 +439,14 @@ export const OLDRUN_KIT: Kit = {
     // A careful or new rider lets the walls turn it (its own settling height). Where its speed settles a rider on the
     // glaze it rides there (the bank carries it, nothing is spent); below the glaze a skilled rider climbs onto it (a
     // little slip for the glaze's speed), and above it keeps under the lip. The climb comes in as the bend deepens.
+    // A new rider (skill under 0.3) does not trust the walls yet: it steers down off them toward the floor's middle, so
+    // it rides low and in the slush, the safe slow line (at skill 0 a fifth of the way up to where the wall would carry
+    // it). The bot's weakest ride so, and the pool's slow end with them.
     const reach = r.skill <= 0.3 ? 0 : r.skill >= 0.8 ? 1 : (r.skill - 0.3) / 0.5;
-    const { u, side, a } = settles(c, z, r.v);
+    const trust = r.skill >= 0.3 ? 1 : 0.2 + (0.8 * (r.skill > 0 ? r.skill : 0)) / 0.3;
+    const st = settles(c, z, r.v);
+    const { side, a } = st;
+    const u = st.u * trust;
     const lo = GLAZE_LO + 0.15;
     const hi = GLAZE_HI - 0.05;
     const want = u <= 0.02 ? 0 : u >= lo ? (u < hi ? u : hi) : u + reach * (lo - u) * smoothstep(0, 0.15, u);

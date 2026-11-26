@@ -140,3 +140,71 @@ bank's turn applied to the motion; `wallYaw` unchanged), `src/sim/course.ts` (th
 too), `scripts/r9/oldrun-tune.ts` (the quick bench: ideal hands on three lines, the pilots and the bots),
 `tests/oldrun.test.ts` (the glaze's bar). Nothing on the five runs any of it: `trackOn`, `onTrack` and `c.kit` are
 false there, and the fingerprint holds.
+
+---
+
+## 2. The set pieces and legends (the sim's side; the world draws them, `notes/r9-oldrun-world.md`)
+
+Three verbs appended to `VERBS` (never reordered: the stingers key on the name and fall back to `st.any`): `peal`,
+`split`, `glaze`. Each stands on one of the kit's own places (`oldrun.ts` `placeOf`: the Hotel Straights' bends, the
+Labyrinth, the Horseshoe's hook), a stage each, through a new optional `place` on `moments.ts`'s internal `Def` (no
+shared type gains a field: `MomentPlay` and `MomentSpec` are the fingerprint's JSON, so the three verbs reuse their
+fields, each documented where it is declared).
+
+| Set piece | Verb | What wins it | Variants |
+| --- | --- | --- | --- |
+| The Bend Bells (stage 1) | `peal` | a bell on an iron bracket over each of the Hotel's six bends, at the middle of its held curvature on the outside wall; pass within 1.6 m of it (`targets`, `need` all) | on the glaze (0.6 up the wall), high on the wall (0.78), each higher than the last (0.45 to 0.85) |
+| The Labyrinth (stage 2) | `split` | its first bend to its last inside the split (`pace` m/s, `need` ticks); lead and trail said as the rider passes or falls behind the split's pace | the split (31.2 m/s, 22.8 s over 712 m), a quick split (32.6), clean (31.2 and no scrape: `row`) |
+| The Horseshoe (stage 3) | `glaze` | ticks on the hook's glaze (`need`), in all or in one hold (`row`), or above a share of the wall (`hw`) | hold it (3 s), unbroken (1.5 s in one hold), high on it (1.3 s above 0.7 of the wall) |
+
+The numbers came from the lab (`scripts/r9/oldrun-pieces.ts`: every variant, the novice, mid and expert pilots and
+the bot at three skills, four seeds each; the mid pilot rides the Labyrinth at 31.5 m/s, the strong bot at 33.5; the
+mid pilot holds about 175 of the hook's 520 ticks on the glaze, the expert 207, its longest hold 113):
+
+| Variant | novice | mid | expert | bot 0.25 | bot 0.55 | bot 0.9 |
+| --- | --- | --- | --- | --- | --- | --- |
+| bells: on the glaze / high / rising | 0/4 each | 4/4 each | 4/4 each | 2, 1, 2 /4 | 2, 2, 0 /4 | 3/4 each |
+| split: even / quick / clean | 0/4 | 4, 0, 4 /4 | 4, 0, 4 /4 | 2, 1, 3 /4 | 0, 0, 2 /4 | 4/4 each |
+| Horseshoe: hold / unbroken / high | 0/4 | 2, 2, 3 /4 | 4/4 each | 2, 1, 1 /4 | 3, 2, 0 /4 | 3, 2, 3 /4 |
+
+The quick split is won with a lantern: the lab's skilled pilots and the bot dash into the split as into a race
+(`labpilots.ts` SPEED, `bot.ts` momentRide), and `tests/moments.test.ts`'s "every variant of every set piece is won by
+a skilled pilot" holds on the Old Run with them. The bot rides a bell at its own height on its wall from about 1.6 s
+out, and holds the Horseshoe's high variant above its share; the lab's mid and expert pilots likewise (the floor line
+plays no set piece). The chip's words are in `src/ui/momentcopy.ts`; nothing new on the HUD (the set piece's chip is the
+five's).
+
+**Legends** (`LEGENDS.oldrun`, on the kit's places through a new optional `place` on the internal `LegendDef`): *The
+Ghost Bob* (a runner over the Horseshoe's lead S-bend: "The hotel's first bob runs the track: follow its lights") and
+*The Ballroom Night* (sky, over the Labyrinth: "The grand hotel lights every window").
+
+## 3. Registered, its home riders and its pool
+
+- **Registered:** `MOUNTAINS[5]`, appended: `{ id: 'oldrun', name: 'The Old Run', tagline: 'An old ice track: ride high
+  on the glaze', seed: OLDRUN_SEED (0x9b05688c, the lab's: no Daily's or Cup's to 2040), unlockGhosts: 18 }`;
+  `MountainId` gains it; its `LAYOUTS` row and kit are the mountain's; out of `BIOMES` (the Daily and Cup); events the
+  light storm and the spirit train only; `LEG_NAMES` already had it; `EIGHT_FROM` null and the Long Night at ten legs.
+  `FIRST_RUN_PACE.oldrun` 95 s (the five's are 0.85 to 0.95 of the lab novice's time; the Old Run's novice rides 101.7).
+  `MOUNTAIN_NAMES` (almanac) and the Trials' `NAMES` gain it (the Trials' `HOURS` waits for its other hour's name).
+- **Home riders** (`src/bot/roster.ts` `HOME_RIDERS`; The Twelve stays twelve, homes 0 to 4): *Count Orsolo* (racer,
+  0.86, stovepipe and moon, cream), *Gus Fennick* (liner, 0.76, aviator and star, ice grey, the track's old keeper),
+  *Lotte Bell* (collector, 0.58, bobble and bell, lilac white, the bellringer's daughter). `riderByName` knows them
+  (their looks on the snow and their lines in the race); the pool rides them after The Twelve on draws of their own
+  (none on the five, whose pools draw exactly what they drew); the mastery board has a star for beating each to the
+  line. Never a duel: no page, ladder or showdown of The Twelve's reads `HOME_RIDERS`.
+- **The pool** (`npx tsx scripts/generate-ghosts.ts --only oldrun`, alone in the heavy slot, single process, 25 s):
+  **49 ghosts** (30 of the crowd, The Twelve, the three home riders and four of the fast end), every one finished, 38 KB.
+  Finish times 77.9 to 100.7 s, median 82.3. `tests/ghostpool.test.ts` replays every record to its stored result.
+  - *Its spread is narrow:* p90/p10 is 1.15 against the five's 1.28 to 1.30. Nothing on the Old Run floors a weak
+    rider and the walls carry anyone who lets them, so the slow end the five get from trees and falls is not there.
+    Against the lab's novice the pool reaches as far as Pinecrest's does (its slowest ghost 0.99 of the novice's time,
+    Pinecrest's 0.93), but its middle is crowded: 80 to 92 s holds 80% of it. Two changes went in for it: a new rider
+    (skill under 0.3) rides lower than the walls would carry it (`lineFor`'s `trust`), and the fast end's gap is scaled
+    to the course's length (a third shorter keeps a third more of its quickest; on the five exactly as before). **For
+    the main lane:** whether a compressed field is the Old Run's character (close racing on a forgiving track) or
+    wants the weak bots to make a person's mistakes (fighting the walls, scraping the lip), which only a person riding
+    it can say.
+
+Every hunk in a shared game file (`src/game/app.ts`): the mastery board's home riders read `[...ROSTER,
+...HOME_RIDERS]` (the import and one line). `src/ui/contract.ts`: `MountainCard['biome']` gains `'oldrun'`.
+`src/game/save.ts`, `spineview.ts`, `ui.ts`: untouched.

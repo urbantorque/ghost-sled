@@ -1,5 +1,6 @@
 import { ChaosEvent, ChaosRoll, Mood, MoodParams, eventAllowed, eventTriggerZ, moodInfo } from './chaos';
 import { CHUNK_LEN, Course, Obstacle, ObstacleKind, Rail, SkyGate, courseFor } from './course';
+import { wallU } from './oldrun';
 import { PI, TAU, angleDiff, approach, clamp, datan2, dcos, dsin, wrapAngle } from './dmath';
 import { MAX_RUN_TICKS, actionOf, draftOf, spiritOf, steerOf } from './input';
 import { Rng } from './prng';
@@ -132,8 +133,9 @@ const GATE_UNITS = 6;
 const RING_UNITS = 12;
 const COLLAPSE_CLOSE = 7;
 const COLLAPSE_KEEP = 0.72;
-/** What a bell rung lights, and a stone lamp kindled. */
+/** What a bell rung lights, and a stone lamp kindled; (round 9) a bend bell. */
 const SHATTER_UNITS = 8;
+const PEAL_UNITS = 8;
 const KINDLE_UNITS = 4;
 /** A legend moment (moments.ts) is said this far up the run from where it plays, and a runner never falls below
  *  this pace. */
@@ -2261,6 +2263,69 @@ export class Sim {
       this.events.push({ type: 'moment', index: p.index, phase, n, of: mo.of });
     };
     switch (p.verb) {
+      case 'peal': {
+        // (Round 9, the Old Run.) Under each bell as the sled passes it, on the glaze or over it, within its reach across.
+        while (mo.at < p.targets.length && p.targets[mo.at].z <= s.z) {
+          const t = p.targets[mo.at++];
+          const dx = s.x - t.x;
+          if (s.tumble === 0 && dx <= t.hw && dx >= -t.hw) {
+            mo.n++;
+            mo.mask |= 1 << (mo.at - 1);
+            this.charge(PEAL_UNITS, true);
+            say('step', mo.n);
+          } else say('miss', mo.n);
+        }
+        if (mo.at >= p.targets.length || s.z >= p.z1) this.momentEnd(p, mo.n >= p.need && p.targets.length > 0);
+        break;
+      }
+      case 'split': {
+        // (Round 9.) The split's pace runs from the set piece's first metre: ahead of it or behind it, said as it changes;
+        // over the last metre inside the split's time. A clean split is lost on the first scrape.
+        const ahead = s.z > p.z0 + p.pace * ticks * DT;
+        if (ahead !== mo.ahead) {
+          mo.ahead = ahead;
+          this.events.push({ type: 'moment', index: p.index, phase: ahead ? 'lead' : 'trail', n: 0, of: 1 });
+        }
+        if (p.row && this.events.some((e) => e.type === 'scrape')) {
+          mo.ok = false;
+          say('miss', 0);
+          this.momentEnd(p, false);
+        } else if (s.z >= p.z1) {
+          mo.n = ticks <= p.need ? 1 : 0;
+          this.momentEnd(p, ticks <= p.need);
+        } else if (ticks > p.need) this.momentEnd(p, false);
+        break;
+      }
+      case 'glaze': {
+        // (Round 9.) Ticks on the hook's glaze (high on it, where the variant asks): in all, or in one hold.
+        let on = false;
+        if (s.grounded && s.tumble === 0) {
+          const surf = this.course.surface(s.x, s.z);
+          on = surf.ice && (p.hw <= 0 || wallU(this.course, s.x, s.z).u >= p.hw);
+        }
+        if (on) {
+          mo.aux++;
+          if (!p.row) mo.at++;
+          const held = p.row ? mo.aux : mo.at;
+          const q = Math.floor((4 * held) / p.need);
+          if (q > mo.n && q < 4) {
+            mo.n = q;
+            say('step', q);
+          }
+        } else if (mo.aux > 0) {
+          if (p.row && mo.aux >= 18) {
+            say('miss', 0);
+            mo.n = 0;
+          }
+          mo.aux = 0;
+        }
+        const won = (p.row ? mo.aux : mo.at) >= p.need;
+        if (won || s.z >= p.z1) {
+          mo.n = won ? mo.of : mo.n;
+          this.momentEnd(p, won);
+        }
+        break;
+      }
       case 'race': {
         if (p.style === 'chase') {
           // The machine left before the rider: pass every car before one reaches the far station.
@@ -3343,6 +3408,13 @@ function momentCount(p: MomentPlay): number {
       return p.need;
     case 'carry':
       return 10;
+    // (Round 9: the bend bells count themselves; the split is won or not; the Horseshoe's hold counts quarters.)
+    case 'peal':
+      return p.targets.length;
+    case 'split':
+      return 1;
+    case 'glaze':
+      return 4;
     default:
       return 1;
   }
