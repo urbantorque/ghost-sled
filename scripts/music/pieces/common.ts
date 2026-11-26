@@ -70,6 +70,12 @@ export const OWN_GESTURES: Readonly<Record<string, readonly Gesture[]>> = {
     { verb: 'split', says: "a clock's tick on one note doubling into a rush, then the octave", voice: 'lead', beats: 4, tune: [[0, 0.25, 5], [0.5, 0.25, 5], [1, 0.25, 5], [1.5, 0.25, 5], [2, 0.125, 5], [2.25, 0.125, 5], [2.5, 0.125, 6], [2.75, 0.125, 7], [3, 1, 8]], perc: [[0, 0.5], [0.5, 0.55], [1, 0.6], [1.5, 0.65], [2, 0.75], [2.25, 0.8], [2.5, 0.85], [2.75, 0.9], [3, 1]], hold: [3, 1, [1, 5]] },
     { verb: 'glaze', says: 'a line that climbs a sixth and holds there, high and smooth', voice: 'lead', beats: 4, tune: [[0, 1, 3], [1, 1, 5], [2, 1.9, 8]], perc: [], hold: [0, 4, [1, 3, 5]], swell: true },
   ],
+  // Gullhaven: a light's signal; a leap off a lip held high on the wind and set down; a line weaving through gaps.
+  gullhaven: [
+    { verb: 'beam', says: "a lighthouse's signal: two short flashes on the octave, then the long light a fifth over it", voice: 'bell', beats: 4, tune: [[0, 0.4, 8], [0.5, 0.4, 8], [1.5, 2.4, 12]], perc: [[0, 0.5], [0.5, 0.5], [1.5, 0.9]], hold: [1.5, 2.5, [1, 5, 8]] },
+    { verb: 'soar', says: 'a leap off the lip to a note held high on the wind, then set down a step at a time on the octave', voice: 'lead', beats: 5, tune: [[0, 0.25, 3], [0.25, 0.25, 5], [0.5, 2.5, 10], [3, 0.5, 9], [3.5, 1.5, 8]], perc: [[0, 0.7], [3.5, 1]], hold: [0.5, 4.5, [1, 5]] },
+    { verb: 'stacks', says: 'a line weaving through the gaps: three quick turns, each round the next note up, then out onto the octave', voice: 'lead', beats: 4.5, tune: [[0, 0.25, 3], [0.25, 0.25, 4], [0.5, 0.5, 3], [1, 0.25, 4], [1.25, 0.25, 5], [1.5, 0.5, 4], [2, 0.25, 5], [2.25, 0.25, 6], [2.5, 0.5, 5], [3, 1.4, 8]], perc: [[0, 0.6], [1, 0.7], [2, 0.8], [3, 1]], hold: [3, 1.5, [1, 5]] },
+  ],
 };
 
 /** Which of a piece's tracks play a gesture's parts, and where. */

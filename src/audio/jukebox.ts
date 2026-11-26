@@ -33,6 +33,8 @@ const MOUNTAINS: ReadonlyArray<{ biome: BiomeId; name: string; course: string }>
   { biome: 'volcanic', name: 'Ember Peak', course: 'ember' },
   { biome: 'blossom', name: 'Sakura Ridge', course: 'sakura' },
   { biome: 'lantern', name: 'Lanternfall', course: 'lanternfall' },
+  { biome: 'oldrun', name: 'The Old Run', course: 'oldrun' },
+  { biome: 'gullhaven', name: 'Gullhaven', course: 'gullhaven' },
 ];
 
 /** The produced pieces' sections, by their own names (every course is laid out alike). */
@@ -48,7 +50,7 @@ const PRODUCED: ReadonlyArray<{ id: string; name: string }> = [
 ];
 
 /** Every set-piece verb (src/sim/moments.ts), and the plain stinger a verb without one of its own plays. */
-const VERBS = ['race', 'gates', 'rings', 'collapse', 'steps', 'slide', 'shatter', 'surge', 'flourish', 'follow', 'kindle', 'carry', 'peal', 'split', 'glaze', 'any'] as const;
+const VERBS = ['race', 'gates', 'rings', 'collapse', 'steps', 'slide', 'shatter', 'surge', 'flourish', 'follow', 'kindle', 'carry', 'peal', 'split', 'glaze', 'beam', 'soar', 'stacks', 'any'] as const;
 const cap = (s: string): string => s[0].toUpperCase() + s.slice(1);
 
 const MOODS: ReadonlyArray<{ mood: Mood; name: string }> = [
