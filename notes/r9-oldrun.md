@@ -84,28 +84,33 @@ would need the thresholds and the outrun in bends, or the turns' ramps shorter: 
 
 ### After (`npx tsx scripts/r9/oldrun-lab.ts`, heavy slot; `shots/r9/oldrun/oldrun-lab.txt`, `.json`)
 
+As the lane leaves it (the mountain registered, its set pieces live, a rider of 0.3 or under riding lower than the walls
+would carry it; the first column of figures at the section's own commit, f5a0792, is in brackets where it moved):
+
 | Pilot (plain day, 6 seeds; bots 3) | Finished | Median time | Mean speed | Bends' time | Bend ticks on the glaze | In the slush | Falls |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | a sled let go | 1/1 | 97.8 s | 32.5 m/s | 40.3 s | 28% | 50% | 0 |
-| careful line | 6/6 | 96.5 s | 33.0 | 39.2 s | 5% | 26% | 0 |
-| novice | 6/6 | 101.7 s | 31.3 | 41.8 s | 6% | 35% | 0 |
-| **mid** | 6/6 | **90.4 s** | **35.4** | **36.7 s** | 47% | 13% | 0 |
+| careful line (the floor's middle) | 6/6 | 107.8 s (96.5) | 29.2 | 44.5 s | 0% | 97% | 0 |
+| novice | 6/6 | 103.0 s (101.7) | 30.9 | 42.3 s | 6% | 38% | 0 |
+| **mid** | 6/6 | **89.6 s** (90.4) | **35.8** | **36.3 s** | 54% | 13% | 0 |
 | mid on the floor line | 6/6 | 106.4 s | 29.4 | 44.0 s | 0% | 100% | 0 |
-| expert | 6/6 | 89.8 s | 35.7 | 36.4 s | 57% | 13% | 0 |
-| bot 0.25 / 0.55 / 0.9 | 3/3 each | 92.7 / 92.0 / 84.9 s | 34.5 / 34.7 / 37.8 | | 42 / 35 / 54% | | 0 |
-| bot 0.9 racer | 3/3 | 84.1 s | 38.2 | | 58% | | 0 |
+| expert | 6/6 | 89.1 s (89.8) | 36.0 | 36.0 s | 61% | 13% | 0 |
+| bot 0.25 / 0.55 / 0.9 | 3/3 each | 91.2 / 90.8 / 85.6 s | 35.1 / 35.1 / 37.5 | | 39 / 46 / 62% | | 0 |
+| bot 0.9 racer | 3/3 | 84.3 s | 38.0 | | 58% | | 0 |
 | clumsy (30 seeds) | **30/30** | 158.4 s | | | | | 0.4 a run, every one a pop's flight landed badly |
 
-The mid pilot in each mood: 90.4 to 93.0 s, all finished, no falls.
+The mid pilot in each mood: 89.6 to 92.5 s, and 97.8 under Comet Night's lighter gravity; all finished, no falls.
 
 **The bar** (printed by the lab, line by line):
 - MET: the mid pilot's glaze line beats its own hands on the floor line by **17%** of the bends' time (10 to 20%);
-  against the careful line's own hands, 6%.
-- MET: the expert spends **57%** and the bot at 0.9 **54%** of its bend time on the glaze.
+  against the careful line's own hands, 18%.
+- MET: the expert spends **61%** and the bot at 0.9 **62%** of its bend time on the glaze.
 - MET: the novice finishes 6 of 6 and a sled let go finishes, no falls, both on the floor's slower line.
 - MET: the clumsy pilot finishes **30 of 30**.
 - MET: **no fall** that was not a pop's flight landed badly (13 falls in every ride, all of them that).
-- MET: the mid pilot finishes in **90.4 s at 35.4 m/s** (85 to 95 s, 32 to 36 m/s).
+- MET: the mid pilot finishes in **89.6 s at 35.8 m/s** (85 to 95 s, 32 to 36 m/s). In `r9-courses.ts`'s harness, where
+  the mid pilot also spends its lanterns and carries charms, it finishes in 83.7 s at 38.2 m/s: a little quicker than
+  the concept's window (section 5).
 
 `tests/oldrun.test.ts` gains the first, second and sixth as promises (two seeds), so the wall cannot quietly stop
 paying.
@@ -233,3 +238,30 @@ every pack with a hash of all of `scripts/music`, and the game refuses a pack wh
 new piece means a whole build. The five's packs hold the same music and the same stingers as before (their sources did
 not change); what changes in them is the stamp. The levelling now sets every course's reference run to the mean of
 the five's (`build.ts`), so the five keep the level each had and a new course is levelled to them.
+
+## 5. Against the five (`npx tsx scripts/playtest/r9-courses.ts`, heavy slot, 42 s)
+
+Written to `shots/r9/oldrun/r9-courses.txt` and `.json` (not the measure lane's file). The five's table is milestone
+0's figure for figure. The Old Run treated as new:
+
+| Measure (mid pilot, 6 seeds, lanterns and charms as the harness rides them) | The Old Run | The five's range |
+| --- | --- | --- |
+| finish time | **83.7 s** | 121.3 to 129.4 |
+| mean speed | **38.2 m/s** | 35.1 to 37.4 |
+| air share | **0%** | 24 to 35% |
+| turns a km of the safe line | 2.67 | 1.78 to 2.67 |
+| mean width | **15.6 m** | 24.6 to 31.1 |
+| hazards a km | **0** | 43 to 126 |
+
+- **New:** outside the five on 5 of 6; **by 15% on 4** (finish time, air share, width, hazards). Met.
+- **Fair:** the clumsy pilot finishes **30 of 30** against the five's hardest (Pinecrest's 27). Met.
+- **The mechanic** (`r9-courselib.ts` `MECHANICS.oldrun`: on the snow, up a banked wall off the floor, a wall a bend has
+  raised over a straight's 2.6 m): in play for **43.3%** of the mid pilot's run.
+- Also from the table: the expert 81.9 s, the novice 98.7 s; the mid pilot wins 13 of 18 set pieces, the expert 18 of
+  18; the clumsy pilot 147.6 s, 0.8 falls a run, every one off its own pops; set pieces span 57.7% of the run and the
+  legends 30.3%; the course is 4 kinds (house, track, labyrinth, outrun), slope 0.278 with a standard deviation of
+  0.045 (the five's 0.10 to 0.11: a steady run, not pitches and flats).
+- *A note on its params:* `BIOME_PARAMS.oldrun.slope` still reads 0.17 (the table prints it), though every section's
+  grade is set absolutely (0.28, the house 0.36). Only `cruiseSpeed()` (a get-up's push) and some far-terrain render
+  reads use it. Changing it now changes the course's float bits and so the pool's replays; left for the main lane (a
+  get-up on the Old Run pushes off at 11.1 m/s where 0.28 would give about 14).
