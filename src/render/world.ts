@@ -922,6 +922,10 @@ export class World {
    *  sky's dome from the first frame (sky.ts setSeaLevel), before the module has loaded. */
   private syncGullhaven(): void {
     this.sky.setSeaLevel(isGullhaven(this.course) ? seaLevelOf(this.course) : null);
+    // (The chase's vista over a gully steps out over the cleft and the sea, camera.ts FALL_YAW: the fall opens seaward,
+    // three.js +x, wherever a gully's column holds a flight.)
+    const c = this.course;
+    this.cam.fallSide = isGullhaven(c) ? (z) => (c.liftX(-z) !== null ? 1 : 0) : null;
     if (this.gullhaven) {
       this.gullhaven.setCourse(this.course);
       return;

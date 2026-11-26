@@ -6,6 +6,7 @@ import { type Gully, gulliesOf, placesOf } from '../sim/gullhaven';
 import type { Sim } from '../sim/sim';
 import { SNOW, merge, part } from './flora';
 import { box, quad, seg } from './landmarkKit';
+import { strata } from './rockforms';
 import { withChamfer } from './chamfer';
 import { makeToonMaterial, shared } from './materials';
 import { pushLocalLight } from './lights';
@@ -57,6 +58,7 @@ const SOCK_A = new Color('#E8E2D2');
 const SOCK_B = new Color('#4A72AE');
 const HULLS = [new Color('#2E4A6A'), new Color('#3E5E50'), new Color('#E4DED0'), new Color('#4C3E5A'), new Color('#2A3A4E')];
 const GULL = new Color('#F4F2EE');
+const CREAM = new Color('#EEE4D0');
 /** The harbour's sea ice beyond the corridor: a pale cold sheet, a step under the snow. */
 const ICE = new Color('#D6E0F2');
 const GULL_W = new Color('#A8AEBC');
@@ -257,7 +259,7 @@ function driftMaterial(): ShaderMaterial {
         p.z += cos(T * 1.3 + aSeed.y * 6.28 + k * 7.0) * 1.2;
         vec4 mv = viewMatrix * modelMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = clamp(uScale * (0.18 + 0.2 * aSeed.z) / max(-mv.z, 1.0), 1.0, 26.0);
+        gl_PointSize = clamp(uScale * (0.2 + 0.24 * aSeed.z) / max(-mv.z, 1.0), 1.5, 40.0);
         vA = smoothstep(0.0, 0.18, k) * (1.0 - smoothstep(0.62, 1.0, k)) * (1.0 - smoothstep(160.0, 420.0, -mv.z));
         vH = k;
       }
@@ -271,7 +273,7 @@ function driftMaterial(): ShaderMaterial {
         vec2 q = gl_PointCoord - 0.5;
         // A streak drawn up by the wind: narrow across, long upward.
         float r = length(vec2(q.x * 2.6, q.y * 0.9));
-        float a = (1.0 - smoothstep(0.15, 0.5, r)) * vA * 0.55;
+        float a = (1.0 - smoothstep(0.12, 0.5, r)) * vA * 0.72;
         if (a < 0.01) discard;
         gl_FragColor = vec4(mix(uShade, uLit, 0.4 + 0.6 * vH), a);
         #include <tonemapping_fragment>
@@ -843,33 +845,45 @@ export class GullhavenWorld {
   /** Sea stacks standing out of the sea along the cliff's foot: tall broken columns of the cliff's dark rock in beds, a
    *  cap of snow on each, instanced (one draw; Low half as many). */
   private stacks(c: Course, low: boolean): void {
-    const g = merge([
-      part(new CylinderGeometry(0.62, 1, 1, 6, 6), ROCK, { pos: [0, 0.5, 0], jitter: 0.12 }),
-      part(new CylinderGeometry(0.4, 0.66, 0.1, 7, 1), SNOW, { pos: [0, 1.02, 0], jitter: 0.04 }),
-    ]);
-    const spots: Array<[number, number, number, number, number, number]> = [];
-    const end = c.finishZ + 400;
+    // (The cliff's rock in beds, as the five's outcrops are laid down, rockforms.ts: each bed its own value, shifted off
+    // the one under it, snow on the ledges and the broken crown. Three forms at their own proportions, a tall needle, a
+    // column and a squat broken block, each scaled whole: a stack stretched to its height turned its ledges' normals up
+    // and drew it as snow.)
+    const forms = [
+      { h: 5, rx: 0.5, rz: 0.4, layers: 13, seed: 0x5ea },
+      { h: 3, rx: 0.55, rz: 0.45, layers: 10, seed: 0x5eb },
+      { h: 1.6, rx: 0.6, rz: 0.5, layers: 7, seed: 0x5ec },
+    ].map((q) => strata({ rx: q.rx, rz: q.rz, h: q.h, layers: low ? Math.ceil(q.layers * 0.6) : q.layers, sides: low ? 6 : 8, rock: [ROCK_D, ROCK, ROCK_L], lie: SNOW, taper: 0.28, shift: 0.12, dip: 0.07, warp: 0.25, bays: 0.25, rough: 0.3, lieMin: 0.05, seed: q.seed }));
+    const spots: Array<Array<[number, number, number, number, number]>> = [[], [], []];
+    const end = placesOf(c).sheds - 200;
     let j = 0;
     for (let z = 60; z < end; j++) {
       z += (low ? 220 : 120) + hash(j, 51) * 140;
+      if (z > end) break;
       const sx = shoreX(c, z, this.sea);
       const out = 40 + hash(j, 52) * 220;
-      const h = 45 + hash(j, 53) * 150;
-      const w = 16 + hash(j, 54) * 22;
-      spots.push([sx + out, this.sea - 20, z, w, h + 20, hash(j, 55) * 6.28]);
+      const w = 16 + hash(j, 54) * 20;
+      const k = Math.floor(hash(j, 53) * 3);
+      spots[k].push([sx + out, z, w, hash(j, 55) * 6.28, 0]);
       // A smaller one beside it now and then.
-      if (hash(j, 56) < 0.45) spots.push([sx + out + 14 + hash(j, 57) * 20, this.sea - 20, z + 10 + hash(j, 58) * 30, w * 0.55, h * 0.5 + 20, hash(j, 59) * 6.28]);
+      if (hash(j, 56) < 0.45) spots[(k + 1) % 3].push([sx + out + 20 + hash(j, 57) * 24, z + 14 + hash(j, 58) * 30, w * 0.55, hash(j, 59) * 6.28, 0]);
     }
-    const im = this.inst(g, spots.length);
-    this.stackSpots = spots.map(([x, , z, w]) => [x, z, w] as [number, number, number]);
-    spots.forEach(([x, y, z, w, h, yaw], i) => {
-      q4.setFromAxisAngle(up, yaw);
-      m4.compose(v3.set(x, y, -z), q4, s3.set(w, h, w * (0.7 + hash(i, 61) * 0.5)));
-      im.setMatrixAt(i, m4);
+    this.stackSpots = [];
+    forms.forEach((g, k) => {
+      const list = spots[k];
+      if (!list.length) return;
+      const im = this.inst(g, list.length);
+      list.forEach(([x, z, w, yaw], i) => {
+        q4.setFromAxisAngle(up, yaw);
+        // (Its foot well under the water.)
+        m4.compose(v3.set(x, this.sea - w * 0.6, -z), q4, s3.set(w, w, w));
+        im.setMatrixAt(i, m4);
+        this.stackSpots.push([x, z, w * 0.5]);
+      });
+      im.computeBoundingSphere();
+      im.name = 'sea-stacks';
+      this.root.add(im);
     });
-    im.computeBoundingSphere();
-    im.name = 'sea-stacks';
-    this.root.add(im);
   }
   private stackSpots: Array<[number, number, number]> = [];
 
@@ -1070,64 +1084,70 @@ export class GullhavenWorld {
     slip.push(box(6, 1.2, 40, STONE, [0, -0.6, 0], [-0.06, 0, 0]));
     slip.push(box(0.6, 1.6, 40, STONE_D, [3.2, -0.2, 0], [-0.06, 0, 0]));
     sheds.push(...placed(slip, sx, c.ground(edgeX(c, sz) - 0.5, sz), sz + 20, 0));
-    // The harbour's ice: a sheet at the course's own ice level from the quay to the pier, the line's two pier heads.
-    const z0 = pl.harbour - 20;
-    const z1 = fz + 120;
+    // The harbour's ice beyond the corridor's own: the basin from the corridor's seaward edge out to the pier, and past
+    // the line the shore-fast ice running on round the pier head until it ends on the open water. A sheet a few
+    // centimetres over the course's own ice level, row by row.
+    const z0 = pl.harbour - 10;
+    const z1 = fz + 160;
     const ice: number[] = [];
     const iceIdx: number[] = [];
-    const across = [-60, -26, -16, 16, 30, 60];
-    const rows = Math.ceil((z1 - z0) / 10);
+    const rows = Math.ceil((z1 - z0) / 8);
     for (let r = 0; r <= rows; r++) {
-      const z = z0 + r * 10;
+      const z = z0 + r * 8;
       const cx = c.centerX(z);
-      const y = c.ground(cx, z) - 0.04;
-      for (const a of across) ice.push(cx + a, y + (Math.abs(a) > 20 ? 0.05 : -0.02), -z);
+      const hw = c.halfWidth(z);
+      const y = c.ground(cx + hw, z) + 0.03;
+      // (Out to the pier inside the harbour; past the line out to a ragged edge on the sea.)
+      const out = z < fz ? hw + 14 : hw + 30 + 10 * Math.sin(z * 0.11) - (z - fz) * 0.1;
+      ice.push(cx + hw - 0.6, y, -z, cx + out, y, -z);
       if (r > 0) {
-        const A = (r - 1) * across.length;
-        const B = r * across.length;
-        for (let k = 0; k + 1 < across.length; k++) {
-          // (Not over the corridor's own ice: the terrain draws that.)
-          if (across[k] === -16) continue;
-          iceIdx.push(A + k, A + k + 1, B + k, A + k + 1, B + k + 1, B + k);
-        }
+        const A = (r - 1) * 2;
+        const B = r * 2;
+        iceIdx.push(A, A + 1, B, A + 1, B + 1, B);
       }
     }
     const iceG = new BufferGeometry();
     iceG.setAttribute('position', new BufferAttribute(new Float32Array(ice), 3));
     iceG.setIndex(iceIdx);
     sheds.push(part(iceG, ICE));
-    // The pier (seaward) and the quay (landward): stone moles along the basin, each ending in a pier-head light at the
-    // line.
+    // The pier (seaward, out past the basin) and the quay (landward, along the corridor's edge, under the moor): stone
+    // walls with snow on their tops, bollards along the quay, each ending at the line in a pier head and its light.
     const pier: BufferGeometry[] = [];
+    const PIER_E = 13;
+    const QUAY_E = 1.6;
     for (const side of [-1, 1]) {
-      const za = side > 0 ? pl.harbour + 40 : pl.harbour + 120;
-      const e = side > 0 ? 24 : 20;
+      const za = side > 0 ? pl.harbour + 30 : pl.harbour + 60;
+      const e = side > 0 ? PIER_E : QUAY_E;
+      const w = side > 0 ? 4.4 : 3;
       for (let z = za; z < fz; z += 8) {
         const cx = c.centerX(z);
+        const hw = c.halfWidth(z);
         const y = c.ground(cx, z);
-        pier.push(box(4.2, 3.2, 8.2, z % 16 < 8 ? STONE : STONE_D, [cx + side * e, y + 0.6, -(z + 4)]));
-        pier.push(box(4.0, 0.25, 8.0, SNOW, [cx + side * e, y + 2.32, -(z + 4)]));
+        const x = cx + side * (hw + e + w / 2);
+        pier.push(box(w, 3.2, 8.2, z % 16 < 8 ? STONE : STONE_D, [x, y - 0.4, -(z + 4)]));
+        pier.push(box(w - 0.2, 0.25, 8.0, SNOW, [x, y + 1.32, -(z + 4)]));
+        if (side < 0 && !low) pier.push(part(new CylinderGeometry(0.22, 0.28, 0.7, 6, 1), IRON, { pos: [x + w * 0.3, y + 1.6, -(z + 2)] }));
       }
       // The pier head and its light: a round stone head, a short white tower, its lantern.
       const cx = c.centerX(fz);
       const y = c.ground(cx, fz);
-      const hx = cx + side * e;
-      pier.push(part(new CylinderGeometry(4.2, 4.6, 3.4, 12, 1), STONE_D, { pos: [hx, y + 0.5, -fz] }));
-      pier.push(part(new CylinderGeometry(0.9, 1.15, 5.2, 10, 1), WHITE, { pos: [hx, y + 4.6, -fz] }));
-      pier.push(part(new CylinderGeometry(1.0, 1.0, 0.25, 10, 1), IRON, { pos: [hx, y + 7.3, -fz] }));
-      pier.push(part(new ConeGeometry(0.9, 0.8, 10, 1), IRON, { pos: [hx, y + 8.6, -fz] }));
-      lit.push(part(new CylinderGeometry(0.62, 0.62, 1.0, 8, 1), GLASS, { pos: [hx, y + 7.85, -fz] }));
-      this.lamps.push([hx, y + 8, fz, 16]);
+      const hx = cx + side * (c.halfWidth(fz) + e + w / 2);
+      pier.push(part(new CylinderGeometry(3.6, 4.0, 3.4, 12, 1), STONE_D, { pos: [hx, y - 0.3, -fz] }));
+      pier.push(part(new CylinderGeometry(3.4, 3.4, 0.25, 12, 1), SNOW, { pos: [hx, y + 1.45, -fz] }));
+      pier.push(part(new CylinderGeometry(1.1, 1.5, 8, 10, 1), WHITE, { pos: [hx, y + 5.5, -fz] }));
+      pier.push(part(new CylinderGeometry(1.3, 1.3, 0.3, 10, 1), IRON, { pos: [hx, y + 9.6, -fz] }));
+      pier.push(part(new ConeGeometry(1.15, 1.0, 10, 1), IRON, { pos: [hx, y + 11.3, -fz] }));
+      lit.push(part(new CylinderGeometry(0.8, 0.8, 1.3, 8, 1), GLASS, { pos: [hx, y + 10.4, -fz] }));
+      this.lamps.push([hx, y + 10.4, fz, 18]);
     }
     sheds.push(...pier);
-    // The boats, frozen in at angles off the line between the corridor and the moles: a hull, a wheelhouse, a mast.
+    // The boats, frozen into the basin at angles between the corridor and the pier: a hull, a wheelhouse, a mast.
     for (let i = 0; i < (low ? 6 : 11); i++) {
-      const z = pl.harbour + 50 + i * 26 + hash(i, 81) * 10;
-      if (z > fz - 12) break;
-      const side = i % 2 ? 1 : -1;
+      const z = pl.harbour + 40 + i * 22 + hash(i, 81) * 10;
+      if (z > fz - 14) break;
       const cx = c.centerX(z);
-      const x = cx + side * (c.halfWidth(z) + 4 + hash(i, 82) * 3);
-      const y = c.ground(cx, z) - 0.35;
+      const x = cx + c.halfWidth(z) + 4 + hash(i, 82) * (PIER_E - 6);
+      const y = c.ground(cx, z) - 0.3;
       const L = 7 + hash(i, 83) * 4;
       const hull = HULLS[i % HULLS.length];
       const b: BufferGeometry[] = [];
@@ -1137,7 +1157,23 @@ export class GullhavenWorld {
       b.push(box(1.6, 1.6, 2.0, LIME, [0, 2.1, 1.0]));
       b.push(box(1.8, 0.2, 2.3, SNOW, [0, 3.0, 1.0]));
       b.push(seg([0, 1.4, -1.8], [0, 6.8, -1.8], 0.07, IRON));
-      sheds.push(...placed(b, x, y, z, (hash(i, 84) - 0.5) * 0.9 + (side > 0 ? 0.25 : -0.25)));
+      sheds.push(...placed(b, x, y, z, (hash(i, 84) - 0.5) * 1.1 + 0.3));
+    }
+    // The line across the harbour's ice between the two pier-head lights: four rows of big ink and cream checks over
+    // the whole corridor, long down the run so the lens sees them square (ART.md 12's line).
+    const hwL = c.halfWidth(fz);
+    const sq = 1.1;
+    const nq = Math.floor((hwL * 2) / sq);
+    for (let row = 0; row < 4; row++) {
+      for (let i = 0; i < nq; i++) {
+        const za = fz + row * sq;
+        const zb = za + sq;
+        const pt = (d: number, zz: number): V3 => {
+          const x = c.centerX(zz) - hwL + d;
+          return [x, c.ground(x, zz) + 0.04, -zz];
+        };
+        sheds.push(quad(pt(i * sq, za), pt((i + 1) * sq, za), pt((i + 1) * sq, zb), pt(i * sq, zb), (i + row) % 2 ? CREAM : IRON));
+      }
     }
     this.add(merge(sheds), this.mat, pl.descent - 60, fz + 260).name = 'harbour';
     this.add(merge(lit), this.glow, pl.descent - 60, fz + 260).name = 'harbour-lights';
@@ -1148,12 +1184,24 @@ export class GullhavenWorld {
   /** Gulls: a few hanging still in each column over its rim, wings held out on the rising air, rocking a little; and
    *  more wheeling slowly along the cliff over the sea. One instanced draw, moved by update() within reach. */
   private birds(c: Course, low: boolean): void {
+    // A gull soaring: a slim white body, long wings held out in a shallow M (the inner wing up from the body, the outer
+    // wing bent down at the wrist), grey on top with ink tips, a short tail. Both faces of each wing.
+    const wing = (s: number): BufferGeometry[] => {
+      const r = (p: V3): V3 => [p[0] * s, p[1], p[2]];
+      const a: V3 = r([0.06, 0.02, 0.1]);
+      const b: V3 = r([0.62, 0.16, 0.04]);
+      const c2: V3 = r([0.6, 0.15, -0.16]);
+      const d: V3 = r([0.06, 0.02, -0.12]);
+      const e: V3 = r([1.22, 0.04, -0.12]);
+      const f2: V3 = r([1.18, 0.04, -0.22]);
+      return [quad(a, b, c2, d, GULL_W), quad(d, c2, b, a, GULL), quad(b, e, f2, c2, GULL_T), quad(c2, f2, e, b, GULL)];
+    };
     const g = merge([
-      part(new OctahedronGeometry(0.22, 0), GULL, { scale: [1, 0.8, 2.4] }),
-      quad([0.05, 0, 0.12], [0.85, 0.12, 0.0], [0.82, 0.1, -0.22], [0.05, 0, -0.18], GULL_W),
-      quad([0.85, 0.12, 0.0], [1.5, 0.02, -0.12], [1.46, 0.02, -0.28], [0.82, 0.1, -0.22], GULL_T),
-      quad([-0.05, 0, -0.18], [-0.82, 0.1, -0.22], [-0.85, 0.12, 0.0], [-0.05, 0, 0.12], GULL_W),
-      quad([-0.82, 0.1, -0.22], [-1.46, 0.02, -0.28], [-1.5, 0.02, -0.12], [-0.85, 0.12, 0.0], GULL_T),
+      part(new OctahedronGeometry(0.1, 0), GULL, { scale: [1, 0.9, 3.4] }),
+      part(new OctahedronGeometry(0.07, 0), GULL, { pos: [0, 0.04, 0.32] }),
+      quad([0, 0.01, -0.26], [0.09, 0.0, -0.44], [-0.09, 0.0, -0.44], [0, 0.01, -0.26], GULL_W),
+      ...wing(1),
+      ...wing(-1),
     ]);
     const hangN = low ? 2 : 4;
     const gullies = gulliesOf(c);
@@ -1191,7 +1239,7 @@ export class GullhavenWorld {
       if (Math.abs(gz - z) > 500 && z > -1e8) continue;
       const rock = Math.sin(t * 1.3 + ph) * 0.12;
       // (Facing into the wind off the sea, +x, held still.)
-      const q = new Quaternion().setFromAxisAngle(up, -Math.PI / 2 + Math.sin(ph) * 0.3).multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), rock));
+      const q = new Quaternion().setFromAxisAngle(up, Math.PI / 2 + Math.sin(ph) * 0.3).multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), rock));
       m4.compose(v3.set(x, y + Math.sin(t * 0.9 + ph) * 0.6, -gz), q, s3.set(1.1, 1.1, 1.1));
       im.setMatrixAt(i, m4);
     }
@@ -1223,7 +1271,7 @@ export class GullhavenWorld {
     (this.driftMat.uniforms.uLit.value as Color).copy(p.snowLit).lerp(p.rim, 0.2);
     (this.driftMat.uniforms.uShade.value as Color).copy(p.snowShade).lerp(p.snowLit, 0.4);
     this.driftMat.uniforms.uLive.value = live;
-    this.driftMat.uniforms.uScale.value = (camera as PerspectiveCamera).isPerspectiveCamera ? 900 : 400;
+    this.driftMat.uniforms.uScale.value = 1500;
     (this.smokeMat.uniforms.uLit.value as Color).copy(p.clouds.shade).lerp(p.fog, 0.45);
     (this.smokeMat.uniforms.uShade.value as Color).copy(p.clouds.shade).multiplyScalar(0.6);
     this.smokeMat.uniforms.uLive.value = live;

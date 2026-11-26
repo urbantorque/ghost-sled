@@ -367,6 +367,13 @@ const OPEN_YAW = 0.12;
 const OPEN_ROLL = 0.024;
 const OPEN_UP = 0.35;
 const OPEN_EASE = 1.4;
+/** Round 9 (Gullhaven, notes/r9-gullhaven-world.md): a long flight beside a fall of hundreds of metres. Where the
+ *  course says a fall opens beside the flight (fallSide), the vista steps out over it instead of toward the course's
+ *  middle, and the look leans toward it by the overlook's own lean (OPEN_YAW, OPEN_ROLL), so the cleft and the sea far
+ *  below come into the frame beside the rider: the vista's allowance and the overlook's, nothing past them, home before
+ *  the stomp with the vista and off under reduced motion. */
+const FALL_YAW = OPEN_YAW;
+const FALL_ROLL = OPEN_ROLL;
 /** The reveal: as an overlook opens the lens takes a breath for REVEAL_S seconds, rising REVEAL_UP
  *  metres and back REVEAL_OUT, turning a further REVEAL_YAW toward the drop and letting the rider sink
  *  a little in the frame, then settles to the lean. Once per overlook. */
@@ -512,6 +519,8 @@ export class ChaseCamera {
   private revealSide = 0;
   private revealArmed = true;
   private vistaPick = 0;
+  /** Round 9: how fully this flight's vista is a fall's (eased, 0 to 1). */
+  private fallK = 0;
   /** The vista's weight before reduced motion takes the swing out of it: the flight's shape (in over
    *  its first moments, out before touchdown), which the wide's letterbox still follows. */
   private flightK = 0;
@@ -653,6 +662,9 @@ export class ChaseCamera {
   /** The course corridor at a three.js z: its centre x and half width (the results shot of a wreck
    *  in the trees is taken from the open course side). */
   corridor: ((z: number) => { x: number; hw: number }) | null = null;
+  /** Round 9 (Gullhaven): the side a long fall opens on beside a flight at three.js z (+1 toward three.js +x, -1, 0 for
+   *  none); null on every other course. */
+  fallSide: ((z: number) => number) | null = null;
   /** Whether a prop stands within `r` metres of a three.js (x, z): the results shot keeps its lens
    *  clear of the trees. */
   blocked: ((x: number, z: number, r: number) => boolean) | null = null;
@@ -1266,6 +1278,10 @@ export class ChaseCamera {
       const out = smooth01((left - VISTA_BACK) / 0.75);
       want = big * Math.min(into, out);
     }
+    // (Round 9: beside a fall, the vista steps out over it, FALL_YAW.)
+    const fall = this.mode === 'chase' && t.airborne ? (this.fallSide?.(t.pos.z) ?? 0) : 0;
+    this.fallK += ((fall !== 0 ? 1 : 0) - this.fallK) * (1 - Math.exp(-dt * 2.5));
+    if (!reduced && want > 0.02 && this.vistaPick === 0 && fall !== 0) this.vistaPick = fall;
     if (!reduced && want > 0.02 && this.vistaPick === 0) {
       // Toward the course's middle (the open side, away from the treeline), else away from the steer.
       const cor = this.corridor?.(t.pos.z);
@@ -1576,7 +1592,9 @@ export class ChaseCamera {
     // The overlook lean and its reveal, giving way to the vista (and the reveal to a section's lift).
     const open = this.openK * (1 - vista);
     const reveal = this.revealK() * (1 - vista) * (1 - rise);
-    const openYaw = MathUtils.clamp(open * OPEN_YAW + this.revealSide * reveal * REVEAL_YAW + this.whipYaw + pl.yaw * pk, -SHOT_YAW_MAX, SHOT_YAW_MAX);
+    // (Round 9: over a fall, the vista leans toward it, FALL_YAW.)
+    const fallLean = this.vistaS * vista * this.fallK;
+    const openYaw = MathUtils.clamp(open * OPEN_YAW + fallLean * FALL_YAW + this.revealSide * reveal * REVEAL_YAW + this.whipYaw + pl.yaw * pk, -SHOT_YAW_MAX, SHOT_YAW_MAX);
     // How fast this feels: calm at 15 m/s, fast from 28, and still climbing at the cap (the FOV, the
     // carve's dutch, the rumble).
     const fast = fastK(t.speed);
@@ -1886,6 +1904,8 @@ export class ChaseCamera {
       else rollT = -t.steer * (0.026 + 0.026 * spK + 0.03 * fast);
       // An overlook leans the horizon down toward the drop (a carve toward it adds to that).
       rollT -= open * OPEN_ROLL * (portrait ? 0.5 : 1);
+      // (Round 9: and a flight over a fall leans it down toward the fall, FALL_ROLL.)
+      rollT -= this.vistaS * this.vistaK * this.fallK * FALL_ROLL * (portrait ? 0.5 : 1);
       rollT -= this.wallK * WALL_ROLL;
       // (A place shot's lens stands level.)
       rollT *= 1 - smooth01(this.placeShotM);

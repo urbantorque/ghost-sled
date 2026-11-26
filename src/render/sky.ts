@@ -291,7 +291,8 @@ export class Sky {
           vec3 col = mix(uDeckShade, uDeckLit, l);
           float az = atan(d.x, -d.z);
           float toward = pow(max(cos(az - uDeckAz) * 0.5 + 0.5, 0.0), 3.0);
-          float low = 1.0 - smoothstep(0.02, 0.42, h);
+          // (Round 9: a deck with a lower edge, Gullhaven's, takes the glow only along that edge, its body the storm's slate.)
+          float low = 1.0 - smoothstep(0.02 + uDeckEdge, uDeckEdge > 0.0 ? uDeckEdge + 0.16 : 0.42, h);
           col = mix(col, uDeckGlow, clamp(low * low * (0.35 + 0.65 * toward) * (0.45 + 0.75 * under) * 1.25, 0.0, 0.92));
           // (Round 9, Gullhaven: a deck with a lower edge, uDeckEdge, the clear sky under it down to the horizon where the
           // low sun shines through. The edge is ragged, and lit gold from under toward the sun's bearing.)

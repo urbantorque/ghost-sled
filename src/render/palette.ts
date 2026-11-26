@@ -4010,7 +4010,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
       kind: 'sheds',
       edit: (p) => {
         lamps(p, 1);
-        p.lampAir = Math.max(p.lampAir, 0.06);
+        p.lampAir = Math.max(p.lampAir, 0.02);
         p.lift.tint = c('#FFE8C8');
         p.grade.hi = c('#FFEEDA');
       },
@@ -4019,8 +4019,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
       kind: 'harbour',
       nth: 0,
       edit: (p) => {
-        lamps(p, 1.5);
-        p.lampAir = Math.max(p.lampAir, 0.08);
+        // (A breath of the lamps' haze only: the pier heads and the sheds' windows in a haze of it washed the line's ice
+        // to one gold glare.)
+        lamps(p, 1.3);
+        p.lampAir = Math.max(p.lampAir, 0.02);
         p.grade.hi = c('#FFEEDA');
       },
     },
