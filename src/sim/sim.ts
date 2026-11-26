@@ -110,6 +110,12 @@ const OVERCAP_EASE = 6;
 /** Round 9, the Old Run: how hard its track damps a sled's swing across the channel (rad/s on the heading's difference
  *  from the channel's direction). About 0.7 of critical on its deepest wall, whose swing has a period of 2.5 s. */
 export const TRACK_DAMP = 1.8;
+/** Round 9, the Old Run: how much of the bank's turn (wallYaw) turns the sled's motion as well as its nose. A banked wall
+ *  holds a sled round a bend by pushing on it, not by the runners' grip, so a sled riding at its settling height turns
+ *  with the channel and spends nothing on slip; one held above it or below it steers against the wall and pays the
+ *  slip a steered turn costs. Without it (0, the groundwork's lab) the wall turned only the nose, the runners turned the
+ *  motion after it, and every bend on the wall cost what a bend on the floor did: the glaze could not pay. */
+export const TRACK_BANK = 1;
 
 /** Round 9, the Old Run: how fast a banked surface turns a carving sled, rad/s: the ground's rise toward the channel's
  *  right (the gradient across the channel's direction `phi`), times gravity, over the speed (8 m/s at least). A sled
@@ -1211,8 +1217,13 @@ export class Sim {
       const k = e >= 6 ? 1 : e / 6;
       s.heading += (off > 0 ? -1 : 1) * k * (1.5 + s.speed / 18) * DT;
     }
-    // (Round 9, the Old Run: the bank turns a carving sled, as a banked track's wall does: notes/r9-ground.md, A2.)
-    if (this.trackOn) s.heading -= wallYaw(vec, phi, s.speed, g) * DT;
+    // (Round 9, the Old Run: the bank turns a carving sled, as a banked track's wall does, its motion with its nose:
+    // notes/r9-ground.md, A2, and notes/r9-oldrun.md, TRACK_BANK.)
+    if (this.trackOn) {
+      const wy = wallYaw(vec, phi, s.speed, g) * DT;
+      s.heading -= wy;
+      s.velHeading -= wy * TRACK_BANK;
+    }
     // Wall rides: up the berm at speed and back down, on purpose.
     if (e > WALL_RIDE_E && s.speed > 15 && !s.drifting) {
       s.wallTicks++;

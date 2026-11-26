@@ -4,9 +4,10 @@ import { ChaosEvent, PLAIN } from '../src/sim/chaos';
 import { CHUNK_LEN, Course, THRESHOLD_AFTER, THRESHOLD_AFTER_MIN, THRESHOLD_BEFORE, THRESHOLD_BEFORE_MAX, eventsFor, finishZFor } from '../src/sim/course';
 import { packInput } from '../src/sim/input';
 import { MOUNTAINS, OLDRUN_LAB_SEED, dailySeed } from '../src/sim/mountains';
-import { FLOOR, LIP, MAX_SLOPE, OLDRUN_LAYOUT, WALL } from '../src/sim/oldrun';
-import { Sim } from '../src/sim/sim';
-import { clumsy } from '../scripts/playtest/labpilots';
+import { gateX, machineZ, pathX } from '../src/sim/moments';
+import { FLOOR, GLAZE, LIP, MAX_SLOPE, OLDRUN_LAYOUT, WALL } from '../src/sim/oldrun';
+import { Sim, TRACK_BANK, TRACK_DAMP, wallYaw } from '../src/sim/sim';
+import { classic, clumsy } from '../scripts/playtest/labpilots';
 
 // The Old Run's own promises (round 9, notes/r9-ground.md section 5), on its lab course: the five's (the first minute,
 // the leaps, the kickers, the square) are not its, and these are. Nothing in its track can floor a rider: its walls
@@ -161,5 +162,49 @@ describe('the Old Run: its walls', () => {
     }
     expect(slush).toBeGreaterThan(50);
     expect(glaze).toBeGreaterThan(50);
+  });
+});
+
+describe('the Old Run: its glaze pays (notes/r9-oldrun.md section 1, the lab bar)', () => {
+  const kit = { gateX, pathX, machineZ, track: { wallYaw, damp: TRACK_DAMP, bank: TRACK_BANK } };
+  /** One lab pilot's run: its time, the seconds it spends in the bends and the share of its grounded bend ticks on the glaze. */
+  const pilot = (skill: 'mid' | 'expert', seed: number, floor = false): { seconds: number; bends: number; glaze: number } => {
+    let p: ReturnType<typeof classic> | null = null;
+    let bend = 0;
+    let onGround = 0;
+    let onGlaze = 0;
+    const r = rideWith((sim) => {
+      if (!p) p = classic(skill, sim, seed, { ...kit, floor });
+      const s = sim.s;
+      if (sim.tick > 0 && !sim.finished && Math.abs(course.centerX(s.z + 2) - 2 * course.centerX(s.z) + course.centerX(s.z - 2)) / 4 >= 1 / 180) {
+        bend++;
+        if (s.grounded) {
+          onGround++;
+          if (course.surface(s.x, s.z).drag === GLAZE.drag) onGlaze++;
+        }
+      }
+      const o = p();
+      return (o.steer | 0) | (o.action ? 16 : 0);
+    });
+    expect(r.sim.finished).toBe(true);
+    expect(r.falls).toBe(0);
+    return { seconds: r.sim.s.finishTick / 60, bends: bend / 60, glaze: onGlaze / Math.max(1, onGround) };
+  };
+
+  it('the mid pilot on its glaze line beats its own hands on the floor line by 10 to 20% of the bends, in 85 to 95 s', () => {
+    for (const seed of [1234, 1271]) {
+      const glaze = pilot('mid', seed);
+      const floor = pilot('mid', seed, true);
+      const gain = (floor.bends - glaze.bends) / floor.bends;
+      expect(gain, `seed ${seed}`).toBeGreaterThanOrEqual(0.1);
+      expect(gain, `seed ${seed}`).toBeLessThanOrEqual(0.2);
+      expect(glaze.seconds).toBeGreaterThan(85);
+      expect(glaze.seconds).toBeLessThan(95);
+      expect(floor.glaze).toBe(0);
+    }
+  });
+
+  it('the expert spends most of its bend time on the glaze', () => {
+    expect(pilot('expert', 1234).glaze).toBeGreaterThan(0.5);
   });
 });

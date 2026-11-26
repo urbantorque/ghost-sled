@@ -5,7 +5,7 @@ import { DRAFT_BIT, InputRecorder, LogEvent, packInput } from '../sim/input';
 import { Rng, hash32, hashFloat } from '../sim/prng';
 import { RunRecord, applyLogEvent } from '../sim/replay';
 import { type RiderPoint, RivalWatch, draftsOn, riderPoint } from '../sim/rivals';
-import { DT, LANTERN, Sim, TICK_RATE, TRACK_DAMP, wallYaw } from '../sim/sim';
+import { DT, LANTERN, Sim, TICK_RATE, TRACK_BANK, TRACK_DAMP, wallYaw } from '../sim/sim';
 import type { KitRider } from '../sim/kit';
 import { Lines } from './lines';
 import type { RideStyle } from './roster';
@@ -1091,7 +1091,7 @@ export class Bot {
     // Moguls keep the runners off the snow, so steering has to be done before them: aim through
     // the whole field at the line where it comes out.
     const aim = Math.max(flying ? s.speed * 2 : 0, this.mogulExit(s.z, s.speed) - zp);
-    let cmd = this.mode === 'drift' ? this.driftSteer(xp, zp) : this.followSteer(xp, zp, hp, tr, aim);
+    let cmd = this.mode === 'drift' ? this.driftSteer(xp, zp) : this.onTrack && !this.goal ? this.trackSteer(xp, zp, hp, tr) : this.followSteer(xp, zp, hp, tr, aim);
     const goal = this.goal;
     cmd = this.groundActions(now, apply, zp, cmd);
     if (goal && !this.goal) {
@@ -1155,6 +1155,38 @@ export class Bot {
     };
     this.goal = null;
     return room(1) > room(-1) ? 1 : -1;
+  }
+
+  /** Round 9, the Old Run: a height on the wall held, not a heading. The sled's offset square to the channel is steered
+   *  toward this rider's line there (kit.ts lineFor), from where the sled will be when the hands act, with the channel's
+   *  own turn, the wall's and the track's damping fed forward: a rider who knows the wall leans into it. */
+  private trackSteer(xp: number, zp: number, hp: number, tr: number): number {
+    const sim = this.sim;
+    const s = sim.s;
+    const c = this.course;
+    const v = s.speed > 8 ? s.speed : 8;
+    const p = c.channelSlope(zp);
+    const phi = datan2(p, 1);
+    const across = (z: number, x: number): number => {
+      const pz = c.channelSlope(z);
+      return (x - c.centerX(z)) / Math.sqrt(1 + pz * pz);
+    };
+    const look = zp + v * 0.9;
+    const want = across(look, this.lineX(look));
+    const wantRate = (across(look + 1, this.lineX(look + 1)) - want) * s.vz;
+    const k = clamp(0.45 / this.t.tau, 0.5, 1);
+    const lateral = clamp(wantRate - 1.2 * k * (across(zp, xp) - want), -7, 7);
+    const psi = Math.asin(clamp(lateral / v, -0.5, 0.5));
+    const phiRate = ((c.channelSlope(zp + 1) - p) * s.vz) / (1 + p * p);
+    // (The velocity turns with the heading over the lead; the bank turns it too, so the slip it needs is what is left.)
+    const vel = s.velHeading + (hp - s.heading);
+    const velRate = phiRate + 4 * k * (psi - (vel - phi));
+    this.course.gradient(xp, zp, this.grad);
+    const yaw = wallYaw(this.grad, phi, s.speed, sim.gravity);
+    const grip = 6.5 * sim.sled.grip * sim.mood.grip * c.surface(xp, zp).grip;
+    const head = vel + (velRate + TRACK_BANK * yaw) / grip;
+    const rate = velRate + 4 * k * (head - hp);
+    return clamp((rate - clamp(phi - hp, -1, 1) * TRACK_DAMP + yaw) / tr + gauss(this.rng) * this.t.steerNoise, -1, 1);
   }
 
   private followSteer(xp: number, zp: number, hp: number, tr: number, aim: number): number {
