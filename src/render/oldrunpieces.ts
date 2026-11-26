@@ -331,6 +331,9 @@ export class OldRunPieces {
     if (this.hookPlay >= 0 && this.hookLamps) {
       const p = this.plays[this.hookPlay];
       this.hookLamps.visible = near(p.z0, p.z1);
+    }
+    if (this.hookPlay >= 0 && this.hookLamps?.visible) {
+      const p = this.plays[this.hookPlay];
       const active = mo !== null && mo.active === this.hookPlay;
       const end = this.ended.get(this.hookPlay);
       const n = this.hookPos.length;

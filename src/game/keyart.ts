@@ -98,16 +98,17 @@ export const TITLE_SHOTS: Readonly<Record<string, TitleShot>> = {
     desk: { r: 4.8, up: 1.3, sweep: 0.4, drift: 0.14, ahead: 40, lift: 0.6, crane: 0, hero: [0.08, 0.2] },
     phone: { r: 7.2, up: 1.5, sweep: 0.12, drift: 0.05, ahead: 30, lift: 0.8, crane: 0, hero: [-0.06, -0.06] },
   },
-  // Round 9, the Old Run (notes/r9-oldrun-world.md): a rider high on the glaze through the Horseshoe, the bare wood
-  // round the track and the lake far below in the setting sun. The reel rides the lead bend and the hook in the gold
-  // over the lake; the lens a little high and swung to the hero's right, so the wall's glaze and the valley share the
-  // frame over its shoulder.
+  // Round 9, the Old Run (notes/r9-oldrun-world.md): a rider down the old ice track into the setting sun, the bare
+  // wood either side and the lake far below at the end of the channel. The reel rides the Horseshoe's lead bend in the
+  // sunset over the lake; the lens high over the channel and swung to the hero's left, the look far down the track, so
+  // the sun sits in the channel's mouth. (Swung to the right and low, as the first composition had it, the lens filled
+  // with the wall's ice and the hero stood behind the title's right column.)
   oldrun: {
-    from: 2380,
-    to: 2860,
+    from: 2170,
+    to: 2560,
     light: 2350,
-    desk: { r: 5.4, up: 1.4, sweep: 0.36, drift: 0.12, ahead: 34, lift: 0.7, crane: 0.2, hero: [0.08, 0.2] },
-    phone: { r: 7.2, up: 1.5, sweep: 0.12, drift: 0.05, ahead: 24, lift: 0.7, crane: 0, hero: [-0.06, -0.06] },
+    desk: { r: 6.4, up: 3, sweep: -0.3, drift: 0.12, ahead: 42, lift: 0.4, crane: 0.2, hero: [0.08, 0.2] },
+    phone: { r: 7.4, up: 2.4, sweep: -0.12, drift: 0.05, ahead: 30, lift: 0.5, crane: 0, hero: [-0.06, -0.06] },
   },
 };
 

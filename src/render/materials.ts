@@ -1671,7 +1671,8 @@ export function makeSnowMaterial(track = false): ShaderMaterial {
             vec3 tBody = col * mix(vec3(0.93), uSnowShade / max(uSnowLit, vec3(0.05)), 0.42);
             vec3 gBody = mix(uSnowShade, uSnowDeep, 0.75) * vec3(0.72, 0.9, 1.1) * (0.45 + 0.45 * shadow);
             body = mix(mix(tBody, gBody, tGlaze), col, tSlush);
-            crackK = mix(0.45, 0.35, tGlaze);
+            // (Faint: at the lens the plates' borders drew a pale cell grid over the near wall.)
+            crackK = mix(0.22, 0.3, tGlaze);
           #endif
           // Fractures frozen in the body: the borders of irregular ice plates, straight-edged and
           // sharp like real cracks (smooth noise contours read as a topographic map), near the lens only.
