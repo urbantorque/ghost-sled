@@ -184,6 +184,21 @@ describe("the results' words", () => {
   });
 });
 
+describe('the results of a Long Night', () => {
+  const night = (line: string): ResultsModel =>
+    ({ score: 1, distance: 4540, finishZ: 4500, finish: { seconds: 150, medal: 0, splits: [], bestTime: null, newBest: true }, best: 0, newBest: false, giftsEarned: 40, wallet: 400, ghosts: [{ name: 'Mika', kind: 'pool', score: 1, time: 155, distance: 4400, passed: true }], ghostsPassed: 1, missions: [], crashCause: '', bestCombo: 0, perfects: 0, maxAir: 0, mountain: 'Pinecrest', mood: '', canRevive: false, canDouble: false, doubled: false, canChallenge: false, unlocked: [], runAgainLabel: { text: 'Ride the Long Night', aria: 'Ride the Long Night again from its first leg' }, raceLine: { text: line, tone: 'event' } }) as ResultsModel;
+
+  it('leads with the depth, not the last leg race, and the button says what it does', () => {
+    const deepest = night('The Long Night: 2 legs: your deepest night');
+    expect(resultsMoment(deepest)).toMatchObject({ figure: '2', of: 'legs', word: 'Your deepest night', time: null });
+    expect(factText(resultsMoment(deepest).fact!)).toBe('1st of 2 on the last leg');
+    expect(storyButton(deepest)).toMatchObject({ label: 'Ride the Long Night', why: 'From its first leg' });
+    const short = night('The Long Night: 1 leg. Your deepest: 2 legs and 340 m');
+    expect(resultsMoment(short)).toMatchObject({ figure: '1', of: 'leg', word: 'Through the Long Night' });
+    expect(factText(resultsMoment(short).fact!)).toBe('Your deepest: 2 legs and 340 m');
+  });
+});
+
 describe("the results' button and where its reason is served", () => {
   const contract = (text: string, here: boolean, toDaily = false): NextGoal => ({ kind: 'contract', text, short: '', reachable: true, gap: 0.2, names: [text], here, toDaily });
 

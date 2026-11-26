@@ -179,6 +179,12 @@ export function resultsMoment(m: ResultsModel): Moment {
     return { kind: md >= 3 ? 'win' : md > 0 ? 'podium' : 'finish', figure: m.trial.figure, of: m.trial.unit, word: m.trial.word ?? 'Across the line', time: null, medal: md, fact: null };
   }
   const place = placeOf(m);
+  // (A Long Night ridden through leads with its depth, not the last leg's race: "2 legs / Your deepest night".)
+  const night = nightDepth(m);
+  if (night && night.legs > 0) {
+    const fact: MomentFact | null = night.deepest ? { before: `Your deepest: ${night.deepest}`, name: null, after: '', tone: 'plain', who: null, rider: null } : place ? { before: `${ordinal(place.rank)} of ${place.of} on the last leg`, name: null, after: '', tone: 'plain', who: null, rider: null } : null;
+    return { kind: night.best ? 'win' : 'finish', figure: String(night.legs), of: night.legs === 1 ? 'leg' : 'legs', word: night.best ? 'Your deepest night' : 'Through the Long Night', time: null, medal: 0, fact };
+  }
   const em = eventMedal(m);
   if (em && em.medal > 0) {
     const fact: MomentFact | null = place ? { before: `${ordinal(place.rank)} of ${place.of} in the race`, name: null, after: '', tone: 'plain', who: null, rider: null } : null;
@@ -189,6 +195,15 @@ export function resultsMoment(m: ResultsModel): Moment {
   const kind: MomentKind = place.rank === 1 ? 'win' : place.rank <= 3 && place.of >= 4 ? 'podium' : 'finish';
   const word = kind === 'win' ? 'First down the mountain' : kind === 'podium' ? 'On the podium' : 'Across the line';
   return { kind, figure: ordinal(place.rank), of: `of ${place.of}`, word, time: clock(fin.seconds), medal: 0, fact };
+}
+
+/** A Long Night's depth, from the race line app.ts writes for one ("The Long Night: 2 legs: your deepest night", "The
+ *  Long Night: 1 leg. Your deepest: 2 legs and 340 m"). */
+export function nightDepth(m: ResultsModel): { legs: number; best: boolean; deepest: string | null } | null {
+  const got = /^The Long Night: (.+?)(?:: (your deepest night)|\. Your deepest: (.+))$/.exec(m.raceLine?.text ?? '');
+  if (!got) return null;
+  const legs = /^(\d+) legs?\b/.exec(got[1]);
+  return { legs: legs ? Number(legs[1]) : 0, best: !!got[2], deepest: got[3] ?? null };
 }
 
 /** The best thing a finish did, by rank: The Twelve, a new best, the nearest rider. */
@@ -282,6 +297,8 @@ function buttonWords(m: ResultsModel): StoryButton {
     const rival = m.ghosts.find((g) => g.name === name);
     if (rival && typeof rival.time === 'number') return { label, why: `${clock(rival.time)} to beat`, aria: p.aria };
   }
+  // A Long Night ridden through says its depth in beat one: the button says what it does.
+  if (m.finish && label === 'Ride the Long Night' && (nightDepth(m)?.legs ?? 0) > 0) return { label, why: 'From its first leg', aria: m.runAgainLabel?.aria ?? label };
   // The Daily's or the Cup's next medal is what another run there is for: its mark and how far off it was.
   const em = eventMedal(m);
   if (em?.next && (!p || p.kind === 'again') && m.finish) {
