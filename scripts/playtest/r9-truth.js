@@ -411,11 +411,16 @@ async (page) => {
     const open = async (sel) => {
       // (Round 9: "a > b" opens a, then presses b in what a opened: a room's control.)
       if (sel.includes(' > ')) {
-        const [a, b] = sel.split(' > ');
+        // (Round 9, the u4 lane: "a > b > c" goes on pressing in what each opened: an album page, a mountain's board.)
+        const [a, b, ...more] = sel.split(' > ');
         if (!(await click(a, 3000))) return false;
         await page.waitForTimeout(900);
-        const ok = await click(`.gs9-room ${b}`, 3000);
+        let ok = await click(`.gs9-room ${b}`, 3000);
         await page.waitForTimeout(900);
+        for (const m of more) {
+          ok = ok && (await click(m, 3000));
+          await page.waitForTimeout(900);
+        }
         return ok;
       }
       const s = sel.startsWith('[') ? sel : await byLabel(sel);

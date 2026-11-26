@@ -125,7 +125,9 @@ export class Results {
     if (back) {
       this.story?.finish();
       this.openDetails(false);
-      this.det?.el.querySelector<HTMLElement>(`[data-fk="${back}"]`)?.focus({ preventScroll: true });
+      // (The sheet takes focus on its next frame, at its [data-first]: the control that was pressed.)
+      const was = this.det?.el.querySelector<HTMLElement>(`[data-fk="${back}"]`);
+      if (was) was.dataset.first = '';
       return;
     }
     this.story?.play();

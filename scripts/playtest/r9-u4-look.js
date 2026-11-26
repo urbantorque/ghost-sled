@@ -45,12 +45,43 @@ async (page) => {
       at = '';
       continue;
     }
-    const want = s.run ? 'run' : 'title';
-    const where = `${s.stage}${s.run ? ':run' : ''}`;
+    // (`results`: a run ridden to its line, pinned on the safe line at 30 m/s as r9-truth.js does, then its results.)
+    const want = s.run || s.results ? 'run' : 'title';
+    const where = `${s.stage}${s.run ? ':run' : s.results ? ':results' : ''}`;
     if (at !== where || s.fresh) {
-      await page.goto(`${c.base}?debug&tier=${c.tier}&save=${s.stage}${s.run ? '&autoride=1' : ''}`, { waitUntil: 'domcontentloaded', timeout: 90000 });
+      await page.goto(`${c.base}?debug&tier=${c.tier}&save=${s.stage}${s.run || s.results ? '&autoride=1' : ''}`, { waitUntil: 'domcontentloaded', timeout: 90000 });
       await phase(want);
-      await page.waitForTimeout(s.run ? 2500 : 2500);
+      await page.waitForTimeout(2500);
+      if (s.results) {
+        await page.evaluate(() => {
+          window.__pinOn = true;
+          const pin = () => {
+            const rr = window.__gs.run;
+            if (rr && !rr.sim.s.crashed && window.__pinOn) {
+              const q = rr.sim.s;
+              const cc = rr.sim.course;
+              q.x = cc.safeX(q.z);
+              q.y = cc.ground(q.x, q.z);
+              q.vx = ((cc.safeX(q.z + 1) - cc.safeX(q.z - 1)) * 30) / 2;
+              q.vz = 30;
+              q.vy = 0;
+              q.speed = 30;
+              q.grounded = true;
+              q.heading = Math.atan2(q.vx, q.vz);
+              q.velHeading = q.heading;
+              q.invuln = 10;
+            }
+            if (window.__pinOn) requestAnimationFrame(pin);
+          };
+          pin();
+          window.__gs.run.sim.s.z = Math.max(window.__gs.run.sim.s.z, 3900);
+        });
+        await phase('results', 120000);
+        await page.evaluate(() => {
+          window.__pinOn = false;
+        });
+        await page.waitForTimeout(6000);
+      }
       at = where;
     } else {
       // Back to the bare surface: Escape until nothing is open (a run stays paused under its card).

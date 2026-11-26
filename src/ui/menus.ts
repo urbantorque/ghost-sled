@@ -1090,6 +1090,10 @@ export class Menus {
   private restore(): void {
     const r = this.returnFocus;
     this.returnFocus = null;
-    if (r && r.isConnected && !this.anyOpen) r.focus({ preventScroll: true });
+    if (!r || this.anyOpen) return;
+    // (Round 9, U4: a room drawn again while the books were open has the same control under the same focus key.)
+    const fk = r.dataset.fk;
+    const to = r.isConnected ? r : fk ? Array.from(document.querySelectorAll<HTMLElement>(`[data-fk="${CSS.escape(fk)}"]`)).find((e) => !e.closest('[inert], [hidden]')) : null;
+    to?.focus({ preventScroll: true });
   }
 }
