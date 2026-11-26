@@ -1330,6 +1330,10 @@ export function makeSnowMaterial(track = false, street = false): ShaderMaterial 
         float groomK = vGroom * (1.0 - smoothstep(-2.2, -0.4, vEdge)) * (1.0 - ice) * (1.0 - bare);
         float powderK = (1.0 - groomK) * (1.0 - ice) * (1.0 - bare) * (1.0 - smoothstep(0.85, 1.0, vPaint.z));
         packed *= 1.0 - groomK;
+        #ifdef STREET
+          // (Gablefall's street is trodden over its cobbles, below: no runners' old tracks, which ran down it like rails.)
+          packed *= 1.0 - smoothstep(0.0, 0.05, vPaint.w);
+        #endif
         // The grain's dab, kept for the light below.
         vec4 grain = vec4(0.0);
         float grainK = 0.0;
@@ -1660,22 +1664,25 @@ export function makeSnowMaterial(track = false, street = false): ShaderMaterial 
             // (Worn in patches where the traffic has scuffed it, never in ruts: a long line down the street read as the
             // fall line's speed lines, ART.md 4.)
             float wornN = vnoise(vec2(cu * 0.42, cv * 0.11) + 2.3) * 0.6 + vnoise(vec2(cu * 1.1, cv * 0.37) + 7.1) * 0.4;
-            float worn = smoothstep(0.56, 0.8, wornN) * (1.0 - smoothstep(2.0, 3.6, abs(cu)));
-            // (Setts laid by hand: each row its own depth and its own stagger, each sett its own width, so they never rule a
-            // grid.)
-            float row = floor(cv / 0.33);
-            float rh = 0.28 + 0.1 * hash13(vec3(row, 7.0, 1.0));
-            float rv = fract(cv / 0.33) * 0.33 / rh;
-            float su = cu / (0.22 + 0.08 * hash13(vec3(row, 3.0, 2.0))) + hash13(vec3(row, 5.0, 4.0)) + 0.18 * vnoise(vec2(cu * 2.1, cv * 1.7));
-            vec2 cell = vec2(fract(su), min(rv, 1.0));
-            float joint = min(min(cell.x, 1.0 - cell.x) * 0.24, min(cell.y, 1.0 - cell.y) * rh);
+            // (In scuffed patches only, a sixth of the street: a whole floor of setts read to the first critic as graph paper.)
+            float worn = smoothstep(0.62, 0.86, wornN) * (1.0 - smoothstep(2.0, 3.6, abs(cu)));
+            // (Setts laid by hand in arcs across the street, each row its own depth and stagger, each stone its own width and
+            // rounded, the snow lying in wide joints between them: stones, never a ruled grid.)
+            cv += 0.55 * (1.0 - cos(clamp(cu, -4.0, 4.0) * 0.55));
+            float row = floor(cv / 0.34);
+            float rh = 0.3 + 0.08 * hash13(vec3(row, 7.0, 1.0));
+            float lv = fract(cv / 0.34) * 0.34;
+            float sw = 0.24 + 0.08 * hash13(vec3(row, 3.0, 2.0));
+            float su = cu / sw + hash13(vec3(row, 5.0, 4.0)) + 0.12 * vnoise(vec2(cu * 2.1, cv * 1.7));
+            vec2 qd = abs(vec2((fract(su) - 0.5) * sw, lv - rh * 0.5)) - (vec2(sw, rh) * 0.5 - 0.035 - 0.06);
+            float sdS = length(max(qd, vec2(0.0))) + min(max(qd.x, qd.y), 0.0) - 0.06;
             float fineC = 1.0 - smoothstep(0.03, 0.1, footprint);
-            float sett = mix(0.55, smoothstep(0.01, 0.03 + footprint * 0.6, joint), fineC);
+            float sett = mix(0.45, 1.0 - smoothstep(-0.006 - footprint * 0.5, 0.006 + footprint * 0.5, sdS), fineC);
             float tone = 0.84 + 0.32 * hash13(vec3(floor(su), row, 3.0));
-            vec3 stoneC = vec3(0.56, 0.55, 0.64) * mix(1.0, tone, fineC);
+            vec3 stoneC = vec3(0.6, 0.58, 0.68) * mix(1.0, tone, fineC);
             // (A thin trodden layer over the whole street: a step cooler than the roofs' fresh snow.)
             col = mix(col, col * mix(vec3(0.92), uSnowShade / max(uSnowLit, vec3(0.05)), 0.35), vPaint.w * 0.32);
-            col = mix(col, col * stoneC, vPaint.w * worn * sett * 0.6);
+            col = mix(col, col * stoneC, vPaint.w * worn * sett * 0.55);
           }
         #endif
         col += uHemi * 0.07 * (0.5 + 0.5 * n.y);
@@ -1755,11 +1762,10 @@ export function makeSnowMaterial(track = false, street = false): ShaderMaterial 
             float ta = dp / max(abs(rr.x), 0.03);
             float hr = ta * rr.y;
             float zr = vWorldPos.z + rr.z * ta;
+            // (Round 9, Gablefall's river: no treeline stands in its mirror, there is none; a roofline of gables drawn here
+            // read as a black sawtooth round the rider. Its ice mirrors the sky alone.)
             #ifdef STREET
-              // (Round 9, Gablefall's river: the quay's houses stand in the mirror, a roofline of steep gables, never a
-              // treeline's jagged tips.)
-              float gab = 1.0 - abs(fract(zr / 7.5 + 0.2 * vnoise(vec2(zr * 0.03, sd))) - 0.5) * 2.0;
-              float tips = 10.0 + 3.5 * vnoise(vec2(zr * 0.05, sd + 2.0)) + 5.0 * gab;
+              float tips = -1e4;
             #else
               float tips = 16.5 + 7.0 * vnoise(vec2(zr * 0.07, sd + 2.0)) + 4.0 * abs(fract(zr * 0.21) - 0.5) + 2.5 * abs(fract(zr * 0.53 + 0.3) - 0.5);
             #endif

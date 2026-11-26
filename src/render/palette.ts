@@ -1038,10 +1038,14 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.sunColor = c('#F6F0EA');
       p.sunCore = new Color(1.6, 1.55, 1.5);
       p.sunTint = 0.4;
-      p.sunSize = 1.9;
-      p.sunGlow = 0.55;
-      p.sunDisc = 0.22;
-      p.sunSoft = 1;
+      // (The one light the frame has: the cloud bright where the sun is behind it. A glow too small left the sort's
+      // critic no light in the picture at all.)
+      p.sunSize = 2.4;
+      p.sunGlow = 0.82;
+      // (A pale coin of sun through the thinner cloud ahead: the frame's one light, which the roofs' shadows and the
+      // windows answer. With no disc the first critic found nothing in the picture lighting it.)
+      p.sunDisc = 0.55;
+      p.sunSoft = 0.7;
       p.skyZenith = c('#6A6E8C');
       p.skyMid = c('#9C9CB6');
       p.skyHorizon = c('#DCD6D8');
@@ -1055,18 +1059,18 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.fogFar = 760;
       p.hemiSky = c('#A8AAC6');
       p.massif.glow = c('#E8DCD8');
-      p.massif.glowK = 0.2;
+      p.massif.glowK = 0.34;
       p.massif.glowLine = -200;
       p.massif.veil = 0.5;
       // The snow cloud: a pale ceiling of soft billows over the whole sky, a little lighter low toward the hidden sun.
       p.deck = { k: 0.62, lit: c('#B4B2C6'), shade: c('#7E8098'), glow: c('#D8D0D0'), edge: 0 };
       p.clouds = { low: 0.25, high: 0, top: 0.15, lit: c('#E6E2E8'), shade: c('#9496AE'), rim: c('#EEE6E4'), shadow: 0 };
-      p.grade = { lift: c('#12142C'), gain: c('#FFF8F4'), saturation: 1, contrast: 1.08, grain: 0.8, foot: 0.32, shafts: 0, lens: 0.2, focal: 0.5, gust: 0, glitter: 0.18 };
+      p.grade = { lift: c('#0E1028'), gain: c('#FFF8F4'), saturation: 1.02, contrast: 1.16, grain: 0.8, foot: 0.32, shafts: 0, lens: 0.2, focal: 0.5, gust: 0, glitter: 0.18 };
       p.poster.shafts = 0;
       Object.assign(p.poster, { rim: 0.35, bands: 3, stripe: 0, rings: 0 });
       p.atmo = { rays: 0, halo: 0, meteors: 0, banner: 0, slide: 0, sweep: 0, valley: 0.6, valleyColor: c('#D4D0DA'), drift: 0.45 };
       // (Soft shadows under the cloud: the form of the roofs and the street's canyon, never the five's hard blue.)
-      p.shadowK = 0.55;
+      p.shadowK = 0.7;
       p.bloom = 0.34;
       p.snowfall = 0.7;
       p.sparkle = 0.45;
@@ -1686,8 +1690,8 @@ export interface JourneyStop {
 export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
   // Gablefall (round 9, notes/r9-gablefall-world.md): a grey afternoon in a snowfall, daylight all the way. The snow
   // thickens over Church Hill into the Market (the far side of the valley goes, the windows tell more), then thins down
-  // the Water Stairs as the cloud lightens to a pale silver over the river, and the line is crossed in daylight with the
-  // snow still falling.
+  // the Water Stairs as the cloud breaks over the river, a pale sun through the gap, and the line is crossed in daylight
+  // with the snow still falling: a sequence of pictures, not one grey (ART.md 15, rule 5).
   gablefall: [
     {
       from: 500, at: 1150, dusk: 0.05,
@@ -1699,7 +1703,10 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.snowfall = 0.85;
         p.lamps = 0.65;
         p.massif.veil = 0.7;
-        p.sunGlow = 0.4;
+        p.sunGlow = 0.45;
+        p.sunDisc = 0.3;
+        p.shadowK = 0.55;
+        p.grade.contrast = 1.18;
       },
     },
     {
@@ -1715,8 +1722,13 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.snowfall = 0.5;
         p.lamps = 0.5;
         p.massif.veil = 0.4;
-        p.sunGlow = 0.75;
-        p.shadowK = 0.62;
+        // (The cloud breaks over the river: a pale silver-gold sun through the gap, the shadows firm, the snow thinning.)
+        p.sunGlow = 1.05;
+        p.sunDisc = 0.85;
+        p.sunColor = c('#FFF0DC');
+        p.deck.k = 0.45;
+        p.shadowK = 0.85;
+        p.grade.hi = c('#FFF4E4');
       },
     },
   ],
