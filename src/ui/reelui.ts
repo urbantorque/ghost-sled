@@ -61,9 +61,11 @@ export class ReelUi {
     this.el = h('section', 'gs-film', h('div', 'gs-film-dip'), this.bar, h('div', 'gs-film-foot', this.card, ctl));
     this.el.setAttribute('aria-label', 'Your run, directed');
     parent.append(this.el);
-    // Skippable at any moment: Escape, as well as the button. Space and K pause.
+    // Skippable at any moment: Escape (and Backspace, round 9's other way back), as well as the button. Space and K
+    // pause. (Round 9, U4: taken at capture and marked taken, so ui.ts back(), which runs on the window's bubbling
+    // phase and skips a key already taken, never also closes what the reel was opened over: one press, one thing.)
     this.onKey = (e) => {
-      if (e.key === 'Escape') {
+      if ((e.key === 'Escape' || e.key === 'Backspace') && !e.repeat) {
         e.preventDefault();
         hd.onSkip();
       } else if (!rec && (e.key === ' ' || e.key === 'k') && !(e.target instanceof HTMLButtonElement)) {
@@ -71,7 +73,7 @@ export class ReelUi {
         hd.onPause();
       }
     };
-    window.addEventListener('keydown', this.onKey);
+    window.addEventListener('keydown', this.onKey, { capture: true });
     skip.focus({ preventScroll: true });
   }
 
@@ -130,7 +132,7 @@ export class ReelUi {
   }
 
   dispose(): void {
-    window.removeEventListener('keydown', this.onKey);
+    window.removeEventListener('keydown', this.onKey, { capture: true });
     this.el.remove();
   }
 }

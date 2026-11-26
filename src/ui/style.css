@@ -169,22 +169,6 @@
   pointer-events: auto;
 }
 
-.gs-h2 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--dim);
-  font-size: 0.74em;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.gs-h2 .gs-i {
-  width: 1.5em;
-  height: 1.5em;
-}
-
 /* Colour roles for ghost kinds and chaos events */
 
 .k-ghost {
@@ -315,21 +299,6 @@
   .gs-btn-soft:hover:not(:disabled) {
     background: rgba(30, 40, 80, 0.94);
   }
-
-  .gs-seg-btn:hover:not([aria-pressed='true']) {
-    color: var(--text);
-  }
-
-  .gs-switch-row:hover .gs-switch {
-    box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.4);
-  }
-}
-
-/* Pause > Home armed: the second tap quits the run. */
-.gs-pause-home.is-armed {
-  background: var(--signal);
-  box-shadow: var(--shadow);
-  color: var(--ink);
 }
 
 /* Keycaps */
@@ -415,11 +384,6 @@
   border-radius: 999px;
   box-shadow: inset 0 0 0 2px rgba(245, 243, 255, 0.78);
   background: rgba(245, 243, 255, 0.14);
-}
-
-/* The rumble switch means nothing until a gamepad has been used. */
-.gs-ui:not(.gs-has-pad) .gs-set-rumble {
-  display: none;
 }
 
 /* ------------------------------------------------------------------ Title */
@@ -602,32 +566,6 @@
   height: 100%;
 }
 
-.b-alpine .gs-mtn-sky {
-  background: linear-gradient(180deg, #2b4c9b 0%, #ffb38a 100%);
-}
-
-.b-glacier .gs-mtn-sky {
-  background: linear-gradient(180deg, #2b5fa8 0%, #ffd9c4 100%);
-}
-
-.b-volcanic .gs-mtn-sky {
-  background: linear-gradient(180deg, #2a1e3a 0%, #ff8a50 100%);
-}
-
-.b-blossom .gs-mtn-sky {
-  background: linear-gradient(180deg, #3a5ba8 0%, #ffc4d6 100%);
-}
-
-/* The Old Run: a low late sun, deep blue down to the amber it lays on the ice. */
-.b-oldrun .gs-mtn-sky {
-  background: linear-gradient(180deg, #2a3a86 0%, #ffa86a 100%);
-}
-
-/* Lanternfall: the end of night, indigo down to a violet that holds the lamps' marigold at its foot. */
-.b-lantern .gs-mtn-sky {
-  background: linear-gradient(180deg, #0b0a3e 0%, #4a388e 62%, #c88a70 100%);
-}
-
 .gs-title.is-first {
   grid-template-areas:
     'main . .'
@@ -635,130 +573,6 @@
     'side . .'
     'ride . .'
     'bar  . .';
-}
-
-/* Missions (shared by the title popover and results) */
-
-.gs-missions {
-  display: grid;
-  gap: 14px;
-}
-
-.gs-mis {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 7px 12px;
-}
-
-.gs-mis-text {
-  font-size: 0.92em;
-  font-weight: 700;
-  line-height: 1.25;
-}
-
-.gs-mis-right {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 800;
-}
-
-.gs-mis-prog {
-  color: var(--dim);
-  font-size: 0.86em;
-}
-
-.gs-mis-reward {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--gift);
-  font-size: 0.9em;
-}
-
-.gs-mis-reward.is-quiet {
-  font-size: 0.8em;
-  opacity: 0.85;
-}
-
-.gs-mis-reward .gs-i {
-  width: 1.15em;
-  height: 1.15em;
-}
-
-/* A real progress bar: the fill grows over a visible track, so "1/5" never reads as an underline. */
-.gs-mis-line {
-  position: relative;
-  grid-column: 1 / -1;
-  height: 6px;
-  overflow: hidden;
-  border-radius: var(--r-pill);
-  background: rgba(245, 243, 255, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.06);
-}
-
-.gs-mis-line::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--text);
-  transform: scaleX(var(--p, 0));
-  transform-origin: left center;
-}
-
-/* A finished mission is the brightest row, never a dimmed one: full text, a full gold bar, the
-   reward in full marigold and a check-and-Done stamp. */
-.gs-mis.is-done .gs-mis-line::before {
-  background: var(--gift);
-}
-
-.gs-mis-complete {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
-  height: 1.8em;
-  padding: 0 0.8em 0 0.55em;
-  border-radius: var(--r-pill);
-  background: var(--gift);
-  color: var(--ink);
-  font-size: 0.76em;
-  font-style: italic;
-  font-weight: 900;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.gs-mis-complete .gs-i {
-  width: 1.3em;
-  height: 1.3em;
-}
-
-.gs-mis.is-new::before {
-  content: '';
-  position: absolute;
-  inset: -7px -10px;
-  border-radius: var(--r-card);
-  background: rgba(255, 211, 77, 0.16);
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* On the results the missions land last (the reveal stagger there): the bars fill, then each one
-   this run completed stamps Done with a flash, 140 ms after the row above (MIS_STAMP_MS). */
-.gs-results.is-in .gs-mis.is-new::before {
-  animation: gs-flash 900ms ease-out calc(1050ms + var(--i, 0) * 140ms) 2 both;
-}
-
-.gs-results.is-in .gs-mis.is-new .gs-mis-complete {
-  animation: gs-stamp 360ms var(--spring) calc(1050ms + var(--i, 0) * 140ms) both;
-  --rot: -4deg;
-}
-
-.gs-results.is-in .gs-mis-line::before {
-  animation: gs-grow 560ms var(--out) 800ms both;
 }
 
 /* -------------------------------------------------------------------- HUD */
@@ -3317,30 +3131,6 @@
   filter: drop-shadow(0 1px 1px rgba(18, 25, 51, 0.7));
 }
 
-.gs-toast-sky.b-alpine {
-  background: linear-gradient(180deg, #2b4c9b 0%, #ffb38a 100%);
-}
-
-.gs-toast-sky.b-glacier {
-  background: linear-gradient(180deg, #2b5fa8 0%, #ffd9c4 100%);
-}
-
-.gs-toast-sky.b-volcanic {
-  background: linear-gradient(180deg, #2a1e3a 0%, #ff8a50 100%);
-}
-
-.gs-toast-sky.b-blossom {
-  background: linear-gradient(180deg, #3a5ba8 0%, #ffc4d6 100%);
-}
-
-.gs-toast-sky.b-lantern {
-  background: linear-gradient(180deg, #0b0a3e 0%, #4a388e 62%, #c88a70 100%);
-}
-
-.gs-toast-sky.b-oldrun {
-  background: linear-gradient(180deg, #2a3a86 0%, #ffa86a 100%);
-}
-
 /* An event's finale: the round it ends on, in the event's role colour (the hazards ice blue, the Gift
    Storm marigold, the Spirit Train mint). An 18 px card like the telegraph, the glyph on its disc, the
    line as the headline and the payoff beside it past a hairline. */
@@ -4186,66 +3976,6 @@
   animation: gs-fade-out 200ms ease both;
 }
 
-/* A finished mission: the Done stamp has the bar row to itself, beside the full gold bar. */
-.gs-mis-foot {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-  min-height: 22px;
-}
-
-.gs-mis-foot > .gs-mis-line {
-  grid-column: auto;
-}
-
-.gs-mis-foot > .gs-mis-complete {
-  height: 22px;
-  font-size: max(11px, 0.72em);
-  transform: rotate(-4deg);
-  transform-origin: left center;
-}
-
-.gs-results.is-in .gs-mis.is-new .gs-mis-foot > .gs-mis-complete {
-  animation: gs-stamp-slot 340ms var(--spring) calc(1050ms + var(--i, 0) * 140ms) both;
-}
-
-@keyframes gs-stamp-slot {
-  0% {
-    opacity: 0;
-    transform: rotate(var(--rot, -6deg)) scale(1.25);
-  }
-  60% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 1;
-    transform: rotate(var(--rot, -6deg)) scale(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  @keyframes gs-stamp-slot {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  /* Reduced motion: the card lands whole. A fade alone would still hold each beat back by its delay
-     (the Done stamps by up to 1.5 s), so every step of the stagger is simply there. These rules sit
-     after the last of them so they win at equal specificity. */
-  .gs-results.is-in .gs-mis-line::before,
-.gs-results.is-in .gs-mis.is-new::before,
-.gs-results.is-in .gs-mis.is-new .gs-mis-complete,
-.gs-results.is-in .gs-mis.is-new .gs-mis-foot > .gs-mis-complete {
-    animation: none;
-  }
-}
-
 /* Wide landscape (desktop, tablets sideways): the card keeps to the right 58% and the scrim lifts
    off the left, where the camera frames the crashed rider as a 3/4 hero shot of the live scene. */
 @media (min-aspect-ratio: 1/1) and (min-width: 901px) {
@@ -4257,31 +3987,8 @@
   }
 }
 
-@keyframes gs-res-in {
-  from {
-    opacity: 0;
-    transform: translateX(48px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  @keyframes gs-res-in {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-}
-
 /* ------------------------------------------------------------------ Menus */
 
-.gs-pause,
 .gs-sheetwrap {
   position: absolute;
   inset: 0;
@@ -4310,80 +4017,16 @@
   transition: opacity 180ms ease;
 }
 
-.gs-pause.is-in,
 .gs-sheetwrap.is-in {
   animation: gs-fade-in 180ms ease both;
 }
 
-.gs-pause.is-in .gs-pause-card,
 .gs-sheetwrap.is-in .gs-sheet {
   animation: gs-pop 260ms var(--spring) both;
 }
 
-.gs-pause.is-out,
 .gs-sheetwrap.is-out {
   animation: gs-fade-out 180ms ease both;
-}
-
-.gs-pause-card {
-  display: grid;
-  grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
-  grid-template-areas:
-    'title set'
-    'resume set'
-    'home set'
-    'key set'
-    '. set';
-  align-items: start;
-  gap: 12px clamp(18px, 3.4vw, 40px);
-  width: min(780px, 100%);
-  max-height: 100%;
-  padding: clamp(18px, 3.6vmin, 34px);
-  overflow-y: auto;
-  border-radius: var(--r-card);
-  background: var(--panel-solid);
-  overscroll-behavior: contain;
-}
-
-.gs-pause-title {
-  grid-area: title;
-  margin-bottom: 4px;
-  font-size: clamp(30px, calc(var(--u) * 2.4), 48px);
-  font-style: italic;
-  font-weight: 900;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.gs-pause-card > .gs-btn-primary {
-  grid-area: resume;
-  width: 100%;
-  justify-content: flex-start;
-}
-
-.gs-pause-card > .gs-btn-soft {
-  grid-area: home;
-  justify-self: start;
-}
-
-.gs-pause-card > .gs-set {
-  grid-area: set;
-}
-
-.gs-pause-key {
-  grid-area: key;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  color: var(--dim);
-  font-size: 0.86em;
-  font-weight: 700;
-}
-
-.gs-pause-key .gs-kbd {
-  font-size: 0.9em;
 }
 
 .gs-touch-mode .gs-kbd-only {
@@ -4399,10 +4042,6 @@
   border-radius: var(--r-card);
   background: #141b38;
   box-shadow: inset 0 0 0 1px var(--hair-2), 0 30px 60px -20px rgba(5, 9, 30, 0.85);
-}
-
-.gs-sheet-settings {
-  width: min(520px, 100%);
 }
 
 .gs-sheet-head {
@@ -4428,25 +4067,21 @@
   pointer-events: auto;
 }
 
-.gs-sheet-body,
-.gs-pause-card {
+.gs-sheet-body {
   scrollbar-color: rgba(245, 243, 255, 0.22) transparent;
   scrollbar-width: thin;
 }
 
-.gs-sheet-body::-webkit-scrollbar,
-.gs-pause-card::-webkit-scrollbar {
+.gs-sheet-body::-webkit-scrollbar {
   width: 6px;
 }
 
-.gs-sheet-body::-webkit-scrollbar-thumb,
-.gs-pause-card::-webkit-scrollbar-thumb {
+.gs-sheet-body::-webkit-scrollbar-thumb {
   border-radius: var(--r-pill);
   background: rgba(245, 243, 255, 0.22);
 }
 
-.gs-sheet-body::-webkit-scrollbar-track,
-.gs-pause-card::-webkit-scrollbar-track {
+.gs-sheet-body::-webkit-scrollbar-track {
   background: transparent;
 }
 
@@ -5085,188 +4720,6 @@
   }
 }
 
-/* Settings controls */
-
-.gs-set {
-  display: grid;
-  gap: 16px;
-}
-
-.gs-set-group {
-  display: grid;
-  gap: 2px;
-}
-
-.gs-set-h {
-  margin-bottom: 4px;
-}
-
-.gs-set-row {
-  display: grid;
-  grid-template-columns: 5.4em minmax(0, 1fr) 2.4em;
-  align-items: center;
-  gap: 14px;
-  min-height: 44px;
-}
-
-.gs-set-label {
-  font-weight: 750;
-}
-
-.gs-set-val {
-  color: var(--dim);
-  font-weight: 800;
-  text-align: right;
-}
-
-.gs-range {
-  --p: 50%;
-  width: 100%;
-  height: 44px;
-  background: transparent;
-  cursor: pointer;
-  -webkit-appearance: none;
-  appearance: none;
-  touch-action: pan-y;
-}
-
-.gs-range:focus-visible {
-  outline: none;
-}
-
-.gs-range::-webkit-slider-runnable-track {
-  height: 4px;
-  border-radius: var(--r-pill);
-  background: linear-gradient(90deg, var(--text) var(--p), rgba(245, 243, 255, 0.16) var(--p));
-}
-
-.gs-range::-webkit-slider-thumb {
-  width: 22px;
-  height: 22px;
-  margin-top: -9px;
-  border-radius: var(--r-pill);
-  background: var(--text);
-  box-shadow: 0 0 0 4px var(--ink), 0 2px 8px rgba(5, 9, 30, 0.5);
-  -webkit-appearance: none;
-  appearance: none;
-  transition: transform 140ms var(--spring);
-}
-
-.gs-range:active::-webkit-slider-thumb {
-  transform: scale(1.12);
-}
-
-.gs-range:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 3px var(--ink), 0 0 0 5px var(--text);
-}
-
-.gs-range::-moz-range-track {
-  height: 4px;
-  border-radius: var(--r-pill);
-  background: rgba(245, 243, 255, 0.16);
-}
-
-.gs-range::-moz-range-progress {
-  height: 4px;
-  border-radius: var(--r-pill);
-  background: var(--text);
-}
-
-.gs-range::-moz-range-thumb {
-  width: 22px;
-  height: 22px;
-  border: 0;
-  border-radius: var(--r-pill);
-  background: var(--text);
-  box-shadow: 0 0 0 4px var(--ink);
-}
-
-.gs-range:focus-visible::-moz-range-thumb {
-  box-shadow: 0 0 0 3px var(--ink), 0 0 0 5px var(--text);
-}
-
-.gs-seg {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  gap: 2px;
-  padding: 3px;
-  border-radius: var(--r-pill);
-  background: rgba(245, 243, 255, 0.06);
-  box-shadow: inset 0 0 0 1px var(--hair);
-}
-
-.gs-seg-btn {
-  min-height: 44px;
-  padding: 0 6px;
-  border-radius: var(--r-pill);
-  color: var(--dim);
-  font-size: 0.9em;
-  font-weight: 800;
-  transition: transform 160ms var(--spring);
-}
-
-.gs-seg-btn:active {
-  transform: scale(0.97);
-}
-
-.gs-seg-btn[aria-pressed='true'] {
-  background: var(--text);
-  color: var(--ink);
-}
-
-.gs-seg-btn:focus-visible {
-  outline-offset: 1px;
-}
-
-.gs-set-cap {
-  margin-top: 6px;
-  color: var(--dim);
-  font-size: 0.8em;
-  font-weight: 650;
-}
-
-.gs-switch-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  min-height: 48px;
-  border-radius: var(--r-pill);
-  text-align: left;
-}
-
-.gs-switch {
-  position: relative;
-  flex: none;
-  width: 48px;
-  height: 28px;
-  border-radius: var(--r-pill);
-  background: rgba(245, 243, 255, 0.18);
-}
-
-.gs-switch::after {
-  content: '';
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--r-pill);
-  background: var(--text);
-  transition: transform 220ms var(--spring);
-}
-
-.gs-switch-row[aria-checked='true'] .gs-switch {
-  background: var(--text);
-}
-
-.gs-switch-row[aria-checked='true'] .gs-switch::after {
-  background: var(--ink);
-  transform: translateX(20px);
-}
-
 /* ---------------------------------------------------------------- Loading */
 
 .gs-load {
@@ -5525,28 +4978,12 @@
     background: linear-gradient(180deg, rgba(8, 12, 30, 0.22) 0%, rgba(8, 12, 30, 0) 14%, rgba(8, 12, 30, 0) 36%, rgba(8, 12, 30, 0.5) 44%, rgba(8, 12, 30, 0.74) 100%);
   }
 
-  .gs-pause-card {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: none;
-    grid-template-areas:
-      'title'
-      'resume'
-      'set'
-      'home'
-      'key';
-  }
-
-  .gs-pause-card > .gs-btn-soft {
-    justify-self: stretch;
-  }
-
   .gs-sheetwrap {
     place-items: end stretch;
     padding: var(--st) 0 0;
   }
 
-  .gs-sheet,
-  .gs-sheet-settings {
+  .gs-sheet {
     width: 100%;
     max-height: 88dvh;
     border-radius: var(--r-card) var(--r-card) 0 0;
@@ -5735,14 +5172,6 @@
     min-height: 42px;
   }
 
-  .gs-missions {
-    gap: 9px;
-  }
-
-  .gs-pause-card {
-    padding: 18px 22px;
-  }
-
   .gs-sheet-head {
     padding: 10px 14px 6px 12px;
   }
@@ -5798,15 +5227,6 @@
     padding-top: 4px;
     font-size: 0.86em;
   }
-
-  /* Rows tighten, but sliders and segments keep their 44px touch targets. */
-  .gs-set {
-    gap: 10px;
-  }
-
-  .gs-set-group {
-    gap: 0;
-  }
 }
 
 /* ------------------------------------------------------------- Keyframes */
@@ -5840,17 +5260,6 @@
   }
 }
 
-@keyframes gs-rise-l {
-  from {
-    opacity: 0;
-    transform: translateX(-28px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
 @keyframes gs-pop {
   from {
     opacity: 0;
@@ -5870,29 +5279,6 @@
   to {
     opacity: 1;
     transform: none;
-  }
-}
-
-@keyframes gs-stamp {
-  0% {
-    opacity: 0;
-    transform: rotate(var(--rot, -7deg)) scale(1.9);
-  }
-  55% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 1;
-    transform: rotate(var(--rot, -7deg)) scale(1);
-  }
-}
-
-@keyframes gs-grow {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(var(--p, 0));
   }
 }
 
@@ -5966,18 +5352,6 @@
   }
   50% {
     transform: translateX(14px);
-  }
-}
-
-@keyframes gs-flash {
-  0% {
-    opacity: 0;
-  }
-  30% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
   }
 }
 
@@ -6057,15 +5431,6 @@
     }
   }
 
-  @keyframes gs-rise-l {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
   @keyframes gs-pop {
     from {
       opacity: 0;
@@ -6076,24 +5441,6 @@
   }
 
   @keyframes gs-slideup {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  @keyframes gs-stamp {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  @keyframes gs-grow {
     from {
       opacity: 0;
     }

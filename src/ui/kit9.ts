@@ -72,6 +72,15 @@ export function closeTopSheet(): boolean {
   return true;
 }
 
+/** A surface of menus.ts is over the sheets (the books or settings over a room): the top one goes out of sight too, and
+ *  comes back when that surface closes (round 9, U4). */
+let covered = false;
+export function coverSheets(on: boolean): void {
+  covered = on;
+  const top = stack[stack.length - 1];
+  if (top) top.el.classList.toggle('is-covered', on);
+}
+
 /** Closes every sheet (the screen under them is leaving). */
 export function closeAllSheets(): void {
   while (stack.length > 0) stack[stack.length - 1].close();
@@ -87,6 +96,8 @@ export function openSheet(el: HTMLElement, from: HTMLElement | null, behind: HTM
   const under = prev ? [...behind, prev.el] : behind;
   for (const b of under) b.inert = true;
   el.inert = false;
+  // (Round 9, U4: the sheet under this one goes out of sight, so its words never show through this one's ink.)
+  prev?.el.classList.add('is-covered');
   let shut = false;
   const close = (): void => {
     if (shut) return;
@@ -95,6 +106,7 @@ export function openSheet(el: HTMLElement, from: HTMLElement | null, behind: HTM
     if (i >= 0) stack.splice(i, 1);
     // (A sheet still open under this one keeps its own screen inert; it comes back to life itself.)
     for (const b of under) if (!stack.some((s) => s.behind.includes(b))) b.inert = false;
+    if (prev && stack[stack.length - 1] === prev && !covered) prev.el.classList.remove('is-covered');
     onClose();
     // (The screen under it may have been drawn again meanwhile: the control with the same focus key takes it.)
     const fk = from?.dataset.fk;

@@ -23,7 +23,8 @@ import { prevDay } from './settle';
 function card(r: Reward, page: number, chapter: string | null = null, name: string = rewardName(r)): RewardCard {
   // (A mirror's card names its mountain's id too: its Almanac page rides it, the modes lane.)
   // (Round 9, the shop lane: a reward the save already held says what it gave instead, rank.ts grant.)
-  return r.kind === 'mirror' ? { kind: r.kind, name, page, chapter, mountain: r.mountain } : { kind: r.kind, name, page, chapter };
+  // (Round 9, U4: a garage piece says its shelf, so the results draw it with its shelf's glyph, not a sled's.)
+  return r.kind === 'mirror' ? { kind: r.kind, name, page, chapter, mountain: r.mountain } : r.kind === 'garage' ? { kind: r.kind, name, page, chapter, shelf: r.shelf } : { kind: r.kind, name, page, chapter };
 }
 
 /** The rank bar at an amount of XP. */

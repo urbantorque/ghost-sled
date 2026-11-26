@@ -1,12 +1,12 @@
-import type { MedalSet, MissionView, MountainCard, ScreenRect, TitleDoor, TitleModel, TitleTrial, UIHandlers } from './contract';
+import type { MedalSet, MountainCard, ScreenRect, TitleDoor, TitleModel, TitleTrial, UIHandlers } from './contract';
 import type { InputMode } from '../game/input';
 import { oldLinkLine } from '../game/challenge';
 import { clock } from '../game/standing';
 import { biomeArt } from './art';
 import { h, kbd, Layer, padBtn, sr, type Ctx } from './dom';
-import { fmt, metres, NBSP, progFigures } from './fmt';
+import { fmt, metres, NBSP } from './fmt';
 import { icon, type IconName } from './icons';
-import { b9, ico9, ordinal9, sheetOpen } from './kit9';
+import { b9, ico9, medalDisc, ordinal9, sheetOpen } from './kit9';
 import { EASE_OUT, play, reduced } from './motion';
 import { pushRect } from './hud';
 import { curly, nb, prizeLower } from './words';
@@ -263,8 +263,10 @@ export class Title {
 
   private render(m: TitleModel): void {
     const el = this.el;
-    // (Everything but the veil and an open room: taking the veil out and putting it back would start its sweep again.)
-    for (const c of Array.from(el.children)) if (c !== this.veil && c !== this.room?.el) c.remove();
+    // (Everything but the veil and an open room: taking the veil out and putting it back would start its sweep again.
+    // Round 9, U4: and a view pushed in the room, a sheet of its own here: a title drawn again as the rivals came in
+    // took the view out from under the player, leaving the room covered and nothing on screen.)
+    for (const c of Array.from(el.children)) if (c !== this.veil && c !== this.room?.el && !(this.room && c.classList.contains('gs9-sheet'))) c.remove();
     if (!this.veil.isConnected) el.append(this.veil);
     el.classList.toggle('is-first', m.firstVisit);
     el.classList.toggle('has-challenge', m.challenge !== null);
@@ -622,23 +624,25 @@ export function medalDots(m: MedalSet, fresh: readonly number[] = [], quiet = fa
 }
 
 /**
- * Round 8, the trials lane: the Trial picked, over Ride. Its rule, then the three targets struck as the medals they win
- * (bronze, silver, gold, each disc in its metal with its figure), your best this week and the days it has left. Until
- * its field is in, the rule alone (nothing loading is shown).
+ * Round 8, the trials lane: the Trial picked, over Ride. Round 9 (U4): one ink card in the round's language, every
+ * figure with its word. Where it rides ("Mirrored Sakura Ridge in the Evening": no chip is picked while it is); its rule,
+ * under the star; then the three targets as the medals they win ("Bronze 13, Silver 16,
+ * Gold 18 perfects", each with its disc, a target already won struck through); then your best this week and the days
+ * it has left. Until its field is in, the rule alone (nothing loading is shown).
  */
 function trialPanel(t: TitleTrial): HTMLElement {
-  const rule = h('p', 'gs-t-greet gs-t-trial-rule', icon('star'), h('span', '', t.rule));
-  const box = h('div', 'gs-t-trial', rule);
+  // (Where it rides first: no chip is picked while the Trial is, so the card names the place and its twist.)
+  const where = h('p', 'gs9-trial-where', curly(t.name));
+  where.setAttribute('translate', 'no');
+  const box = h('div', 'gs9-trial', where, h('p', 'gs9-trial-rule', ico9('star'), h('span', '', curly(t.rule))));
   if (t.targets) {
-    const row = h('p', 'gs-t-trial-goals');
+    const goals = h('p', 'gs9-trial-goals');
     t.targets.forEach((v, i) => {
       const held = t.medal > i;
-      row.append(h('span', `gs-medal m-${i + 1} gs-t-trial-goal${held ? ' is-held' : ''}`, sr(`${MEDAL[i + 1]} `), h('span', 'gs-num', v), held ? sr(', held') : null));
+      const goal = h('span', `gs9-trial-goal${held ? ' is-held' : ''}`, medalDisc(i + 1), h('span', 'gs9-num', `${MEDAL[i + 1]} ${v}${i === 2 && t.unit ? ` ${t.unit}` : ''}`), held ? sr(', held') : null);
+      goals.append(goal);
     });
-    if (t.unit) row.lastElementChild?.append(h('span', 'gs-t-trial-unit', ` ${t.unit}`));
-    if (t.best) row.append(h('span', 'gs-t-trial-best', 'Best ', h('span', 'gs-num', t.best)));
-    row.append(h('span', 'gs-t-trial-best', t.left));
-    box.append(row);
+    box.append(goals, h('p', 'gs9-trial-left', t.best ? `Your best this week ${t.best}. ${t.left}.` : `${t.left}.`));
   }
   return box;
 }
@@ -683,47 +687,4 @@ function challengeBanner(c: NonNullable<TitleModel['challenge']>): HTMLElement {
         : h('span', 'gs-challenge-v', 'Beat a score of ', h('span', 'gs-num', fmt(c.score)), ' on ', place);
   }
   return h('div', 'gs-challenge', icon('ghost', 'gs-challenge-ico'), h('div', 'gs-challenge-txt', k, v));
-}
-
-/** "270/800" on screen, "270 of 800" to a reader (the mission rows, and the results' folded row). */
-export function progText(n: number, of: number, dp?: 0 | 1): HTMLElement {
-  const [v, t] = progFigures(n, of, dp);
-  const slash = h('span', '', '/');
-  slash.setAttribute('aria-hidden', 'true');
-  return h('span', '', v, slash, sr(' of '), t);
-}
-
-/**
- * Mission rows: text, a progress bar (fill over a visible track) and the gift reward. A finished
- * mission reads as finished, never as a dimmer open one: its reward in full marigold ("+25"), and
- * its bar row traded for a check-and-Done stamp beside a full gold bar. The stamp has that row to
- * itself, so it never lands on the reward or any other number. On the results, one this run
- * completed (`flashNew`) lands its stamp with a flash.
- */
-export function missionList(list: MissionView[], flashNew = false): HTMLElement {
-  const ul = h('ul', 'gs-missions');
-  list.forEach((mv, i) => {
-    const pct = mv.target > 0 ? Math.max(0, Math.min(1, mv.progress / mv.target)) : 0;
-    const li = h('li', `gs-mis${mv.done ? ' is-done' : ''}${flashNew && mv.justCompleted ? ' is-new' : ''}`);
-    li.style.setProperty('--i', String(i));
-    li.dataset.row = String(i);
-    const right = h('span', 'gs-mis-right');
-    const line = h('span', 'gs-mis-line');
-    line.setAttribute('aria-hidden', 'true');
-    if (mv.done) {
-      right.append(h('span', 'gs-mis-reward', h('span', 'gs-num', '+' + fmt(mv.reward), sr(' gifts')), icon('gift')));
-      line.style.setProperty('--p', '1');
-      li.append(h('span', 'gs-mis-text', mv.text), right, h('span', 'gs-mis-foot', h('span', 'gs-mis-complete', icon('check'), 'Done'), line));
-      ul.append(li);
-      return;
-    }
-    right.append(
-      h('span', 'gs-mis-prog gs-num', progText(Math.min(mv.progress, mv.target), mv.target, mv.dp)),
-      h('span', 'gs-mis-reward is-quiet', icon('gift'), h('span', 'gs-num', fmt(mv.reward), sr(' gifts'))),
-    );
-    line.style.setProperty('--p', String(pct));
-    li.append(h('span', 'gs-mis-text', mv.text), right, line);
-    ul.append(li);
-  });
-  return ul;
 }

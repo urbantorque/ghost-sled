@@ -1,9 +1,12 @@
 import type { SettingsModel, UIHandlers } from './contract';
 import { h, type Ctx } from './dom';
-import { icon } from './icons';
+import { percent } from './fmt';
 
-// The settings controls, shared by the pause overlay and the settings sheet. Built once, then
-// kept in sync with set(). Changes are reported live through onSettings.
+// The settings, in the round's language (round 9, U4): the settings sheet's body (menus.ts), opened from the title's
+// Settings door or the pause card's Settings. Built once, then kept in sync with set(); every change is reported live
+// through onSettings. Three blocks, each its heading and its controls: Sound (three sliders, each its figure as a
+// percentage), Quality (five pills, one pressed, and a line saying what Auto is doing), and the two switches (control
+// hints; the pad's rumble once a pad has been used).
 
 type Vol = 'master' | 'music' | 'sfx';
 type Quality = SettingsModel['quality'];
@@ -33,24 +36,22 @@ export class SettingsPanel {
     private readonly ctx: Ctx,
     private readonly hd: UIHandlers,
   ) {
-    const id = `gs-set-${++uid}`;
-    this.el = h('div', 'gs-set');
+    const id = `set9-${++uid}`;
+    this.el = h('div', 'gs9-set');
 
-    const sound = h('div', 'gs-set-group');
-    sound.setAttribute('role', 'group');
-    sound.setAttribute('aria-labelledby', `${id}-snd`);
-    const sh = h('h3', 'gs-h2 gs-set-h', icon('speaker'), 'Sound');
+    const sh = h('h3', 'gs9-cap', 'Sound');
     sh.id = `${id}-snd`;
-    sound.append(sh, this.slider(id, 'master', 'Master'), this.slider(id, 'music', 'Music'), this.slider(id, 'sfx', 'Effects'));
+    const sound = h('div', 'gs9-set-g', sh, this.slider(id, 'master', 'Master'), this.slider(id, 'music', 'Music'), this.slider(id, 'sfx', 'Effects'));
+    sound.setAttribute('role', 'group');
+    sound.setAttribute('aria-labelledby', sh.id);
 
-    const qual = h('div', 'gs-set-group');
-    const qh = h('h3', 'gs-h2 gs-set-h', icon('gear'), 'Quality');
+    const qh = h('h3', 'gs9-cap', 'Quality');
     qh.id = `${id}-q`;
-    const seg = h('div', 'gs-seg');
+    const seg = h('div', 'gs9-seg gs9-set-seg');
     seg.setAttribute('role', 'group');
-    seg.setAttribute('aria-labelledby', `${id}-q`);
+    seg.setAttribute('aria-labelledby', qh.id);
     for (const { q, label } of QUALITIES) {
-      const b = h('button', 'gs-seg-btn', label);
+      const b = h('button', 'gs9-b', h('span', 'gs9-b-t', label));
       b.type = 'button';
       b.dataset.fk = `q-${q}`;
       b.addEventListener('click', () => {
@@ -63,60 +64,65 @@ export class SettingsPanel {
       this.segs.set(q, b);
       seg.append(b);
     }
-    this.cap = h('p', 'gs-set-cap');
-    qual.append(qh, seg, this.cap);
+    this.cap = h('p', 'gs9-block-p');
+    this.cap.setAttribute('aria-live', 'polite');
+    const qual = h('div', 'gs9-set-g', qh, seg, this.cap);
 
-    this.hintsBtn = h('button', 'gs-switch-row', h('span', 'gs-set-label', 'Control Hints'), h('span', 'gs-switch'));
-    this.hintsBtn.type = 'button';
-    this.hintsBtn.dataset.fk = 'hints';
-    this.hintsBtn.setAttribute('role', 'switch');
-    this.hintsBtn.addEventListener('click', () => {
-      this.ctx.sound('tap');
+    this.hintsBtn = this.switchRow('hints', 'Control Hints', null, () => {
       this.m = { ...this.m, hints: !this.m.hints };
-      this.paintHints();
+      this.paintSwitches();
       this.hd.onSettings({ hints: this.m.hints });
     });
-
     // The pad's rumble. The row shows once a gamepad has been used (.gs-has-pad on the UI root).
-    this.rumbleBtn = h('button', 'gs-switch-row gs-set-rumble', h('span', 'gs-set-label', 'Controller Rumble'), h('span', 'gs-switch'));
-    this.rumbleBtn.type = 'button';
-    this.rumbleBtn.dataset.fk = 'rumble';
-    this.rumbleBtn.setAttribute('role', 'switch');
-    this.rumbleBtn.addEventListener('click', () => {
-      this.ctx.sound('tap');
+    this.rumbleBtn = this.switchRow('rumble', 'Controller Rumble', null, () => {
       this.m = { ...this.m, rumble: !this.m.rumble };
-      this.paintRumble();
+      this.paintSwitches();
       this.hd.onSettings({ rumble: this.m.rumble });
     });
+    this.rumbleBtn.classList.add('gs9-set-rumble');
 
-    this.el.append(sound, qual, this.hintsBtn, this.rumbleBtn);
+    this.el.append(sound, h('div', 'gs9-sep'), qual, h('div', 'gs9-sep'), this.hintsBtn, this.rumbleBtn);
     this.set(this.m);
   }
 
   private slider(id: string, key: Vol, label: string): HTMLElement {
     const inputId = `${id}-${key}`;
-    const lab = h('label', 'gs-set-label', label);
+    const lab = h('label', 'gs9-set-l', label);
     lab.htmlFor = inputId;
-    const input = h('input', 'gs-range');
+    const input = h('input', 'gs9-range');
     input.type = 'range';
     input.min = '0';
     input.max = '100';
     input.step = '1';
     input.id = inputId;
     input.dataset.fk = `v-${key}`;
-    const out = h('span', 'gs-set-val gs-num');
+    const out = h('span', 'gs9-set-v gs9-num');
     out.setAttribute('aria-hidden', 'true');
     input.addEventListener('input', () => {
       const patch: Partial<SettingsModel> = {};
       patch[key] = Number(input.value) / 100;
       this.m = { ...this.m, ...patch };
       paintRange(input);
-      out.textContent = input.value;
+      out.textContent = percent(Number(input.value));
       this.hd.onSettings(patch);
     });
     input.addEventListener('change', () => this.ctx.sound('tap'));
     this.ranges.set(key, { input, out });
-    return h('div', 'gs-set-row', lab, input, out);
+    return h('div', 'gs9-set-row', lab, input, out);
+  }
+
+  /** A switch with its words: the name, and (when it needs one) what it changes. */
+  private switchRow(fk: string, label: string, line: string | null, flip: () => void): HTMLButtonElement {
+    const b = h('button', 'gs9-switch-row', h('span', 'gs9-set-st', h('span', 'gs9-set-l', label), line ? h('span', 'gs9-set-sub', line) : null), h('span', 'gs9-switch-v'), h('span', 'gs9-switch'));
+    b.querySelector('.gs9-switch-v')?.setAttribute('aria-hidden', 'true');
+    b.type = 'button';
+    b.dataset.fk = fk;
+    b.setAttribute('role', 'switch');
+    b.addEventListener('click', () => {
+      this.ctx.sound('tap');
+      flip();
+    });
+    return b;
   }
 
   set(m: SettingsModel): void {
@@ -124,12 +130,11 @@ export class SettingsPanel {
     for (const [key, r] of this.ranges) {
       const v = String(Math.round(Math.max(0, Math.min(1, m[key])) * 100));
       if (r.input.value !== v) r.input.value = v;
-      r.out.textContent = v;
+      r.out.textContent = percent(Number(v));
       paintRange(r.input);
     }
     this.paintQuality();
-    this.paintHints();
-    this.paintRumble();
+    this.paintSwitches();
   }
 
   private paintQuality(): void {
@@ -138,15 +143,17 @@ export class SettingsPanel {
     // in the row for a save that already chose it.
     const ultra = this.segs.get('ultra');
     if (ultra) ultra.hidden = this.m.ultra === false && this.m.quality !== 'ultra';
-    this.cap.textContent = this.m.quality === 'auto' ? `Auto is running at ${TIER[this.m.currentTier]}` : this.m.quality === 'ultra' ? 'Ultra is built for a dedicated graphics card' : 'Fixed quality';
+    this.cap.textContent = this.m.quality === 'auto' ? `Auto is running at ${TIER[this.m.currentTier]}.` : this.m.quality === 'ultra' ? 'Ultra is built for a dedicated graphics card.' : `Fixed at ${TIER[this.m.quality]}.`;
   }
 
-  private paintHints(): void {
+  private paintSwitches(): void {
     this.hintsBtn.setAttribute('aria-checked', String(this.m.hints));
-  }
-
-  private paintRumble(): void {
     this.rumbleBtn.setAttribute('aria-checked', String(this.m.rumble));
+    // (Its state in words beside the pill: a pill alone read as a form's control with no state.)
+    for (const [b, on] of [[this.hintsBtn, this.m.hints], [this.rumbleBtn, this.m.rumble]] as const) {
+      const v = b.querySelector('.gs9-switch-v');
+      if (v) v.textContent = on ? 'On' : 'Off';
+    }
   }
 }
 

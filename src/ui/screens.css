@@ -139,13 +139,6 @@
   }
 }
 
-/* ------------------------------------------------------------------ Title: the finale's card */
-
-.b-lantern .gs-mtn-sky,
-.gs-toast-sky.b-lantern {
-  background: linear-gradient(180deg, #120e3f 0%, #3a2a88 62%, #7a5cc0 100%);
-}
-
 /* ------------------------------------------------------------------ Title: The Twelve's card */
 
 .gs-title {
@@ -174,11 +167,6 @@
       'bar';
   }
 
-  /* The Twelve's row takes the greeting's place above Ride: one line of direction, not two. */
-  .gs-title:has(.gs-t12) .gs-t-greet {
-    display: none;
-  }
-
   .gs-t-veil-txt {
     top: 30%;
     right: 0;
@@ -200,17 +188,6 @@
   .gs-t-veil .gs-t-veil-slab,
 .gs-t-veil .gs-t-veil-txt {
     animation: none;
-  }
-}
-
-@keyframes gs-mo-draw {
-  from {
-    opacity: 0;
-    transform: scaleX(0);
-  }
-  to {
-    opacity: 1;
-    transform: none;
   }
 }
 
@@ -242,8 +219,7 @@
   animation-delay: 190ms;
 }
 
-.gs-sheetwrap.is-out .gs-sheet,
-.gs-pause.is-out .gs-pause-card {
+.gs-sheetwrap.is-out .gs-sheet {
   animation: gs-sink 170ms cubic-bezier(0.5, 0, 0.9, 0.4) both;
 }
 
@@ -299,53 +275,7 @@
   }
 }
 
-/* ------------------------------------------------------------------ Pause, in the same language */
-
-/* The pause card speaks the title's language: the scene stays in view through the title's own diagonal
-   scrim, the word is set like the wordmark with its runner drawn under it, and the card comes in from the
-   logo's side with its parts stepping in after it. */
-.gs-pause {
-  background:
-    linear-gradient(100deg, rgba(8, 12, 30, 0.82) 0%, rgba(8, 12, 30, 0.62) 46%, rgba(8, 12, 30, 0.4) 100%);
-}
-
-.gs-pause-title {
-  position: relative;
-  justify-self: start;
-  padding: 0 0.12em 0.2em 0;
-  letter-spacing: -0.035em;
-  text-shadow:
-    0.05em 0.045em 0 var(--ghost),
-    0.1em 0.09em 0 rgba(18, 25, 51, 0.55);
-}
-
-.gs-pause-title::after {
-  content: '';
-  position: absolute;
-  left: 0.1em;
-  right: 0.3em;
-  bottom: 0;
-  height: 0.1em;
-  border-radius: var(--r-pill);
-  background: var(--text);
-  transform-origin: 0 50%;
-}
-
-.gs-pause.is-in .gs-pause-card {
-  animation: gs-rise-l 300ms var(--out) both;
-}
-
-.gs-pause.is-in .gs-pause-title::after {
-  animation: gs-mo-draw 360ms var(--out) 140ms both;
-}
-
-.gs-pause.is-in .gs-pause-card > :not(.gs-pause-title) {
-  animation: gs-rise 300ms var(--out) 90ms both;
-}
-
-.gs-pause.is-in .gs-pause-card > .gs-set {
-  animation-delay: 150ms;
-}
+/* ------------------------------------------------------------------ Loading, in the same language */
 
 /* The loading bar is the wordmark's runner: round-ended, off-white with the ghosts' mint under it. */
 .gs-load {
@@ -357,10 +287,6 @@
 @media (prefers-reduced-motion: reduce) {
   .gs-sheetwrap.is-in .gs-sheet-body > *,
 .gs-sheetwrap.is-out .gs-sheet,
-.gs-pause.is-out .gs-pause-card,
-.gs-pause.is-in .gs-pause-card,
-.gs-pause.is-in .gs-pause-card > *,
-.gs-pause.is-in .gs-pause-title::after,
 .gs-title.is-in .gs-ride::after {
     animation: none;
   }
@@ -749,7 +675,7 @@
 
 /* ---- the challenge banner and the Trial's rule, over Ride (style.css and trials.css draw them) ---- */
 .gs9-t-ride > .gs-challenge,
-.gs9-t-ride > .gs-t-trial {
+.gs9-t-ride > .gs9-trial {
   max-width: min(100%, 460px);
 }
 

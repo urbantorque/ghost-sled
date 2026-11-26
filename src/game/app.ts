@@ -71,7 +71,7 @@ import { type SpineOutcome, type SpineRun, type SpineSettlement, settleSpine } f
 import { albumModel, almanacModel, lanternRow, resultsSpine, titleSpine } from './spineview';
 import { flameNow } from './flame';
 import { type Board, type ClimbOutcome, type Spot, bestStanding, boardOf, climbMoment, decidedLine, goldHook, laps, medalsHeld, nextLine, rungHook, settleClimb, spotOn, stageSeconds } from './ladder';
-import { type BestRun, type Climb, Grudge, SHELF_KEYS, SaveStore, oldBest, ornamentState, retireGrudge, rideableGrudge, shelfState } from './save';
+import { type BestRun, type Climb, Grudge, INTROS_KEPT, INTROS_SEEN_KEPT, SHELF_KEYS, SaveStore, oldBest, ornamentState, retireGrudge, rideableGrudge, shelfState } from './save';
 import { useFixture } from './devsave';
 import { type GrudgeRow, type SettleResult, Settlement, cupMedalNow, dailyMedalNow, dailyStreakNow, isNemesis, medalFor, medalThresholds, settleBest, settleGrudge, settleRun, topScore } from './settle';
 import { inReach } from './pacer';
@@ -259,9 +259,24 @@ export class App {
   private grinds = 0;
   private results: ResultsModel | null = null;
   /** Round 9 (U1): what opened since the title was last up, each said once on its door (titleIntro), and the lines
-   *  whose door has been opened this session. */
-  private intros: TitleIntro[] = [];
-  private readonly introsSeen = new Set<string>();
+   *  whose door has been opened. (U4: kept in the save, SaveData.intros and introsSeen, so a "New" outlives a reload.) */
+  private get intros(): TitleIntro[] {
+    return this.save.data.intros ?? [];
+  }
+  /** A door with something new was opened: a run's "New" leaves the save; the day's news is marked opened for the day
+   *  (the same news tomorrow is new again). */
+  private introSeen(line: string): void {
+    const d = this.save.data;
+    if (this.intros.some((x) => x.line === line)) {
+      const left = this.intros.filter((x) => x.line !== line);
+      if (left.length) d.intros = left;
+      else delete d.intros;
+    } else {
+      const key = `${dailyKey(new Date())} ${line}`;
+      d.introsSeen = [...(d.introsSeen ?? []).filter((x) => x !== key), key].slice(-INTROS_SEEN_KEPT);
+    }
+    this.save.save();
+  }
   /** Counts results cards shown and hidden: a card's first-frame sounds skip a card already gone. */
   private resultsSeq = 0;
   /** Rewards landed on this card (each coin's index). */
@@ -425,7 +440,7 @@ export class App {
       onRideMode: (mode) => this.rideMode(mode),
       onOpenAlbum: () => this.openAlbum(),
       // (Round 9: a door's "New" was read: the next thing new may take its door.)
-      onIntroSeen: (line) => this.introsSeen.add(line),
+      onIntroSeen: (line) => this.introSeen(line),
       onResultsBeat: (kind, i) => this.resultsBeat(kind, i),
       // Round 8 (the photo lane): photo mode, from pause and from the results.
       onPhoto: () => this.openPhoto(),
@@ -654,9 +669,10 @@ export class App {
    *  The flame's days are on the Daily and Cup door already. */
   private titleIntro(news: string | null): TitleIntro | null {
     const day: TitleIntro | null = news && /^New this month/.test(news) ? { door: 'progress', line: news } : news && /contracts today|division|Trial:/.test(news) ? { door: 'events', line: news } : null;
-    const all = day ? [...this.intros, day] : this.intros;
-    for (let i = all.length - 1; i >= 0; i--) if (!this.introsSeen.has(all[i].line)) return all[i];
-    return null;
+    // (U4: the day's news first, until its door is opened today; then the newest a run opened, until its door is.)
+    if (day && !(this.save.data.introsSeen ?? []).includes(`${dailyKey(new Date())} ${day.line}`)) return day;
+    const run = this.intros;
+    return run.length > 0 ? run[run.length - 1] : null;
   }
 
   /** What a run's opened rewards introduce on the title (ui/words.ts SAYS says the same on the results' card). */
@@ -669,7 +685,7 @@ export class App {
     };
     for (const r of opened) {
       const i = say[r.name] ?? (r.kind === 'sled' ? { door: 'garage' as const, line: 'New: a sled of your own, in the garage.' } : r.kind === 'garage' ? { door: 'garage' as const, line: `New: ${r.name}, in the garage.` } : null);
-      if (i && !this.intros.some((x) => x.line === i.line)) this.intros.push(i);
+      if (i && !this.intros.some((x) => x.line === i.line)) this.save.data.intros = [...this.intros, i].slice(-INTROS_KEPT);
     }
   }
 
@@ -940,9 +956,10 @@ export class App {
         const spot = this.spotFor(m.id);
         // (Counted only when the medal wall opens and reads it: a board builds its mountain's whole course and plans
         // its set pieces, and five of them for a wall nobody has opened cost the first frame about 150 ms at 6x.)
-        const stars = (): { got: number; of: number } => {
+        const stars = (): NonNullable<MountainCard['stars']> => {
           const b = masteryBoard(courseFor(m.seed), m.id, readMastery(d.mastery?.[m.id]), d.climb?.[m.id]?.medal ?? 0);
-          return { got: b.filter((s) => s.done).length, of: b.length };
+          // (Round 9, U4: the board itself too, each star's goal, for the medal wall's board of the mountain.)
+          return { got: b.filter((s) => s.done).length, of: b.length, board: b.map((s) => ({ label: s.label, group: s.group, done: s.done })) };
         };
         return {
           id: m.id,

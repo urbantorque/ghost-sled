@@ -1,18 +1,19 @@
 import type { AlbumModel, AlmanacModel, GarageCard, GarageShelf, GarageShelfId, LanternTownView, MissionView, PaintCard, SettingsModel, SledCard, UIHandlers } from './contract';
-import { type RideMode, albumBody, almanacBody, rankHead } from './almanac';
+import type { RideMode } from './almanac';
 import { sledById } from '../sim/sleds';
 import { sledArt, sledTint } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
-import { fmt, percent } from './fmt';
+import { fmt, percent, progFigures } from './fmt';
 import { icon } from './icons';
+import { b9, coverSheets, ico9, openSheet, sheetFrame } from './kit9';
 import { SettingsPanel } from './settings';
-import { missionList } from './title';
 import { hatArt, paintArt, scarfArt, soundArt, trailArt } from './garageart';
 import type { GarageAct, GarageView } from './garageview';
 import type { GarageUI } from './garage';
 
-// Pause overlay (Resume, the run's missions, inline settings, Home) and the two sheets: the Garage and
-// Settings.
+// The pause card (Resume, the run's missions, Settings, Photo, Home), Settings, the books and the garage's layer.
+// Round 9 (U4): the pause card, Settings and the books are sheets in the round's language (kit9.ts), each in a layer
+// of its own here; the round 6 garage sheet below stays as it was, for the dev harness.
 // Escape and Backspace close the top sheet (round 9, DECISIONS 392: ui.ts back() calls closeTop below), as the pad's
 // B and each sheet's Close do. Until round 9 Escape was deliberately unbound because on CrazyGames it exits
 // fullscreen; it still does there, as the browser takes it first, so in fullscreen a player presses it twice (and
@@ -22,6 +23,15 @@ import type { GarageUI } from './garage';
 // that pick what the preview shows. The sleds are renders of the real in-game meshes when the game hands
 // over a portrait source, with the flat vector art as the fallback; the looks are drawn from the numbers
 // the game builds them from (garageart.ts). Buying is two taps everywhere: Buy arms, Confirm spends.
+
+/** A round 9 sheet's close says where it goes: Back (to the surface it was opened over) or Close. */
+function closeWords(sheet: HTMLElement, back: boolean): void {
+  const x = sheet.querySelector<HTMLElement>('.gs9-sheet-head [data-fk^="close-"]');
+  const t = x?.querySelector('.gs9-b-t');
+  if (!x || !t || t.textContent === (back ? 'Back' : 'Close')) return;
+  t.textContent = back ? 'Back' : 'Close';
+  x.querySelector('.gs9-i')?.replaceWith(ico9(back ? 'back' : 'close'));
+}
 
 /** The sim's clean-landing yaw window in radians: a sled's landTol widens it. */
 const LAND_WINDOW = 0.62;
@@ -232,7 +242,13 @@ export class Menus {
   private booksTab: 'almanac' | 'album' = 'almanac';
   private lastAlmanac: AlmanacModel | null = null;
   private lastAlbum: AlbumModel | null = null;
-  private readonly pausePanel: SettingsPanel;
+  /** Round 9 (U4): the books' builders (books.ts), loaded when a book is first opened; an album page open over the
+   *  contents, and its close. */
+  private booksMod: Promise<typeof import('./books')> | null = null;
+  private bookPage: (() => void) | null = null;
+  /** The pause card, and its Settings (focus comes back to it when settings close over the card). */
+  private readonly pauseCard: HTMLElement;
+  private readonly pauseSettings: HTMLButtonElement;
   /** The run's missions on the pause card, as they stand now (hidden with none). */
   private readonly pauseMis: HTMLElement;
   private readonly sheetPanel: SettingsPanel;
@@ -260,13 +276,15 @@ export class Menus {
     private readonly ctx: Ctx,
     private readonly hd: UIHandlers,
   ) {
-    // Pause.
-    const pauseEl = h('div', 'gs-pause gs-scrim');
-    this.pausePanel = new SettingsPanel(ctx, hd);
-    this.resumeBtn = btn(ctx, {
-      cls: 'gs-btn-primary gs-btn-lg',
+    // Pause (round 9, U4): one sheet at the reading edge (the bottom on a phone). The word set like the wordmark, what
+    // the run is working toward (its missions as they stand), Resume (the one primary, its key on it), then Settings,
+    // Photo and Home, each with its word. The settings are one press away, not on the card.
+    const pauseEl = h('div', 'gs9-layer gs9-pause-layer');
+    // (The way back, in the keys' words and in the pad's: the UI root shows the one in use, .gs-pad-mode.)
+    const keys = h('span', 'gs-kbd-only', h('span', 'gs-key-keys', kbd('P')), h('span', 'gs-key-pad', kbd('Start', 'gs-pad-start')));
+    keys.setAttribute('aria-hidden', 'true');
+    this.resumeBtn = b9(ctx, 'primary', ['Resume', keys], {
       icon: 'play',
-      label: 'Resume',
       sound: 'confirm',
       fk: 'resume',
       onClick: () => {
@@ -274,14 +292,14 @@ export class Menus {
         hd.onPause(false);
       },
     });
+    this.resumeBtn.setAttribute('aria-keyshortcuts', 'P');
     // Home throws the run away (no results, missions or rewards), so it is two taps like Buy: the first
     // arms it for a few seconds, the second quits.
-    const home = btn(ctx, {
-      cls: 'gs-btn-soft gs-pause-home',
+    const home = b9(ctx, 'quiet', 'Home', {
       icon: 'back',
-      label: 'Home',
       sound: 'back',
       fk: 'p-home',
+      cls: 'gs9-pause-home',
       onClick: () => {
         if (this.homeArmed) {
           this.disarmHome();
@@ -289,29 +307,29 @@ export class Menus {
           hd.onHome();
           return;
         }
-        const label = home.querySelector('.gs-btn-label');
+        const label = home.querySelector('.gs9-b-t');
         if (label) label.textContent = 'Quit Run?';
         home.classList.add('is-armed');
-        home.setAttribute('aria-label', 'Quit run: press again to leave without results');
+        home.setAttribute('aria-label', 'Quit Run? Press again to leave without results');
         this.homeArmed = window.setTimeout(() => this.disarmHome(), 3000);
       },
     });
     this.homeBtn = home;
-    const title = h('h2', 'gs-pause-title', 'Paused');
-    title.id = 'gs-pause-title';
-    // The way back, in the keys' words and in the pad's: the UI root shows the one in use (.gs-pad-mode).
-    const key = h('p', 'gs-pause-key gs-kbd-only', h('span', 'gs-key-keys', kbd('P'), ' to resume'), h('span', 'gs-key-pad', kbd('Start', 'gs-pad-start'), ' to resume'));
-    // Under the title, what the run is working toward: each mission's live progress, Done once it popped.
-    this.pauseMis = h('section', 'gs-pause-mis');
-    this.pauseMis.setAttribute('aria-labelledby', 'gs-pause-mis-h');
+    const title = h('h2', 'gs9-pause-h', 'Paused');
+    title.id = 'gs9-pause-t';
+    title.tabIndex = -1;
+    // Under the word, what the run is working toward: each mission's live progress, Done once it popped.
+    this.pauseMis = h('section', 'gs9-pause-mis');
+    this.pauseMis.setAttribute('aria-labelledby', 'gs9-pause-mis-h');
     this.pauseMis.hidden = true;
+    this.pauseSettings = b9(ctx, 'secondary', 'Settings', { icon: 'gear', fk: 'p-settings', onClick: () => (this.lastSettings ? this.showSettings(this.lastSettings) : undefined) });
     // Round 8 (the photo lane): photo mode holds the run where it stopped and hands the lens to the player.
-    const photo = hd.onPhoto ? btn(ctx, { cls: 'gs-btn-soft gs-pause-photo', icon: 'camera', label: 'Photo', sound: 'tap', fk: 'p-photo', onClick: () => hd.onPhoto?.() }) : null;
-    const acts = h('div', 'gs-pause-acts', photo, home);
-    const card = h('div', 'gs-pause-card gs-panel', title, this.pauseMis, this.resumeBtn, this.pausePanel.el, acts, key);
+    const photo = hd.onPhoto ? b9(ctx, 'secondary', 'Photo', { icon: 'camera', fk: 'p-photo', onClick: () => hd.onPhoto?.() }) : null;
+    const card = h('section', 'gs9-sheet is-fit gs9-pause', h('header', 'gs9-sheet-head', title), h('div', 'gs9-sheet-body', this.pauseMis, this.resumeBtn, h('div', 'gs9-pause-acts', this.pauseSettings, photo, home)));
     card.setAttribute('role', 'dialog');
     card.setAttribute('aria-modal', 'true');
     card.setAttribute('aria-labelledby', title.id);
+    this.pauseCard = card;
     pauseEl.append(card);
     this.pause = new Layer(pauseEl, 180);
     parent.append(pauseEl);
@@ -325,19 +343,21 @@ export class Menus {
     this.sleds = new Layer(sledsWrap, 200);
     parent.append(sledsWrap);
 
-    // Settings sheet.
+    // Settings (round 9, U4): a sheet from the logo's side (the bottom on a phone), as a room is: Close from the title's
+    // door, Back over the pause card.
     this.sheetPanel = new SettingsPanel(ctx, hd);
-    const setHead = this.sheetHead('Settings', 'gs-settings-title', () => this.closeSheet(this.settings), null);
-    this.settingsSheet = this.sheet('gs-sheet-settings', 'gs-settings-title', setHead, h('div', 'gs-sheet-body', this.sheetPanel.el));
-    const setWrap = this.wrap(this.settingsSheet, () => this.closeSheet(this.settings));
+    const sf = sheetFrame(ctx, { cls: 'gs9-settings', title: 'Settings', close: 'Close', closeIcon: 'close', fk: 'close-settings', onClose: () => this.closeSheet(this.settings) });
+    sf.body.append(this.sheetPanel.el);
+    this.settingsSheet = sf.el;
+    const setWrap = h('div', 'gs9-layer', sf.el);
     this.settings = new Layer(setWrap, 200);
     parent.append(setWrap);
 
-    // The books (round 8).
-    this.booksBody = h('div', 'gs-sheet-body gs-books-body');
-    const booksHead = this.sheetHead('Almanac', 'gs-books-title', () => this.closeSheet(this.books), null);
-    this.booksSheet = this.sheet('gs-sheet-books', 'gs-books-title', booksHead, this.booksBody);
-    const booksWrap = this.wrap(this.booksSheet, () => this.closeSheet(this.books));
+    // The books (round 8; round 9, U4: a sheet over the Progress room, with Back, its builders loaded on demand).
+    const bf = sheetFrame(ctx, { cls: 'gs9-books', title: 'Almanac', close: 'Back', closeIcon: 'back', fk: 'close-books', onClose: () => this.closeSheet(this.books) });
+    this.booksSheet = bf.el;
+    this.booksBody = bf.body;
+    const booksWrap = h('div', 'gs9-layer', bf.el);
     this.books = new Layer(booksWrap, 200);
     parent.append(booksWrap);
 
@@ -439,13 +459,18 @@ export class Menus {
 
   showPause(s: SettingsModel, missions?: MissionView[]): void {
     this.lastSettings = { ...s };
-    this.pausePanel.set(s);
     const list = (missions ?? []).slice(0, PAUSE_MISSIONS);
     this.pauseMis.replaceChildren();
     if (list.length > 0) {
-      const head = h('h3', 'gs-pause-mis-h', 'Missions');
-      head.id = 'gs-pause-mis-h';
-      this.pauseMis.append(head, missionList(list));
+      // (Each as the Progress room says it: its words, a check once done, and "270 of 800".)
+      const head = h('h3', 'gs9-cap', 'This Run’s Missions');
+      head.id = 'gs9-pause-mis-h';
+      const ul = h('ul', 'gs9-list');
+      for (const mv of list) {
+        const [v, t] = progFigures(Math.min(mv.progress, mv.target), mv.target, mv.dp);
+        ul.append(h('li', `gs9-row${mv.done ? ' is-done' : ''}`, h('span', 'gs9-row-t', h('span', 'gs9-check', mv.done ? ico9('check') : null), mv.text), h('span', 'gs9-row-v gs9-num', mv.done ? 'Done' : `${v} of ${t}`)));
+      }
+      this.pauseMis.append(head, ul);
     }
     this.pauseMis.hidden = list.length === 0;
     if (this.pause.show()) {
@@ -458,7 +483,7 @@ export class Menus {
   private disarmHome(): void {
     window.clearTimeout(this.homeArmed);
     this.homeArmed = 0;
-    const label = this.homeBtn.querySelector('.gs-btn-label');
+    const label = this.homeBtn.querySelector('.gs9-b-t');
     if (label) label.textContent = 'Home';
     this.homeBtn.classList.remove('is-armed');
     this.homeBtn.removeAttribute('aria-label');
@@ -467,6 +492,11 @@ export class Menus {
   hidePause(): void {
     if (!this.pause.open) return;
     this.disarmHome();
+    // (Round 9, U4: settings opened over the card go with it: P resumes from under them too.)
+    if (this.settings.open) {
+      this.settings.hide();
+      this.uncover();
+    }
     this.pause.hide();
     // Lift inert from the surfaces underneath first, or the focus return below cannot land.
     this.onChange();
@@ -476,11 +506,18 @@ export class Menus {
   showSettings(s: SettingsModel): void {
     this.lastSettings = { ...s };
     this.sheetPanel.set(s);
-    if (this.settings.show()) {
-      this.rememberFocus();
-      this.settingsSheet.querySelector<HTMLElement>('[data-fk^="close-"]')?.focus({ preventScroll: true });
-    }
+    // (Over the pause card it is a step down from it: Back, and the card out of sight under it.)
+    const over = this.pause.open;
+    closeWords(this.settingsSheet, over);
+    const fresh = this.settings.show();
+    if (fresh && !over) this.rememberFocus();
+    // (Inert lifted first: over the pause card every other layer is inert, and focus cannot land in one.)
     this.onChange();
+    if (fresh) {
+      this.pauseCard.classList.toggle('is-covered', over);
+      coverSheets(true);
+      this.settingsSheet.querySelector<HTMLElement>('.gs9-sheet-h')?.focus({ preventScroll: true });
+    }
   }
 
   showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[], shelves?: GarageShelf[], lanterns?: LanternTownView[]): void {
@@ -932,9 +969,11 @@ export class Menus {
   closeMenus(): void {
     const was = this.sleds.open || this.settings.open || this.books.open;
     if (this.garage.open) this.closeGarage();
+    this.closeBookPage();
     this.sleds.hide();
     this.settings.hide();
     this.books.hide();
+    this.uncover();
     this.onChange();
     if (was && !this.pause.open) this.restore();
   }
@@ -951,90 +990,100 @@ export class Menus {
     const top = this.settings.open ? this.settings : this.books.open ? this.books : this.sleds.open ? this.sleds : null;
     if (!top) return false;
     this.ctx.sound('back');
+    // (Round 9, U4: an album page open over its contents goes first.)
+    if (top === this.books && this.bookPage) {
+      this.closeBookPage();
+      return true;
+    }
     this.closeSheet(top);
     return true;
   }
 
   private closeSheet(l: Layer): void {
+    if (l === this.books) this.closeBookPage();
     l.hide();
+    this.uncover();
     this.onChange();
-    if (!this.sleds.open && !this.settings.open && !this.books.open) this.restore();
+    // (Settings over the pause card give focus back to its Settings.)
+    if (l === this.settings && this.pause.open) this.pauseSettings.focus({ preventScroll: true });
+    else if (!this.sleds.open && !this.settings.open && !this.books.open) this.restore();
   }
 
-  /** Round 8: the Almanac's tab of the books (the rank, the month's chapter, the fifty pages), opened at the page the
-   *  bar fills toward. */
+  /** Round 9 (U4): what a sheet of this file put out of sight comes back as it closes (the pause card under settings, a
+   *  room under the books or settings). */
+  private uncover(): void {
+    if (!this.settings.open) this.pauseCard.classList.remove('is-covered');
+    if (!this.settings.open && !this.books.open) coverSheets(false);
+  }
+
+  /** The Almanac (round 8; round 9, U4: this month's chapter and the fifty ranks as rows), opened at the rank the bar
+   *  fills toward. */
   showAlmanac(m: AlmanacModel): void {
     this.lastAlmanac = m;
     this.booksTab = 'almanac';
     this.renderBooks();
   }
 
-  /** Round 8: the Spirit Album's tab of the books. */
+  /** The Spirit Album (round 8; round 9, U4: its contents, a page a row; a page opens over them). */
   showAlbum(m: AlbumModel): void {
     this.lastAlbum = m;
     this.booksTab = 'album';
     this.renderBooks();
   }
 
+  /** Round 9 (U4): one book at a time, each from its own button in the Progress room (the round 8 sheet had a tab for
+   *  each). Its builders load on the first open; a book already up takes its new model in place. */
   private renderBooks(): void {
-    const fresh = !this.books.open;
-    const tab = this.booksTab;
-    const title = this.booksSheet.querySelector('.gs-sheet-title');
-    if (title) title.textContent = tab === 'almanac' ? 'Almanac' : 'Spirit Album';
-    // The tabs: the other book is a round trip to the game for its model (onOpenAlmanac, onOpenAlbum).
-    const tabs = h('div', 'gs-gtabs gs-books-tabs');
-    tabs.setAttribute('role', 'tablist');
-    tabs.setAttribute('aria-label', 'Books');
-    for (const [id, label] of [['almanac', 'Almanac'], ['album', 'Spirit Album']] as const) {
-      const on = id === tab;
-      const b = h('button', `gs-gtab${on ? ' is-on' : ''}`, label);
-      b.type = 'button';
-      b.id = `gs-btab-${id}`;
-      b.dataset.fk = `btab-${id}`;
-      b.setAttribute('role', 'tab');
-      b.setAttribute('aria-selected', String(on));
-      b.setAttribute('aria-controls', 'gs-books-panel');
-      b.tabIndex = on ? 0 : -1;
-      const go = () => {
-        if (id === this.booksTab) return;
-        this.ctx.sound('tap');
-        if (id === 'album') this.hd.onOpenAlbum?.();
-        else this.hd.onOpenAlmanac?.();
-        this.booksSheet.querySelector<HTMLElement>(`[data-fk="btab-${id}"]`)?.focus({ preventScroll: true });
-      };
-      b.addEventListener('click', go);
-      b.addEventListener('keydown', (e) => {
-        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-        e.preventDefault();
-        this.booksSheet.querySelector<HTMLElement>(`[data-fk="btab-${id === 'almanac' ? 'album' : 'almanac'}"]`)?.click();
-      });
-      tabs.append(b);
-    }
-    const a = this.lastAlmanac;
-    const al = this.lastAlbum;
-    // (The modes lane: an opened page's Ride, for a mirror or the Long Night.)
-    const ride = this.hd.onRideMode
-      ? (mode: RideMode) => {
-          this.ctx.sound('confirm');
-          this.hd.onRideMode?.(mode);
-        }
-      : undefined;
-    const panel = tab === 'almanac' && a ? h('div', 'gs-books-panel', rankHead(a.bar), almanacBody(a, ride)) : tab === 'album' && al ? albumBody(al) : h('div', 'gs-books-panel');
-    panel.id = 'gs-books-panel';
-    panel.setAttribute('role', 'tabpanel');
-    panel.setAttribute('aria-labelledby', `gs-btab-${tab}`);
-    this.booksBody.replaceChildren(tabs, panel);
-    if (this.books.show()) {
-      this.rememberFocus();
-      this.booksSheet.querySelector<HTMLElement>('[data-fk^="close-"]')?.focus({ preventScroll: true });
-    }
-    // The Almanac opens at the page being filled toward; the Album at its top.
-    const next = tab === 'almanac' ? panel.querySelector<HTMLElement>('[data-next]') : null;
-    const body = this.booksBody;
-    body.scrollTop = 0;
-    if (next) body.scrollTop = Math.max(0, next.getBoundingClientRect().bottom - body.getBoundingClientRect().top - body.clientHeight * 0.85);
-    void fresh;
-    this.onChange();
+    void (this.booksMod ??= import('./books')).then((bk) => {
+      const tab = this.booksTab;
+      const a = this.lastAlmanac;
+      const al = this.lastAlbum;
+      const name = tab === 'almanac' ? 'Almanac' : 'Spirit Album';
+      const head = this.booksSheet.querySelector<HTMLElement>('.gs9-sheet-h');
+      if (head) head.textContent = name;
+      this.booksSheet.setAttribute('aria-label', name);
+      this.closeBookPage();
+      // (The modes lane: an opened rank's Ride, for a mirror, the Long Night or the Trial.)
+      const ride = this.hd.onRideMode ? (mode: RideMode) => this.hd.onRideMode?.(mode) : undefined;
+      const body = tab === 'almanac' && a ? bk.almanacBody(a, this.ctx, ride) : tab === 'album' && al ? bk.albumContents(al, this.ctx, (id, from) => this.openBookPage(bk, id, from)) : h('div');
+      this.booksBody.replaceChildren(body);
+      const fresh = this.books.show();
+      if (fresh) this.rememberFocus();
+      this.onChange();
+      if (fresh) {
+        coverSheets(true);
+        head?.focus({ preventScroll: true });
+      }
+      // The Almanac opens at the rank being filled toward (a third of the way down); the Album at its top.
+      const next = tab === 'almanac' ? body.querySelector<HTMLElement>('[data-next]') : null;
+      const sc = this.booksBody;
+      sc.scrollTop = 0;
+      if (next) sc.scrollTop = Math.max(0, next.getBoundingClientRect().top - sc.getBoundingClientRect().top - sc.clientHeight / 3);
+    });
+  }
+
+  /** An album page over the contents: its own sheet with Back, focus back on its row as it closes. */
+  private openBookPage(bk: typeof import('./books'), id: string, from: HTMLElement): void {
+    const sec = this.lastAlbum?.sections.find((s) => s.id === id);
+    if (!sec || this.bookPage) return;
+    let shut = (): void => {};
+    const v = sheetFrame(this.ctx, { cls: 'gs9-books is-page', title: sec.name, close: 'Back', closeIcon: 'back', fk: 'close-page', onClose: () => shut() });
+    v.el.querySelector('.gs9-sheet-h')?.setAttribute('translate', 'no');
+    v.body.append(bk.albumPage(sec));
+    this.books.el.append(v.el);
+    this.booksSheet.classList.add('is-covered');
+    shut = openSheet(v.el, from, [this.booksSheet], () => {
+      v.el.remove();
+      this.booksSheet.classList.remove('is-covered');
+      this.bookPage = null;
+    });
+    this.bookPage = shut;
+  }
+
+  private closeBookPage(): void {
+    const p = this.bookPage;
+    this.bookPage = null;
+    p?.();
   }
 
   private rememberFocus(): void {
@@ -1046,6 +1095,10 @@ export class Menus {
   private restore(): void {
     const r = this.returnFocus;
     this.returnFocus = null;
-    if (r && r.isConnected && !this.anyOpen) r.focus({ preventScroll: true });
+    if (!r || this.anyOpen) return;
+    // (Round 9, U4: a room drawn again while the books were open has the same control under the same focus key.)
+    const fk = r.dataset.fk;
+    const to = r.isConnected ? r : fk ? Array.from(document.querySelectorAll<HTMLElement>(`[data-fk="${CSS.escape(fk)}"]`)).find((e) => !e.closest('[inert], [hidden]')) : null;
+    to?.focus({ preventScroll: true });
   }
 }

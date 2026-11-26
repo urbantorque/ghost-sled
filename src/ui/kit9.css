@@ -255,10 +255,350 @@
   color: var(--rider, var(--c-text));
 }
 
+/* ---- a sheet under another (a view pushed over a room, the books or settings over a room or the pause card): out of
+   sight, so the one on top never shows another's words through its ink ---- */
+.gs9-sheet.is-covered {
+  visibility: hidden;
+}
+
+/* A sheet's scrolling body fades at its edges, so a row cut by the head or the foot reads as more to scroll, not as
+   broken (round 9, U4; Details keeps its button at its foot, unfaded). */
+.gs9-sheet:not(.gs9-det) > .gs9-sheet-body {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 18px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 18px), transparent 100%);
+}
+
+/* ---- a sheet over the title: the title's own column steps out (its logo, picker, Ride, quiet line and doors), so only
+   the sheet and the scene are left and nothing reads through the sheet's ink (round 9, U4: both critics' worst fault).
+   The column is inert under a room, and the whole title under settings, the books or the garage. ---- */
+.gs9-t {
+  transition: opacity var(--dur-enter) var(--ease-out);
+}
+
+.gs9-t[inert],
+.gs-title[inert] .gs9-t {
+  opacity: 0;
+}
+
+/* ---- a section's head inside a sheet (round 9, U4: the Almanac's ranks, an album page's found and still to find) ---- */
+.gs9-cap {
+  margin-bottom: var(--sp-2);
+  color: var(--text-dim);
+  font-size: var(--fs-s);
+  font-weight: var(--fw-label);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+}
+
+/* A smaller secondary, inside a row. */
+.gs9-b.gs9-b-s {
+  min-height: 36px;
+  padding: 0 0.85em;
+  font-size: var(--fs-s);
+}
+
+/* ---- a layer that holds a sheet: menus.ts's surfaces (the books, settings, pause) in the round's language ---- */
+.gs9-layer {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-door);
+  pointer-events: none;
+}
+
+.gs9-layer.is-out {
+  opacity: 0;
+  transition: opacity var(--dur-tap) ease;
+}
+
+/* A sheet that fits its words (the pause card, settings): at the top of the reading edge, as tall as it needs. */
+.gs9-sheet.is-fit {
+  bottom: auto;
+  max-height: calc(100% - var(--st) - var(--sb));
+}
+
+/* ---- a slider: a hairline track filled to the value in off-white, a round thumb with an ink ring ---- */
+.gs9-range {
+  --p: 50%;
+  width: 100%;
+  height: var(--hit);
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: pan-y;
+}
+
+.gs9-range:focus-visible {
+  outline: none;
+}
+
+.gs9-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(90deg, var(--c-text) var(--p), rgba(245, 243, 255, 0.16) var(--p));
+}
+
+.gs9-range::-webkit-slider-thumb {
+  width: 22px;
+  height: 22px;
+  margin-top: -9px;
+  border-radius: var(--r-pill);
+  background: var(--c-text);
+  box-shadow: 0 0 0 4px var(--c-ink), 0 2px 8px rgba(5, 9, 30, 0.5);
+  -webkit-appearance: none;
+  appearance: none;
+  transition: transform var(--dur-tap) var(--ease-spring);
+}
+
+.gs9-range:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+
+.gs9-range:focus-visible::-webkit-slider-thumb,
+.gs9-range.gs-pad-focus::-webkit-slider-thumb {
+  box-shadow: var(--focus);
+}
+
+.gs9-range::-moz-range-track {
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.16);
+}
+
+.gs9-range::-moz-range-progress {
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--c-text);
+}
+
+.gs9-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--c-text);
+  box-shadow: 0 0 0 4px var(--c-ink);
+}
+
+.gs9-range:focus-visible::-moz-range-thumb {
+  box-shadow: var(--focus);
+}
+
+/* ---- a switch: its words on the left, the pill on the right; on is off-white with an ink knob ---- */
+.gs9-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--c-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gs9-switch-row:focus-visible,
+.gs9-switch-row.gs-pad-focus {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.gs9-switch {
+  position: relative;
+  flex: none;
+  width: 48px;
+  height: 28px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.18);
+}
+
+.gs9-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-pill);
+  background: var(--c-text);
+  transition: transform var(--dur-enter) var(--ease-spring);
+}
+
+.gs9-switch-row[aria-checked='true'] .gs9-switch {
+  background: var(--c-text);
+}
+
+.gs9-switch-row[aria-checked='true'] .gs9-switch::after {
+  background: var(--c-ink);
+  transform: translateX(20px);
+}
+
+@media (hover: hover) {
+  .gs9-switch-row:hover .gs9-switch {
+    box-shadow: inset 0 0 0 1px var(--hair-strong);
+  }
+}
+
+/* ---- settings (settings.ts): three blocks, each its heading and its controls ---- */
+.gs9-set {
+  display: grid;
+  gap: var(--sp-4);
+}
+
+.gs9-set-g {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.gs9-set-row {
+  display: grid;
+  grid-template-columns: 5.2em minmax(0, 1fr) 3.2em;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.gs9-set-l {
+  font-weight: var(--fw-label);
+}
+
+.gs9-set-v {
+  color: var(--text-dim);
+  font-weight: var(--fw-label);
+  text-align: right;
+}
+
+.gs9-set-seg {
+  display: flex;
+  justify-content: space-between;
+}
+
+.gs9-set-seg .gs9-b {
+  flex: 1;
+  min-height: 40px;
+}
+
+.gs9-set-seg .gs9-b[aria-pressed='true'] {
+  background: rgba(245, 243, 255, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.5);
+}
+
+.gs9-switch-v {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: var(--fs-s);
+  font-weight: var(--fw-label);
+}
+
+.gs9-set-g > .gs9-block-p {
+  margin-top: var(--sp-1);
+}
+
+.gs9-set-st {
+  display: grid;
+  gap: 2px;
+}
+
+.gs-ui:not(.gs-has-pad) .gs9-set-rumble {
+  display: none;
+}
+
+/* ---- the pause card (menus.ts): the word set like the wordmark, the run's missions, Resume, then the doors ---- */
+/* The frozen run dims under the card, darkest at the reading edge (the bottom on a phone), so the run reads as stopped
+   and the HUD steps back. */
+.gs9-pause-layer {
+  background: linear-gradient(100deg, rgba(8, 12, 30, 0.72) 0%, rgba(8, 12, 30, 0.5) 46%, rgba(8, 12, 30, 0.34) 100%);
+}
+
+/* The HUD steps back while the card is up, so its chips never read through the card's ink. */
+.gs-ui:has(> .gs9-pause-layer:not([hidden])) > .gs-hud {
+  opacity: 0.35;
+}
+
+.gs9-pause {
+  width: min(440px, 38vw);
+}
+
+.gs9-pause .gs9-sheet-head {
+  padding-top: var(--sp-5);
+}
+
+/* (ART.md 10: pause is set like the wordmark, italic 900 with the ghosts' mint under it and the runner drawn beneath.) */
+.gs9-pause-h {
+  position: relative;
+  padding: 0 0.12em 0.22em 0;
+  font-size: clamp(30px, calc(var(--u) * 2.3), 46px);
+  font-style: italic;
+  font-weight: var(--fw-display);
+  line-height: 1;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+  text-shadow: 0.05em 0.045em 0 var(--c-ghost), 0.1em 0.09em 0 rgba(18, 25, 51, 0.55);
+}
+
+.gs9-pause-h:focus {
+  outline: none;
+}
+
+.gs9-pause-h::after {
+  content: '';
+  position: absolute;
+  left: 0.1em;
+  right: 0.3em;
+  bottom: 0;
+  height: 0.1em;
+  border-radius: var(--r-pill);
+  background: var(--c-text);
+  transform-origin: 0 50%;
+  animation: gs9-draw var(--dur-turn) var(--ease-out) 140ms both;
+}
+
+@keyframes gs9-draw {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.gs9-pause .gs9-b-primary {
+  width: 100%;
+  min-height: 56px;
+  justify-content: flex-start;
+  font-size: var(--fs-l);
+}
+
+.gs9-pause-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.gs9-pause-acts .gs9-b {
+  flex: 1;
+}
+
+.gs9-pause-home.is-armed {
+  background: var(--c-text);
+  color: var(--c-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs9-pause-h::after {
+    animation: none;
+  }
+}
+
 /* ---- a screen held upright: a sheet comes up from the bottom, the whole width ---- */
 @media (max-aspect-ratio: 1/1) {
   .gs9-sheet,
-  .gs9-sheet.is-right {
+  .gs9-sheet.is-right,
+  .gs9-sheet.is-fit {
     left: 0;
     right: 0;
     top: auto;
@@ -273,6 +613,10 @@
 
   .gs9-sheet-head {
     padding: var(--sp-3) var(--sp-3) var(--sp-2) var(--sp-4);
+  }
+
+  .gs9-pause-layer {
+    background: linear-gradient(0deg, rgba(8, 12, 30, 0.72) 0%, rgba(8, 12, 30, 0.5) 46%, rgba(8, 12, 30, 0.34) 100%);
   }
 
   .gs9-sheet-body {

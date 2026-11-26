@@ -183,7 +183,22 @@ export interface SaveData {
   ornament?: string;
   /** The mountains' sets: how many of each mountain's three pieces its mastery board has opened (0 to 3). */
   sets?: Record<string, number>;
+  /** Round 9 (U4): the title's one thing new not yet opened (app.ts keepIntros: what a run opened, by its door and
+   *  its one line), and the lines whose door has been opened, so a "New" outlives a reload and one opened stays
+   *  opened. Each written only while it holds something, and kept short (loadIntros). */
+  intros?: SavedIntro[];
+  introsSeen?: string[];
 }
+
+/** A "New" on one of the title's doors and its one line in that door's room. */
+export interface SavedIntro {
+  door: 'events' | 'progress' | 'garage' | 'settings';
+  line: string;
+}
+
+/** How many "New"s a save keeps waiting, and how many opened lines it remembers (the newest). */
+export const INTROS_KEPT = 8;
+export const INTROS_SEEN_KEPT = 24;
 
 /** Where each garage shelf keeps what is owned, and what is worn, in the save. */
 export const SHELF_KEYS: Readonly<Record<ShelfId, { owned: 'scarves' | 'hats' | 'trails' | 'sounds'; on: 'scarf' | 'hat' | 'trail' | 'sound' }>> = {
@@ -577,8 +592,24 @@ export function merge(base: SaveData, p: Partial<SaveData>, today: string): Save
   if (trials) d.trials = trials;
   else delete d.trials;
   loadShop(d, p);
+  loadIntros(d, p);
   pruneDaily(d, today);
   return d;
+}
+
+/** Round 9 (U4): the title's "New"s, through a reader: a door the title has, a line of words (no markup reaches the
+ *  room), each once, the newest kept; written only when it holds something (an old save keeps its shape). */
+function loadIntros(d: SaveData, p: Partial<SaveData>): void {
+  const DOORS = ['events', 'progress', 'garage', 'settings'];
+  const line = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= 200 && !/[<>]/.test(v);
+  const intros: SavedIntro[] = [];
+  if (Array.isArray(p.intros)) for (const x of p.intros as unknown[]) if (isObj(x) && typeof x.door === 'string' && DOORS.includes(x.door) && line(x.line) && !intros.some((y) => y.line === x.line)) intros.push({ door: x.door as SavedIntro['door'], line: x.line });
+  if (intros.length) d.intros = intros.slice(-INTROS_KEPT);
+  else delete d.intros;
+  const seen: string[] = [];
+  if (Array.isArray(p.introsSeen)) for (const x of p.introsSeen as unknown[]) if (line(x) && !seen.includes(x)) seen.push(x);
+  if (seen.length) d.introsSeen = seen.slice(-INTROS_SEEN_KEPT);
+  else delete d.introsSeen;
 }
 
 /** Round 9, the shop lane: the tracks, the ornaments and the sets, each through its reader and written only when it

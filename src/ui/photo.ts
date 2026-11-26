@@ -1,5 +1,6 @@
 import type { InputMode } from '../game/input';
-import { btn, h, kbd, padBtn, type UiSound } from './dom';
+import { btn, h, kbd, padBtn, type Ctx, type UiSound } from './dom';
+import type { IconName } from './icons';
 import './photo.css';
 
 // Round 8, photo mode (the photo lane; V8 and G11's frame). From pause, or from the results while the scene still
@@ -48,6 +49,12 @@ export interface PhotoOpts {
   card: boolean;
   /** The page shows the canvas mirrored (a mirror mountain): a drag across turns the other way. */
   mirrored: boolean;
+}
+
+/** A button in one of the round's three ranks, with its words: kit9.ts b9's markup, built here because the app imports
+ *  this module before the UI's root, and kit9.ts's sheet must load after style.css (round 9, U4). */
+function rankBtn(ctx: Ctx, rank: 'primary' | 'secondary' | 'quiet', label: string, o: { icon: IconName; fk: string; aria?: string; cls?: string; sound?: UiSound; onClick(): void }): HTMLButtonElement {
+  return btn(ctx, { cls: `gs9-b gs9-b-${rank}${rank === 'primary' ? ' gs-btn-primary' : ''}${o.cls ? ` ${o.cls}` : ''}`, icon: o.icon, iconCls: 'gs9-i', aria: o.aria, fk: o.fk, sound: o.sound, onClick: o.onClick }, h('span', 'gs9-b-t', label));
 }
 
 /** Turning speed: radians per pixel dragged, per second at full stick or key. */
@@ -135,10 +142,10 @@ export class PhotoMode {
     this.flash.setAttribute('aria-hidden', 'true');
 
     // The help: what moves the view, in the language of the input in use.
-    this.help = h('div', 'gs-ph-help', h('h2', 'gs-ph-title', 'Photo'), this.helpLines(opts.mode));
+    this.help = h('div', 'gs-ph-help', h('h2', 'gs-ph-title gs9-speed', 'Photo'), this.helpLines(opts.mode));
 
     // The lens: a focal length, right is longer.
-    this.lensIn = h('input', 'gs-range gs-ph-range');
+    this.lensIn = h('input', 'gs9-range gs-ph-range');
     Object.assign(this.lensIn, { type: 'range', min: String(MM_LO), max: String(MM_HI), step: '1', id: 'gs-ph-lens' });
     this.lensOut = h('output', 'gs-ph-val gs-num');
     this.lensOut.htmlFor.add('gs-ph-lens');
@@ -151,7 +158,7 @@ export class PhotoMode {
     const lensBox = h('div', 'gs-ph-ctl', h('span', 'gs-ph-ctl-h', lensLab, this.lensOut), this.lensIn);
 
     // The tilt: the horizon, either way.
-    this.tiltIn = h('input', 'gs-range gs-ph-range');
+    this.tiltIn = h('input', 'gs9-range gs-ph-range');
     Object.assign(this.tiltIn, { type: 'range', min: String(-TILT_DEG), max: String(TILT_DEG), step: '1', id: 'gs-ph-tilt' });
     this.tiltOut = h('output', 'gs-ph-val gs-num');
     this.tiltOut.htmlFor.add('gs-ph-tilt');
@@ -163,25 +170,26 @@ export class PhotoMode {
     tiltLab.htmlFor = 'gs-ph-tilt';
     const tiltBox = h('div', 'gs-ph-ctl', h('span', 'gs-ph-ctl-h', tiltLab, this.tiltOut), this.tiltIn);
 
+    // (Round 9, U4: every control in the round's three ranks with its words; the grid, the focus and the first frame were
+    // lone glyphs. Save Photo is the one primary.)
     const ctx = { sound: (k: UiSound) => hooks.sound(k), gameKeyJustPressed: () => false };
-    this.gridBtn = btn(ctx, { cls: 'gs-btn-soft gs-btn-round gs-ph-tog', icon: 'grid', aria: 'Framing grid', fk: 'ph-grid', onClick: () => this.toggleGrid() });
+    this.gridBtn = rankBtn(ctx, 'quiet', 'Grid', { icon: 'grid', fk: 'ph-grid', aria: 'Grid: the thirds over the picture', cls: 'gs-ph-tog', onClick: () => this.toggleGrid() });
     this.gridBtn.setAttribute('aria-pressed', 'false');
-    this.focusBtn = opts.canFocus ? btn(ctx, { cls: 'gs-btn-soft gs-btn-round gs-ph-tog', icon: 'focus', aria: 'Focus on the rider', fk: 'ph-focus', onClick: () => this.toggleFocus() }) : null;
+    this.focusBtn = opts.canFocus ? rankBtn(ctx, 'quiet', 'Focus', { icon: 'focus', fk: 'ph-focus', aria: 'Focus on the rider', cls: 'gs-ph-tog', onClick: () => this.toggleFocus() }) : null;
     this.focusBtn?.setAttribute('aria-pressed', 'false');
-    const reset = btn(ctx, { cls: 'gs-btn-soft gs-btn-round', icon: 'reset', aria: 'Back to the first frame', fk: 'ph-reset', sound: 'back', onClick: () => this.reset() });
-    const back = btn(ctx, { cls: 'gs-btn-soft gs-ph-back', icon: 'back', label: 'Done', sound: 'back', fk: 'ph-back', onClick: () => this.leave() });
+    const reset = rankBtn(ctx, 'quiet', 'First Frame', { icon: 'reset', fk: 'ph-reset', sound: 'back', onClick: () => this.reset() });
+    const back = rankBtn(ctx, 'quiet', 'Done', { icon: 'back', sound: 'back', fk: 'ph-back', cls: 'gs-ph-back', onClick: () => this.leave() });
     back.setAttribute('aria-keyshortcuts', 'Escape');
-    const save = btn(ctx, { cls: 'gs-btn-primary gs-ph-save', icon: 'camera', label: 'Save Photo', sound: 'confirm', fk: 'ph-save', onClick: () => void this.save(false) });
+    const save = rankBtn(ctx, 'primary', 'Save Photo', { icon: 'camera', sound: 'confirm', fk: 'ph-save', onClick: () => void this.save(false) });
     save.setAttribute('aria-keyshortcuts', 'Enter');
-    const card = opts.card ? btn(ctx, { cls: 'gs-btn-soft gs-ph-card', icon: 'flag', label: 'With Run Card', sound: 'confirm', fk: 'ph-card', onClick: () => void this.save(true) }) : null;
-    card?.setAttribute('aria-label', 'Save the photo with the run card: the mountain, the time, the place and your name');
+    const card = opts.card ? rankBtn(ctx, 'secondary', 'With Run Card', { icon: 'flag', sound: 'confirm', fk: 'ph-card', aria: 'With Run Card: save the photo with the mountain, the time, the place and your name', onClick: () => void this.save(true) }) : null;
     this.status = h('p', 'gs-ph-status');
     this.status.setAttribute('role', 'status');
     this.status.setAttribute('aria-live', 'polite');
 
     this.bar = h(
       'div',
-      'gs-ph-bar gs-panel',
+      'gs-ph-bar',
       back,
       h('div', 'gs-ph-lens', lensBox, tiltBox),
       h('div', 'gs-ph-togs', this.gridBtn, this.focusBtn, reset),

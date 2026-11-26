@@ -1190,6 +1190,20 @@ const SCENARIOS: Record<string, () => void> = {
     goTitle(ladderTitle({ spine: titleSpineOf(spineD) }));
     handlers.onOpenAlmanac?.();
   },
+  // Round 9 (U4): the Long Night once the three new mountains are in, sixteen legs (eight, then the same mirrored), on
+  // the eight-mountain title: its block in the Progress room, its depth, its Ride.
+  'night-sixteen': () => {
+    spineD = spineSave();
+    const sp = titleSpineOf(spineD);
+    goTitle({ ...eightTitle(), spine: { ...sp, longNight: { legs: 16, best: { legs: 11, z: 2340 } } } });
+    window.setTimeout(() => document.querySelector<HTMLElement>('[data-fk="door-progress"]')?.click(), 400);
+  },
+  // Round 9 (U4): the beat between two legs, deep in a sixteen-leg night (the twelfth leg, a mountain mirrored).
+  'night-beat-sixteen': () => {
+    goTitle(eightTitle());
+    ui.hideTitle();
+    void import('./nightbeat').then((nb) => nb.showNightBeat(document.body, { n: 12, of: 16, mountain: 'Gablefall', mirror: true, mood: 'Blizzard', event: 'Avalanche', lantern: 0.62, getUps: 2, charms: ['Kite String', 'Bark Skin'] }, false, () => log('night beat done')));
+  },
   album: () => {
     spineD = spineSave({ stickers: 40 });
     goTitle(ladderTitle({ spine: titleSpineOf(spineD) }));
@@ -1664,7 +1678,7 @@ const GROUPS: Record<string, string[]> = {
   fx: ['callouts', 'callouts-merge', 'callouts-landing', 'callouts-landing-big', 'callouts-late-stomp', 'callouts-perfect', 'callouts-chase', 'callouts-chase-band', 'callouts-band', 'callouts-pass', 'overtake-frame', 'lost', 'bank', 'toasts', 'toasts-2', 'pass', 'pass-you', 'pass-landing', 'landing-pass', 'pass-grudge', 'pass-grudge-settled', 'passed-by', 'passed-by-grudge', 'passed-by-you', 'queue'],
   chaos: ['reveal', 'reveal-lantern', 'reveal-comet', 'reveal-haunted', 'reveal-event', 'reveal-plain', 'warn-avalanche', 'warn-yeti', 'warn-gifts', 'warn-train'],
   hints: ['hint-steer', 'hint-crouch', 'hint-drift', 'hint-drift-done', 'hint-pop', 'hint-stomp', 'hint-draft', 'hint-dash', 'hint-flipspin', 'hint-learn', 'tricks-long', 'stamp-long'],
-  spine: ['seq-first', 'seq-rematch', 'seq-turn', 'seq-cards', 'seq-wreck', 'seq-duel', 'seq-win', 'title-spine', 'title-spine-risk', 'title-flame', 'title-spine-early', 'almanac', 'album', 'lanterns'],
+  spine: ['seq-first', 'seq-rematch', 'seq-turn', 'seq-cards', 'seq-wreck', 'seq-duel', 'seq-win', 'title-spine', 'title-spine-risk', 'title-flame', 'title-spine-early', 'almanac', 'album', 'lanterns', 'night-sixteen', 'night-beat-sixteen'],
   menus: ['results', 'results-win', 'results-duel', 'results-duel-lost', 'results-duel-opens', 'results-crowned', 'results-finish', 'results-finish-solo', 'results-short', 'results-plain', 'results-unlock', 'results-record', 'results-mid', 'results-last', 'results-zero', 'results-doubled', 'pause', 'sleds', 'settings'],
   cash: ['bank-tiers', 'bank-t0', 'bank-t1', 'bank-t2', 'bank-t3', 'bank-best', 'bank-draft', 'bank-bump', 'stake', 'stake-fuse', 'stake-held', 'lost-crack', 'lost-best', 'lost-small', 'chase-stake'],
   beats: ['streak', 'streak-5', 'pass-words', 'pass-streak', 'race-news', 'race-queue', 'race-call', 'race-call-grudge', 'race-call-you', 'duel', 'duel-lost', 'lead', 'grudge-settled', 'nemesis-down', 'finale-avalanche', 'finale-storm', 'finale-train', 'finale-yeti', 'finale-dodged', 'pops', 'pop-mission', 'pop-unlock', 'new-best', 'friend-beaten', 'says', 'countdown', 'countdown-storm', 'countdown-plain', 'countdown-yeti'],
