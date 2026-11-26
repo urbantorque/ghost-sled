@@ -76,6 +76,8 @@ interface Style {
  *  wands with lilac tags on the glacier, ash-pale stakes on the volcano, bamboo and paper on Sakura. */
 const STYLES: Record<BiomeId, Style> = {
   alpine: { weights: [3, 2, 3, 2], shaft: '#F2EADB', band: '#5C7BD0', fence: '#D8C6AC', flags: ['#5F8FE6', '#E4ECFB'] },
+  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+  oldrun: { weights: [3, 2, 3, 2], shaft: '#F2EADB', band: '#5C7BD0', fence: '#D8C6AC', flags: ['#5F8FE6', '#E4ECFB'] },
   glacier: { weights: [4, 3, 3, 0], shaft: '#E2ECF5', band: '#6C8AD8', fence: '#D5DDEA', flags: ['#9A88E6', '#DCE8FA'] },
   volcanic: { weights: [4, 3, 1, 2], shaft: '#D3CED7', band: '#7A70B4', fence: '#C2BCC8', flags: ['#9484D0', '#E2DEE8'] },
   blossom: { weights: [2, 2, 4, 2], shaft: '#EFE7D8', band: '#9C86CC', fence: '#E0D6C4', flags: ['#EDBFD8', '#B09EE8'] },

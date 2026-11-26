@@ -63,6 +63,8 @@ function spanStyle(biome: BiomeId, ctx: SiteCtx): SpanStyle {
       return { post: C('#3E3440'), rail: C('#4A3E4A'), beam: C('#3A3040'), dark: shade(p.low, 0.42), arch: false, rise: 7, ice: false };
     case 'blossom':
       return { post: C('#93405A'), rail: C('#6A2A40'), beam: C('#93405A'), dark: C('#3A2A36'), arch: true, rise: 11, ice: false };
+    // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+    case 'oldrun':
     case 'alpine':
       return { post: TIMBER_DARK, rail: TIMBER_LIGHT, beam: TIMBER, dark: TIMBER_DARK, arch: false, rise: 4, ice: false };
     case 'lantern':

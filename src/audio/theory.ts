@@ -254,6 +254,27 @@ export const STYLES: Record<Mood, Style> = {
  */
 export const CLEAR: Record<BiomeId, Style> = {
   alpine: STYLES[Mood.None],
+  // The Old Run (round 9): a quick galop in A major at 132, the hotel's ballroom band out on the ice. An oom-pah bass
+  // (the root on the beat, the fifth off it), a kick on every beat and a clap on the off-beat, a bright pluck arp in
+  // 16ths and a brass-bright square lead; little reverb, so it stays quick.
+  oldrun: {
+    tonic: 57,
+    bpm: 132,
+    mode: 'major',
+    penta: MAJOR_PENTA,
+    bright: 0,
+    swing: 0,
+    pad: { cutoff: 2800, attack: 0.35, detune: 6, wobble: 0 },
+    bass: [0, _, 7, _, 0, _, 7, _, 0, _, 7, _, 4, _, 7, _],
+    arp: { kind: 'up', rate: 1, timbre: 'pluck', prob: 0.95, oct: 1 },
+    kick: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+    hat: [0.2, 0.15, 0.55, 0.15, 0.2, 0.15, 0.55, 0.15, 0.2, 0.15, 0.55, 0.15, 0.2, 0.15, 0.55, 0.3],
+    clap: [0, 0, 0.8, 0, 0, 0, 0.8, 0, 0, 0, 0.8, 0, 0, 0, 0.8, 0],
+    sparkle: { prob: 0.06, timbre: 'bell' },
+    lead: 'square',
+    verb: 0.7,
+    kit: { kick: 'tight', snare: 'clap', pump: 0.22 },
+  },
   // Lanternfall: Bb major at 92 (the produced score's key, a slow pulse), a music-box arp rising and falling,
   // a bass that only marks the bar, no clap until the lanterns: a hush that keeps moving.
   lantern: {
@@ -379,6 +400,8 @@ export const ACCENTS: Record<BiomeId, Accent> = {
   // Lanternfall: a soft pad, round plucks, the most sparkle of any mountain (a music box), a glass octave.
   lantern: { padCut: 0.9, pluckBright: 0.85, sparkleMul: 1.9, sub: false, koto: false, shimmer: true },
   alpine: { padCut: 1, pluckBright: 0.8, sparkleMul: 1, sub: false, koto: false, shimmer: false },
+  // The Old Run: a bright band, a crisp pluck, bells kept for the bends.
+  oldrun: { padCut: 1.1, pluckBright: 0.8, sparkleMul: 1, sub: false, koto: false, shimmer: false },
   glacier: { padCut: 1.15, pluckBright: 1.1, sparkleMul: 1.6, sub: false, koto: false, shimmer: true },
   volcanic: { padCut: 0.72, pluckBright: 0.9, sparkleMul: 0.8, sub: true, koto: false, shimmer: false },
   blossom: { padCut: 1, pluckBright: 1, sparkleMul: 1.1, sub: false, koto: true, shimmer: false },

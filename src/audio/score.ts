@@ -298,12 +298,42 @@ const LANTERNFALL: Song = {
   ]),
 };
 
+/**
+ * The Old Run (A major, 132): a galop, the old hotel's dance on the ice. Plain bright chords that turn on the
+ * dominant every two bars, a chorus that climbs IV V vi and swings home through a secondary dominant; the hook is
+ * quick repeated notes and a run up the scale, then a held top note: the sled into a bend and out of it.
+ */
+const OLDRUN: Song = {
+  intro: [I(), at(4)],
+  verse: [I(), at(4), at(3), at(4), I(), at(5), at(1, 7), at(4)],
+  chorus: [at(3), at(4), at(5, 7), at(4), at(3), at(4), at(1, 7), I()],
+  bridge: [at(5), at(1, 7), at(3), at(4, undefined, 's4')],
+  build: at(4, 7),
+  hook: line([
+    [0, 2, 4], [2, 2, 4], [4, 2, 4], [6, 2, 5], [8, 2, 6], [10, 2, 7], [12, 4, 8],
+    [16, 2, 6], [18, 2, 6], [20, 2, 6], [22, 2, 7], [24, 4, 8], [28, 4, 6],
+    [32, 2, 4], [34, 2, 4], [36, 2, 4], [38, 2, 5], [40, 2, 6], [42, 2, 7], [44, 4, 8],
+    [48, 8, 9], [56, 4, 8], [60, 4, 6],
+    [64, 2, 7], [66, 2, 7], [68, 2, 7], [70, 2, 8], [72, 4, 9], [76, 4, 7],
+    [80, 2, 8], [82, 2, 8], [84, 2, 8], [86, 2, 9], [88, 4, 10], [92, 4, 8],
+    [96, 4, 9], [100, 4, 8], [104, 4, 6], [108, 4, 4],
+    [112, 4, 5], [116, 4, 6], [120, 8, 7],
+  ]),
+  answer: line([
+    [24, 2, 2], [26, 2, 3], [28, 4, 4],
+    [56, 2, 6], [58, 2, 5], [60, 4, 4],
+    [88, 2, 3], [90, 2, 4], [92, 4, 5],
+    [120, 2, 5], [122, 2, 6], [124, 4, 7],
+  ]),
+};
+
 export const SONGS: Record<BiomeId, Song> = {
   alpine: PINECREST,
   glacier: FROSTFANG,
   volcanic: EMBER,
   blossom: SAKURA,
   lantern: LANTERNFALL,
+  oldrun: OLDRUN,
 };
 
 export function songFor(biome: BiomeId): Song {

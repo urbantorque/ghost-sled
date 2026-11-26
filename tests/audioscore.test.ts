@@ -57,8 +57,9 @@ describe('the songs', () => {
   it('each mountain has its own key, tempo and hook, and the title its own theme', () => {
     const keys = new Set(Object.values(CLEAR).map((s) => `${s.tonic % 12}${s.mode}`));
     const tempi = new Set(Object.values(CLEAR).map((s) => s.bpm));
-    expect(keys.size).toBe(5);
-    expect(tempi.size).toBe(5);
+    // (One a look: the five's, and since round 9 the Old Run's.)
+    expect(keys.size).toBe(Object.keys(CLEAR).length);
+    expect(tempi.size).toBe(Object.keys(CLEAR).length);
     const heads = new Set(songs.map(([, s]) => headOf(s).map((n) => `${n.s}:${n.d}`).join(',')));
     expect(heads.size).toBe(songs.length);
     expect(TITLE_STYLE.bpm).toBeLessThan(Math.min(...tempi));

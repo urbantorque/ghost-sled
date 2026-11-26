@@ -103,6 +103,8 @@ function dome(r: number, k = 0.52, seg = 8): SphereGeometry {
  *  the sleeve's radius at the shoulder and the cuff. */
 const CUT: Record<BiomeId, { coat: [number, number, number, number]; sleeve: [number, number] }> = {
   alpine: { coat: [0.2, 0.27, 0.62, 0.68], sleeve: [0.06, 0.075] },
+  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+  oldrun: { coat: [0.2, 0.27, 0.62, 0.68], sleeve: [0.06, 0.075] },
   glacier: { coat: [0.23, 0.3, 0.66, 0.67], sleeve: [0.075, 0.09] },
   volcanic: { coat: [0.2, 0.33, 0.86, 0.56], sleeve: [0.06, 0.08] },
   blossom: { coat: [0.2, 0.28, 0.82, 0.58], sleeve: [0.06, 0.13] },
@@ -114,6 +116,8 @@ const CUT: Record<BiomeId, { coat: [number, number, number, number]; sleeve: [nu
  *  inward turn) and how it moves (0 a cowbell rung, 1 a tool pumped overhead, 2 a parasol twirled). */
 const PROP_REST: Record<BiomeId, [number, number, number, number]> = {
   alpine: [0.35, 0.3, 0.1, 0],
+  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+  oldrun: [0.35, 0.3, 0.1, 0],
   glacier: [0.12, 0.25, 0, 1],
   volcanic: [0.15, 0.3, 0, 1],
   blossom: [3.15, -0.3, 0, 2],
@@ -284,6 +288,8 @@ export function restyleCrowd(geo: BufferGeometry, biome: BiomeId): void {
 const DRESS: Record<BiomeId, { coats: string[]; hats: string[] }> = {
   // Loden greens, charcoal, wine-plum and oatmeal; cream, sky and heather knits.
   alpine: { coats: ['#4E6B4C', '#3A4058', '#2F5A52', '#2E3A66', '#6A4058', '#CFC2A8', '#4A6390', '#6B5646', '#7A8C6A'], hats: ['#F0E8D8', '#9CC0EE', '#3F5A44', '#B9A6E0', '#FFFFFF', '#5B8FD6', '#8A6E5A', '#D7E3F4'] },
+  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+  oldrun: { coats: ['#4E6B4C', '#3A4058', '#2F5A52', '#2E3A66', '#6A4058', '#CFC2A8', '#4A6390', '#6B5646', '#7A8C6A'], hats: ['#F0E8D8', '#9CC0EE', '#3F5A44', '#B9A6E0', '#FFFFFF', '#5B8FD6', '#8A6E5A', '#D7E3F4'] },
   // Expedition parkas: steel blue, deep teal, glacier white, slate, a muted ochre, indigo.
   glacier: { coats: ['#4C6FA8', '#2D6670', '#DDE6EF', '#55607A', '#9C8452', '#34406E', '#6A86B8', '#3E4A62'], hats: ['#E8E0D2', '#BDEBFF', '#9CB4D8', '#F4F6FA', '#5B8FD6', '#7A8AA6'] },
   // Ash folk: ash grey, charcoal, basalt plum, slate teal, umber and dusty lilac.

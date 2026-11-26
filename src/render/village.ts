@@ -202,6 +202,8 @@ interface Style {
 
 const STYLE: Record<BiomeId, Style> = {
   alpine: { walls: [C('#8A5A44'), C('#A06A4C'), C('#E8DCCB'), C('#74493A')], roof: C('#F4F2FA'), trim: C('#4A3040'), glass: C('#2E3658'), ice: C('#BFE4F4'), rim: C('#E8EEF8'), road: C('#7A7896') },
+  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+  oldrun: { walls: [C('#8A5A44'), C('#A06A4C'), C('#E8DCCB'), C('#74493A')], roof: C('#F4F2FA'), trim: C('#4A3040'), glass: C('#2E3658'), ice: C('#BFE4F4'), rim: C('#E8EEF8'), road: C('#7A7896') },
   glacier: { walls: [C('#E2563A'), C('#F0A030'), C('#D8E2EE'), C('#C8402E')], roof: C('#F2F8FF'), trim: C('#3A4A66'), glass: C('#24345A'), ice: C('#A8E8FA'), rim: C('#E6F4FF'), road: C('#7C8CB0') },
   volcanic: { walls: [C('#564A52'), C('#4A4048'), C('#6A5A5E'), C('#3E363E')], roof: C('#E8DCDC'), trim: C('#241E26'), glass: C('#2A2030'), ice: C('#3A2A30'), rim: C('#5A4A50'), road: C('#5A4A58') },
   blossom: { walls: [C('#EFE4D6'), C('#E6D6C8'), C('#C8402E'), C('#F2EADF')], roof: C('#F6F2FA'), trim: C('#3A3048'), glass: C('#3A2E48'), ice: C('#C8DCF4'), rim: C('#F0EAF4'), road: C('#8A80A0') },

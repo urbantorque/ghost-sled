@@ -373,6 +373,8 @@ function base(): Palette {
 function biomeBase(biome: BiomeId): Palette {
   const p = base();
   switch (biome) {
+    // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+    case 'oldrun':
     case 'alpine':
       return p;
     case 'glacier':
@@ -1430,6 +1432,8 @@ export interface JourneyStop {
  *  nowhere else. What belongs to a place rather than to the hour (a street's lamplight, a cavern's dark)
  *  is in PLACES below, keyed to the course's own sections. Round 7 restaged every row to ART.md 15. */
 export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
+  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+  oldrun: [],
   alpine: [
     {
       // The cloud builds through the afternoon. The grade holds cool, so the gold later is a change.
@@ -2743,6 +2747,8 @@ const lamps = (p: Palette, k: number): void => {
  *  acts carry their places with them. A row is a place's own picture: its exposure and split tone, its
  *  air, and what lights it. Blended in over the section's own blend and out past its end. */
 export const PLACES: Record<BiomeId, Place[]> = {
+  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+  oldrun: [],
   alpine: [
     {
       // The gold's own leap (the second): honey on the lit snow, violet in the long shadows, the valley's

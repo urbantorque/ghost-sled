@@ -1249,6 +1249,8 @@ export function forestBase(biome: BiomeId, p: Palette, lod: Lod = 0): { a: Buffe
 /** Chance an instance of set 'a' or 'b' takes the variant (pick 1) rather than the original. */
 export const VARIANT_SHARE: Record<BiomeId, { a: number; b: number }> = {
   alpine: { a: 0.3, b: 0.24 },
+  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+  oldrun: { a: 0.3, b: 0.24 },
   glacier: { a: 0.3, b: 0.4 },
   volcanic: { a: 0.35, b: 0.4 },
   blossom: { a: 0.4, b: 0.4 },

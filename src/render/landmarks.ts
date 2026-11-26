@@ -103,6 +103,8 @@ const BEHIND_SHORT = 30;
  *  Ember, paper-lantern amber on Sakura. */
 const LAMP_LIGHT: Record<BiomeId, [number, number, number]> = {
   alpine: [1, 0.56, 0.2],
+  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+  oldrun: [1, 0.56, 0.2],
   glacier: [1, 0.68, 0.3],
   volcanic: [1, 0.4, 0.12],
   blossom: [1, 0.6, 0.26],
@@ -123,6 +125,8 @@ const AIR_BIN = 2;
 
 const SPAN_KINDS: Record<BiomeId, Kind[]> = {
   alpine: ['gate', 'bridge'],
+  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+  oldrun: ['gate', 'bridge'],
   glacier: ['arch', 'gate'],
   volcanic: ['basalt', 'arch', 'bridge'],
   blossom: ['torii', 'bridge'],
@@ -132,6 +136,8 @@ const SPAN_KINDS: Record<BiomeId, Kind[]> = {
 // (Ember's vents throw spans high, so it gets the most bank pieces, its basalt lodge among them.)
 const BANK_KINDS: Record<BiomeId, Kind[]> = {
   alpine: ['hut', 'tower', 'jump'],
+  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+  oldrun: ['hut', 'tower', 'jump'],
   glacier: ['falls', 'dome', 'guardian'],
   volcanic: ['guardian', 'hut', 'tower', 'falls'],
   blossom: ['pagoda', 'guardian', 'hut'],
@@ -140,6 +146,8 @@ const BANK_KINDS: Record<BiomeId, Kind[]> = {
 };
 const ENC_KINDS: Record<BiomeId, Kind[]> = {
   alpine: ['gallery'],
+  // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
+  oldrun: ['gallery'],
   glacier: ['icetunnel', 'gallery'],
   volcanic: ['lavatunnel', 'gallery'],
   blossom: ['toriirow', 'gallery'],
