@@ -361,8 +361,9 @@ export class SpeedPosts {
    *  after a cut (a new run, a revive far off, the title reel moving to another rider). */
   update(z: number): void {
     // (Round 9: the Old Run's strobe is its parapet's posts and iron lamps along the lip, oldrunworld.ts; nothing of
-    // the five's stakes and slalom flags stands on its crest.)
-    if (this.cap <= 0 || this.course.kit?.id === 'oldrun') return;
+    // the five's stakes and slalom flags stands on its crest. Gullhaven's is its snow fence along the cliff's edge and the
+    // wall on the moor, gullhavenworld.ts.)
+    if (this.cap <= 0 || this.course.kit?.id === 'oldrun' || this.course.kit?.id === 'gullhaven') return;
     // (Reduced motion: they stand still, no flap and no whip.)
     (this.mesh.material as ShaderMaterial).uniforms.uPostLive.value = reduced() ? 0 : 1;
     if (!(Math.abs(z - this.lastZ) < 120)) this.seek(z);

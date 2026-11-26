@@ -60,6 +60,8 @@ import { MarqueeWorld } from './marqueeworld';
 import { LanternWorld } from './lanternworld';
 import type { OldRunWorld } from './oldrunworld';
 import { isOldRun, oldrunClearings } from './oldrunplan';
+import type { GullhavenWorld } from './gullhavenworld';
+import { gullhavenClearings, isGullhaven, seaLevelOf } from './gullhavenplan';
 import { LanternRow } from './lanternrow';
 import type { Fireworks } from './fireworks';
 import type { TrailDef } from '../game/garage';
@@ -270,6 +272,12 @@ export class World {
   private oldrun: OldRunWorld | null = null;
   private oldrunLoading = false;
   private readonly oldrunRoot = new Object3D();
+  /** Round 9: Gullhaven's own world (gullhavenworld.ts: the beacon, the fence and the moor's walls, the sea cliff's clefts
+   *  and the wind in them, the sea and its stacks, the lighthouse, the sheds and the harbour), loaded on demand the
+   *  first time its course is drawn, into its own root. Null until then and on every other mountain. */
+  private gullhaven: GullhavenWorld | null = null;
+  private gullhavenLoading = false;
+  private readonly gullhavenRoot = new Object3D();
   /** Round 8, the light lane: the Lantern Row's lit lanterns over the finish town and the title shot. */
   private readonly row = new LanternRow();
   /** The rails and the marks of the leaps and forks (rails.ts): one draw, on every tier. */
@@ -506,6 +514,8 @@ export class World {
       this.lantern.clearings(z0, z1, out);
       // (The Old Run's hotel and timing house, known before its world has loaded: oldrunplan.ts.)
       oldrunClearings(this.course, z0, z1, out);
+      // (Gullhaven's sea cliff and moor, its world's alone: gullhavenplan.ts.)
+      gullhavenClearings(this.course, z0, z1, out);
     };
     this.spirit.setQuality(quality.particleBudget, quality.bloom);
     this.charmGates.setCourse(this.course);
@@ -516,6 +526,7 @@ export class World {
       this.marquee.root,
       this.lantern.root,
       this.oldrunRoot,
+      this.gullhavenRoot,
       this.row.root,
       this.sky.root,
       this.terrain.root,
@@ -568,6 +579,7 @@ export class World {
     this.rider.setHeroRim(this.palette.heroRim);
     this.lakeMirror = new LakeMirror(this.renderer);
     this.syncOldRun();
+    this.syncGullhaven();
     this.applyWeather();
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -739,6 +751,7 @@ export class World {
     this.poster.setTier(q.detail === 'low');
     this.lantern.setDetail(q.detail);
     this.oldrun?.setDetail(q.detail);
+    this.gullhaven?.setDetail(q.detail);
     this.row.setDetail(q.detail);
     this.charmGates.setLow(q.detail === 'low');
     this.life.setQuality(q.detail, q.forestDensity);
@@ -783,6 +796,7 @@ export class World {
     this.setPieces.setCourse(c, this.palette, this.mood);
     this.lantern.setCourse(c);
     this.syncOldRun();
+    this.syncGullhaven();
     this.row.setCourse(c);
     this.sky.setPalette(this.palette);
     this.setGhostGlow(this.palette.ghostGlow);
@@ -900,6 +914,26 @@ export class World {
       w.setCourse(this.course);
       this.oldrunRoot.add(w.root);
       this.oldrun = w;
+    });
+  }
+
+  /** Round 9: Gullhaven's world, loaded the first time its course is drawn (nothing of it is in the first download),
+   *  and handed every course after (it empties itself on any other mountain). Its sea stands at its own level in the
+   *  sky's dome from the first frame (sky.ts setSeaLevel), before the module has loaded. */
+  private syncGullhaven(): void {
+    this.sky.setSeaLevel(isGullhaven(this.course) ? seaLevelOf(this.course) : null);
+    if (this.gullhaven) {
+      this.gullhaven.setCourse(this.course);
+      return;
+    }
+    if (this.gullhavenLoading || !isGullhaven(this.course)) return;
+    this.gullhavenLoading = true;
+    void import('./gullhavenworld').then((m) => {
+      const w = new m.GullhavenWorld(this.particles, this.sky.seaUniforms);
+      w.setDetail(this.quality.detail);
+      w.setCourse(this.course);
+      this.gullhavenRoot.add(w.root);
+      this.gullhaven = w;
     });
   }
 
@@ -1070,6 +1104,7 @@ export class World {
     this.marquee.reset();
     this.lantern.reset();
     this.oldrun?.reset();
+    this.gullhaven?.reset();
     this.charmGates.reset();
     this.sdLook = null;
     this.dashK = 0;
@@ -1176,6 +1211,7 @@ export class World {
     this.marquee.update(dt, v.time, v.mode, s, v.sim, this.quality.detail === 'low');
     this.lantern.update(dt, v.time, v.mode, s, v.sim, this.cam.camera, this.palette);
     this.oldrun?.update(dt, v.time, v.mode, s, v.sim, this.cam.camera);
+    this.gullhaven?.update(dt, v.time, v.mode, s, v.sim, this.cam.camera, this.palette);
     this.row.update(s.z, v.mode, this.palette);
     // Named moments after the raw events: the camera, the ghost layer, then the world's own.
     this.cam.beats(beats, feel);
@@ -1186,6 +1222,7 @@ export class World {
     if (v.mode === 'run') this.marquee.beats(beats, s);
     if (v.mode === 'run') this.lantern.beats(beats, s);
     if (v.mode === 'run') this.oldrun?.beats(beats, s);
+    if (v.mode === 'run') this.gullhaven?.beats(beats, s);
     this.flash = Math.max(this.flash, this.spirit.takeFlash());
     this.moments.update(v, dt);
     this.setPieces.update(s.z, this.quality.viewChunks * CHUNK_LEN, tmpV.set(s.x, s.y, -s.z), v.time, v.mode === 'run' ? beats : NO_BEATS);

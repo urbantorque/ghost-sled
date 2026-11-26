@@ -1,5 +1,6 @@
 import { Course, type Ledge } from '../sim/course';
 import { CREST_OUT, CREST_TOP, CREST_U, FLOOR, WALL, trackAt } from '../sim/oldrun';
+import { cleftAt, pointAt, seaLevelOf } from './gullhavenplan';
 
 // What the ground is, as opposed to how high it is. The sim's ground() says how high every surface
 // stands; everything here is the look laid over it, and every number past `limit` (where a sled is
@@ -189,11 +190,59 @@ export function crestGround(c: Course, x: number, z: number): number {
   return base + top - (top - (h + CREST_OUT)) * smooth01((tt - CREST_TOP) / CREST_FALL_DRAWN);
 }
 
+/** Round 9 (Gullhaven's world, notes/r9-gullhaven-world.md): the ground its world draws past the corridor's edges.
+ *  Seaward, past the fence, the sea cliff: the sim's own fall carries on under the water forever (no sled is ever
+ *  there); drawn, it stops on the sea floor a little under the sea's level (gullhavenplan.ts seaLevelOf), hidden by the
+ *  water, and in a gully's cleft (cleftAt) the back wall falls at once from the fence to the sea, so the geo is a slot in
+ *  the cliff with the sea in it. Landward, the moor: the sim's bank where a sled can reach (it turns a sled back within
+ *  a few metres), then a long rise in hummocks up to the tops, where the sim's own moor keeps steepening into a wall
+ *  no sled meets. Inside the corridor the ground is the sim's to the millimetre. */
+export const CLIFF_FROM = 0.6;
+/** How far up the moor's bank the drawn ground is the sim's, and where it is wholly the moor's. */
+const MOOR_SIM = 2.5;
+const MOOR_OWN = 6;
+export function cliffGround(c: Course, x: number, z: number): number {
+  const y = c.ground(x, z);
+  const cx = c.centerX(z);
+  const hw = c.halfWidth(z);
+  if (x < cx) {
+    const em = cx - hw - x;
+    if (em <= MOOR_SIM) return y;
+    const edge = c.ground(cx - hw, z);
+    const moor = edge + moorRise(em, x, z);
+    return em >= MOOR_OWN ? moor : y + (moor - y) * smooth01((em - MOOR_SIM) / (MOOR_OWN - MOOR_SIM));
+  }
+  const e = x - cx - hw;
+  if (e <= CLIFF_FROM) return y;
+  const floor = seaLevelOf(c) - 30;
+  // (A point of the cliff top standing out past the fence, the beacon's knoll or the lighthouse's: its top held at the
+  // cliff top's level a metre down, its sides falling sheer.)
+  const pt = pointAt(c, e, z);
+  if (pt > 0) {
+    const top = c.ground(cx + hw + CLIFF_FROM, z) - 1;
+    const yy = y + (top - y) * pt;
+    return yy > floor ? yy : floor;
+  }
+  const k = cleftAt(c, z);
+  if (k <= 0) return y > floor ? y : floor;
+  const top = c.ground(cx + hw + CLIFF_FROM, z);
+  const cut = top - 900 * smooth01((e - CLIFF_FROM) / 2.4);
+  const d = y + (Math.min(y, cut) - y) * k;
+  return d > floor ? d : floor;
+}
+
+/** The moor's rise `e` metres past the corridor's landward edge: the sim's bank for its first metres, then a long slope
+ *  of a sixth with hummocks in it, broadening and steepening a little toward the tops. */
+function moorRise(e: number, x: number, z: number): number {
+  const bank = e < 3 ? 0.16 * e * e : 1.44 + 0.96 * (e - 3) * (1 - smooth01((e - 3) / 8)) + 0.17 * Math.max(0, e - 3) * smooth01((e - 3) / 8);
+  const hum = (vnoise2(x / 23, z / 31, 41) - 0.5) * 2.4 * smooth01((e - 5) / 14) + (vnoise2(x / 70, z / 96, 43) - 0.5) * 9 * smooth01((e - 12) / 40);
+  return bank + hum + 0.0006 * Math.max(0, e - 20) * Math.max(0, e - 20);
+}
 /** How a course's ground is drawn (read once a row or a build: a call through it costs nothing on the five). */
 export function groundOf(c: Course): GroundFn {
   let f = drawers.get(c);
   if (!f) {
-    f = c.kit?.id === 'oldrun' ? (x, z) => crestGround(c, x, z) : (x, z) => c.ground(x, z);
+    f = c.kit?.id === 'oldrun' ? (x, z) => crestGround(c, x, z) : c.kit?.id === 'gullhaven' ? (x, z) => cliffGround(c, x, z) : (x, z) => c.ground(x, z);
     drawers.set(c, f);
   }
   return f;
@@ -205,8 +254,9 @@ export function visualGround(c: Course, x: number, z: number): number {
   const off = x - c.centerX(z);
   const e = Math.abs(off) - c.halfWidth(z);
   let y = c.ground(x, z);
-  // (The Old Run's crest of snow past its lip: groundOf.)
+  // (The Old Run's crest of snow past its lip, and Gullhaven's sea cliff past its fence: groundOf.)
   if (e > 0 && c.kit?.id === 'oldrun') return crestGround(c, x, z);
+  if (e > 0 && c.kit?.id === 'gullhaven') return cliffGround(c, x, z);
   if (e <= 0) return y;
   const sh = c.shapeAt(z);
   const wall = sh.wall;

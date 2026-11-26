@@ -1,7 +1,7 @@
 import { BufferAttribute, BufferGeometry, Mesh, Object3D, ShaderMaterial } from 'three';
 import { CHUNK_LEN, Course, Ramp } from '../sim/course';
 import { FLOOR as TRACK_FLOOR, GLAZE, SLUSH, WALL as TRACK_WALL, trackAt } from '../sim/oldrun';
-import { HANDOVER_FROM, HANDOVER_TO, MID_ROW, groundOf, handoverRow, ledgeAt, rampart, rockWeight, smoothK, vnoise2, wallK } from './ground';
+import { CLIFF_FROM, HANDOVER_FROM, HANDOVER_TO, MID_ROW, groundOf, handoverRow, ledgeAt, rampart, rockWeight, smoothK, vnoise2, wallK } from './ground';
 import { addLightSource, pushLocalLight } from './lights';
 import { makeSnowMaterial, shared } from './materials';
 import { LIP, LIP_FROM, lipDrop, type OverlookPlan, type Overlooks } from './overlook';
@@ -159,6 +159,9 @@ class ChunkJob {
   readonly track: Float32Array | null;
   /** The course's drawn ground (ground.ts groundOf): the sim's, but past the Old Run's lip its crest of snow. */
   private readonly gnd: (x: number, z: number) => number;
+  /** Round 9, Gullhaven: its seaward side past the fence is the sea cliff (ground.ts cliffGround), bare rock where it
+   *  falls, with no drifts on it. */
+  private readonly cliff: boolean;
   private ramps: Ramp[] = [];
   private drift: [number, number] = [0, 0];
   row = 0;
@@ -184,6 +187,7 @@ class ChunkJob {
     this.groom = new Float32Array(n);
     this.track = course.kit?.id === 'oldrun' ? new Float32Array(n * 4) : null;
     this.gnd = groundOf(course);
+    this.cliff = course.kit?.id === 'gullhaven';
   }
 
   get done(): boolean {
@@ -293,7 +297,8 @@ class ChunkJob {
         let gx = sx;
         let gz = sz;
         this.snow[p * 2] = off;
-        if (ed > DRIFT_FROM) {
+        const sea = this.cliff && side > 0 && ed > CLIFF_FROM;
+        if (ed > DRIFT_FROM && !sea) {
           // Past the treeline: the drifts lift the snow, and their slope bends the normal too.
           let lift = snowDrift(x, z, ed, this.drift)[0];
           this.snow[p * 2 + 1] = this.drift[1];
@@ -372,7 +377,7 @@ class ChunkJob {
         // (Round 9: the Old Run's crest is snow all along. Where a bend sweeps it across a row, its face falls steeply
         // down the run, and the ledge-face test painted it as Pinecrest's strata: a blind critic read a dark slab of
         // rock on the bank.)
-        this.rock[rq] = tr ? 0 : Math.max(rockWeight(ridge, wall, fall, limit, ed, off, sx, sz, z, this.kick[kq] > 0), cRock);
+        this.rock[rq] = tr ? 0 : Math.max(rockWeight(ridge, wall, fall, limit, ed, off, sx, sz, z, this.kick[kq] > 0), cRock, sea ? smoothK(0.7, 1.5, Math.sqrt(gx * gx + gz * gz)) : 0);
         this.rock[rq + 1] = led ? y - lipY : y - by;
         this.rock[rq + 2] = led ? x : z;
         // (A wall on one bank only ramps its own ice by its height: its crest casts on the floor only in a canyon.)

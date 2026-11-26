@@ -1,7 +1,7 @@
 import { BackSide, BufferAttribute, BufferGeometry, Color, DoubleSide, Mesh, Object3D, ShaderMaterial, SphereGeometry, Vector3, Vector4 } from 'three';
 import { COMET_DIR, Palette, tierLook } from './palette';
 import { shared } from './materials';
-import { Massif, NOISE, SEA_GLSL, makeSeaUniforms } from './massif';
+import { Massif, NOISE, SEA_GLSL, makeSeaUniforms, type SeaUniforms } from './massif';
 
 // Sky dome (gradient, sun or moon, stars, aurora, comet, and the sea of clouds below the horizon)
 // and the mountain panorama (massif.ts). Both follow the camera so they read as infinitely far away.
@@ -14,6 +14,9 @@ export class Sky {
   /** The valley mist below the run (Medium and High). */
   private mist = new ValleyMist();
   private sea = makeSeaUniforms();
+  /** The sea of clouds' depth under the lens, and the sea's own level where a course has one (setSeaLevel). */
+  private readonly seaDepth = this.sea.uSeaY.value;
+  private seaLevel: number | null = null;
   private wisps = true;
   private highClouds = 0;
   /** Low draws the poster's sky (setDetail), from the last palette's poster fields (setPalette). */
@@ -60,6 +63,7 @@ export class Sky {
         uDeckShade: { value: new Color() },
         uDeckGlow: { value: new Color() },
         uDeckAz: { value: 0 },
+        uDeckEdge: { value: 0 },
         uStill: { value: 0 },
         uRays: { value: 0 },
         uHalo: { value: 0 },
@@ -132,6 +136,7 @@ export class Sky {
         uniform vec3 uDeckShade;
         uniform vec3 uDeckGlow;
         uniform float uDeckAz;
+        uniform float uDeckEdge;
         uniform float uStill;
         uniform float uRays;
         uniform float uHalo;
@@ -288,8 +293,20 @@ export class Sky {
           float toward = pow(max(cos(az - uDeckAz) * 0.5 + 0.5, 0.0), 3.0);
           float low = 1.0 - smoothstep(0.02, 0.42, h);
           col = mix(col, uDeckGlow, clamp(low * low * (0.35 + 0.65 * toward) * (0.45 + 0.75 * under) * 1.25, 0.0, 0.92));
-          // The far deck melts into the horizon rather than ending on a line.
-          return vec4(col, cov * smoothstep(0.0, 0.06, h));
+          // (Round 9, Gullhaven: a deck with a lower edge, uDeckEdge, the clear sky under it down to the horizon where the
+          // low sun shines through. The edge is ragged, and lit gold from under toward the sun's bearing.)
+          float foot = 0.0;
+          if (uDeckEdge > 0.0) {
+            float e = uDeckEdge + 0.02 * n + 0.012 * snoise(vec2(az * 9.0, 2.0));
+            foot = smoothstep(e, e + 0.035, h);
+            float rim = 1.0 - smoothstep(e, e + 0.07, h);
+            float sunward = pow(toward, 2.0);
+            col = mix(col, mix(uDeckGlow, uSunColor, 0.65 * sunward) * (1.0 + 0.35 * sunward), rim * foot * (0.25 + 0.75 * sunward) * 0.9);
+          } else {
+            // The far deck melts into the horizon rather than ending on a line.
+            foot = smoothstep(0.0, 0.06, h);
+          }
+          return vec4(col, cov * foot);
         }
         // High wisps: long thin strokes stretched along the horizon, pale with their sun side warm.
         vec4 cloudWisps(float az, float h, float sunSide) {
@@ -646,6 +663,7 @@ export class Sky {
     u.uDeckShade.value.copy(p.deck.shade);
     u.uDeckGlow.value.copy(p.deck.glow);
     u.uDeckAz.value = (p.massif.heroAz * Math.PI) / 180;
+    u.uDeckEdge.value = p.deck.edge ?? 0;
     this.highClouds = p.clouds.high;
     // Rays only from a sun (a moon's fought the aurora and the comet), and only while it is low.
     u.uRays.value = p.moon ? 0 : p.atmo.rays * (1 - Math.max(0, Math.min(1, (p.diskDir.y - 0.3) / 0.25)));
@@ -681,8 +699,23 @@ export class Sky {
     this.mist.setDetail(tier);
   }
 
+  /** The sea's uniforms, shared by the dome, the panorama and (round 9) Gullhaven's sea plane (gullhavenworld.ts), so
+   *  the near water and the far meet without a seam. */
+  get seaUniforms(): SeaUniforms {
+    return this.sea;
+  }
+
+  /** Round 9, Gullhaven: the sea stands at its own level in the world (world y), not a fixed depth under the lens, so
+   *  from the cape's head it lies a thousand metres down and at the harbour it is the water beside the ice. Null (every
+   *  other course) keeps the sea of clouds' depth. */
+  setSeaLevel(y: number | null): void {
+    this.seaLevel = y;
+    if (y === null) this.sea.uSeaY.value = this.seaDepth;
+  }
+
   follow(cam: Vector3): void {
     this.root.position.set(cam.x, cam.y, cam.z);
+    if (this.seaLevel !== null) this.sea.uSeaY.value = Math.min(-1.5, this.seaLevel - cam.y);
   }
 }
 

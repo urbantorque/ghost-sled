@@ -6,6 +6,7 @@ import { LIGHT_GLSL, shared } from './materials';
 import { LIP_FROM, WIDE, flankMode, type OverlookPlan, type Overlooks } from './overlook';
 import { Palette } from './palette';
 import { MID_ROW, groundOf } from './ground';
+import { isGullhaven, seaLevelOf } from './gullhavenplan';
 import { VILLAGE_SLOTS, buildHamlet, buildVillage, makeVillageMaterial, type VillageBuild, type VillageLight } from './village';
 
 // The middle of the world: the mountainside from the edge of the terrain mesh out to about a
@@ -508,6 +509,10 @@ export class Midground {
   readonly root = new Object3D();
   private course: Course;
   private biome: BiomeId;
+  /** Round 9, Gullhaven: a coast (the sea cliff on the right falling to the sea at its own level, the moor on the left),
+   *  and that sea's level (world y). */
+  private coast = false;
+  private sea = 0;
   private cfg: TierCfg;
   /** Signed lateral offsets of the columns (from the corridor centre, at the reference frame) and how
    *  each is made: 0 outer (e = metres past the reference edge), 1 the tier's own terrain edge,
@@ -583,6 +588,8 @@ export class Midground {
   constructor(course: Course, palette: Palette, tier: 'low' | 'medium' | 'high', reach: number) {
     this.course = course;
     this.biome = course.biome;
+    this.coast = isGullhaven(course);
+    this.sea = this.coast ? seaLevelOf(course) : 0;
     this.cfg = TIERS[tier];
     this.root.name = 'midground';
     this.shoulder = new Mesh(this.geo, this.shoulderMat);
@@ -620,6 +627,8 @@ export class Midground {
     if (course !== this.course) {
       this.course = course;
       this.biome = course.biome;
+      this.coast = isGullhaven(course);
+      this.sea = this.coast ? seaLevelOf(course) : 0;
       this.villages.clear();
       this.hamlets.clear();
       this.clear();
@@ -775,7 +784,8 @@ export class Midground {
     if (v !== undefined) return v;
     v = null;
     const seed = this.course.seed;
-    if (hashf(seed, k, 11) < 0.8) {
+    // (Round 9: Gullhaven has no valley under it, only the sea, and its harbour is its own world's.)
+    if (hashf(seed, k, 11) < 0.8 && !this.coast) {
       const z = STAIR * k + STAIR * FLAT * (0.42 + 0.16 * hashf(seed, k, 13));
       // On whichever side already falls away there (a coin toss where both do).
       const l = this.modeRaw(z, -1);
@@ -795,7 +805,7 @@ export class Midground {
     if (v !== undefined) return v;
     v = null;
     const seed = this.course.seed;
-    if (hashf(seed, j, 21) < 0.85) {
+    if (hashf(seed, j, 21) < 0.85 && !this.coast) {
       const z = HAMLET_STEP * j + HAMLET_STEP * (0.15 + 0.7 * hashf(seed, j, 22));
       const first = hashf(seed, j, 23) < 0.5 ? -1 : 1;
       for (let t = 0; t < 2 && !v; t++) {
@@ -812,6 +822,8 @@ export class Midground {
    *  sides opposed (one falls away while the other climbs; both climb a little where it is near zero),
    *  so the run nearly always has a mountain wall on at least one hand. */
   private modeRaw(z: number, side: number): number {
+    // (Round 9, Gullhaven: the sea cliff on the right falls all the way, the moor on the left always climbs.)
+    if (this.coast) return side > 0 ? 0 : 1;
     return flankMode(this.course.seed, z, side);
   }
 
@@ -882,6 +894,13 @@ export class Midground {
     out.yF = c.baseY(this.stairZ(z)) - VALLEY_DEPTH;
     out.wall = (640 + 170 * noise1(seed ^ (side > 0 ? 0x3bd : 0x91f), z / 520)) * (1 - 0.72 * wk);
     out.spur = 340 + 150 * noise1(seed ^ (side > 0 ? 0x6c1 : 0x4e3), z / 430);
+    if (this.coast) {
+      // (Round 9, Gullhaven: past the cliff the sea's floor, hidden by the water, and no far wall over it; inland the
+      // moor rises gently to its tops, never a mountain's spur.)
+      out.yF = this.sea - 40;
+      out.wall = 0;
+      out.spur = 120 + 70 * noise1(seed ^ 0x4e3, z / 430);
+    }
     out.vil = null;
     out.ham = null;
     const k0 = Math.floor(z / STAIR);
@@ -961,6 +980,8 @@ export class Midground {
     if (h) f *= 0.1 + 0.9 * smooth(HAMLET_R * 0.8, HAMLET_R + 40, Math.hypot(e - h.e, z - h.z));
     if (this.biome === 'volcanic') f *= 0.6;
     else if (this.biome === 'glacier') f *= 0.7;
+    // (Round 9: Gullhaven's moor has no forest.)
+    else if (this.coast) f = 0;
     return f;
   }
 
@@ -1003,7 +1024,8 @@ export class Midground {
         // skirt tucked 2.5 m under the terrain; the fill far under the run (it only shows past the
         // end of the streamed terrain, in the haze, and stays under the deepest drop).
         x = cx + u;
-        y = kind === 3 ? by - 14 : gnd(x, z) - (kind === 2 ? 2.5 : 0);
+        // (Round 9, Gullhaven: past the sea cliff the fill lies on the sea's floor, under the water, never a shelf over it.)
+        y = kind === 3 ? (this.coast && u >= 0 ? this.sea - 40 : by - 14) : gnd(x, z) - (kind === 2 ? 2.5 : 0);
         // (On an overlook, the terrain's lowered lip, and the bank carrying on down its face.)
         if (kind !== 3 && this.plan) y -= this.plan.drop(z, u < 0 ? -1 : 1, Math.abs(u) - c.halfWidth(z));
         // (And a composed place's banks, as the terrain draws them.)
