@@ -301,7 +301,12 @@ Written to `shots/r9/oldrun/r9-courses.txt` and `.json` (not the measure lane's 
 
 Every figure in sections 1 to 5 is the sim's, ridden by the lab's pilots, the clumsy pilot and the bot. Nobody has
 ridden the Old Run by hand: not the wall, not the glaze, not the set pieces, not the bot's field around a person. The
-score has been rendered, measured and level-checked by the build and the stems test, and listened to by nobody.
+score has been rendered, measured and level-checked by the build and the stems test, and listened to by nobody. Photo
+mode and Save Clip have not been opened on the Old Run in a browser (the world builder's `openPhoto` mid-run left the
+HUD up; it wants the pause flow); a pool rider's run there is cut to its reel and clip by `tests/clip.test.ts`.
+
+**The suites:** the full suite in the heavy slot at 5fbd460 and the notes after it: **111 files, 1,994 passed, 2
+expected failures** (`shots/r9/oldrun/full-suite.txt`). `tsc` clean. `tests/five.test.ts` green at every commit.
 
 ## 8. The world (built beside the lane; `notes/r9-oldrun-world.md` is its full account)
 
