@@ -60,7 +60,7 @@ export const SLED_SHOP: readonly SledShop[] = [
     factor: 1,
     signature: 'Spinning Top',
     signatureHow: 'Sitting still and upright while the saucer spins flat under you',
-    tiers: ['A chased steel skid ring round the rim', 'A cream quilted cushion in the dish', 'A tall curved backrest of bent wood behind you', 'A short mast at the back of the rim and its lamp, lit', 'An ink spiral in the dish that burns outward with your scarf in the flow'],
+    tiers: ['A chased steel skid ring round the rim', 'A cream quilted cushion in the dish', 'A low curved backrest of bent wood behind you', 'A short mast at the back of the rim and its lamp, lit', 'An ink spiral in the dish that burns outward with your scarf in the flow'],
   },
   {
     index: 2,
@@ -82,7 +82,7 @@ export const SLED_SHOP: readonly SledShop[] = [
     factor: 1.25,
     signature: 'Comet Tail',
     signatureHow: 'Let go and trailing behind the sled from one runner, body streamed out flat',
-    tiers: ['A second, raised steel shoe curling off each runner\'s tail', 'Quilted cream backrest panels inside the sideboards', 'A tall tail fin between the push bars, the comet streaking up it', 'A lamp on a post off the push bar, lit', 'The comet inlaid in ink that burns from its head to its tail in the flow'],
+    tiers: ['A second, raised steel shoe curling off each runner\'s tail', 'A quilted cream backrest across the tail behind you', 'Two low fins at the tail\'s corners, a comet streaking up each', 'A lamp on a post off the push bar, lit', 'The comet inlaid in ink that burns from its head to its tail in the flow'],
   },
   {
     index: 4,

@@ -371,12 +371,17 @@ export class Menus {
   /** Closes the garage (its Back, Escape, the pad's B) and tells the app, which puts the world back. */
   closeGarage(): void {
     if (!this.garage.open) return;
+    const door = this.returnFocus?.dataset.fk;
     this.garage.hide();
     this.garage.el.parentElement?.classList.remove('gs-garage-on');
     this.garageUi?.reset();
     this.onChange();
     this.garageAct?.({ kind: 'close' });
     if (!this.anyOpen) this.restore();
+    // (The app redraws the title as the garage closes: the door that opened it is found again by its data-fk.)
+    if (door && !this.anyOpen && (document.activeElement === document.body || !document.activeElement)) {
+      document.querySelector<HTMLElement>(`[data-fk="${CSS.escape(door)}"]`)?.focus({ preventScroll: true });
+    }
   }
 
   private sheetHead(title: string, id: string, onClose: () => void, extra: HTMLElement | null): HTMLElement {

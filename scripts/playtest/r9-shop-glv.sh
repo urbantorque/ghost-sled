@@ -10,7 +10,8 @@ BASE0="${R9_BASE0:-http://127.0.0.1:4961/}"
 SLOT="C:/Users/roger/OneDrive/Desktop/Ghost Sled/scripts/playtest/browser-slot.sh"
 S="r9-shop-glv"
 mkdir -p "$OUT"
-bash "$SLOT" take r9-shop >/dev/null || { echo "no slot"; exit 2; }
+# (R9_HELD=1: the caller holds the slot already and gives it back.)
+[ -n "$R9_HELD" ] || bash "$SLOT" take r9-shop >/dev/null || { echo "no slot"; exit 2; }
 playwright-cli -s="$S" open --config="$ROOT/.playwright/cli-headless.config.json" >/dev/null 2>&1
 for b in "$BASE0" "$BASE"; do playwright-cli -s="$S" goto "${b}?debug" >/dev/null 2>&1; sleep 12; done
 job() { # name base look
@@ -27,5 +28,5 @@ job dressed "$BASE" "{ scarf: 'double', hat: 'floppeak', finish: 'snow', tiers: 
 job pom "$BASE" "{ scarf: 'pomtails', tiers: 4, trail: 'stardust' }"
 job comet "$BASE" "{ scarf: 'almanacknot', tiers: 3, trail: 'comet' }"
 playwright-cli -s="$S" close >/dev/null 2>&1
-bash "$SLOT" give r9-shop >/dev/null
+[ -n "$R9_HELD" ] || bash "$SLOT" give r9-shop >/dev/null
 echo "$(date +%H:%M:%S) done"

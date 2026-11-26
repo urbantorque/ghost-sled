@@ -489,8 +489,8 @@ export class GarageScene {
     this.gift = g;
     this.giftLid = lid;
     this.momentT = 0;
-    this.momentShot = shot;
-    this.show(this.tall ? 'home' : 'sled');
+    this.momentShot = shot === 'hatBack' ? 'hatFront' : shot;
+    this.show(this.tall ? 'home' : 'sled', true);
   }
 
   private momentShot: PlaceShot = 'home';

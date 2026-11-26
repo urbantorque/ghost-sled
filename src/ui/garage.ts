@@ -134,6 +134,9 @@ export class GarageUI {
     this.render();
     if (fk) this.el.querySelector<HTMLElement>(`[data-fk="${CSS.escape(fk)}"]`)?.focus({ preventScroll: true });
     if (first) {
+      this.card.scrollTop = 0;
+      this.strip.scrollTop = 0;
+      this.strip.scrollLeft = 0;
       this.tryPicked();
       this.el.querySelector<HTMLElement>('[data-fk="close-garage"]')?.focus({ preventScroll: true });
     }
