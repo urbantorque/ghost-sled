@@ -1,16 +1,16 @@
 import { hash32, hashString } from './prng';
 
-/** The looks the world and the music are dressed for: the four, Lanternfall's own (round 7), the Old Run's and Gullhaven's
- *  (round 9, notes/r9-oldrun.md section 2, notes/r9-gullhaven.md). */
-export type BiomeId = 'alpine' | 'glacier' | 'volcanic' | 'blossom' | 'lantern' | 'oldrun' | 'gullhaven';
+/** The looks the world and the music are dressed for: the four, Lanternfall's own (round 7), the Old Run's, Gullhaven's
+ *  and Gablefall's (round 9, notes/r9-oldrun.md section 2, notes/r9-gullhaven.md, notes/r9-gablefall-world.md). */
+export type BiomeId = 'alpine' | 'glacier' | 'volcanic' | 'blossom' | 'lantern' | 'oldrun' | 'gullhaven' | 'gablefall';
 /** What a course is built as. Since Lanternfall's world was built this is the look itself; the name is kept for
  *  the sim's tables. (Round 9: and a new mountain that lays its own ground, under its own id, until its world lane makes
- *  it a look of its own: it borrows one meanwhile, LOOK below. The Old Run's is its own.) */
-export type CourseBiome = BiomeId | 'gablefall';
+ *  it a look of its own: it borrows one meanwhile, LOOK below. The Old Run's, Gullhaven's and Gablefall's are their own.) */
+export type CourseBiome = BiomeId;
 export type MountainId = 'pinecrest' | 'frostfang' | 'ember' | 'sakura' | 'lanternfall' | 'oldrun' | 'gullhaven' | 'daily';
 
 /** A new mountain's borrowed look, until its world lane gives it its own (round 9; Lanternfall's round 7 path). */
-const LOOK: Partial<Record<CourseBiome, BiomeId>> = { gablefall: 'alpine' };
+const LOOK: Partial<Record<CourseBiome, BiomeId>> = {};
 
 /** The look a course biome is drawn and scored with: its own (Lanternfall borrowed Frostfang's until its world
  *  was built), or a new mountain's borrowed one. */

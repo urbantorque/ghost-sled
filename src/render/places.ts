@@ -67,6 +67,8 @@ function spanStyle(biome: BiomeId, ctx: SiteCtx): SpanStyle {
     case 'oldrun':
     // (Gullhaven, round 9: Pinecrest's, never read: its course plans none of the five's places, landmarks.ts SitePlan, and stands its own, gullhavenworld.ts.)
     case 'gullhaven':
+    // (Gablefall, round 9: Pinecrest's until its world is made, notes/r9-gablefall-world.md.)
+    case 'gablefall':
     case 'alpine':
       return { post: TIMBER_DARK, rail: TIMBER_LIGHT, beam: TIMBER, dark: TIMBER_DARK, arch: false, rise: 4, ice: false };
     case 'lantern':

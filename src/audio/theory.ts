@@ -254,6 +254,8 @@ export const STYLES: Record<Mood, Style> = {
  */
 export const CLEAR: Record<BiomeId, Style> = {
   alpine: STYLES[Mood.None],
+  // (Gablefall, round 9: Pinecrest's until Gablefall's score, notes/r9-gablefall-world.md.)
+  gablefall: STYLES[Mood.None],
   // The Old Run (round 9): a quick galop in A major at 152, the hotel's ballroom band out on the ice. An oom-pah bass
   // (the root on the beat, the fifth off it), a kick on every beat and a clap on the off-beat, a bright pluck arp in
   // 16ths and a brass-bright square lead; little reverb, so it stays quick.
@@ -428,6 +430,8 @@ export const ACCENTS: Record<BiomeId, Accent> = {
   blossom: { padCut: 1, pluckBright: 1, sparkleMul: 1.1, sub: false, koto: true, shimmer: false },
   // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
   gullhaven: { padCut: 1, pluckBright: 0.8, sparkleMul: 1, sub: false, koto: false, shimmer: false },
+  // (Gablefall, round 9: Pinecrest's until Gablefall's score, notes/r9-gablefall-world.md.)
+  gablefall: { padCut: 1, pluckBright: 0.8, sparkleMul: 1, sub: false, koto: false, shimmer: false },
 };
 
 export function styleFor(mood: Mood): Style {

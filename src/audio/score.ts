@@ -364,6 +364,8 @@ export const SONGS: Record<BiomeId, Song> = {
   lantern: LANTERNFALL,
   oldrun: OLDRUN,
   gullhaven: GULLHAVEN,
+  // (Gablefall, round 9: Pinecrest's band until Gablefall's score, notes/r9-gablefall-world.md.)
+  gablefall: PINECREST,
 };
 
 export function songFor(biome: BiomeId): Song {

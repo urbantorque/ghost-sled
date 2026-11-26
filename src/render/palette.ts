@@ -379,6 +379,8 @@ function base(): Palette {
 function biomeBase(biome: BiomeId): Palette {
   const p = base();
   switch (biome) {
+    // (Gablefall, round 9: Pinecrest's until its world is made, notes/r9-gablefall-world.md.)
+    case 'gablefall':
     case 'alpine':
       return p;
     case 'gullhaven':
@@ -1007,6 +1009,8 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.snowfall = 0.03;
       p.sparkle = 0.9;
       return;
+    // (Gablefall, round 9: Pinecrest's until its world is made, notes/r9-gablefall-world.md.)
+    case 'gablefall':
     case 'alpine':
       // A bright ski day: a high white sun off to the right, deep cobalt over pale blue, teal pines and
       // short, sharp blue shadows.
@@ -1335,6 +1339,8 @@ function round7(p: Palette, biome: BiomeId): void {
       p.posterSunSat = 0.6;
       p.poster.foot = 0.42;
       return;
+    // (Gablefall, round 9: Pinecrest's until its world is made, notes/r9-gablefall-world.md.)
+    case 'gablefall':
     case 'alpine':
       p.air = { far: c('#6E9AE2'), cool: c('#E4ECFF'), low: 0.5, scatter: 1.1 };
       p.lamps = 0.2;
@@ -1526,6 +1532,8 @@ function visualLift(p: Palette, biome: BiomeId): void {
       // (The low sun's sheen on the wind-packed shelf seen toward it; under a storm deck the sky's fill is its slate.)
       p.lift = { bounce: 0.4, sun: 0.72, tint: c('#FFF6EA'), sky: 0.4, through: 0.4, sheen: 0.9 };
       return;
+    // (Gablefall, round 9: Pinecrest's until its world is made, notes/r9-gablefall-world.md.)
+    case 'gablefall':
     case 'alpine':
       p.lift = { bounce: 0.42, sun: 0.75, tint: c('#FFFFFF'), sky: 0.48, through: 0.6, sheen: 0.8 };
       return;
@@ -1601,6 +1609,9 @@ export interface JourneyStop {
  *  nowhere else. What belongs to a place rather than to the hour (a street's lamplight, a cavern's dark)
  *  is in PLACES below, keyed to the course's own sections. Round 7 restaged every row to ART.md 15. */
 export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
+  // (Gablefall, round 9: until its world is made, notes/r9-gablefall-world.md, the start's light holds all run: one stop
+  // that changes nothing.)
+  gablefall: [{ from: 2700, at: 2800, dusk: 0, edit: () => {} }],
   // The Old Run (round 9, notes/r9-oldrun-world.md): a winter afternoon going down. The sun sinks through the wood over
   // the Hotel Straights and the Labyrinth, sets gold over the lake through the Horseshoe, and the line is crossed in the
   // first blue of the evening, the parapet's iron lamps lit.
@@ -3275,6 +3286,8 @@ const lamps = (p: Palette, k: number): void => {
  *  acts carry their places with them. A row is a place's own picture: its exposure and split tone, its
  *  air, and what lights it. Blended in over the section's own blend and out past its end. */
 export const PLACES: Record<BiomeId, Place[]> = {
+  // (Gablefall, round 9: none until its world is made, notes/r9-gablefall-world.md.)
+  gablefall: [],
   // The Old Run (round 9, notes/r9-oldrun-world.md): its places graded over the hour's light. The start house and the
   // hotel above it in the warm light off the facade; the Hotel Straights' wood dappled, shafts between the trunks; the
   // Labyrinth's deep walls holding the shade, the lamps already telling there; the Horseshoe's stretch over the lake in
