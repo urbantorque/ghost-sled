@@ -148,6 +148,57 @@ function shapeGeometry(shape: FlakeShape, body: Color, edge: Color): BufferGeome
         tri([0, y, 0], [0, y + 0.15, 0], [-w, y + 0.12, 0], body, body, edge);
       }
       break;
+    case 'arcs': {
+      // (Round 9, G6, the Old Run's Bell Peals: three arcs nested round a point at the left, opening to the right as a
+      // bell's ring is drawn; cream paper, the outer edge of each in the edge colour. A whole hoop of light read as a sky
+      // gate.)
+      for (const [r, w] of [[0.2, 0.07], [0.34, 0.07], [0.48, 0.07]] as const) {
+        const n = 10;
+        for (let i = 0; i < n; i++) {
+          const a0 = -0.95 + (i / n) * 1.9;
+          const a1 = -0.95 + ((i + 1) / n) * 1.9;
+          const o = (a: number): [number, number, number] => [Math.cos(a) * r - 0.25, Math.sin(a) * r, 0];
+          const n0 = (a: number): [number, number, number] => [Math.cos(a) * (r - w) - 0.25, Math.sin(a) * (r - w), 0];
+          tri(n0(a0), o(a0), o(a1), body, edge, edge);
+          tri(n0(a0), o(a1), n0(a1), body, edge, body);
+        }
+      }
+      break;
+    }
+    case 'gull': {
+      // (Gullhaven's Gulls: built in the bird's own frame, x across, y up, z back, the head toward -z, its wings bent
+      // as a gull's are, up from the body and down to the tips, so from behind it is the gull's own M; the tips in
+      // the edge colour.)
+      const W = (sx: number): void => {
+        const sh: [number, number, number] = [sx * 0.06, 0.02, -0.04];
+        const el: [number, number, number] = [sx * 0.24, 0.12, 0.0];
+        const tip: [number, number, number] = [sx * 0.5, -0.04, 0.12];
+        const back: [number, number, number] = [sx * 0.05, 0.0, 0.12];
+        const trail: [number, number, number] = [sx * 0.26, 0.08, 0.14];
+        tri(sh, el, back, body, body, body);
+        tri(el, trail, back, body, body, body);
+        tri(el, tip, trail, body, edge, body);
+      };
+      W(-1);
+      W(1);
+      tri([0, 0.02, -0.2], [0.05, 0.0, 0.18], [-0.05, 0.0, 0.18], body, body, body);
+      tri([0, 0.0, 0.14], [0.08, 0.0, 0.26], [-0.08, 0.0, 0.26], edge, body, body);
+      break;
+    }
+    case 'pinwheel': {
+      // (Gablefall's Pinwheels: four vanes round a pin, each a curled triangle half paper and half its colour.)
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2;
+        const c = Math.cos(a);
+        const s = Math.sin(a);
+        const r = (x: number, y: number): [number, number, number] => [x * c - y * s, x * s + y * c, 0];
+        // (Its vanes alternate cream and gold, the toy's own two colours; all cream they read as the Paper Cranes.)
+        const v = i % 2 ? edge : body;
+        tri([0, 0, 0], r(0.5, 0), r(0.5, 0.46), v, v, v);
+        tri([0, 0, 0], r(0.5, 0.46), r(0.08, 0.16), v, v, v);
+      }
+      break;
+    }
     case 'ball':
     case 'lantern': {
       const g = shape === 'ball' ? new IcosahedronGeometry(0.5, 1) : new CylinderGeometry(0.34, 0.4, 0.8, 8, 1);
@@ -181,6 +232,10 @@ const MOTION: Record<FlakeMotion, { life: number; grav: number; drag: number; sp
   bob: { life: 1.7, grav: 0, drag: 0.3, spin: 0.8, flat: false },
   tumble: { life: 1.6, grav: 2.5, drag: 0.7, spin: 8, flat: false },
   hop: { life: 0.75, grav: 9, drag: 0.1, spin: 0, flat: false },
+  // (Round 9, G6.) A peal rings out beside the stern facing the lens and widens as it falls back; a gull is thrown up
+  // beside the rider, holds pace there in the wind with its wings beating, then peels away behind.
+  peal: { life: 1.0, grav: 0, drag: 0, spin: 0, flat: false },
+  hang: { life: 1.8, grav: 0, drag: 0, spin: 0, flat: false },
 };
 
 interface Flake {
@@ -383,6 +438,11 @@ export class TrailForms {
       const f = this.flakes[this.next];
       this.next = (this.next + 1) % this.flakes.length;
       this.launch(f, form.motion, s, fwd, side);
+      // (A pinwheel faces the lens and spins about its pin, whatever its motion.)
+      if (form.shape === 'pinwheel') {
+        f.r.set(0, -Math.atan2(fwd.x, -fwd.z), 0);
+        f.w.set(0, 0, (rnd() < 0.5 ? -1 : 1) * (11 + rnd() * 6));
+      }
       f.life = M.life * (0.8 + 0.4 * rnd());
       f.size = form.size * 1.5 * (0.8 + 0.4 * rnd());
     }
@@ -391,21 +451,29 @@ export class TrailForms {
       if (f.age >= f.life) continue;
       f.age += dt;
       if (f.age >= f.life) continue;
+      const k = f.age / f.life;
+      // (A gull holds pace beside the rider in the wind, then falls back and peels away to its side.)
+      if (form.motion === 'hang') f.v.lerp(v1.copy(s.vel).multiplyScalar(k < 0.62 ? 1 : 0.84).addScaledVector(side, (f.phase > 3.14 ? 1 : -1) * (k < 0.62 ? 0 : 2.4)), Math.min(1, 2.6 * dt));
       f.v.y -= M.grav * dt;
       f.v.multiplyScalar(Math.max(0, 1 - M.drag * dt));
       f.p.addScaledVector(f.v, dt);
       f.r.addScaledVector(f.w, dt);
-      const k = f.age / f.life;
       // Solid, then gone (ART.md 12): a quick shrink over its last quarter; a pop grows in first; a drop bursts.
       let sc = k > 0.75 ? Math.max(0, (1 - k) / 0.25) : 1;
       if (form.motion === 'pop') sc *= Math.min(1, f.age / 0.12);
       if (form.motion === 'drop' && k > 0.7) sc = 1 + (k - 0.7) * 3;
+      // (A peal widens as it rings out, then is gone.)
+      if (form.motion === 'peal') sc = (0.35 + 1.05 * k) * (k > 0.85 ? Math.max(0, (1 - k) / 0.15) : 1);
       let y = f.p.y;
       if (form.motion === 'bob') y += Math.sin(s.time * 5 + f.phase) * 0.12;
       if (M.flat) e1.set(-Math.PI / 2 + Math.sin(f.phase) * 0.3, f.r.y, 0);
+      else if (form.motion === 'hang') e1.set(0.18 * Math.sin(s.time * 2.1 + f.phase), -Math.atan2(fwd.x, -fwd.z), 0.22 * Math.sin(s.time * 1.7 + f.phase));
+      else if (form.shape === 'pinwheel') e1.set(0, f.r.y, f.r.z);
       else e1.set(f.r.x, f.r.y, f.r.z);
       q1.setFromEuler(e1);
       s1.setScalar(f.size * sc);
+      // (A gull's wings beat: the bird's height is its wings' bend, flattened and lifted.)
+      if (form.motion === 'hang') s1.y *= 0.4 + 1.1 * Math.abs(Math.sin(s.time * 7 + f.phase * 2));
       inst.setMatrixAt(n++, m1.compose(v1.set(f.p.x, y, f.p.z), q1, s1));
     }
     inst.count = n;
@@ -469,6 +537,21 @@ export class TrailForms {
       case 'hop':
         f.p.set(p.x + side.x * sd * (1.3 + rnd() * 0.5) + fwd.x * 0.6, p.y + 0.15, p.z + side.z * sd * (1.3 + rnd() * 0.5) + fwd.z * 0.6);
         f.v.set(vx, vy + 3.2, vz);
+        break;
+      case 'peal':
+        // Beside the stern, low, facing the lens; carried at nearly the sled's speed, so it falls back slowly as it widens.
+        f.p.set(p.x - fwd.x * 0.5 + side.x * sd * (0.75 + rnd() * 0.2), p.y + 0.45 + rnd() * 0.2, p.z - fwd.z * 0.5 + side.z * sd * (0.75 + rnd() * 0.2));
+        f.v.set(vx * 0.95 + side.x * sd * 0.5, vy * 0.95 + 0.3, vz * 0.95 + side.z * sd * 0.5);
+        // (Its arcs open away from the sled: turned over on the left.)
+        f.r.set(0, -Math.atan2(fwd.x, -fwd.z), sd > 0 ? 0 : Math.PI);
+        f.w.set(0, 0, 0);
+        break;
+      case 'hang':
+        // Thrown up and out to one side of the rider, to hang beside its head where the lens sees it (the side kept in its
+        // phase, for the peel away).
+        f.phase = sd > 0 ? 3.5 + rnd() * 2.5 : rnd() * 3;
+        f.p.set(p.x - fwd.x * 0.2 + side.x * sd * 0.8, p.y + 1.1, p.z - fwd.z * 0.2 + side.z * sd * 0.8);
+        f.v.set(vx + side.x * sd * (1.2 + rnd() * 0.8), vy + 0.9 + rnd() * 0.6, vz + side.z * sd * (1.2 + rnd() * 0.8));
         break;
     }
   }

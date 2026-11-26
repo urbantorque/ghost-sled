@@ -1132,6 +1132,8 @@ export function paintSled(geo: BufferGeometry, hex: string): BufferGeometry {
 /** The cream and the ink a finish's motif is drawn in (ART.md 5's accents: never a role's colour). */
 const FIN_CREAM = new Color('#F3E6D4');
 const FIN_INK = new Color('#2E2420');
+/** The Snowfield Frame's walnut (round 9, G6). */
+const FIN_WALNUT = new Color('#6E4A2E');
 
 /** A finish as render needs it (game/paints.ts Paint). */
 export interface FinishLook {
@@ -1164,7 +1166,9 @@ export function finishSled(geo: BufferGeometry, f: FinishLook, round: boolean): 
   const ground = f.hex ? new Color(f.hex) : null;
   const pv = ground ? 0.2126 * ground.r + 0.7152 * ground.g + 0.0722 * ground.b : 0.5;
   const acc = f.accent === 'cream' ? FIN_CREAM : FIN_INK;
-  const keep = [RIDER_COLORS.accent, STEEL, RIDER_COLORS.pom];
+  // (Round 9, G6: the tiers' cream kept too; within 0.32 of the pom's in linear light it was not, so a finish painted a
+  // blanket roll or a quilt, and on Midnight Stars the roll read as a black cannon.)
+  const keep = [RIDER_COLORS.accent, STEEL, RIDER_COLORS.pom, FIN_CREAM];
   const c = new Color();
   const out = new Color();
   const a = new Vector3();
@@ -1221,7 +1225,11 @@ export function finishSled(geo: BufferGeometry, f: FinishLook, round: boolean): 
         break;
       }
       case 'twotone':
-        mark = round ? r > 0.74 || !top : !top || w > 0.7 || u < 0.08 || u > 0.9;
+        // (Round 9, G6: an ink frame twice as broad, so the Snowfield's white deck reads framed, not grey; the critics
+        // took it for the Basalt Hex's slate.)
+        // (A cream frame on the top only, so the Plum Two-Tone's sides stay plum: framed all round it read pale grey-mauve
+        // from behind, with the Almanac Pages.)
+        mark = f.accent === 'ink' ? (round ? top && r > 0.72 : top && (w > 0.7 || u < 0.08 || u > 0.9)) : round ? top && r > 0.8 : top && (w > 0.78 || u < 0.06 || u > 0.92);
         break;
       case 'scroll':
         burn = (round ? r > 0.62 : u < 0.16 || u > 0.8 || w > 0.82) && Math.sin(cx * 42 + Math.sin(cz * 31) * 2.4 + cy * 20) > 0.15;
@@ -1234,6 +1242,8 @@ export function finishSled(geo: BufferGeometry, f: FinishLook, round: boolean): 
         const d1 = Math.abs(fract(cx / s + cz / (s * 1.73)) - 0.5);
         const d2 = Math.abs(fract(cx / s - cz / (s * 1.73)) - 0.5);
         const d3 = Math.abs(fract((cz + cy) / (s * 0.87)) - 0.5);
+        // (Round 9, G6: the fine lattice kept; made bold it read as the finish line's check, which ART.md 13 forbids. The
+        // slate is darker instead.)
         mark = (top || back) && (d1 > 0.47 || d2 > 0.47 || d3 > 0.475);
         break;
       }
@@ -1244,12 +1254,16 @@ export function finishSled(geo: BufferGeometry, f: FinishLook, round: boolean): 
         mark = (round ? r > 0.7 : w > 0.78 || u > 0.86 || u < 0.1 || back) && Math.sin(cz * 36 + cx * 22 + cy * 30) > 0.25;
         break;
       case 'ruled':
-        mark = top && fract(cz / 0.16) < 0.3;
+        // (Round 9, G6: bolder rules on a paler page and an ink margin down each side, so it reads as a ruled page and
+        // not as the natural wood's two browns.)
+        mark = top && fract(cz / 0.15) < 0.4;
         break;
       default:
         break;
     }
-    if (mark) out.copy(acc).multiplyScalar(f.accent === 'cream' ? Math.min(1.05, k) : 1);
+    // (Round 9, G6: a two-tone's ink frame is the Snowfield Frame's walnut, its card's words; in the umber the frame read
+    // as a near-black sled.)
+    if (mark) out.copy(f.motif === 'twotone' && f.accent === 'ink' ? FIN_WALNUT : acc).multiplyScalar(f.accent === 'cream' ? Math.min(1.05, k) : 1);
     else if (burn) out.multiplyScalar(0.42);
     for (let j = at; j < at + span; j++) col.setXYZ(j, out.r, out.g, out.b);
   }
@@ -1322,7 +1336,8 @@ function crestBoard(half: number, y0: number, rise: number, z: number, lite: boo
     const h = (p0.y + p1.y) / 2 - y0;
     out.push(part(new BoxGeometry(p1.x - p0.x + 0.004, h, 0.04), shade(C.wood, i % 2 ? 0.9 : 1.04), { pos: [(p0.x + p1.x) / 2, y0 + h / 2, z] }));
   }
-  out.push(...tube(top.map((p) => p.clone().setZ(z + 0.005)), 0.018, 0.018, C.accent, lite ? 4 : 6));
+  // (Round 9, G6: the vermillion edge twice as bold, so the crest reads from behind as a red-rimmed arch.)
+  out.push(...tube(top.map((p) => p.clone().setZ(z + 0.005)), 0.032, 0.032, C.accent, lite ? 4 : 6));
   if (!lite) for (const sx of [-1, 1]) out.push(part(new TorusGeometry(0.05, 0.016, 4, 10, Math.PI * 1.5), C.accent, { pos: [sx * (half + 0.02), y0 + 0.1, z], rot: [0, Math.PI / 2, sx * 0.6] }));
   return out;
 }
@@ -1464,8 +1479,8 @@ export function sledTrackParts(id: number, tiers: number, lite = false): TrackPa
     }
     case 4: {
       // The Wisp: long thin curls, a pad laced with cords, swept wings, a bent stalk, filigree on the wings.
-      const deck = new Color('#E8FFFB');
-      if (t >= 1) for (const sx of [-0.28, 0.28]) body.push(...tube(scroll(sx, 0.03, 0.78, 0.16, 1.35, lite ? 7 : 14), 0.016, 0.008, new Color('#BFF8EE'), sides));
+      const deck = WISP.deck;
+      if (t >= 1) for (const sx of [-0.28, 0.28]) body.push(...tube(scroll(sx, 0.03, 0.78, 0.16, 1.35, lite ? 7 : 14), 0.016, 0.008, WISP.runner, sides));
       if (t >= 2) {
         body.push(part(new BoxGeometry(0.5, 0.035, 0.52), shade(deck, 0.96), { pos: [0, 0.24, 0.3] }));
         for (const z of [0.12, 0.3, 0.48]) body.push(...tube([new Vector3(-0.27, 0.265, z), new Vector3(0.27, 0.265, z)], 0.016, 0.016, FIN_CREAM, sides));
@@ -1484,7 +1499,7 @@ export function sledTrackParts(id: number, tiers: number, lite = false): TrackPa
           const k = i / steps;
           stalk.push(new Vector3(post[0], 0.22 + (post[1] - 0.24) * Math.sin(k * Math.PI * 0.5), 0.62 + (post[2] - 0.62) * k * k));
         }
-        body.push(...tube(stalk, 0.02, 0.012, new Color('#BFF8EE'), sides));
+        body.push(...tube(stalk, 0.02, 0.012, WISP.runner, sides));
       }
       if (t >= 5) for (const sx of [-1, 1]) inlay.push(...inkLine([new Vector3(sx * 0.34, 0.235, 0.24), new Vector3(sx * 0.5, 0.33, 0.48), new Vector3(sx * 0.6, 0.4, 0.66)], 0.01));
       break;
@@ -1503,12 +1518,38 @@ export function sledTrackParts(id: number, tiers: number, lite = false): TrackPa
         }
         body.push(...tube([new Vector3(-0.375, 0.6, 1.02), new Vector3(0.375, 0.6, 1.02)], 0.032, 0.032, FIN_CREAM, sides));
       }
-      if (t >= 2) body.push(...quilt(0.86, 0.5, 0.23, 0.28, lite ? 2 : 4, lite ? 2 : 3));
-      if (t >= 3) body.push(...crestBoard(0.32, 0.2, 0.32, 0.7, lite));
+      if (t >= 2) {
+        body.push(...quilt(0.86, 0.5, 0.23, 0.28, lite ? 2 : 4, lite ? 2 : 3));
+        // (Round 9, G6: the pad lies under the rider, and five rounds of critics never saw it from behind. A cream
+        // blanket roll across the tail, wider than the hips, strapped in the dark wood: its ends show either side of
+        // the rider's back, and over the bow.)
+        // (High enough to clear the first tier's push bar from the chase lens, which hid its middle at seat height.)
+        body.push(part(new CylinderGeometry(0.11, 0.11, 1.0, lite ? 8 : 14), FIN_CREAM, { pos: [0, 0.5, 0.6], rot: [0, 0, Math.PI / 2] }));
+        for (const sx of [-0.3, 0.3]) body.push(part(new TorusGeometry(0.113, 0.02, 4, lite ? 8 : 12), C.woodDark, { pos: [sx, 0.5, 0.6], rot: [0, Math.PI / 2, 0] }));
+        for (const sx of [-0.3, 0.3]) body.push(part(new BoxGeometry(0.03, 0.3, 0.03), C.woodDark, { pos: [sx, 0.33, 0.6] }));
+      }
+      if (t >= 3) body.push(...crestBoard(0.32, 0.2, 0.45, 0.7, lite));
       if (t >= 4) postFrom(0.2, post[2]);
       if (t >= 5) {
-        for (const sx of [-0.3, 0.3]) inlay.push(...inkLine([new Vector3(sx, 0.062, -0.62), new Vector3(sx, 0.062, 0.76)], 0.011));
-        inlay.push(...inkLine(arch(0.27, 0.22, t >= 3 ? 0.34 : 0.11, t >= 3 ? 0.725 : 0.69, lite ? 6 : 12), 0.009));
+        // (Round 9, G6: down the runners' outsides and up their tails, and across the tail board's back, where the lens
+        // behind sees a sled; along the runners' tops it hid under the deck.)
+        for (const sx of [-1, 1]) inlay.push(...inkLine([new Vector3(sx * 0.33, 0.04, -0.62), new Vector3(sx * 0.33, 0.04, 0.74), new Vector3(sx * 0.33, 0.11, 0.87)], 0.013));
+        inlay.push(...inkLine([new Vector3(-0.3, 0.165, 0.558), new Vector3(0.3, 0.165, 0.558)], 0.012));
+        inlay.push(...inkLine(arch(0.27, 0.22, t >= 3 ? 0.47 : 0.11, t >= 3 ? 0.725 : 0.69, lite ? 6 : 12), 0.011));
+        // (A diamond and two scrolls inlaid on the crest's face, the part of a built-up sled the lens behind sees most of;
+        // lines alone along the runners were never seen from behind.)
+        if (t >= 3) inlay.push(part(new BoxGeometry(0.15, 0.15, 0.012), FIN_CREAM, { pos: [0, 0.42, 0.73], rot: [0, 0, Math.PI / 4] }));
+        if (t >= 3)
+          for (const sx of [-1, 1]) {
+            const sp: Vector3[] = [];
+            const n = lite ? 8 : 14;
+            for (let i = 0; i <= n; i++) {
+              const a = (i / n) * Math.PI * 3;
+              const r = 0.075 * (1 - (i / n) * 0.7);
+              sp.push(new Vector3(sx * 0.16 + Math.cos(a) * r * sx, 0.42 + Math.sin(a) * r, 0.728));
+            }
+            inlay.push(...inkLine(sp, 0.011));
+          }
       }
       break;
     }
@@ -1581,26 +1622,80 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       }
       break;
     }
-    case 'ch1orn': {
-      body.push(part(new CylinderGeometry(0.13, 0.13, 0.025, s + 6, 1, false, -Math.PI / 2, Math.PI), FIN_CREAM, { pos: [0, 0.04, 0], rot: [Math.PI / 2, 0, 0] }));
-      for (let i = 0; i < 5; i++) {
-        const a = -Math.PI / 2 + ((i + 0.5) / 5) * Math.PI;
-        body.push(part(new SphereGeometry(0.035, 6, 4), shade(FIN_CREAM, 0.94), { pos: [Math.sin(a) * 0.2, 0.04 + Math.cos(a) * 0.2, 0], scale: [1, 1.6, 0.5], rot: [0, 0, -a] }));
+    case 'timingclock': {
+      // (Round 9, G6, the Old Run's timing house: a wooden tower, its clock's lit cream dial facing the lens behind, an
+      // ink rim and hands, a low hipped cap with a finial; ART.md 15's timing house, never a pointed spire.)
+      body.push(part(new BoxGeometry(0.11, 0.42, 0.1), C.wood, { pos: [0, 0.21, 0] }));
+      body.push(part(new BoxGeometry(0.13, 0.025, 0.12), C.woodDark, { pos: [0, 0.43, 0] }));
+      body.push(part(new ConeGeometry(0.1, 0.07, 4), new Color('#5E5A60'), { pos: [0, 0.475, 0], rot: [0, Math.PI / 4, 0] }));
+      body.push(part(new SphereGeometry(0.016, 5, 4), FIN_INK, { pos: [0, 0.52, 0] }));
+      glow.push(part(new CylinderGeometry(0.085, 0.085, 0.012, s + 4), warm(1.5), { pos: [0, 0.33, 0.058], rot: [Math.PI / 2, 0, 0] }));
+      body.push(part(new TorusGeometry(0.087, 0.013, 4, s + 6), FIN_INK, { pos: [0, 0.33, 0.062] }));
+      body.push(part(new BoxGeometry(0.012, 0.065, 0.006), FIN_INK, { pos: [0, 0.355, 0.067] }));
+      body.push(part(new BoxGeometry(0.048, 0.012, 0.006), FIN_INK, { pos: [0.022, 0.33, 0.067] }));
+      break;
+    }
+    case 'lighthouse': {
+      // (Gullhaven's lighthouse: a tapered tower in cream and umber bands, the gallery and its lamp lit at the head.)
+      const bands = 4;
+      for (let i = 0; i < bands; i++) {
+        const y0 = (i / bands) * 0.38;
+        const y1 = ((i + 1) / bands) * 0.38;
+        const r = (y: number) => 0.085 - (y / 0.38) * 0.03;
+        body.push(lathe([[r(y0), y0], [r(y1), y1]], s, i % 2 ? C.accent : FIN_CREAM));
       }
+      body.push(part(new CylinderGeometry(0.075, 0.075, 0.018, s), FIN_INK, { pos: [0, 0.39, 0] }));
+      glow.push(part(new CylinderGeometry(0.045, 0.045, 0.07, s), warm(1.7), { pos: [0, 0.435, 0] }));
+      body.push(part(new ConeGeometry(0.058, 0.06, s), FIN_INK, { pos: [0, 0.5, 0] }));
+      break;
+    }
+    case 'gablehouse': {
+      // (Gablefall's houses: a steep slate roof under snow, its gable end to the lens with a lit window, a stone chimney.)
+      const slate = new Color('#5A5E6A');
+      // (Wide and low, its walls the slate's grey-blue under a white roof and two lit windows.)
+      const wall = new Color('#8C8478');
+      body.push(part(new BoxGeometry(0.26, 0.12, 0.16), wall, { pos: [0, 0.06, 0] }));
+      // The gable end, front and back: a triangle of wall under the roof.
+      const gable = new BufferGeometry();
+      gable.setAttribute('position', new BufferAttribute(new Float32Array([-0.13, 0, 0, 0.13, 0, 0, 0, 0.16, 0]), 3));
+      for (const z of [0.0805, -0.0805]) body.push(part(gable.clone(), wall, { pos: [0, 0.12, z], rot: [0, z > 0 ? 0 : Math.PI, 0] }));
+      for (const sx of [-1, 1]) {
+        body.push(part(new BoxGeometry(0.19, 0.016, 0.2), slate, { pos: [sx * 0.07, 0.2, 0], rot: [0, 0, -sx * 0.9] }));
+        body.push(part(new BoxGeometry(0.17, 0.03, 0.19), FIN_CREAM, { pos: [sx * 0.066, 0.214, 0], rot: [0, 0, -sx * 0.9] }));
+      }
+      body.push(part(new BoxGeometry(0.04, 0.1, 0.04), new Color('#7A6A5E'), { pos: [0.08, 0.25, -0.03] }));
+      body.push(part(new BoxGeometry(0.05, 0.02, 0.05), FIN_CREAM, { pos: [0.08, 0.31, -0.03] }));
+      for (const x of [-0.06, 0.06]) glow.push(part(new BoxGeometry(0.045, 0.05, 0.006), warm(1.6), { pos: [x, 0.065, 0.082] }));
+      break;
+    }
+    case 'ch1orn': {
+      // (Round 9, G6: a rising sun in honey gold, its rays long; in cream it read lilac in shade, like the Paper Fan.)
+      const sun = new Color('#E8B24A');
+      body.push(part(new CylinderGeometry(0.13, 0.13, 0.025, s + 6, 1, false, -Math.PI / 2, Math.PI), sun, { pos: [0, 0.04, 0], rot: [Math.PI / 2, 0, 0] }));
+      // (Short, broad rays and a cream horizon bar under it: long spikes round a half disc read as a crown.)
+      for (let i = 0; i < 7; i++) {
+        const a = -Math.PI / 2 + ((i + 0.5) / 7) * Math.PI;
+        body.push(part(new ConeGeometry(0.035, 0.07, 4), shade(sun, 0.92), { pos: [Math.sin(a) * 0.17, 0.04 + Math.cos(a) * 0.17, 0], rot: [0, 0, -a] }));
+      }
+      body.push(part(new BoxGeometry(0.36, 0.03, 0.04), FIN_CREAM, { pos: [0, 0.035, 0.01] }));
       break;
     }
     case 'ch2orn': {
-      body.push(part(new TorusGeometry(0.15, 0.02, 4, s + 2), FIN_CREAM, { pos: [0, 0.03, 0], rot: [Math.PI / 2, 0, 0] }));
-      for (let i = 0; i < 10; i++) {
-        const a = (i / 10) * Math.PI * 2;
-        body.push(part(new ConeGeometry(0.03, 0.14 + (i % 2) * 0.1, lite ? 6 : 8), FIN_CREAM, { pos: [Math.sin(a) * 0.15, -0.06 - (i % 2) * 0.05, Math.cos(a) * 0.15], rot: [Math.PI, 0, 0] }));
+      // (Round 9, G6: a frozen eave, a wooden board hung with icicles of every length; a ring of them read as a crown, The
+      // Twelve's.)
+      body.push(part(new BoxGeometry(0.34, 0.05, 0.07), C.woodDark, { pos: [-0.06, 0.06, 0.04] }));
+      body.push(part(new BoxGeometry(0.36, 0.03, 0.09), FIN_CREAM, { pos: [-0.06, 0.1, 0.04] }));
+      for (let i = 0; i < 7; i++) {
+        const x = -0.21 + i * 0.05;
+        const l = [0.12, 0.22, 0.16, 0.3, 0.14, 0.24, 0.1][i];
+        body.push(part(new ConeGeometry(0.022, l, lite ? 5 : 7), FIN_CREAM, { pos: [x, 0.035 - l / 2, 0.06], rot: [Math.PI, 0, 0] }));
       }
       break;
     }
     case 'ch3orn':
-      lantern(0.065, 0.46, 0.31, 5);
+      lantern(0.075, 0.3, 0.17, 4);
       for (const g of glow) if (g.getAttribute('color')) tintGlow(g, new Color('#D6E6FF'));
-      for (const dx of [-0.03, 0.02]) body.push(part(new SphereGeometry(0.022, 5, 4), FIN_CREAM, { pos: [dx, -0.5 - Math.abs(dx), 0.14], scale: [1, 1.8, 1] }));
+      for (const dx of [-0.03, 0.02]) body.push(part(new SphereGeometry(0.02, 5, 4), FIN_CREAM, { pos: [dx, -0.36 - Math.abs(dx), 0.14], scale: [1, 1.8, 1] }));
       break;
     case 'ch4orn': {
       body.push(...tube([new Vector3(0, 0, 0), new Vector3(0.08, 0.14, 0), new Vector3(0.02, 0.3, 0), new Vector3(0.1, 0.42, 0)], 0.016, 0.01, new Color('#8A6444'), 4));
@@ -1618,11 +1713,12 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       glow.push(part(new SphereGeometry(0.11, s, 4, 0, Math.PI * 2, 0, Math.PI / 2), new Color('#FFE2A8').multiplyScalar(1.6), { pos: [0, 0.11, 0], scale: [1, 0.55, 1] }));
       break;
     case 'ch6orn': {
-      body.push(part(new TorusGeometry(0.17, 0.025, 5, s + 8), C.wood, { pos: [0, 0.22, 0] }));
-      body.push(part(new CylinderGeometry(0.045, 0.045, 0.05, s), FIN_CREAM, { pos: [0, 0.22, 0], rot: [Math.PI / 2, 0, 0] }));
+      // (Round 9, G6: smaller and lower, so it never stands over the rider's head; a lit sun at its hub, the midsummer.)
+      body.push(part(new TorusGeometry(0.12, 0.022, 5, s + 8), C.wood, { pos: [0, 0.14, 0] }));
+      glow.push(part(new SphereGeometry(0.04, s, 5), new Color('#FFE2A0').multiplyScalar(1.6), { pos: [0, 0.14, 0] }));
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * Math.PI * 2;
-        body.push(part(new BoxGeometry(0.018, 0.16, 0.018), C.woodDark, { pos: [Math.sin(a) * 0.09, 0.22 + Math.cos(a) * 0.09, 0], rot: [0, 0, -a] }));
+        body.push(part(new BoxGeometry(0.016, 0.1, 0.016), C.woodDark, { pos: [Math.sin(a) * 0.075, 0.14 + Math.cos(a) * 0.075, 0], rot: [0, 0, -a] }));
       }
       break;
     }
@@ -1633,14 +1729,18 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
         swag.push(new Vector3(-0.62 * k, -0.16 * Math.sin(k * Math.PI) - 0.04 * k, 0.06 + 0.1 * k));
       }
       body.push(...tube(swag, 0.008, 0.008, C.woodDark, 3));
-      for (let i = 1; i <= 5; i++) {
-        const p = swag[Math.round((i / 6) * 8)];
-        glow.push(part(new SphereGeometry(0.045, s, 5), warm(1.6), { pos: [p.x, p.y - 0.06, p.z], scale: [1, 1.3, 1] }));
+      // (Round 9, G6: three bigger lanterns on the swag, each with its dark cap; five small ones were not seen.)
+      for (let i = 1; i <= 3; i++) {
+        const p = swag[Math.round((i / 4) * 8)];
+        glow.push(part(new SphereGeometry(0.07, s, 5), warm(1.65), { pos: [p.x, p.y - 0.09, p.z], scale: [1, 1.25, 1] }));
+        body.push(part(new CylinderGeometry(0.03, 0.045, 0.03, s), FIN_INK, { pos: [p.x, p.y - 0.005, p.z] }));
       }
       break;
     }
     case 'ch8orn': {
-      for (let i = 0; i < 7; i++) body.push(part(new BoxGeometry(0.04, 0.2, 0.006), shade(FIN_CREAM, i % 2 ? 0.88 : 1), { pos: [Math.sin((i / 6 - 0.5) * 2.2) * 0.1, 0.06 + Math.cos((i / 6 - 0.5) * 2.2) * 0.1, 0], rot: [0, 0, -(i / 6 - 0.5) * 2.2] }));
+      // (Round 9, G6: the pleats alternate cream and the dark wood, so the fan reads as folded paper, not a lilac shape;
+      // in the umber the ribs read as the coat's navy.)
+      for (let i = 0; i < 9; i++) body.push(part(new BoxGeometry(0.04, 0.22, 0.006), i % 2 ? C.woodDark : FIN_CREAM, { pos: [Math.sin((i / 8 - 0.5) * 2.4) * 0.11, 0.06 + Math.cos((i / 8 - 0.5) * 2.4) * 0.11, 0], rot: [0, 0, -(i / 8 - 0.5) * 2.4] }));
       break;
     }
     case 'ch9orn':
@@ -1648,22 +1748,30 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       break;
     case 'ch10orn':
       body.push(...tube([new Vector3(0, 0, 0), new Vector3(0, 0.02, 0.12)], 0.012, 0.01, C.woodDark, 4));
-      glow.push(part(new SphereGeometry(0.13, s, s - 2), new Color('#E2B4E8').multiplyScalar(1.35), { pos: [0, -0.16, 0.12], scale: [1, 0.9, 1] }));
+      // (Round 9, G6: a dark hollowed shell lit amber through its cut holes; in plum paper it read lilac-pink, by the
+      // grudge's rose and the style charm's orchid.)
+      glow.push(part(new SphereGeometry(0.095, s, s - 2), new Color('#FFB24A').multiplyScalar(1.5), { pos: [0, -0.13, 0.12], scale: [1, 0.9, 1] }));
+      body.push(part(new SphereGeometry(0.115, s, s - 2, 0, Math.PI * 2, 0, Math.PI), new Color('#8A5A3A'), { pos: [0, -0.13, 0.1], scale: [1, 0.9, 0.85] }));
       body.push(part(new CylinderGeometry(0.05, 0.08, 0.04, s), FIN_INK, { pos: [0, -0.03, 0.12] }));
-      for (let i = 0; i < 4; i++) body.push(part(new TorusGeometry(0.131 * Math.sin(((i + 1) / 5) * Math.PI), 0.006, 3, s + 4), new Color('#7A4E86'), { pos: [0, -0.16 + 0.117 * Math.cos(((i + 1) / 5) * Math.PI), 0.12], rot: [Math.PI / 2, 0, 0] }));
+      for (const [x, y] of [[-0.045, -0.105], [0.045, -0.105], [0, -0.175]] as const) glow.push(part(new SphereGeometry(0.03, 6, 4), new Color('#FFC86A').multiplyScalar(1.7), { pos: [x, y, 0.23], scale: [1.3, 0.8, 0.4] }));
       break;
     case 'ch11orn':
       body.push(part(new IcosahedronGeometry(0.11, lite ? 0 : 1), new Color('#FFFDF6'), { pos: [0, 0.11, 0] }), part(new IcosahedronGeometry(0.08, lite ? 0 : 1), new Color('#FFFDF6'), { pos: [0, 0.27, 0] }));
-      body.push(part(new CylinderGeometry(0.05, 0.05, 0.07, 6), FIN_INK, { pos: [0, 0.38, 0] }), part(new CylinderGeometry(0.075, 0.075, 0.012, 8), FIN_INK, { pos: [0, 0.345, 0] }));
+      // (Round 9, G6: a cream knit cap, no top hat: a black stovepipe is The Twelve's.)
+      body.push(part(new SphereGeometry(0.07, s, 4, 0, Math.PI * 2, 0, Math.PI / 2), FIN_CREAM, { pos: [0, 0.33, 0] }), part(new SphereGeometry(0.025, 5, 4), FIN_CREAM, { pos: [0, 0.405, 0] }));
+      for (const x of [-0.025, 0.025]) body.push(part(new SphereGeometry(0.011, 4, 3), FIN_INK, { pos: [x, 0.29, -0.075] }));
       body.push(...tube([new Vector3(0.05, 0.12, 0), new Vector3(0.18, 0.2, 0)], 0.008, 0.006, C.woodDark, 3));
       break;
     case 'ch12orn': {
       body.push(...tube([new Vector3(0, 0, 0), new Vector3(0, 0.02, 0.12)], 0.012, 0.01, C.woodDark, 4));
+      // (Round 9, G6: a broad flat star, its points short and fat and lit, a dark rim round its middle; slim and pale it
+      // read as a fir.)
       for (let i = 0; i < 5; i++) {
         const a = (i / 5) * Math.PI * 2;
-        glow.push(part(new ConeGeometry(0.065, 0.19, 4), warm(1.55), { pos: [Math.sin(a) * 0.11, -0.18 + Math.cos(a) * 0.11, 0.12], rot: [0, 0, -a] }));
+        glow.push(part(new ConeGeometry(0.075, 0.15, 4), warm(1.6), { pos: [Math.sin(a) * 0.12, -0.2 + Math.cos(a) * 0.12, 0.12], rot: [0, 0, -a], scale: [1, 1, 0.5] }));
       }
-      glow.push(part(new SphereGeometry(0.08, 6, 5), warm(1.7), { pos: [0, -0.18, 0.12] }));
+      glow.push(part(new CylinderGeometry(0.1, 0.1, 0.05, 10), warm(1.75), { pos: [0, -0.2, 0.12], rot: [Math.PI / 2, 0, 0] }));
+      body.push(part(new TorusGeometry(0.1, 0.012, 3, 12), FIN_INK, { pos: [0, -0.2, 0.15] }));
       break;
     }
     default:
@@ -1671,6 +1779,9 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       lantern(0.09, 0.22, 0.17);
       break;
   }
+  // (Round 9, G6: the months' ornaments a third bigger again; five rounds of critics found them small and pale on the
+  // snow at race distance. Grown about the post's top, so what hangs from it hangs lower.)
+  if (/^ch\d+orn$/.test(id)) for (const g of [...body, ...glow]) g.scale(1.35, 1.35, 1.35);
   return { body, glow };
 }
 /** A sled as the garage has it (round 9): its own build, its fitted tiers and, from the fourth, its stern post's
@@ -1681,16 +1792,20 @@ export function sledWithTrack(id: number, tiers: number, ornament: string, finis
   const t = sledTrackParts(id, tiers, lite);
   const glow: BufferGeometry[] = [...t.glow];
   let post: Vector3 | null = null;
+  const orn: BufferGeometry[] = [];
   if (tiers >= 4) {
     const p = POST_TOP[id] ?? POST_TOP[0];
     post = new Vector3(p[0], p[1], p[2]);
     const o = ornamentParts(ornament, lite);
-    for (const g of o.body) t.body.push(g.translate(p[0], p[1], p[2]));
+    for (const g of o.body) orn.push(g.translate(p[0], p[1], p[2]));
     for (const g of o.glow) glow.push(g.translate(p[0], p[1], p[2]));
   }
   let body = t.body.length ? merge([base, ...t.body]) : base;
   const round = id === 1 || id === 5;
   if (finish) body = finishSled(body, finish, round);
+  // (Round 9, G6: the ornament keeps its own colours under any finish, the finish being the sled's and its tiers';
+  // painted with them, a banded lighthouse or a clock's dial took the walnut or the plum.)
+  if (orn.length) body = merge([body, ...orn]);
   return { body, glow: glow.length ? merge(glow) : null, inlay: t.inlay.length ? merge(t.inlay) : null, post };
 }
 
@@ -1699,9 +1814,10 @@ export function sledGeometryFor(id: number, lite = false): BufferGeometry {
   const C = RIDER_COLORS;
   switch (id) {
     case 1: {
-      // Whirl Saucer: a shallow disc with a rim.
+      // Whirl Saucer: a shallow disc with a rim. (Round 9, G6: bentwood walnut; its blue sat by the speed charm's
+      // azure, ART.md 16, in every critic's sheet.)
       return merge([
-        part(new CylinderGeometry(0.62, 0.5, 0.1, 18), new Color('#3E7FD8'), { pos: [0, 0.08, 0.05] }),
+        part(new CylinderGeometry(0.62, 0.5, 0.1, 18), WHIRL_WOOD, { pos: [0, 0.08, 0.05] }),
         part(new TorusGeometry(0.6, 0.045, 6, 22), C.accent, { pos: [0, 0.13, 0.05], rot: [Math.PI / 2, 0, 0] }),
         part(new CylinderGeometry(0.2, 0.2, 0.02, 12), new Color('#FFF4EA'), { pos: [0, 0.14, 0.05] }),
       ]);
@@ -1712,19 +1828,26 @@ export function sledGeometryFor(id: number, lite = false): BufferGeometry {
       for (let i = 0; i < 3; i++) parts.push(part(new BoxGeometry(0.2, 0.05, 1.7), i === 1 ? C.woodDark : C.wood, { pos: [-0.21 + i * 0.21, 0.08, 0.15] }));
       parts.push(part(new TorusGeometry(0.28, 0.05, 6, 14, Math.PI * 1.2), C.wood, { pos: [0, 0.34, -0.72], rot: [0, Math.PI / 2, 0], scale: [1, 1, 3.4] }));
       parts.push(part(new CylinderGeometry(0.02, 0.02, 0.66, 5), C.accent, { pos: [0, 0.18, 0.1], rot: [0, 0, Math.PI / 2] }));
+      // (Round 9, G6: the player's vermillion where the lens behind sees it, rails down both sides and a cap across the
+      // tail; its one red bar lay under the rider, and from behind the stock toboggan showed none.)
+      for (const sx of [-1, 1]) parts.push(part(new BoxGeometry(0.035, 0.045, 1.6), C.accent, { pos: [sx * 0.325, 0.11, 0.15] }));
+      parts.push(part(new BoxGeometry(0.69, 0.05, 0.04), C.accent, { pos: [0, 0.1, 0.98] }));
       return merge(parts);
     }
     case 3:
       return cometBobGeometry(lite);
     case 4: {
-      // Wisp: pale spectral runners and deck.
-      const mint = new Color('#BFF8EE');
+      // Wisp: pale spectral runners and deck. (Round 9, G6: moonlit pearl and silver, not the ghosts' mint, ART.md 1,
+      // and vermillion along the deck's edges and tail like every sled's trim.)
       return merge([
-        part(new BoxGeometry(0.58, 0.05, 1.2), new Color('#E8FFFB'), { pos: [0, 0.2, 0.05] }),
-        part(new BoxGeometry(0.04, 0.04, 1.5), mint, { pos: [-0.28, 0.03, 0.05] }),
-        part(new BoxGeometry(0.04, 0.04, 1.5), mint, { pos: [0.28, 0.03, 0.05] }),
-        part(new TorusGeometry(0.2, 0.024, 5, 10, Math.PI * 1.4), mint, { pos: [-0.28, 0.22, -0.72], rot: [0, Math.PI / 2, 0] }),
-        part(new TorusGeometry(0.2, 0.024, 5, 10, Math.PI * 1.4), mint, { pos: [0.28, 0.22, -0.72], rot: [0, Math.PI / 2, 0] }),
+        part(new BoxGeometry(0.58, 0.05, 1.2), WISP.deck, { pos: [0, 0.2, 0.05] }),
+        part(new BoxGeometry(0.04, 0.04, 1.5), WISP.runner, { pos: [-0.28, 0.03, 0.05] }),
+        part(new BoxGeometry(0.04, 0.04, 1.5), WISP.runner, { pos: [0.28, 0.03, 0.05] }),
+        part(new TorusGeometry(0.2, 0.024, 5, 10, Math.PI * 1.4), WISP.runner, { pos: [-0.28, 0.22, -0.72], rot: [0, Math.PI / 2, 0] }),
+        part(new TorusGeometry(0.2, 0.024, 5, 10, Math.PI * 1.4), WISP.runner, { pos: [0.28, 0.22, -0.72], rot: [0, Math.PI / 2, 0] }),
+        part(new BoxGeometry(0.03, 0.03, 1.18), C.accent, { pos: [-0.3, 0.225, 0.05] }),
+        part(new BoxGeometry(0.03, 0.03, 1.18), C.accent, { pos: [0.3, 0.225, 0.05] }),
+        part(new BoxGeometry(0.63, 0.035, 0.035), C.accent, { pos: [0, 0.215, 0.66] }),
       ]);
     }
     case 5: {
@@ -1752,6 +1875,12 @@ export function sledGeometryFor(id: number, lite = false): BufferGeometry {
       return sledGeometry(RIDER_COLORS.accent, lite);
   }
 }
+
+/** The Wisp's own (round 9, G6): a pale pearl deck and silver runners, a moonlit thing; nothing a role owns (its mint
+ *  was the ghosts', ART.md 1). */
+const WISP = { deck: new Color('#ECE9F1'), runner: new Color('#A9B6CC') };
+/** The Whirl Saucer's bentwood (round 9, G6): a walnut a step darker than the wooden sleds', no role's colour. */
+const WHIRL_WOOD = new Color('#7E4E33');
 
 /** Comet Bob's own paint: a violet lacquer in two values, and the cream of its comet. Nothing a role owns (ART.md 1). */
 export const COMET_BOB = { lacquer: new Color('#5A3E96'), lacquerDark: new Color('#3F2A70'), comet: new Color('#F4E8CF') };
@@ -2065,16 +2194,18 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
   };
   const strap = (r = 0.247, y = 1.0) => part(new TorusGeometry(r, 0.019, lite ? 3 : 4, lite ? 10 : 18), C.strap, { pos: [0, y, 0.01], rot: [Math.PI / 2 + 0.06, 0, 0] });
   switch (hat) {
-    case 'watch':
-      // Short and snug: a lower crown and a thick rolled cuff, no pom-pom. (Round 9: no cream stripe either, so from
-      // behind it is the one plain red dome, where the stripe read as the beanie's cream.)
-      out.push(dome(0.94), seam(0.94));
-      out.push(part(new TorusGeometry(0.266, 0.065, 6, 24), cuff, { pos: [0, 0.9, 0.01], rot: [Math.PI / 2, 0, 0] }));
-      out.push(ribbed(0.272, 0.278, 0.07, 0.885));
-      flaps([0.48, 1.3, 0.96]);
-      goggles(0.99, -0.236);
-      out.push(strap(0.24, 0.985));
+    case 'watch': {
+      // A fisherman's watch cap perched high on the crown (round 9, G6): a short flat-topped cylinder narrower than the
+      // head, its deep rolled cuff ribbed, the hair showing round it and over the ears; from behind a small red box on a
+      // dark head. (Low and snug, one plain red dome with a cuff, three critic rounds took it for the Trapper or the
+      // Bobble Hem.)
+      out.push(smoothPart(new SphereGeometry(0.252, lite ? 10 : 18, lite ? 5 : 8, 0, Math.PI * 2, 0, 1.35), C.hair, { pos: [0, 0.86, 0.004], scale: [1.04, 1.06, 1.06] }));
+      out.push(ribs(part(new CylinderGeometry(0.205, 0.215, 0.1, lite ? 12 : 22, 1, true), cuff, { pos: [0, 1.04, 0.0] }), lite ? 12 : 22, 0.84));
+      out.push(part(new CylinderGeometry(0.188, 0.2, 0.12, lite ? 12 : 22), C.accent, { pos: [0, 1.145, 0.0] }));
+      out.push(part(new TorusGeometry(0.205, 0.018, 4, lite ? 12 : 20), shade(cuff, 0.9), { pos: [0, 1.09, 0], rot: [Math.PI / 2, 0, 0] }));
+      goggles(0.965, -0.236);
       break;
+    }
     case 'trapper': {
       // A round crown, a thick cream fur brim, the front turned up, and long flaps down past the jaw with
       // a fur edge: from behind a broad hat with two flaps and a cream band.

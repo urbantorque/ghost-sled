@@ -39,10 +39,13 @@ const conv = (s: GameSource, price: number, shelf: ShelfId): Source => {
   }
 };
 
+// (Round 9, G6: a piece no longer sold, kept by those who hold it, is neither bought nor free: left out.)
+const live = (x: { source: GameSource }): boolean => x.source.kind !== 'kept';
+
 export const ITEMS: readonly Item[] = [
-  ...HATS.map((x) => ({ id: x.id, shelf: 'hat' as const, name: x.name, source: conv(x.source, x.price, 'hat') })),
-  ...SCARVES.filter((x) => x.source.kind !== 'chapter' && x.source.kind !== 'set').map((x) => ({ id: x.id, shelf: 'scarf' as const, name: x.name, source: conv(x.source, x.price, 'scarf') })),
-  ...TRAILS.filter((x) => x.source.kind !== 'chapter' && x.source.kind !== 'set').map((x) => ({ id: x.id, shelf: 'trail' as const, name: x.name, source: conv(x.source, x.price, 'trail') })),
+  ...HATS.filter(live).map((x) => ({ id: x.id, shelf: 'hat' as const, name: x.name, source: conv(x.source, x.price, 'hat') })),
+  ...SCARVES.filter((x) => live(x) && x.source.kind !== 'chapter' && x.source.kind !== 'set').map((x) => ({ id: x.id, shelf: 'scarf' as const, name: x.name, source: conv(x.source, x.price, 'scarf') })),
+  ...TRAILS.filter((x) => live(x) && x.source.kind !== 'chapter' && x.source.kind !== 'set').map((x) => ({ id: x.id, shelf: 'trail' as const, name: x.name, source: conv(x.source, x.price, 'trail') })),
   ...PAINTS.map((x) => ({ id: x.id, shelf: 'finish' as const, name: x.name, source: conv(x.source, x.price, 'finish') })),
   ...ORNAMENTS.filter((x) => x.source.kind === 'free').map((x) => ({ id: x.id, shelf: 'ornament' as const, name: x.name, source: conv(x.source, x.price, 'ornament') })),
   ...SOUNDS.map((x) => ({ id: x.id, shelf: 'sound' as const, name: x.name, source: conv(x.source, x.price, 'sound') })),
@@ -78,9 +81,9 @@ export function proposedBuyables(): Buyable[] {
   for (const s of SLED_SHOP) if (s.from === 'shop') out.push({ id: `sled:${s.key}`, shelf: 'sled', price: s.price });
   for (const s of SLED_SHOP) for (let t = 0; t < 5; t++) out.push({ id: `track:${s.key}:${t}`, shelf: 'track', price: trackPrice(s.index, t), track: { sled: s.key, tier: t, lines: LINES[t] } });
   for (const it of ITEMS) if (it.source.kind === 'shop') out.push({ id: `${it.shelf}:${it.id}`, shelf: it.shelf, price: it.source.price });
+  // (Round 9, G6: a chapter is its trail and its ornament; its scarf's page gives gifts, which the career's lifetime
+  // already holds.)
   for (const ch of ALMANAC_CHAPTERS) {
-    out.push({ id: `chapter:${ch.month}:scarf`, shelf: 'scarf', price: CHAPTER_PRICES.scarf, month: ch.month });
-    out.push({ id: `chapter:${ch.month}:trail`, shelf: 'trail', price: CHAPTER_PRICES.trail, month: ch.month });
     out.push({ id: `chapter:${ch.month}:ornament`, shelf: 'ornament', price: CHAPTER_PRICES.ornament, month: ch.month });
   }
   return out;

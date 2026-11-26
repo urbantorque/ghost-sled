@@ -143,11 +143,12 @@ describe('the garage keeps the colour roles and stays a look', () => {
   it('has one free item a shelf, unique ids, and a price on everything else', () => {
     for (const s of SHELF_IDS) {
       const list = SHELVES[s];
-      // (Round 9: the found pieces, the Almanac's and the sets', are on the shelves too, at no price: never sold.)
+      // (Round 9: the found pieces, the Almanac's and the sets', are on the shelves too, at no price: never sold. G6: a
+      // piece no longer sold keeps the price it sold for, on the record.)
       expect(list.filter((i) => i.source.kind === 'free')).toHaveLength(1);
       expect(new Set(list.map((i) => i.id)).size).toBe(list.length);
       for (const i of list) {
-        expect(i.source.kind === 'shop' || i.source.kind === 'chapter' ? i.price >= 50 : i.price === 0).toBe(true);
+        expect(i.source.kind === 'shop' || i.source.kind === 'chapter' ? i.price >= 50 : i.source.kind === 'kept' ? i.price >= 0 : i.price === 0).toBe(true);
         expect(i.name).not.toMatch(/[–—]/);
         expect(i.blurb).not.toMatch(/[–—]/);
       }

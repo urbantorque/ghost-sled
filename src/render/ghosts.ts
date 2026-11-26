@@ -386,7 +386,9 @@ function sledSource(id: number): SledSource {
     const pos = g.getAttribute('position');
     const col = g.getAttribute('color');
     const glow = new Float32Array(pos.count);
-    const hot = [RIDER_COLORS.accent, new Color('#BFF8EE'), new Color('#B9C1CF')];
+    // (Round 9, G6: the Wisp's runners are silver now, never the ghosts' mint, so its glass sled glows them by the new
+    // colour; the old mint is no sled's.)
+    const hot = [RIDER_COLORS.accent, new Color('#A9B6CC'), new Color('#B9C1CF')];
     for (let i = 0; i < pos.count; i++) {
       if (i >= sn) {
         glow[i] = -1;

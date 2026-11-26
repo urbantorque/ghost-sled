@@ -169,8 +169,12 @@ function flameMaterial(hdr: number): ShaderMaterial {
         if (vFlame.w > 0.5) {
           // The glow on the scarf's tip: a soft round light, vermillion warming to orange.
           float g2 = dot(c, c);
-          a = exp(-g2 * 3.2) * (1.0 - smoothstep(0.75, 1.0, g2));
-          col = mix(uRoot, uOrange, 0.5) * uHdr;
+          // (Round 9, G6: a tighter, fainter halo: its wide low-alpha edge, laid over the snow's blue shade, read mauve.)
+          a = exp(-g2 * 5.0) * (1.0 - smoothstep(0.5, 0.8, g2)) * 0.75;
+          // (Round 9, G6: the flame's orange warming toward the gifts' marigold a breath, so the glow laid over white snow
+          // and the spray stays a warm orange; half vermillion, translucent over white, it read rose, the grudge's, in
+          // every critic's frame.)
+          col = mix(uOrange, uMid, 0.2) * uHdr;
         } else {
           // A teardrop: full at its foot, narrowing to a point at its tip.
           float w = mix(1.0, 0.3, clamp(al * 0.5 + 0.5, 0.0, 1.0));
@@ -178,7 +182,8 @@ function flameMaterial(hdr: number): ShaderMaterial {
           a = pow(clamp(1.0 - r2, 0.0, 1.0), 1.05);
           // The rider's vermillion at its birth burning into a flame's orange, and only toward its end half way on to
           // marigold: a whole marigold teardrop is the course's own fuel (the fourth critic read Low's tongues as pickups).
-          col = mix(uRoot, uOrange, smoothstep(0.0, 0.45, t));
+          // (Round 9, G6: born half way to the flame's orange, for the same reason as the glow.)
+          col = mix(mix(uRoot, uOrange, 0.5), uOrange, smoothstep(0.0, 0.45, t));
           col = mix(col, uMid, 0.45 * smoothstep(0.55, 1.0, t));
           col = mix(col, vec3(1.0, 0.9, 0.7), clamp(1.0 - r2, 0.0, 1.0) * 0.25 * (1.0 - t));
           col *= uHdr;

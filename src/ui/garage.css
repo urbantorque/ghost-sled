@@ -1,8 +1,10 @@
 /*
-  Round 9, the shop lane: the garage over its place (src/ui/garage.ts), on the round's tokens (tokens.css). The place
-  is the picture: the UI keeps to a column at the reading edge on a desk and a sheet over the thumbs on a phone held
-  upright, and everything else is the workshop. Ink panels at 86% with the hairline, full pills and 18 px cards, the
-  vermillion only on the one primary (a purchase or a tier fitted), the gifts' marigold only on the wallet.
+  Round 9, the shop lane: the garage over its place (src/ui/garage.ts). Round 9, G6: in the round's language, one kit9
+  sheet (kit9.css) like every room and the other screens: from the logo's side on a desk (the left, where the place
+  keeps the rider right of it), from the bottom on a phone held upright (the rider above it). The heading in italic 900
+  with a quiet Close; the gifts in marigold as the results draw them; the shelves as pills, the picked one pressed as
+  settings' quality is; tiles and tiers as 18 px cards with the hairline; body words at the system's text weight; the
+  vermillion only on a purchase or a tier being fitted. Order on both forms: the shelves, their pieces, the piece picked.
 */
 
 .gs-gar-layer {
@@ -26,46 +28,35 @@
   pointer-events: none;
 }
 
-.gs-gar-head,
-.gs-gar-side {
-  pointer-events: auto;
+/* The sheet: kit9's, from the logo's side of a desk, as wide as the place leaves it (render/garagescene.ts keeps the
+   rider 17% right of centre). */
+.gs-gar-sheet.gs9-sheet {
+  width: clamp(330px, 32vw, 440px);
+  gap: 0;
 }
 
 .gs-gar-head {
-  position: absolute;
-  top: var(--st);
-  left: var(--sl);
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  flex-wrap: wrap;
-  max-width: calc(100vw - var(--sl) - var(--sr) - clamp(320px, 31vw, 430px) - var(--sp-4));
+  flex: none;
 }
 
 .gs-gar-title {
   margin: 0;
-  font-size: var(--fs-xl);
-  font-weight: var(--fw-display);
-  font-style: italic;
-  line-height: var(--lh-tight);
-  text-shadow: var(--halo);
+}
+
+/* The wallet and the Lantern Row, under the heading. */
+.gs-gar-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-4) var(--sp-3) var(--sp-5);
 }
 
 .gs-gar-wallet {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4em;
-  min-height: var(--hit);
-  padding: 0 1em;
-  border-radius: var(--r-pill);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--hair);
+  margin: 0;
   font-weight: var(--fw-label);
   font-variant-numeric: tabular-nums;
-}
-
-.gs-gar-wallet .gs-i {
-  color: var(--c-gift);
 }
 
 .gs-gar-wallet-w {
@@ -73,28 +64,67 @@
   font-weight: var(--fw-text);
 }
 
-.gs-gar-side {
-  position: absolute;
-  top: var(--st);
-  right: var(--sr);
-  bottom: var(--sb);
-  width: clamp(320px, 31vw, 430px);
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
-  min-height: 0;
+.gs-gar-gifts {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  color: var(--c-gift);
+  font-weight: var(--fw-label);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
+.gs-gar-gifts .gs-i {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.gs-gar-rafters[aria-pressed='true'],
+.gs-gar-tab.is-on,
+.gs-gar-chip.is-on {
+  background: rgba(245, 243, 255, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.5);
+  color: var(--c-text);
+}
+
+/* The shelves: pills in one track, the picked one pressed (as settings' quality), never a filled off-white tab. */
 .gs-gar-tabs {
+  flex: none;
   display: flex;
-  gap: var(--sp-1);
-  padding: var(--sp-1);
+  gap: 2px;
+  margin: 0 var(--sp-4) var(--sp-2) var(--sp-5);
+  padding: 3px;
   border-radius: var(--r-pill);
-  background: var(--surface);
+  background: rgba(245, 243, 255, 0.05);
   box-shadow: inset 0 0 0 1px var(--hair);
   overflow-x: auto;
   scrollbar-width: none;
-  flex: none;
+  overscroll-behavior-x: contain;
+}
+
+.gs-gar-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.gs-gar-tab.gs9-b {
+  flex: 1 0 auto;
+  min-height: 36px;
+  min-width: 0;
+  padding: 0 0.75em;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-dim);
+  font-size: var(--fs-s);
+}
+
+.gs-gar-tab.gs9-b.is-on {
+  background: rgba(245, 243, 255, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.5);
+  color: var(--c-text);
+}
+
+.gs-gar-sheet.is-rafters .gs-gar-strip {
+  display: none;
 }
 
 .gs-gar-tab,
@@ -104,39 +134,128 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-.gs-gar-tab {
-  flex: 1 0 auto;
-  min-height: 38px;
-  padding: 0 0.8em;
-  background: transparent;
-  color: var(--text-dim);
-  font-size: var(--fs-s);
-}
-
-.gs-gar-tab.is-on {
-  background: var(--c-text);
-  color: var(--c-ink);
-}
-
-.gs-gar-card {
-  flex: 0 0 auto;
-  max-height: 62%;
-  overflow-y: auto;
+/* The shelf's pieces: a grid of tiles that scrolls in its own band, so the piece picked stays in sight under it. */
+.gs-gar-strip {
+  flex: 0 1 auto;
+  max-height: 40%;
   min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 6px;
+  padding: var(--sp-2) var(--sp-4) var(--sp-2) var(--sp-5);
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 calc(100% - 14px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 calc(100% - 14px), transparent 100%);
+}
+
+.gs-gar-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+  min-height: var(--hit);
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-radius: var(--r-card);
+  background: rgba(245, 243, 255, 0.04);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  color: var(--c-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--dur-tap) var(--ease-out), background var(--dur-tap) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .gs-gar-tile:hover {
+    background: rgba(245, 243, 255, 0.1);
+  }
+}
+
+.gs-gar-tile:active {
+  transform: scale(0.98);
+}
+
+.gs-gar-tile.is-picked {
+  background: rgba(245, 243, 255, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.5);
+}
+
+.gs-gar-tile:focus-visible,
+.gs-gar-tab:focus-visible,
+.gs-gar-chip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.gs-gar-tile-name {
+  font-weight: var(--fw-label);
+  line-height: var(--lh-tight);
+}
+
+.gs-gar-tile-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-size: var(--fs-s);
+  font-weight: var(--fw-text);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.gs-gar-tile-state .gs-i {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.gs-gar-tile.is-buy .gs-gar-tile-state,
+.gs-gar-tile.is-short .gs-gar-tile-state {
+  color: var(--c-gift);
+}
+
+.gs-gar-tile.is-short .gs-gar-tile-state {
+  opacity: 0.72;
+}
+
+.gs-gar-tile.is-found .gs-gar-tile-name,
+.gs-gar-tile.is-later .gs-gar-tile-name {
+  color: var(--text-dim);
+}
+
+.gs-gar-new {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+}
+
+/* The piece picked: its words and its one action, in the sheet's scrolling body (kit9's edge fade). */
+.gs-gar-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4) var(--sp-5) var(--sp-5);
   overscroll-behavior: contain;
+  border-top: 1px solid var(--hair);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 18px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 18px), transparent 100%);
 }
 
 .gs-gar-name {
   margin: 0;
   text-wrap: balance;
-  font-size: var(--fs-xl);
+  font-size: var(--fs-l);
   font-weight: var(--fw-display);
   font-style: italic;
   line-height: var(--lh-tight);
-  padding-bottom: 2px;
+  padding-bottom: 0.08em;
 }
 
 .gs-gar-blurb,
@@ -145,9 +264,6 @@
 .gs-gar-sig-line {
   margin: 0;
   line-height: var(--lh-text);
-}
-
-.gs-gar-blurb {
   font-weight: var(--fw-text);
 }
 
@@ -171,24 +287,36 @@
   margin-top: var(--sp-1);
 }
 
-.gs-gar-act {
-  min-width: 12em;
+.gs-gar-act.gs9-b-primary {
+  min-height: 50px;
+  padding: 0 1.3em;
 }
 
 .gs-gar-state {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.4em;
   margin: 0;
   min-height: var(--hit);
   font-weight: var(--fw-label);
 }
 
+.gs-gar-state .gs-i {
+  width: 1.15em;
+  height: 1.15em;
+}
+
+.gs-gar-state > .gs-gar-gifts + .gs-gar-dim {
+  margin-left: -0.4em;
+}
+
 .gs-gar-sig {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: var(--sp-2) var(--sp-3);
+  margin-top: var(--sp-1);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
   border-radius: var(--r-card);
   background: rgba(245, 243, 255, 0.05);
   box-shadow: inset 0 0 0 1px var(--hair);
@@ -199,11 +327,12 @@
   font-size: var(--fs-s);
 }
 
-.gs-gar-sub {
-  margin: var(--sp-2) 0 0;
-  font-size: var(--fs-s);
+.gs-gar-sig-line strong {
   font-weight: var(--fw-label);
-  color: var(--text-dim);
+}
+
+.gs-gar-sub {
+  margin: var(--sp-3) 0 0;
 }
 
 .gs-gar-tiers {
@@ -212,13 +341,13 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-1);
+  gap: 6px;
 }
 
 .gs-gar-tier {
   display: grid;
-  grid-template-columns: 6.5em 1fr;
-  gap: 2px var(--sp-2);
+  grid-template-columns: 6.2em minmax(0, 1fr);
+  gap: 3px var(--sp-2);
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-card);
   box-shadow: inset 0 0 0 1px var(--hair);
@@ -238,6 +367,7 @@
 
 .gs-gar-tier-what {
   font-size: var(--fs-s);
+  font-weight: var(--fw-text);
   color: var(--text-dim);
   line-height: var(--lh-text);
 }
@@ -251,121 +381,58 @@
 .gs-gar-tier-state {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.35em;
   font-size: var(--fs-s);
   font-weight: var(--fw-label);
 }
 
-.gs-gar-tier-state.is-fitted .gs-i,
-.gs-gar-state .gs-i {
-  color: var(--c-text);
+.gs-gar-tier-state .gs-i {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.gs-gar-tier-state > .gs-gar-gifts + .gs-gar-dim {
+  margin-left: -0.35em;
+}
+
+.gs-gar-state.is-on .gs-i,
+.gs-gar-tier-state.is-fitted .gs-i {
+  color: var(--c-gift);
 }
 
 .gs-gar-orn-row {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-1);
+  gap: 6px;
+  margin-top: var(--sp-2);
 }
 
 .gs-gar-chip {
   min-height: 36px;
   padding: 0 0.85em;
+  border: 0;
   border-radius: var(--r-pill);
   background: transparent;
   color: var(--c-text);
   box-shadow: inset 0 0 0 1px var(--hair-strong);
+  font: inherit;
   font-size: var(--fs-s);
   font-weight: var(--fw-label);
+  cursor: pointer;
 }
 
-.gs-gar-chip.is-on {
-  background: var(--c-text);
-  color: var(--c-ink);
+@media (hover: hover) {
+  .gs-gar-tab.gs9-b:hover:not(.is-on),
+  .gs-gar-chip:hover:not(:disabled):not(.is-on) {
+    background: rgba(245, 243, 255, 0.1);
+    color: var(--c-text);
+  }
 }
 
 .gs-gar-chip:disabled {
-  opacity: 0.55;
-}
-
-.gs-gar-strip {
-  flex: 1 1 0;
-  min-height: 7em;
-  overflow-y: auto;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-content: start;
-  gap: var(--sp-2);
-  padding: var(--sp-1);
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-}
-
-.gs-gar-tile {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 2px;
-  min-height: 3.6em;
-  padding: var(--sp-2) var(--sp-3);
-  border: 0;
-  border-radius: var(--r-card);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--hair);
-  color: var(--c-text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: transform var(--dur-tap) var(--ease-out), background var(--dur-tap) var(--ease-out);
-}
-
-.gs-gar-tile:hover {
-  background: var(--surface-raised);
-}
-
-.gs-gar-tile:active {
-  transform: scale(0.98);
-}
-
-.gs-gar-tile.is-on {
-  box-shadow: inset 0 0 0 2px var(--c-text);
-}
-
-.gs-gar-tile:focus-visible,
-.gs-gar-tab:focus-visible,
-.gs-gar-chip:focus-visible {
-  outline: none;
-  box-shadow: var(--focus);
-}
-
-.gs-gar-tile-name {
-  font-weight: var(--fw-label);
-  line-height: var(--lh-tight);
-}
-
-.gs-gar-tile-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
-  font-size: var(--fs-xs);
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-}
-
-.gs-gar-tile.is-buy .gs-gar-tile-state .gs-i {
-  color: var(--c-gift);
-}
-
-.gs-gar-tile.is-found .gs-gar-tile-name,
-.gs-gar-tile.is-later .gs-gar-tile-name {
-  color: var(--text-dim);
-}
-
-.gs-gar-new {
-  position: absolute;
-  top: 6px;
-  right: 8px;
+  opacity: 0.5;
+  cursor: default;
 }
 
 .gs-gar-towns {
@@ -374,13 +441,13 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
+  gap: 6px;
 }
 
 .gs-gar-town {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px var(--sp-2);
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px var(--sp-2);
   align-items: center;
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-card);
@@ -393,6 +460,7 @@
 
 .gs-gar-town-lit {
   font-size: var(--fs-s);
+  font-weight: var(--fw-text);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -402,12 +470,13 @@
   justify-self: start;
 }
 
-/* The moment of a purchase: the scene has the floor; a line names the piece. */
+/* The moment of a purchase: the scene has the floor; one line names the piece, an ink chip as the results' fact. */
 .gs-gar-moment {
   position: absolute;
-  left: 50%;
+  left: calc((100% + var(--sl) + clamp(330px, 32vw, 440px)) / 2);
   bottom: calc(var(--sb) + var(--sp-6));
   transform: translateX(-50%);
+  margin: 0;
   padding: var(--sp-2) var(--sp-5);
   border-radius: var(--r-pill);
   background: var(--surface);
@@ -415,6 +484,9 @@
   font-weight: var(--fw-label);
   pointer-events: none;
   white-space: nowrap;
+  animation: gs9-in var(--dur-enter) var(--ease-out) both;
+  --from-x: 0px;
+  --from-y: 12px;
 }
 
 .gs-gar-moment b {
@@ -422,66 +494,59 @@
   font-weight: var(--fw-display);
 }
 
-/* A phone held upright: the place in the top half, the shelf a sheet over the thumbs. */
-@media (max-aspect-ratio: 4/5) {
-  .gs-gar-head {
-    max-width: none;
-    right: var(--sr);
-  }
-
-  .gs-gar-rafters .gs-btn-label {
-    font-size: var(--fs-s);
-  }
-
-  .gs-gar-side {
-    top: auto;
-    left: 0;
-    right: 0;
-    bottom: 0;
+/* A phone held upright: the place in the top half, the sheet from the bottom under the rider (kit9's), its pieces a
+   row of tiles under the shelves, the piece picked under them. */
+@media (max-aspect-ratio: 1/1) {
+  .gs-gar-sheet.gs9-sheet {
     width: auto;
-    max-height: 54dvh;
-    padding: var(--sp-2) var(--sl) var(--sb) var(--sl);
-    border-radius: var(--r-card) var(--r-card) 0 0;
-    background: var(--surface-solid);
-    box-shadow: inset 0 1px 0 var(--hair), var(--shadow);
-    gap: var(--sp-2);
+    max-height: 56dvh;
+  }
+
+  .gs-gar-head {
+    padding-bottom: var(--sp-1);
+  }
+
+  .gs-gar-bar {
+    padding: 0 var(--sp-3) var(--sp-2) var(--sp-4);
   }
 
   .gs-gar-tabs {
-    background: transparent;
-    box-shadow: none;
-    padding: 0;
-  }
-
-  .gs-gar-card {
-    background: transparent;
-    box-shadow: none;
-    max-height: none;
-    padding: 2px 4px;
-    margin: -2px -4px;
+    margin: 0 var(--sp-3) var(--sp-1) var(--sp-4);
   }
 
   .gs-gar-strip {
     flex: none;
-    min-height: 0;
+    max-height: none;
     display: flex;
     overflow-x: auto;
     overflow-y: hidden;
-    padding-bottom: var(--sp-1);
+    padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-4);
+    scroll-padding-inline: var(--sp-4);
+    -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent 100%);
+    mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent 100%);
   }
 
   .gs-gar-tile {
     flex: 0 0 auto;
-    min-width: 9.5em;
+    min-width: 8.6em;
+  }
+
+  .gs-gar-card {
+    padding: var(--sp-3) var(--sp-3) calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)) var(--sp-4);
   }
 
   .gs-gar-moment {
-    bottom: calc(54dvh + var(--sp-3));
+    left: 50%;
+    bottom: calc(56dvh + var(--sp-3));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .gs-gar-tile {
     transition: none;
+  }
+
+  .gs-gar-moment {
+    animation: none;
   }
 }

@@ -576,9 +576,11 @@ export class GarageScene {
 
   resize(w: number, h: number): void {
     this.camera.aspect = w / Math.max(1, h);
-    this.tall = this.camera.aspect < 0.8;
+    // (Round 9, G6: the sheet comes from the logo's side, the left, so the rider stands right of centre; and it comes
+    // from the bottom at kit9's square, where the place frames for a phone.)
+    this.tall = this.camera.aspect <= 1;
     if (this.tall) this.camera.setViewOffset(w, h, 0, h * 0.16, w, h);
-    else this.camera.setViewOffset(w, h, w * 0.17, 0, w, h);
+    else this.camera.setViewOffset(w, h, -w * 0.17, 0, w, h);
     this.camera.updateProjectionMatrix();
     this.show(this.shot, true);
   }

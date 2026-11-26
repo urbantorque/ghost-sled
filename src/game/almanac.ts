@@ -328,21 +328,25 @@ export function chapterOf(key: string): Chapter | null {
   return m ? (CHAPTERS[Number(m[1]) - 1] ?? null) : null;
 }
 
-/** A chapter's set: a scarf, a trail and an ornament that look like their month (garage.ts), each sold for gifts
- *  from its month on and found on its pages. (Round 8's were one pattern list and two colour lists turned, so they
- *  repeated the shop; a chapter's third piece was a paint, the piece least seen at race distance.) */
+/** A chapter's set: its ornament, which looks like its month (garage.ts), sold for gifts from its month on and found
+ *  on its page. (Round 8's were one pattern list and two colour lists turned, so they repeated the shop; a chapter's
+ *  third piece was a paint, the piece least seen at race distance. Round 9, G6: its scarf and its trail are cut; four
+ *  critic rounds could not tell the months' scarves apart, and a blind critic matched a third of the months' trails to
+ *  their months; a chapter is its ornament and its title.) */
 export function chapterSet(month: number): GarageExtra[] {
-  const p = chapterPieces(month);
-  return [extraOf('scarf', p.scarf), extraOf('trail', p.trail), extraOf('ornament', p.ornament)];
+  return [extraOf('ornament', chapterPieces(month).ornament)];
 }
 
-/** A chapter's ten pages: its scarf on page 3, its trail on page 6, its ornament on page 8 and its title on page 10;
- *  gifts between. */
+/** What the pages that gave a month's scarf and its trail give instead (round 9, G6): a page of gifts each, more than
+ *  the pages between. */
+export const CHAPTER_PAGE3_GIFTS = 100;
+
+/** A chapter's ten pages: gifts on pages 3 and 6 (its scarf's and its trail's, until round 9), its ornament on page 8
+ *  and its title on page 10; gifts between. */
 export function chapterRewards(month: number, page: number): Reward[] {
   const set = chapterSet(month);
-  if (page === 3) return [{ kind: 'garage', shelf: 'scarf', id: set[0].id }];
-  if (page === 6) return [{ kind: 'garage', shelf: 'trail', id: set[1].id }];
-  if (page === 8) return [{ kind: 'garage', shelf: 'ornament', id: set[2].id }];
+  if (page === 3 || page === 6) return [{ kind: 'gifts', gifts: CHAPTER_PAGE3_GIFTS }];
+  if (page === 8) return [{ kind: 'garage', shelf: 'ornament', id: set[0].id }];
   if (page === 10) return [{ kind: 'title', title: CHAPTERS[month - 1].title }];
   return [{ kind: 'gifts', gifts: 25 + 5 * page }];
 }
