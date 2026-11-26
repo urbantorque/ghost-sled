@@ -263,8 +263,10 @@ export class Title {
 
   private render(m: TitleModel): void {
     const el = this.el;
-    // (Everything but the veil and an open room: taking the veil out and putting it back would start its sweep again.)
-    for (const c of Array.from(el.children)) if (c !== this.veil && c !== this.room?.el) c.remove();
+    // (Everything but the veil and an open room: taking the veil out and putting it back would start its sweep again.
+    // Round 9, U4: and a view pushed in the room, a sheet of its own here: a title drawn again as the rivals came in
+    // took the view out from under the player, leaving the room covered and nothing on screen.)
+    for (const c of Array.from(el.children)) if (c !== this.veil && c !== this.room?.el && !(this.room && c.classList.contains('gs9-sheet'))) c.remove();
     if (!this.veil.isConnected) el.append(this.veil);
     el.classList.toggle('is-first', m.firstVisit);
     el.classList.toggle('has-challenge', m.challenge !== null);
