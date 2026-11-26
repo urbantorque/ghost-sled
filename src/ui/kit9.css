@@ -422,6 +422,12 @@
   transform: translateX(20px);
 }
 
+@media (hover: hover) {
+  .gs9-switch-row:hover .gs9-switch {
+    box-shadow: inset 0 0 0 1px var(--hair-strong);
+  }
+}
+
 /* ---- settings (settings.ts): three blocks, each its heading and its controls ---- */
 .gs9-settings {
   width: min(480px, 40vw);

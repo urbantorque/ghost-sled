@@ -202,12 +202,14 @@ async (page) => {
       if (photo && photo.checkVisibility()) return 'photo';
       const m = ui.menus;
       if (m.settings.open) return 'settings';
-      if (m.books.open) return 'books';
+      // (Round 9, U4: the books' top sheet by its name, so an album page closing back to the contents is seen.)
+      if (m.books.open) return `books:${Array.from(m.books.el.querySelectorAll('.gs9-sheet')).filter((e) => !e.classList.contains('is-covered')).pop()?.getAttribute('aria-label') ?? ''}`;
       if (m.sleds.open) return 'garage';
       if (m.pause.open) return 'pause';
       if (ui.title.popover && ui.title.popover.isConnected) return `popover:${ui.title.popKind}`;
       // (Round 9: a room over the title, a view pushed in it, or the results' Details.)
-      const sheets = Array.from(document.querySelectorAll('.gs9-sheet'));
+      // (Round 9, U4: settings, the books and the pause card are sheets too, kept in the page while hidden.)
+      const sheets = Array.from(document.querySelectorAll('.gs9-sheet')).filter((e) => e.checkVisibility() && !e.classList.contains('is-covered'));
       if (sheets.length) return `sheet:${sheets[sheets.length - 1].getAttribute('aria-label')}`;
       if (ui.results.layer.open) return `results:${ui.results.el ? ui.results.el.dataset.view : ''}`;
       if (ui.title.layer.open) return 'title';
@@ -299,7 +301,7 @@ async (page) => {
   };
   /** Round 9: closes the title's rooms (and the views pushed in them) with Escape, as a player would. */
   const closeRooms = async () => {
-    for (let i = 0; i < 4 && (await page.evaluate(() => !!document.querySelector('.gs9-sheet'))); i++) {
+    for (let i = 0; i < 4 && (await page.evaluate(() => Array.from(document.querySelectorAll('.gs9-sheet')).some((e) => e.checkVisibility()))); i++) {
       await page.keyboard.press('Escape');
       await page.waitForTimeout(350);
     }
@@ -436,7 +438,7 @@ async (page) => {
         if (sf === 'title') return;
         const closed = await page.evaluate(() => {
           const ui = window.__gs.ui;
-          const top = ui.menus.topEl ?? Array.from(document.querySelectorAll('.gs9-sheet')).pop() ?? null;
+          const top = ui.menus.topEl ?? Array.from(document.querySelectorAll('.gs9-sheet')).filter((e) => e.checkVisibility() && !e.classList.contains('is-covered')).pop() ?? null;
           const x = top && top.querySelector('[data-fk^="close-"]');
           if (x) {
             x.click();

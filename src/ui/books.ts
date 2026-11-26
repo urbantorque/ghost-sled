@@ -107,7 +107,6 @@ export function albumContents(m: AlbumModel, ctx: Ctx, open: (id: string, from: 
     const all = sec.got >= sec.of;
     const b = b9(ctx, 'quiet', [pageArt(sec.id), h('span', 'gs9-bk-pt', name, h('span', 'gs9-bk-pc gs9-num', all ? `All ${fmt(sec.of)} found` : `${fmt(sec.got)} of ${fmt(sec.of)} found`)), ico9('chevR', 'gs9-bk-chev')], {
       fk: `album-${sec.id}`,
-      aria: `${sec.name}: ${sec.got} of ${sec.of} stickers found`,
       cls: 'gs9-bk-page',
       onClick: () => open(sec.id, b),
     });
