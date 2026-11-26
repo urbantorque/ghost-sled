@@ -375,6 +375,8 @@ function base(): Palette {
 function biomeBase(biome: BiomeId): Palette {
   const p = base();
   switch (biome) {
+    // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+    case 'gullhaven':
     case 'alpine':
       return p;
     case 'oldrun':
@@ -2283,6 +2285,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       },
     },
   ],
+  // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+  gullhaven: [],
 };
 
 /** Round 8, the light lane: a mountain's other hour (the Almanac's `hourOpen`, G4's reward: a second Clear Skies
@@ -3704,6 +3708,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
       },
     },
   ],
+  // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+  gullhaven: [],
 };
 
 /** Lanternfall's cloud lets go this many metres above the lip of the break, so the camera's whip onto the

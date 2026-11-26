@@ -210,6 +210,8 @@ const STYLE: Record<BiomeId, Style> = {
   blossom: { walls: [C('#EFE4D6'), C('#E6D6C8'), C('#C8402E'), C('#F2EADF')], roof: C('#F6F2FA'), trim: C('#3A3048'), glass: C('#3A2E48'), ice: C('#C8DCF4'), rim: C('#F0EAF4'), road: C('#8A80A0') },
   // Lanternfall's far hamlets: plum timber over stone, snow roofs, and a pool that holds the lamps' light.
   lantern: { walls: [C('#4A3C66'), C('#3E3258'), C('#5A4C78'), C('#352C50')], roof: C('#EEEAFA'), trim: C('#221C3C'), glass: C('#2A2448'), ice: C('#6A5CB0'), rim: C('#C8C0E8'), road: C('#5E5490') },
+  // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+  gullhaven: { walls: [C('#8A5A44'), C('#A06A4C'), C('#E8DCCB'), C('#74493A')], roof: C('#F4F2FA'), trim: C('#4A3040'), glass: C('#2E3658'), ice: C('#BFE4F4'), rim: C('#E8EEF8'), road: C('#7A7896') },
 };
 
 const VERMILLION = C('#D8402E');

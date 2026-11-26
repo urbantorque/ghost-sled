@@ -1259,6 +1259,8 @@ export const VARIANT_SHARE: Record<BiomeId, { a: number; b: number }> = {
   volcanic: { a: 0.35, b: 0.4 },
   blossom: { a: 0.4, b: 0.4 },
   lantern: { a: 0.3, b: 0.3 },
+  // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+  gullhaven: { a: 0.3, b: 0.24 },
 };
 
 /** Whether a pick is an upright tree that may lean (mounds, stubs and seracs stay planted). */

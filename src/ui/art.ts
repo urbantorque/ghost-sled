@@ -7,6 +7,14 @@ import type { MountainCard } from './contract';
 const SIGNAL = '#FF4D2E';
 
 const RIDGES: Record<MountainCard['biome'], string> = {
+  // (Gullhaven, round 9: a first sketch until its world is made, notes/r9-gullhaven.md: a low sun under a storm deck, the
+  // sea, the cape with its beacon.)
+  gullhaven:
+    '<rect x="0" y="18" width="160" height="16" fill="#121933" opacity=".28"/>' +
+    '<circle cx="118" cy="44" r="10" fill="#FFE2C4" opacity=".8"/>' +
+    '<path d="M40 80V60h120v20z" fill="#F5F3FF" opacity=".14"/>' +
+    '<path d="M0 80V48l22-4 20 8 14 10 8 18z" fill="#121933" opacity=".8"/>' +
+    '<path d="M14 45v-9h3v9z" fill="#F5F3FF" opacity=".85"/>',
   alpine:
     '<circle cx="114" cy="60" r="13" fill="#FFE6C9" opacity=".85"/>' +
     '<path d="M0 80V56l22-14 16 9 24-22 22 18 18-10 26 20 32-8v31z" fill="#F5F3FF" opacity=".26"/>' +

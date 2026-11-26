@@ -110,6 +110,8 @@ const LAMP_LIGHT: Record<BiomeId, [number, number, number]> = {
   blossom: [1, 0.6, 0.26],
   // Marigold: here the course's fuel colour is the world's own light.
   lantern: [1, 0.66, 0.2],
+  // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+  gullhaven: [1, 0.56, 0.2],
 };
 /** How much of the day must have gone for the windows to glow (journeyDusk). */
 const DUSK_LIT = 0.45;
@@ -132,6 +134,8 @@ const SPAN_KINDS: Record<BiomeId, Kind[]> = {
   blossom: ['torii', 'bridge'],
   // (lanternkit.ts builds them: a bell frame, an arched bridge strung with lights.)
   lantern: ['gate', 'bridge'],
+  // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+  gullhaven: ['gate', 'bridge'],
 };
 // (Ember's vents throw spans high, so it gets the most bank pieces, its basalt lodge among them.)
 const BANK_KINDS: Record<BiomeId, Kind[]> = {
@@ -143,6 +147,8 @@ const BANK_KINDS: Record<BiomeId, Kind[]> = {
   blossom: ['pagoda', 'guardian', 'hut'],
   // (A lamp tower, and a great standing lamp.)
   lantern: ['tower', 'guardian', 'tower'],
+  // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+  gullhaven: ['hut', 'tower', 'jump'],
 };
 const ENC_KINDS: Record<BiomeId, Kind[]> = {
   alpine: ['gallery'],
@@ -152,6 +158,8 @@ const ENC_KINDS: Record<BiomeId, Kind[]> = {
   volcanic: ['lavatunnel', 'gallery'],
   blossom: ['toriirow', 'gallery'],
   lantern: ['gallery'],
+  // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+  gullhaven: ['gallery'],
 };
 /** How likely a section's piece is to span the run: narrow ones mostly (a ravine's walls hide anything on
  *  its banks), wide ones mostly a bank piece. */

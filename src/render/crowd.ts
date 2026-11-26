@@ -110,6 +110,8 @@ const CUT: Record<BiomeId, { coat: [number, number, number, number]; sleeve: [nu
   blossom: { coat: [0.2, 0.28, 0.82, 0.58], sleeve: [0.06, 0.13] },
   // The lamplighters' robe: narrow at the shoulder, a full bell to the snow, a wide sleeve.
   lantern: { coat: [0.19, 0.34, 0.96, 0.5], sleeve: [0.07, 0.14] },
+  // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+  gullhaven: { coat: [0.2, 0.27, 0.62, 0.68], sleeve: [0.06, 0.075] },
 };
 
 /** What a prop holder does with it, per mountain: the right arm's rest (side raise, forward raise,
@@ -123,6 +125,8 @@ const PROP_REST: Record<BiomeId, [number, number, number, number]> = {
   blossom: [3.15, -0.3, 0, 2],
   // A lighting pole held up at arm's length, its flame over the heads, turned in the hand.
   lantern: [2.95, -0.2, 0, 2],
+  // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+  gullhaven: [0.35, 0.3, 0.1, 0],
 };
 
 /** The prop holders' style, shared by the one crowd material (set by restyleCrowd). */
@@ -300,6 +304,8 @@ const DRESS: Record<BiomeId, { coats: string[]; hats: string[] }> = {
   // Lamplighters: robes in the night's own colours (indigo, plum, slate violet, a deep teal, undyed wool)
   // with hoods and sashes in pale lilac, silver and cream. The only warm thing on them is the flame they carry.
   lantern: { coats: ['#3A3478', '#54407E', '#2E2C5C', '#6A5C9C', '#2F5A70', '#C9C2DC', '#463A6A', '#7A6CA8'], hats: ['#DAD2F2', '#F0ECF8', '#B4A8E0', '#8E86C8', '#E6E0D2', '#5E5490'] },
+  // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+  gullhaven: { coats: ['#4E6B4C', '#3A4058', '#2F5A52', '#2E3A66', '#6A4058', '#CFC2A8', '#4A6390', '#6B5646', '#7A8C6A'], hats: ['#F0E8D8', '#9CC0EE', '#3F5A44', '#B9A6E0', '#FFFFFF', '#5B8FD6', '#8A6E5A', '#D7E3F4'] },
 };
 
 /** A crowd's colour range for a biome: coats and accents. */

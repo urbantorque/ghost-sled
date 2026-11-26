@@ -327,6 +327,35 @@ const OLDRUN: Song = {
   ]),
 };
 
+/**
+ * Gullhaven (E dorian, 104): a reel for the harbour's band. The tune runs in even 8ths and turns on the flat seventh (i,
+ * VII, IV), the chorus lifts to IV and the fifth; the hook is a run up to the fifth and round it, the answer falling
+ * home, as a sled lifts off a lip, hangs, and comes down on the far shelf.
+ */
+const GULLHAVEN: Song = {
+  intro: [I(), at(6)],
+  verse: [I(), at(6), I(), at(3), I(), at(6), at(4), I()],
+  chorus: [at(3), I(), at(6), at(4), at(3), I(), at(6), I()],
+  bridge: [at(5), at(6), at(3), at(4, undefined, 's4')],
+  build: at(4, 7),
+  hook: line([
+    [0, 2, 4], [2, 2, 2], [4, 2, 4], [6, 2, 5], [8, 2, 7], [10, 2, 5], [12, 2, 4], [14, 2, 2],
+    [16, 2, 1], [18, 2, 2], [20, 2, 4], [22, 2, 2], [24, 4, 1], [28, 4, 0],
+    [32, 2, 4], [34, 2, 2], [36, 2, 4], [38, 2, 5], [40, 2, 7], [42, 2, 8], [44, 2, 9], [46, 2, 7],
+    [48, 2, 8], [50, 2, 7], [52, 2, 5], [54, 2, 4], [56, 8, 5],
+    [64, 2, 7], [66, 2, 9], [68, 2, 7], [70, 2, 5], [72, 2, 4], [74, 2, 5], [76, 2, 7], [78, 2, 5],
+    [80, 2, 4], [82, 2, 2], [84, 2, 1], [86, 2, 2], [88, 4, 4], [92, 4, 2],
+    [96, 2, 4], [98, 2, 5], [100, 2, 7], [102, 2, 9], [104, 2, 8], [106, 2, 7], [108, 2, 5], [110, 2, 4],
+    [112, 4, 2], [116, 4, 1], [120, 8, 0],
+  ]),
+  answer: line([
+    [24, 2, 6], [26, 2, 5], [28, 4, 4],
+    [56, 2, 2], [58, 2, 1], [60, 4, 0],
+    [88, 2, 6], [90, 2, 5], [92, 4, 4],
+    [120, 2, 4], [122, 2, 2], [124, 4, 0],
+  ]),
+};
+
 export const SONGS: Record<BiomeId, Song> = {
   alpine: PINECREST,
   glacier: FROSTFANG,
@@ -334,6 +363,7 @@ export const SONGS: Record<BiomeId, Song> = {
   blossom: SAKURA,
   lantern: LANTERNFALL,
   oldrun: OLDRUN,
+  gullhaven: GULLHAVEN,
 };
 
 export function songFor(biome: BiomeId): Song {

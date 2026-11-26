@@ -202,6 +202,8 @@ export function townStyle(biome: BiomeId, p: Palette): Town {
   switch (biome) {
     // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
     case 'oldrun':
+    // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+    case 'gullhaven':
     case 'alpine':
       return { lower: [C('#ECE4D6'), C('#E4DACA'), C('#D9CDBB')], upper: [TIMBER, C('#7A5440'), C('#8A5E44'), C('#5E4032')], roof: C('#3A3448'), trim: TIMBER_DARK, shutters: [C('#3F6A6E'), C('#6A3A48'), C('#3E5A8A'), C('#4A6A48')], lamp: '#FFB45E', lampAlways: false };
     case 'glacier':

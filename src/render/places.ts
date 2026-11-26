@@ -65,6 +65,8 @@ function spanStyle(biome: BiomeId, ctx: SiteCtx): SpanStyle {
       return { post: C('#93405A'), rail: C('#6A2A40'), beam: C('#93405A'), dark: C('#3A2A36'), arch: true, rise: 11, ice: false };
     // (The Old Run, round 9: Pinecrest's until its world is made, notes/r9-oldrun.md section 2.)
     case 'oldrun':
+    // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
+    case 'gullhaven':
     case 'alpine':
       return { post: TIMBER_DARK, rail: TIMBER_LIGHT, beam: TIMBER, dark: TIMBER_DARK, arch: false, rise: 4, ice: false };
     case 'lantern':
