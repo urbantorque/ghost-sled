@@ -59,6 +59,13 @@ const WALL_K = 420;
 /** How far before and after a bend its outside wall takes to rise and fall (a smootherstep: |H''| <= 0.0069 for the
  *  whole 4.9 m, under the curvature that lifts a sled at 46 m/s anywhere up the wall). */
 export const WALL_RAMP = 70;
+/** The parapet past the lip as the world draws it (drawnGround): the wall's curve carried on to CREST_U of its width,
+ *  then a crest of snow that rounds over in CREST_TOP metres and falls in CREST_FALL to the forest floor, CREST_OUT
+ *  over the lip's height. */
+export const CREST_U = 1.25;
+export const CREST_TOP = 1.2;
+export const CREST_FALL = 5;
+export const CREST_OUT = 0.4;
 /** The glaze: the band of a bend's outside wall it lies on (shares of the wall's width up), on a wall this high. */
 export const GLAZE_LO = 0.4;
 export const GLAZE_HI = 0.9;
@@ -250,6 +257,35 @@ function at(c: Course, z: number): At {
   return o;
 }
 
+/** The ground as the world draws it (read only; the sim never calls it): the kit's own inside CREST_U of the wall's
+ *  width (past anything a sled reaches: the lip turns it back 0.5 m out, its gradient is read 0.2 m round it), and
+ *  past it the parapet's snow, rounding over in CREST_TOP metres and falling in CREST_FALL to the forest floor outside,
+ *  CREST_OUT over the lip's height: a crest of snow, not the cliff the sim's rising curve would draw. */
+export function drawnGround(c: Course, x: number, z: number): number {
+  const { d, h } = across(c, x, z);
+  const u = (d - FLOOR) / WALL;
+  if (u <= CREST_U) return c.ground(x, z);
+  const base = c.baseY(z);
+  const t = d - FLOOR - CREST_U * WALL;
+  const y1 = h * CREST_U * CREST_U;
+  const s1 = (2 * h * CREST_U) / WALL;
+  if (t <= CREST_TOP) return base + y1 + s1 * t - (s1 * t * t) / (2 * CREST_TOP);
+  const top = y1 + (s1 * CREST_TOP) / 2;
+  return base + top - (top - (h + CREST_OUT)) * smoothstep(0, CREST_FALL, t - CREST_TOP);
+}
+
+/** The track at z as the world draws it (read only): the line, its slope dx/dz, its curvature d2x/dz2, and the walls'
+ *  heights left (-x) and right (+x). */
+export function trackAt(c: Course, z: number): { cx: number; p: number; pp: number; hl: number; hr: number } {
+  const a = at(c, z);
+  return { cx: a.cx, p: a.p, pp: a.pp, hl: a.hl, hr: a.hr };
+}
+
+/** The turns the kit laid on a course, in order (read only: the world hangs things on them). */
+export function turnsOf(c: Course): readonly Readonly<Turn>[] {
+  return laid(c).turns;
+}
+
 /** Where (x, z) is across the channel: the distance square to it from the middle, the side, that side's wall. */
 function across(c: Course, x: number, z: number): { d: number; side: 1 | -1; h: number; a: At; q: number } {
   const a = at(c, z);
@@ -352,7 +388,9 @@ export const OLDRUN_KIT: Kit = {
     if (d <= FLOOR) return base;
     // The wall, and past the lip the parapet: the wall's own curve carried on up, so the lip is never a crest and the
     // ground stays smooth enough there for the sim's gradient (a steeper parapet, curving six times as hard, read as
-    // the ground falling away under a sled that reached it).
+    // the ground falling away under a sled that reached it). (The world draws a crest of snow out past CREST_U, where
+    // no sled ever is: drawnGround below. The sim keeps the curve rising, since its landing's prediction looks past
+    // the lip and a crest there changed where flights were set to land.)
     const u = (d - FLOOR) / WALL;
     return base + h * u * u;
   },
