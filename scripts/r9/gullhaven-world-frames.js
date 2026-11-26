@@ -72,7 +72,9 @@ async (page) => {
     await page.evaluate(async (spot) => {
       const run = window.__gs.run;
       const cc = run.sim.course;
-      const gk = await import('/src/sim/gullhaven.ts');
+      // (The module the app itself loaded, as for the palette below: a second copy has its own lay of the course.)
+      const gurl = performance.getEntriesByType('resource').map((e) => e.name).find((n) => n.includes('/src/sim/gullhaven.ts')) ?? '/src/sim/gullhaven.ts';
+      const gk = await import(gurl);
       const gullyAt = (q) => gk.gulliesOf(cc).find((g) => q >= gk.gullySpan(g).z0 && q <= gk.gullySpan(g).z1) || null;
       // (The bold line through a gully as the kit lays it, gullhaven.ts boldX: lineFor's choice holds by where a rider is.)
       const at = (q) => {

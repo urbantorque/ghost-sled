@@ -252,7 +252,8 @@ export const SEA_GLSL = /* glsl */ `
     vec3 col = mix(uSeaWater, sky, fr * 0.72);
     float far = smoothstep(1200.0, 7000.0, t);
     col = mix(col, mix(uSeaHaze, uSeaRim, 0.35), far * pow(toSun, 3.0) * up * 0.55);
-    col = mix(col, col * 0.76, trough * 0.7);
+    // (A shallow step only: drawn deep, the troughs read as cracks in ice, the third critic.)
+    col = mix(col, col * 0.88, trough * 0.6);
     col = mix(col, mix(uSeaLit, uSeaHaze, 0.5), crest * (0.16 + 0.42 * graze));
     float wc = snoise(pw * vec2(0.028, 0.045) + vec2(uTime * 0.04, 0.0));
     #if SEA_Q > 0
@@ -265,13 +266,16 @@ export const SEA_GLSL = /* glsl */ `
     col *= 0.86 + 0.22 * smoothstep(-0.5, 0.6, shoal);
     float across = ld.x * sxz.y - ld.y * sxz.x;
     float path = exp(-across * across / (0.0012 + 0.006 * graze)) * step(0.0, dot(ld, sxz)) * up;
-    float gl = s1 * 0.5 + 0.5;
+    // (The path's glints from the water's own broken surface, not the swell's even crests: those laid a ladder of blobs.)
+    float gl = snoise(pw * vec2(0.021, 0.047) + vec2(uTime * 0.11, -uTime * 0.07)) * 0.5 + 0.5;
     #if SEA_Q > 0
-      gl = gl * 0.6 + (snoise(pw * vec2(0.05, 0.09) + uTime * 0.2) * 0.5 + 0.5) * 0.4;
+      gl = gl * 0.55 + (snoise(pw * vec2(0.06, 0.13) + uTime * 0.2) * 0.5 + 0.5) * 0.3 + (s1 * 0.5 + 0.5) * 0.15;
     #endif
     col = mix(col, uSeaRim * 1.35, path * (0.25 + 0.75 * smoothstep(0.55, 0.9, gl)) * 0.9);
     col = mix(col, mix(uSeaHaze, uSeaRim, 0.5), pow(toSun, 8.0) * 0.3 * up * graze);
-    col = mix(col, uSeaHaze, smoothstep(2500.0, 18000.0, t) * 0.85);
+    // (The far sea goes to a haze a step under the sky's band, so the horizon stays a line under a low sun: in the
+    // sky's own colour the sea and the band were one cream, the first critic.)
+    col = mix(col, mix(uSeaHaze, uSeaShade, 0.3), smoothstep(2500.0, 18000.0, t) * 0.85);
     return vec4(col, 1.0);
   }
   // (One return a function: a lake's early return read to the D3D compiler as an unset result.)
@@ -464,11 +468,17 @@ const VERT = /* glsl */ `
         float wob = snoise(vec2(fwd * 0.00042, 3.7 + layer)) * 360.0 + snoise(vec2(fwd * 0.0013, 7.1 + layer)) * 130.0;
         float coastX = -30.0 + 0.45 * wob + 1900.0 * smoothstep(2400.0, 4800.0, fwd);
         float inland = coastX - p.x;
-        float land = smoothstep(-30.0, 240.0, inland);
+        float land = smoothstep(-20.0, 90.0, inland);
         float moor = 40.0 + min(inland, 4000.0) * 0.09 + 460.0 * uRange.x * pow(clamp(rg, 0.0, 1.2), uRange.y) * smoothstep(150.0, 1500.0, inland);
         float hl = -0.22 * clamp(fwd, -900.0, 7000.0) + moor;
-        hl = max(hl, uSeaY + 90.0 * smoothstep(0.0, 260.0, inland));
+        hl = max(hl, uSeaY + 140.0 * smoothstep(0.0, 70.0, inland));
         h = mix(uSeaY - 70.0, hl, land);
+        // An island out to sea, well round from the sun's bearing (one under the sun covered its disc), a low whaleback of
+        // moor on rock cliffs: the far shore the sea needs to read as a sea and not a plain.
+        vec2 i2 = p - vec2(3900.0, -1700.0);
+        float isl = 1.0 - smoothstep(260.0, 520.0, length(i2 * vec2(1.0, 1.5)));
+        float ih = uSeaY - 70.0 + (120.0 + 70.0 * clamp(rg, 0.0, 1.0)) * smoothstep(0.0, 0.35, isl) * sqrt(isl);
+        h = max(h, ih);
       }
       P = vec3(p.x, h, p.y);
       vHero = vec3(layer, position.x, v);
@@ -598,7 +608,9 @@ const FRAG = /* glsl */ `
     // (Round 9, Gullhaven's coast: the snow lies down to a little over the sea, wherever the lens is.)
     float snowLine = (uCoast > 0.5 ? uSeaY + 70.0 : uSnowY) + n1 * (uCoast > 0.5 ? 40.0 : 120.0);
     // Higher up it clings to steeper faces too.
-    float hold = 0.36 - 0.12 * smoothstep(snowLine, snowLine + 600.0, vPos.y);
+    // (Gullhaven's coast: snow lies only on the gentle tops, its sea cliffs bare rock: snow down a cliff's striations
+    // drew icicle teeth on a frosted cake, the second critic.)
+    float hold = uCoast > 0.5 ? 0.62 : 0.36 - 0.12 * smoothstep(snowLine, snowLine + 600.0, vPos.y);
     float snow = smoothstep(hold, hold + 0.06, slope + n2 * 0.08 + n1 * 0.04) * smoothstep(snowLine - 12.0, snowLine + 12.0, vPos.y);
     float ice = 0.0;
     float crater = 0.0;
@@ -712,6 +724,8 @@ const FRAG = /* glsl */ `
     }
     // The crater glows (stronger at night).
     col += uLavaColor * crater * uLava * (0.8 + 0.2 * sin(uTime * 1.3));
+    // (Round 9, Gullhaven: the coast's rock darkens to a wet foot at the waterline, so a shore stands on the sea.)
+    if (uCoast > 0.5) col = mix(col, col * 0.55, (1.0 - smoothstep(uSeaY + 6.0, uSeaY + 40.0, vPos.y)) * 0.8);
     // The sea of clouds swallows the mountains' feet, round a billowing surface.
     if (uSea > 0.0) {
       // (Gullhaven's coast stands out of the sea on a shore, not out of billows.)

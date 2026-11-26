@@ -226,7 +226,10 @@ export function cliffGround(c: Course, x: number, z: number): number {
   const k = cleftAt(c, z);
   if (k <= 0) return y > floor ? y : floor;
   const top = c.ground(cx + hw + CLIFF_FROM, z);
-  const cut = top - 900 * smooth01((e - CLIFF_FROM) / 2.4);
+  // (A sheer drop of some thirty metres under the fence, then the back wall falling steeply to the sea over the next
+  // hundred metres out: drawn sheer all the way it was edge-on from the run and the air, and the path read as a sheet
+  // laid on the water, the first critic.)
+  const cut = top - 30 * smooth01((e - CLIFF_FROM) / 2.4) - Math.max(0, top - floor - 30) * smooth01((e - CLIFF_FROM - 2.4) / 105);
   const d = y + (Math.min(y, cut) - y) * k;
   return d > floor ? d : floor;
 }

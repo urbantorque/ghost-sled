@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Color, ConeGeometry, CylinderGeometry, DodecahedronGeometry, DoubleSide, InstancedMesh, Matrix4, Mesh, NormalBlending, Object3D, OctahedronGeometry, PerspectiveCamera, PlaneGeometry, Points, Quaternion, ShaderMaterial, SphereGeometry, Vector3 } from 'three';
+import { BoxGeometry, BufferAttribute, BufferGeometry, Color, ConeGeometry, CylinderGeometry, DodecahedronGeometry, DoubleSide, InstancedMesh, Matrix4, Mesh, NormalBlending, Object3D, OctahedronGeometry, PerspectiveCamera, PlaneGeometry, Points, Quaternion, ShaderMaterial, SphereGeometry, Vector3 } from 'three';
 import type { Snap } from '../game/run';
 import type { Beat } from '../game/beats';
 import type { Course } from '../sim/course';
@@ -13,7 +13,9 @@ import { pushLocalLight } from './lights';
 import { cliffGround, visualGround } from './ground';
 import { SEA_GLSL, type SeaUniforms } from './massif';
 import { BEACON, LIGHT_POINT, cleftAt, isGullhaven, lighthouseZ, seaLevelOf } from './gullhavenplan';
-import type { Palette } from './palette';
+import { type Palette, getPalette } from './palette';
+import { Mood } from '../sim/chaos';
+import { LOW_BOLD, type StillFigure, crowdColors, stillCrowd } from './crowd';
 import type { Particles } from './particles';
 import type { Detail } from './postfx/tiers';
 import { reduced } from '../ui/motion';
@@ -40,9 +42,11 @@ type V3 = [number, number, number];
 const ROCK = new Color('#363850');
 const ROCK_D = new Color('#26283C');
 const ROCK_L = new Color('#4C4E68');
-const POST_C = new Color('#5A4A44');
-const LATH = new Color('#7A6656');
-const RAIL_C = new Color('#4E403C');
+// (The fence is weathered pale timber with a little light of its own: in near-navy slats against the low sun it stood
+// along the run as a hard dark barcode, a hazard's silhouette, the first critic.)
+const POST_C = new Color('#9A8E86');
+const LATH = new Color('#C2B6A6');
+const RAIL_C = new Color('#8A7E76');
 const STONE = new Color('#7E7C8E');
 const STONE_D = new Color('#5C5A6E');
 const WHITE = new Color('#EEEAE2');
@@ -259,8 +263,9 @@ function driftMaterial(): ShaderMaterial {
         p.z += cos(T * 1.3 + aSeed.y * 6.28 + k * 7.0) * 1.2;
         vec4 mv = viewMatrix * modelMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = clamp(uScale * (0.2 + 0.24 * aSeed.z) / max(-mv.z, 1.0), 1.5, 40.0);
-        vA = smoothstep(0.0, 0.18, k) * (1.0 - smoothstep(0.62, 1.0, k)) * (1.0 - smoothstep(160.0, 420.0, -mv.z));
+        gl_PointSize = clamp(uScale * (0.2 + 0.24 * aSeed.z) / max(-mv.z, 1.0), 1.5, 18.0);
+        // (Gone near the lens, where a mote is a blot on the glass.)
+        vA = smoothstep(0.0, 0.18, k) * (1.0 - smoothstep(0.62, 1.0, k)) * (1.0 - smoothstep(160.0, 420.0, -mv.z)) * smoothstep(7.0, 22.0, -mv.z);
         vH = k;
       }
     `,
@@ -293,11 +298,15 @@ function beamMaterial(): ShaderMaterial {
     blending: 2,
     uniforms: { uK: { value: 0.3 }, uCol: { value: new Color('#F4F2E6') } },
     vertexShader: /* glsl */ `
-      varying vec2 vUv;
+      varying float vAlong;
+      varying float vFace;
       varying float vFade;
       void main() {
-        vUv = uv;
+        // (The cone runs along its own +x from the lantern: how far along it, 0 to 1.)
+        vAlong = clamp(position.x / 900.0, 0.0, 1.0);
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vec3 n = normalize(normalMatrix * normal);
+        vFace = abs(dot(n, normalize(-mv.xyz)));
         vFade = smoothstep(12.0, 40.0, -mv.z);
         gl_Position = projectionMatrix * mv;
       }
@@ -305,11 +314,11 @@ function beamMaterial(): ShaderMaterial {
     fragmentShader: /* glsl */ `
       uniform float uK;
       uniform vec3 uCol;
-      varying vec2 vUv;
+      varying float vAlong;
+      varying float vFace;
       varying float vFade;
       void main() {
-        float across = abs(vUv.x - 0.5) * 2.0;
-        float a = (1.0 - smoothstep(0.2, 1.0, across)) * pow(1.0 - vUv.y, 1.6) * uK * vFade;
+        float a = pow(vFace, 2.2) * pow(1.0 - vAlong, 2.6) * uK * vFade * 0.5;
         gl_FragColor = vec4(uCol * a, 1.0);
       }
     `,
@@ -343,14 +352,14 @@ function smokeMaterial(): ShaderMaterial {
         // The plume leaves the fire upward and is bent flat inland (along +u) by the wind, widening as it goes.
         float t = vUv.x;
         float yc = 0.12 + 0.35 * pow(t, 0.55) * 0.5 + 0.03 * sin(t * 9.0 - T * 1.4);
-        float w = 0.03 + 0.22 * t;
+        float w = 0.02 + 0.13 * t;
         float dy = (vUv.y - yc) / w;
         float n = snoise2(vec2(t * 5.0 - T * 0.5, vUv.y * 6.0)) * 0.6 + snoise2(vec2(t * 13.0 - T * 1.1, vUv.y * 15.0 + 2.0)) * 0.4;
         float dens = exp(-dy * dy * 1.4) * (0.7 + 0.5 * n) * (1.0 - smoothstep(0.55, 1.0, t)) * smoothstep(0.0, 0.04, t);
-        float a = smoothstep(0.08, 0.4, dens) * 0.85;
+        float a = smoothstep(0.12, 0.6, dens) * 0.4;
         if (a < 0.01) discard;
         vec3 col = mix(uShade, uLit, clamp(0.5 + n * 0.4 - dy * 0.2, 0.0, 1.0));
-        col = mix(col, uFire, (1.0 - smoothstep(0.0, 0.12, t)) * 0.7);
+        col = mix(col, uFire, (1.0 - smoothstep(0.0, 0.05, t)) * 0.35);
         gl_FragColor = vec4(col, a);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -399,6 +408,8 @@ export class GullhavenWorld {
   private readonly glow: ShaderMaterial;
   private readonly cloth: ShaderMaterial;
   private readonly rockMat: ShaderMaterial;
+  private readonly fenceMat: ShaderMaterial;
+  private readonly paintMat: ShaderMaterial;
   private readonly owned: Array<{ dispose(): void }> = [];
   private readonly seaMat: ShaderMaterial;
   private readonly seaMesh: Mesh;
@@ -429,6 +440,12 @@ export class GullhavenWorld {
     // (Not the stone shader: it lays snow on whatever faces up, and from the cliff top a stack is all ledges and crown;
     // its beds are the form's own three values, rockforms.ts.)
     this.rockMat = makeToonMaterial({ coolShade: 0.12, doubleSided: true, rim: 0.12 });
+    // (The fence's timber is pale and weathered, its shade its own: with a light of its own it read to the second critic
+    // as lit from nowhere, and orange under the moon; dark against the low sun its posts rake their shadows to the lens.)
+    this.fenceMat = makeToonMaterial({ coolShade: 0.3 });
+    // (Painted and limewashed work, the lighthouse and the houses: its shade its own colour, so a white tower seen
+    // against the low sun or the moon is shaded and rimmed, not the brightest thing in the frame.)
+    this.paintMat = makeToonMaterial({ coolShade: 0.18, rim: 0.22 });
     this.cloth.uniforms.uCloth.value = 0.16;
     this.seaMat = seaMaterial(sea, 1);
     this.seaMesh = new Mesh(discGeometry(4800, 28, 96), this.seaMat);
@@ -511,6 +528,9 @@ export class GullhavenWorld {
     this.root.add(this.seaMesh);
     withChamfer(low ? 'low' : 'full', () => {
       this.fence(c, low);
+      // (No outcrops on the brow: the third critic read them as pale untextured stubs lining the edge, and picked the edge
+      // without them in every pair. brow() is kept for the lane to try again with the cliff's own face.)
+      void this.brow;
       this.moorWall(c, low);
       this.moorStones(c, low);
       this.gullies(c, low);
@@ -540,18 +560,20 @@ export class GullhavenWorld {
     const railG = merge(railParts);
     // A panel of laths, a unit long along +z (stretched to the gap), each lath a narrow board with a gap beside it.
     const laths: BufferGeometry[] = [];
-    for (let i = 0; i < 6; i++) laths.push(box(0.025, 1.12, 0.075, i % 2 ? LATH : POST_C, [0, 0.72 + (i % 2) * 0.04, (i + 0.5) / 6]));
+    for (let i = 0; i < 4; i++) laths.push(box(0.03, 1.1, 0.12, LATH, [0, 0.72 + (i % 2) * 0.05, (i + 0.5) / 4]));
     const lathG = merge(laths);
-    const posts = this.inst(postG, n);
-    const rails = this.inst(railG, n);
-    const panels = low ? null : this.inst(lathG, n);
+    const posts = this.inst(postG, n, this.fenceMat);
+    const rails = this.inst(railG, n, this.fenceMat);
+    const panels = low ? null : this.inst(lathG, n, this.fenceMat);
+    // (The laths cast no shadow: seen from a flight their shadows laid a blue barcode along the edge.)
+    if (panels) panels.castShadow = false;
     // The pennants: a triangle of cloth on a short staff over the post, flying along its own +x (aSway 0 at the staff).
     const nf = Math.ceil(n / FLAG_EVERY);
     const flagsA = this.inst(pennant(FLAG_A), nf, this.cloth);
     // (Low: one colour of pennant on the posts themselves, no staffs: two draws fewer.)
     const flagsB = low ? null : this.inst(pennant(FLAG_B), nf, this.cloth);
     const staffG = part(new CylinderGeometry(0.025, 0.025, 1.0, 4, 1), POST_C, { pos: [0, 1.85, 0] });
-    const staffs = low ? null : this.inst(staffG, nf);
+    const staffs = low ? null : this.inst(staffG, nf, this.fenceMat);
     const gullies = gulliesOf(c);
     const upAt = (z: number): number => {
       let k = 0;
@@ -610,12 +632,44 @@ export class GullhavenWorld {
     if (staffs) staffs.count = f;
     flagsA.count = fa;
     if (flagsB) flagsB.count = fb;
+    // (The pennants and their staffs cast no shadow: the low light laid their shapes across the run as figures with an
+    // arm raised, cast by nothing in view, the first critic.)
+    for (const im of [staffs, flagsA, flagsB]) if (im) im.castShadow = false;
     for (const im of [posts, rails, panels, staffs, flagsA, flagsB]) {
       if (!im) continue;
       im.computeBoundingSphere();
       im.name = 'fence';
       this.root.add(im);
     }
+  }
+
+  /** The cliff's brow: outcrops of its bedded rock along the edge past the fence, every so often, standing a little
+   *  over the edge and running down the face, with a tongue of snow on their tops. They break the edge's line (from a
+   *  flight it read as a table's edge with the sea under it, the second critic) and say the face is rock. One draw. */
+  private brow(c: Course, low: boolean): void {
+    const g = strata({ rx: 0.5, rz: 0.5, h: 1, foot: 3, layers: low ? 4 : 6, sides: low ? 5 : 7, rock: [ROCK_D, ROCK, ROCK_L], lie: SNOW, taper: 0.25, shift: 0.2, dip: 0.2, warp: 0.35, rough: 0.35, lieMin: 0.12, seed: 0xb40 });
+    const spots: Array<[number, number, number, number, number]> = [];
+    const gl = gulliesOf(c);
+    const end = placesOf(c).descent;
+    for (let z = 40, j = 0; z < end; j++) {
+      z += (low ? 34 : 18) + hash(j, 61) * 22;
+      // (Never on a lip's cornice, nor on the beacon's or the lighthouse's points.)
+      if (gl.some((g) => z > g.zL - 12 && z < g.zL + 6)) continue;
+      if (Math.abs(z - BEACON.z) < 20 || Math.abs(z - lighthouseZ(c)) < 30) continue;
+      const x = edgeX(c, z) + 1.6 + hash(j, 62) * 2.5;
+      const top = c.ground(edgeX(c, z) - 0.2, z);
+      const w = 3 + hash(j, 63) * 5;
+      spots.push([x, top - w * 0.55, z, w, hash(j, 64) * 6.28]);
+    }
+    const im = this.inst(g, spots.length, this.rockMat);
+    spots.forEach(([x, y, z, w, yaw], i) => {
+      q4.setFromAxisAngle(up, yaw);
+      m4.compose(v3.set(x, y, -z), q4, s3.set(w, w * 0.8, w));
+      im.setMatrixAt(i, m4);
+    });
+    im.computeBoundingSphere();
+    im.name = 'brow';
+    this.root.add(im);
   }
 
   // ------------------------------------------------------------------ the moor
@@ -625,10 +679,20 @@ export class GullhavenWorld {
    *  Each length is a block of stacked stone with a snow cap, instanced (one draw). The strobe on the land side. */
   private moorWall(c: Course, low: boolean): void {
     const len = 2.6;
-    const blockG = merge([
-      part(new CylinderGeometry(0.42, 0.55, 1.0, 5, 2), STONE, { pos: [0, 0.48, 0], rot: [0, 0.3, 0], scale: [1, 1, len / 1.0], jitter: 0.12 }),
-      part(new CylinderGeometry(0.36, 0.42, 0.18, 5, 1), SNOW, { pos: [0, 1.02, 0], rot: [0, 0.3, 0], scale: [1, 1, len / 0.82], jitter: 0.06 }),
-    ]);
+    // (A length of dry stone, its stones laid in two courses under a row of upright coping stones, snow lying along
+    // the top: a block under a white lid read to the first critic as a lidded prism, and from a flight a row of them as
+    // a dotted line. Each length runs into the next. Low keeps one block a length.)
+    const stones: BufferGeometry[] = [];
+    if (low) {
+      stones.push(part(new CylinderGeometry(0.42, 0.55, 1.0, 5, 2), STONE, { pos: [0, 0.48, 0], rot: [0, 0.3, 0], scale: [1, 1, (len * 1.04) / 1.0], jitter: 0.12 }));
+      stones.push(part(new CylinderGeometry(0.36, 0.42, 0.14, 5, 1), SNOW, { pos: [0, 1.0, 0], rot: [0, 0.3, 0], scale: [1, 1, (len * 1.02) / 0.82], jitter: 0.06 }));
+    } else {
+      for (let k = 0; k < 3; k++) stones.push(part(new BoxGeometry(0.62, 0.42, 0.9), k % 2 ? STONE : STONE_D, { pos: [0, 0.21, -len / 2 + 0.45 + k * 0.86], jitter: 0.07 }));
+      for (let k = 0; k < 3; k++) stones.push(part(new BoxGeometry(0.5, 0.36, 0.82), k % 2 ? STONE_D : STONE, { pos: [0, 0.6, -len / 2 + 0.85 + k * 0.86], jitter: 0.07 }));
+      for (let k = 0; k < 6; k++) stones.push(part(new BoxGeometry(0.38, 0.32, 0.16), k % 2 ? STONE_D : STONE, { pos: [0, 0.94, -len / 2 + 0.22 + k * 0.43], rot: [0.12 * (k % 3 - 1), 0, 0], jitter: 0.04 }));
+      stones.push(part(new BoxGeometry(0.42, 0.08, len * 0.98), SNOW, { pos: [0.02, 1.12, 0], jitter: 0.03 }));
+    }
+    const blockG = merge(stones);
     const spots: Array<[number, number, number, number]> = [];
     const end = placesOf(c).descent;
     const e0 = 4.2;
@@ -721,7 +785,9 @@ export class GullhavenWorld {
         const h1 = hash(g.index * 977 + i, 41);
         const h2 = hash(g.index * 977 + i, 42);
         const z = g.zL - 4 + h1 * (g.column + 8);
-        const x = g.bx + (h2 - 0.5) * 6;
+        // (Beside the line, over the cleft's edge and out over the slot, where the wind comes up out of it: drawn up the
+        // line itself it rose out of the rider's beanie.)
+        const x = g.bx + 2.5 + h2 * (edgeX(c, z) - g.bx + 7);
         // From the face and the cleft under the rim to well over it.
         const foot = rim - 26 - h2 * 10;
         pts.push(x, foot, -z);
@@ -797,29 +863,36 @@ export class GullhavenWorld {
     const cx = c.centerX(z);
     const x0 = cx + 9.5;
     const x1 = edgeX(c, z) - FENCE_IN - 0.3;
-    const steps = 10;
-    const prof: Array<[number, number]> = [
-      [-0.9, -0.05],
-      [-0.2, 0.32],
-      [0.5, 0.4],
-      [1.0, 0.18],
-      [1.15, -0.25],
-      [0.8, -0.7],
+    // (Flush with the shelf, never standing proud of it: a raised bar across the line read to the first critic as a
+    // wall to stop at. Its brow overhangs the drop by a metre or so, torn along its edge by the wind, its underside in
+    // shade and a darker lip of shadow under that, so the edge reads as the place the shelf ends.)
+    const steps = 16;
+    const prof: Array<[number, number, number]> = [
+      [-1.6, -0.02, 0],
+      [-0.4, 0.04, 0],
+      [0.35, 0.03, 0],
+      [0.85, -0.1, 1],
+      [1.1, -0.4, 1],
+      [0.95, -0.85, 2],
+      [0.5, -1.25, 2],
     ];
+    const under = [SNOW, new Color('#D4DCF0'), new Color('#9CA6CA')];
     for (let i = 0; i < steps; i++) {
       const xa = x0 + ((x1 - x0) * i) / steps;
       const xb = x0 + ((x1 - x0) * (i + 1)) / steps;
-      const ya = c.ground(xa, z - 1.2);
-      const yb = c.ground(xb, z - 1.2);
+      const ya = c.ground(xa, z - 1.8);
+      const yb = c.ground(xb, z - 1.8);
+      // (Torn: each stretch of the brow reaches out its own way.)
+      const ta = 0.65 + 0.7 * hash(g.index * 53 + i, 71);
+      const tb = 0.65 + 0.7 * hash(g.index * 53 + i + 1, 71);
       for (let k = 0; k + 1 < prof.length; k++) {
         const [da, ha] = prof[k];
-        const [db, hb] = prof[k + 1];
-        const wob = 0.12 * Math.sin(i * 1.7 + g.index);
-        const pa0: V3 = [xa, ya + ha, -(z + da + wob)];
-        const pb0: V3 = [xb, yb + ha, -(z + da + wob)];
-        const pa1: V3 = [xa, ya + hb, -(z + db + wob)];
-        const pb1: V3 = [xb, yb + hb, -(z + db + wob)];
-        out.push(quad(pa0, pb0, pb1, pa1, k >= 3 ? new Color('#DCE2F2') : SNOW));
+        const [db, hb, kc] = prof[k + 1];
+        const pa0: V3 = [xa, ya + ha, -(z + da * (da > 0 ? ta : 1))];
+        const pb0: V3 = [xb, yb + ha, -(z + da * (da > 0 ? tb : 1))];
+        const pa1: V3 = [xa, ya + hb, -(z + db * (db > 0 ? ta : 1))];
+        const pb1: V3 = [xb, yb + hb, -(z + db * (db > 0 ? tb : 1))];
+        out.push(quad(pa0, pb0, pb1, pa1, under[kc]));
       }
     }
   }
@@ -827,10 +900,10 @@ export class GullhavenWorld {
   /** A windsock on a pole by the fence at the lip: banded cloth, filled by the wind climbing the gully and standing on
    *  end over the column (aSway lets it flutter at its tail). */
   private sock(c: Course, g: Gully, out: BufferGeometry[]): void {
-    const z = g.zL - 3;
-    const x = edgeX(c, z) - FENCE_IN - 0.4;
+    const z = g.zL - 1;
+    const x = edgeX(c, z) - FENCE_IN;
     const y = visualGround(c, x, z);
-    out.push(placedOne(part(new CylinderGeometry(0.05, 0.07, 5.2, 5, 1), POST_C, { pos: [0, 2.6, 0] }), x, y, z));
+    out.push(placedOne(part(new CylinderGeometry(0.035, 0.05, 5.2, 5, 1), LATH, { pos: [0, 2.6, 0] }), x, y, z));
     // The sock: five bands, a cone frustum from the hoop up, leaning a little inland off the vertical.
     const bands = 5;
     for (let b = 0; b < bands; b++) {
@@ -1011,11 +1084,26 @@ export class GullhavenWorld {
     const parts: BufferGeometry[] = [];
     // (Its point is the cliff top held out past the fence, ground.ts cliffGround.)
     const H = 24;
-    parts.push(part(new CylinderGeometry(2.4, 3.3, H, low ? 10 : 16, 1), WHITE, { pos: [0, H / 2, 0] }));
-    parts.push(part(new CylinderGeometry(3.6, 3.6, 0.7, low ? 10 : 16, 1), WHITE, { pos: [0, 0.35, 0] }));
+    const seg16 = low ? 10 : 16;
+    // The tower: limewashed, in courses (a slightly wider ring every few metres), one slate band round its middle,
+    // a door at its foot and small windows climbing it. (A plain taper read to the first critic as untextured.)
+    parts.push(part(new CylinderGeometry(2.4, 3.3, H, seg16, 1), WHITE, { pos: [0, H / 2, 0] }));
+    parts.push(part(new CylinderGeometry(3.6, 3.7, 0.9, seg16, 1), STONE, { pos: [0, 0.45, 0] }));
+    for (let k = 1; k < 6; k++) {
+      const yk = (H * k) / 6;
+      const r = 3.3 - (0.9 * yk) / H;
+      parts.push(part(new CylinderGeometry(r + 0.06, r + 0.06, 0.18, seg16, 1, true), LIME, { pos: [0, yk, 0] }));
+    }
+    parts.push(part(new CylinderGeometry(2.86, 2.98, 3.2, seg16, 1, true), SLATE, { pos: [0, H * 0.5, 0] }));
+    parts.push(box(0.3, 2.3, 1.3, GLASS, [-3.15, 1.6, 0]));
+    if (!low) for (const [yk, a] of [[6.5, 0.4], [11.5, -0.6], [17, 0.2], [21, -0.3]]) parts.push(box(0.25, 1.1, 0.6, GLASS, [-Math.cos(a) * (3.15 - (0.9 * yk) / H), yk, Math.sin(a) * (3.15 - (0.9 * yk) / H)], [0, -a, 0]));
     // The gallery and its rail, the lantern room's glass and ink frame, the dome and its vent.
-    parts.push(part(new CylinderGeometry(3.4, 2.5, 0.5, low ? 10 : 16, 1), IRON, { pos: [0, H + 0.2, 0] }));
-    parts.push(part(new CylinderGeometry(3.3, 3.3, 1.0, low ? 10 : 16, 1, true), IRON, { pos: [0, H + 0.95, 0] }));
+    parts.push(part(new CylinderGeometry(3.4, 2.5, 0.5, seg16, 1), IRON, { pos: [0, H + 0.2, 0] }));
+    parts.push(part(new CylinderGeometry(3.3, 3.3, 0.12, seg16, 1, true), IRON, { pos: [0, H + 1.4, 0] }));
+    for (let k = 0; k < (low ? 8 : 16); k++) {
+      const a = (k / (low ? 8 : 16)) * Math.PI * 2;
+      parts.push(seg([Math.cos(a) * 3.25, H + 0.4, Math.sin(a) * 3.25], [Math.cos(a) * 3.25, H + 1.45, Math.sin(a) * 3.25], 0.04, IRON));
+    }
     parts.push(part(new CylinderGeometry(1.9, 1.9, 0.5, low ? 8 : 12, 1), IRON, { pos: [0, H + 0.7, 0] }));
     parts.push(part(new ConeGeometry(2.2, 1.6, low ? 8 : 12, 1), IRON, { pos: [0, H + 4.4, 0] }));
     parts.push(part(new SphereGeometry(0.35, 6, 4), IRON, { pos: [0, H + 5.3, 0] }));
@@ -1023,28 +1111,25 @@ export class GullhavenWorld {
       const a = (k / (low ? 6 : 10)) * Math.PI * 2;
       parts.push(seg([Math.cos(a) * 1.85, H + 0.95, Math.sin(a) * 1.85], [Math.cos(a) * 1.85, H + 3.6, Math.sin(a) * 1.85], 0.06, IRON));
     }
-    // The keeper's cottage, white walls and a slate roof, on the landward side of the tower.
+    // The keeper's cottage, limewashed with a slate roof and a chimney, on the landward side of the tower: a door, two
+    // windows on its long side, snow on the roof's ridge.
     parts.push(box(6, 3.4, 9, LIME, [-8, 1.7, 0]));
     parts.push(part(new CylinderGeometry(0, 4.9, 2.6, 4, 1), SLATE, { pos: [-8, 4.7, 0], rot: [0, Math.PI / 4, 0], scale: [0.95, 1, 1.35] }));
+    parts.push(part(new CylinderGeometry(0, 3.4, 1.0, 4, 1), SNOW, { pos: [-8, 5.55, 0], rot: [0, Math.PI / 4, 0], scale: [0.95, 1, 1.35] }));
     parts.push(box(0.8, 2.2, 0.8, STONE_D, [-8, 5.4, 3.2]));
-    this.add(merge(placed(parts, x, top, z, 0)), this.mat).name = 'lighthouse';
-    const glass = merge(placed([part(new CylinderGeometry(1.8, 1.8, 2.6, low ? 8 : 12, 1), GLASS, { pos: [0, H + 2.25, 0] }), box(0.1, 1.2, 1.2, GLASS, [-5, 1.8, 0])], x, top, z, 0));
+    parts.push(box(0.12, 2.0, 1.0, GLASS, [-11.03, 1.1, 2.4]));
+    this.add(merge(placed(parts, x, top, z, 0)), this.paintMat).name = 'lighthouse';
+    const glass = merge(placed([part(new CylinderGeometry(1.8, 1.8, 2.6, low ? 8 : 12, 1), GLASS, { pos: [0, H + 2.25, 0] }), box(0.1, 1.2, 1.2, GLASS, [-11.03, 1.8, -2]), box(0.1, 1.2, 1.2, GLASS, [-11.03, 1.8, 1])], x, top, z, 0));
     this.add(glass, this.glow).name = 'lighthouse-lamp';
     this.light = [x, top + H + 2.3, z];
-    // The beam: a long flat cone of light (two crossed quads), turned by update().
+    // The beam: a long cone of light from the lantern (open at both ends, both faces), turned by update(). Its light is
+    // the length of air it passes through, so it is strongest along its middle and soft at its edges, never a sheet
+    // seen edge-on (two crossed quads read as a wire along the beam's foot, the first critic).
     const L = 900;
-    const g = new BufferGeometry();
-    const w0 = 1.4;
-    const w1 = 70;
-    const P = [0, -w0, 0, 0, w0, 0, L, w1, 0, L, -w1, 0, 0, 0, -w0, 0, 0, w0, L, 0, w1, L, 0, -w1];
-    const uv = [0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1];
-    for (let i = 0; i < 8; i++) {
-      uv[i * 2 + 1] = P[i * 3] / L;
-    }
-    g.setAttribute('position', new BufferAttribute(new Float32Array(P), 3));
-    g.setAttribute('uv', new BufferAttribute(new Float32Array(uv), 2));
-    g.setIndex([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7]);
-    const beam = new Mesh(this.keep(g), this.beamMat);
+    const cone = new CylinderGeometry(26, 0.9, L, low ? 10 : 18, 1, true);
+    cone.rotateZ(Math.PI / 2);
+    cone.translate(L / 2, 0, 0);
+    const beam = new Mesh(this.keep(cone), this.beamMat);
     beam.position.set(x, top + H + 2.3, -z);
     beam.frustumCulled = false;
     beam.renderOrder = 5;
@@ -1171,6 +1256,9 @@ export class GullhavenWorld {
     // The line across the harbour's ice between the two pier-head lights: four rows of big ink and cream checks over
     // the whole corridor, long down the run so the lens sees them square (ART.md 12's line).
     const hwL = c.halfWidth(fz);
+    // (Its own draw, in paint: in the stone shader the ink checks took the snow that lies on what faces up, and the line
+    // vanished, the second critic: the run read as riding into the sea.)
+    const line: BufferGeometry[] = [];
     const sq = 1.1;
     const nq = Math.floor((hwL * 2) / sq);
     for (let row = 0; row < 4; row++) {
@@ -1181,11 +1269,61 @@ export class GullhavenWorld {
           const x = c.centerX(zz) - hwL + d;
           return [x, c.ground(x, zz) + 0.04, -zz];
         };
-        sheds.push(quad(pt(i * sq, za), pt((i + 1) * sq, za), pt((i + 1) * sq, zb), pt(i * sq, zb), (i + row) % 2 ? CREAM : IRON));
+        line.push(quad(pt(i * sq, za), pt((i + 1) * sq, za), pt((i + 1) * sq, zb), pt(i * sq, zb), (i + row) % 2 ? CREAM : IRON));
       }
     }
-    this.add(merge(sheds), this.mat, pl.descent - 60, fz + 260).name = 'harbour';
+    // The harbour's houses up the slope behind the quay, in two rows stepping up the moor's foot: limewashed and tarred
+    // fronts to the harbour, slate roofs under snow, a chimney each, their windows lit as the day goes. A harbour
+    // hamlet beside the line, never a square round it.
+    const homes: BufferGeometry[] = [];
+    for (let i = 0; i < (low ? 6 : 11); i++) {
+      const row = i % 2;
+      const z = pl.harbour - 30 + Math.floor(i / 2) * 44 + row * 20 + hash(i, 91) * 10;
+      if (z > fz + 70) break;
+      const cx = c.centerX(z);
+      const e = 12 + row * 15 + hash(i, 92) * 5;
+      const x = cx - c.halfWidth(z) - e;
+      const y = visualGround(c, x, z) - 0.3;
+      const w = 6 + hash(i, 93) * 2.5;
+      const d = 5 + hash(i, 94) * 2;
+      const h = 4 + hash(i, 95) * 2.2;
+      const wall = hash(i, 96) < 0.55 ? LIME : hash(i, 96) < 0.8 ? TAR_L : new Color('#C8B6A0');
+      const p: BufferGeometry[] = [];
+      p.push(box(d, h, w, wall, [0, h / 2, 0]));
+      p.push(part(new CylinderGeometry(0, w * 0.68, w * 0.42, 4, 1), SLATE, { pos: [0, h + w * 0.2, 0], rot: [0, Math.PI / 4, 0], scale: [d / w * 1.05, 1, 1.02] }));
+      p.push(part(new CylinderGeometry(0, w * 0.5, w * 0.28, 4, 1), SNOW, { pos: [0, h + w * 0.28, 0], rot: [0, Math.PI / 4, 0], scale: [d / w * 1.0, 1, 0.98] }));
+      p.push(box(0.7, 1.8, 0.7, STONE_D, [0.6, h + w * 0.3, w / 2 - 0.6]));
+      p.push(box(0.08, 2.0, 0.95, new Color('#4A3E3A'), [d / 2 + 0.02, 1.0, -w / 4]));
+      homes.push(...placed(p, x, y, z, 0));
+      // Two windows to the harbour, on the side facing the run.
+      lit.push(...placed([box(0.08, 1.0, 0.9, GLASS, [d / 2 + 0.03, h * 0.62, w / 5]), box(0.08, 1.0, 0.9, GLASS, [d / 2 + 0.03, h * 0.62, -w / 2.6])], x, y, z, 0));
+      this.lamps.push([x + d / 2 + 2, y + 2, z, 10]);
+    }
+    sheds.push(...homes);
+    // (In paint, not the stone shader: tarred walls and boats' hulls took its strata and its snow on their roofs' undersides.)
+    this.add(merge(sheds), this.paintMat, pl.descent - 60, fz + 260).name = 'harbour';
+    const lm = this.add(merge(line), this.paintMat, fz - 300, fz + 260, false);
+    lm.name = 'finish-line';
     this.add(merge(lit), this.glow, pl.descent - 60, fz + 260).name = 'harbour-lights';
+    // The harbour's folk on the quay to see the line crossed, still, in their knitwear and oilskins (crowd.ts
+    // stillCrowd, one draw; Low fewer and bolder), facing the ice.
+    const p = getPalette('gullhaven', Mood.None);
+    const { coats, hats } = crowdColors('gullhaven', p);
+    const folk: StillFigure[] = [];
+    let k = 0;
+    for (let z = fz - 90; z < fz + 16; z += 3.1) {
+      k++;
+      if (low && k % 2) continue;
+      const cx = c.centerX(z);
+      const x = cx - c.halfWidth(z) - 1.6 - 0.6 - hash(k, 97) * 1.6;
+      const y = c.ground(cx, z) + 1.25;
+      folk.push({ x, y, z: -(z + (hash(k, 98) - 0.5) * 1.2), face: 1, coat: coats[k % coats.length], hat: hats[(k * 3) % hats.length] });
+    }
+    if (folk.length) {
+      const m = this.add(stillCrowd(folk, 'gullhaven', low ? LOW_BOLD : 1), this.mat, pl.harbour, fz + 200);
+      m.name = 'onlookers';
+      m.castShadow = false;
+    }
   }
 
   // ------------------------------------------------------------------ the gulls
@@ -1281,15 +1419,18 @@ export class GullhavenWorld {
     (this.driftMat.uniforms.uShade.value as Color).copy(p.snowShade).lerp(p.snowLit, 0.4);
     this.driftMat.uniforms.uLive.value = live;
     this.driftMat.uniforms.uScale.value = 1500;
-    (this.smokeMat.uniforms.uLit.value as Color).copy(p.clouds.shade).lerp(p.fog, 0.45);
-    (this.smokeMat.uniforms.uShade.value as Color).copy(p.clouds.shade).multiplyScalar(0.6);
+    // (A pale grey smoke in the air's own colours: dark, against the sea at the opening it read as an island or a stain.)
+    (this.smokeMat.uniforms.uLit.value as Color).copy(p.clouds.lit).lerp(p.fog, 0.5);
+    (this.smokeMat.uniforms.uShade.value as Color).copy(p.clouds.shade).lerp(p.fog, 0.55);
     this.smokeMat.uniforms.uLive.value = live;
     this.place(time * live, s.z);
     // The lighthouse's beam turns (a sweep every ten seconds), stronger as the day goes.
     const lampK = shared.uLampK.value as number;
     if (this.beam) {
-      this.beam.rotation.set(0, time * live * 0.63, 0);
-      this.beamMat.uniforms.uK.value = 0.06 + 0.22 * Math.min(1, lampK);
+      this.beam.rotation.set(0, time * live * 0.63, -0.025);
+      // (By dusk and night only: by day a beam in the low sun's air read as a hard milky slab, the third critic.)
+      this.beamMat.uniforms.uK.value = 0.26 * Math.max(0, Math.min(1, (lampK - 0.6) / 0.8));
+      this.beam.visible = this.beamMat.uniforms.uK.value > 0.004;
     }
     const lit = Math.max(0, Math.min(1.6, (lampK - 0.35) / 0.8));
     this.glow.uniforms.uEmissiveStrength.value = Math.max(0.35 * (this.fire ? 1 : 0), Math.min(1.25, lit * 1.3));

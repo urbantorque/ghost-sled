@@ -304,8 +304,10 @@ const DRESS: Record<BiomeId, { coats: string[]; hats: string[] }> = {
   // Lamplighters: robes in the night's own colours (indigo, plum, slate violet, a deep teal, undyed wool)
   // with hoods and sashes in pale lilac, silver and cream. The only warm thing on them is the flame they carry.
   lantern: { coats: ['#3A3478', '#54407E', '#2E2C5C', '#6A5C9C', '#2F5A70', '#C9C2DC', '#463A6A', '#7A6CA8'], hats: ['#DAD2F2', '#F0ECF8', '#B4A8E0', '#8E86C8', '#E6E0D2', '#5E5490'] },
-  // (Gullhaven, round 9: Pinecrest's until its world is made, notes/r9-gullhaven.md.)
-  gullhaven: { coats: ['#4E6B4C', '#3A4058', '#2F5A52', '#2E3A66', '#6A4058', '#CFC2A8', '#4A6390', '#6B5646', '#7A8C6A'], hats: ['#F0E8D8', '#9CC0EE', '#3F5A44', '#B9A6E0', '#FFFFFF', '#5B8FD6', '#8A6E5A', '#D7E3F4'] },
+  // Gullhaven's harbour folk (round 9, notes/r9-gullhaven-world.md): fishermen's knitwear and oilskins in navy wool, a
+  // weathered dark green, slate, peat brown, undyed cream and grey; knit caps in the same. Never a signal colour (an
+  // oilskin's yellow would be the gifts' marigold).
+  gullhaven: { coats: ['#2E3A5C', '#3E5A4A', '#4A5068', '#5A4638', '#D2C6B0', '#6A6E78', '#34404E', '#5E6A5A'], hats: ['#3A4660', '#D8CCB4', '#5E5A50', '#8A7A62', '#2E3448', '#A8A49C'] },
 };
 
 /** A crowd's colour range for a biome: coats and accents. */
