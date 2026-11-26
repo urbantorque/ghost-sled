@@ -46,9 +46,11 @@ async (page) => {
   await page.evaluate(() => window.__gs.applyLook());
   // The way in: the title's Garage door (the app's own path; the title is the ui lane's).
   // (Focused first, as a keyboard player's would be, so the close can be seen to hand focus back to it.)
-  const door = await page.$('[data-fk="sleds"]');
+  // (The title redraws as the look goes on: wait for it to settle and find the door afresh.)
+  await wait(800);
+  const door = await page.waitForSelector('[data-fk="sleds"]', { timeout: 10000 }).catch(() => null);
   if (door) {
-    await door.focus();
+    await page.focus('[data-fk="sleds"]').catch(() => page.focus('[data-fk="sleds"]'));
     await page.keyboard.press('Enter');
   } else {
     errors.push('missing: the title Garage door');

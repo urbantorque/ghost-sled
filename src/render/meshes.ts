@@ -1244,7 +1244,7 @@ export function finishSled(geo: BufferGeometry, f: FinishLook, round: boolean): 
         mark = (round ? r > 0.7 : w > 0.78 || u > 0.86 || u < 0.1 || back) && Math.sin(cz * 36 + cx * 22 + cy * 30) > 0.25;
         break;
       case 'ruled':
-        mark = top && fract(cz / 0.16) < 0.2;
+        mark = top && fract(cz / 0.16) < 0.3;
         break;
       default:
         break;
@@ -1340,7 +1340,7 @@ function quilt(w: number, d: number, y: number, z: number, cols: number, rows: n
 /** The inlay's lines laid along a path: capsules, coloured by its material (rider.ts: cream while cold, burning
  *  with the scarf in the flow). */
 function inkLine(path: Vector3[], r: number): BufferGeometry[] {
-  return tube(path, r * 2.4, r * 2.4, FIN_CREAM, 4);
+  return tube(path, r * 3.2, r * 3.2, FIN_CREAM, 4);
 }
 
 export function sledTrackParts(id: number, tiers: number, lite = false): TrackParts {
@@ -1501,8 +1501,9 @@ export function sledTrackParts(id: number, tiers: number, lite = false): TrackPa
           body.push(...tube(sweep, 0.042, 0.022, C.wood, sides));
           body.push(part(new SphereGeometry(0.05, sides, 4), FIN_CREAM, { pos: [sx * 1.25, 0.6, 1.02] }));
         }
+        body.push(...tube([new Vector3(-0.375, 0.6, 1.02), new Vector3(0.375, 0.6, 1.02)], 0.032, 0.032, FIN_CREAM, sides));
       }
-      if (t >= 2) body.push(...quilt(0.66, 0.5, 0.23, 0.28, lite ? 2 : 4, lite ? 2 : 3));
+      if (t >= 2) body.push(...quilt(0.86, 0.5, 0.23, 0.28, lite ? 2 : 4, lite ? 2 : 3));
       if (t >= 3) body.push(...crestBoard(0.32, 0.2, 0.32, 0.7, lite));
       if (t >= 4) postFrom(0.2, post[2]);
       if (t >= 5) {
@@ -1518,6 +1519,13 @@ export function sledTrackParts(id: number, tiers: number, lite = false): TrackPa
 /** An ornament's parts round its post's top (origin): `body` lit like the sled, `glow` lit from inside (cream-gold
  *  past 1, so the bloom takes it on Medium and up; Low keeps its hue). A lamp has ribs: bands of paper palest at the
  *  waist, a dark cap and foot (ART.md 14). `lite` is Low's: fewer sides. */
+/** Tints a glow part's vertex colours (a lantern's paper in another colour than the helper's warm cream). */
+function tintGlow(g: BufferGeometry, tint: Color): void {
+  const c = g.getAttribute('color') as BufferAttribute;
+  for (let i = 0; i < c.count; i++) c.setXYZ(i, c.getX(i) * tint.r, c.getY(i) * tint.g, c.getZ(i) * tint.b);
+  c.needsUpdate = true;
+}
+
 export function ornamentParts(id: string, lite = false): { body: BufferGeometry[]; glow: BufferGeometry[] } {
   const C = RIDER_COLORS;
   const body: BufferGeometry[] = [];
@@ -1590,7 +1598,8 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       break;
     }
     case 'ch3orn':
-      lantern(0.06, 0.36, 0.26, 5);
+      lantern(0.065, 0.46, 0.31, 5);
+      for (const g of glow) if (g.getAttribute('color')) tintGlow(g, new Color('#D6E6FF'));
       for (const dx of [-0.03, 0.02]) body.push(part(new SphereGeometry(0.022, 5, 4), FIN_CREAM, { pos: [dx, -0.5 - Math.abs(dx), 0.14], scale: [1, 1.8, 1] }));
       break;
     case 'ch4orn': {
@@ -1606,7 +1615,7 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
     case 'ch5orn':
       body.push(lathe([[0.04, 0], [0.1, 0.03], [0.13, 0.12], [0.135, 0.13]], s, new Color('#4A4448')));
       for (const sx of [-1, 1]) body.push(part(new BoxGeometry(0.016, 0.1, 0.016), new Color('#4A4448'), { pos: [sx * 0.07, -0.04, 0] }));
-      glow.push(part(new SphereGeometry(0.11, s, 4, 0, Math.PI * 2, 0, Math.PI / 2), new Color('#FF9A4A').multiplyScalar(1.6), { pos: [0, 0.11, 0], scale: [1, 0.55, 1] }));
+      glow.push(part(new SphereGeometry(0.11, s, 4, 0, Math.PI * 2, 0, Math.PI / 2), new Color('#FFE2A8').multiplyScalar(1.6), { pos: [0, 0.11, 0], scale: [1, 0.55, 1] }));
       break;
     case 'ch6orn': {
       body.push(part(new TorusGeometry(0.17, 0.025, 5, s + 8), C.wood, { pos: [0, 0.22, 0] }));
@@ -1617,10 +1626,19 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       }
       break;
     }
-    case 'ch7orn':
-      body.push(...tube([new Vector3(0, 0, 0), new Vector3(0, 0, 0.1), new Vector3(0.04, -0.12, 0.2), new Vector3(0.06, -0.26, 0.28)], 0.006, 0.006, FIN_INK, 3));
-      for (const [x, y, z] of [[0.0, -0.06, 0.12], [0.04, -0.16, 0.2], [0.06, -0.28, 0.28]] as const) glow.push(part(new SphereGeometry(0.058, s, 5), warm(1.6), { pos: [x, y, z], scale: [1, 1.3, 1] }));
+    case 'ch7orn': {
+      const swag: Vector3[] = [];
+      for (let i = 0; i <= 8; i++) {
+        const k = i / 8;
+        swag.push(new Vector3(-0.62 * k, -0.16 * Math.sin(k * Math.PI) - 0.04 * k, 0.06 + 0.1 * k));
+      }
+      body.push(...tube(swag, 0.008, 0.008, C.woodDark, 3));
+      for (let i = 1; i <= 5; i++) {
+        const p = swag[Math.round((i / 6) * 8)];
+        glow.push(part(new SphereGeometry(0.045, s, 5), warm(1.6), { pos: [p.x, p.y - 0.06, p.z], scale: [1, 1.3, 1] }));
+      }
       break;
+    }
     case 'ch8orn': {
       for (let i = 0; i < 7; i++) body.push(part(new BoxGeometry(0.04, 0.2, 0.006), shade(FIN_CREAM, i % 2 ? 0.88 : 1), { pos: [Math.sin((i / 6 - 0.5) * 2.2) * 0.1, 0.06 + Math.cos((i / 6 - 0.5) * 2.2) * 0.1, 0], rot: [0, 0, -(i / 6 - 0.5) * 2.2] }));
       break;
@@ -2095,7 +2113,7 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
       // past one shoulder, a pom-pom at its end; the tail takes the pom-pom's spring, more toward its tip.
       out.push(dome(), ribbed(0.268, 0.274, 0.095, 0.905), stripe(), seam());
       out.push(part(new TorusGeometry(0.27, 0.018, 4, 18), shade(C.accent, 0.9), { pos: [0, 0.952, 0.01], rot: [Math.PI / 2, 0, 0] }));
-      const path = [new Vector3(0, 1.08, 0.04), new Vector3(0.01, 1.2, 0.18), new Vector3(0.02, 1.22, 0.36), new Vector3(0.03, 1.14, 0.54), new Vector3(0.05, 1.0, 0.68), new Vector3(0.06, 0.84, 0.76)];
+      const path = [new Vector3(0, 1.08, 0.04), new Vector3(0.03, 1.18, 0.17), new Vector3(0.08, 1.18, 0.32), new Vector3(0.15, 1.1, 0.45), new Vector3(0.22, 0.97, 0.54), new Vector3(0.28, 0.82, 0.58)];
       const rad = [0.17, 0.13, 0.1, 0.075, 0.058, 0.045];
       for (let i = 0; i < path.length - 1; i++) {
         const w0 = (i / (path.length - 1)) * 0.9;
@@ -2106,7 +2124,7 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
           return [w0 + (w1 - w0) * t, 0];
         }));
       }
-      out.push(pom(0.065, 0.79, 0.78, 0.085, 1));
+      out.push(pom(0.29, 0.77, 0.59, 0.085, 1));
       flaps();
       goggles();
       out.push(strap());

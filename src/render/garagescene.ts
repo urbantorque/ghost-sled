@@ -470,7 +470,7 @@ export class GarageScene {
     this.momentTier = tier;
     if (this.reduced()) {
       this.finishMoment();
-      this.show(shot, true);
+      this.show(shot === 'hatBack' ? 'hatFront' : shot, true);
       return;
     }
     const g = new Group();

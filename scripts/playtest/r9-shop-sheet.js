@@ -23,9 +23,9 @@ async (page) => {
   // Every look a sheet shoots, by shelf (the key's names are the game's own, garage.ts and paints.ts).
   const SHEETS = {
     hats: ['beanie', 'watch', 'twinpom', 'trapper', 'bobbles', 'chullo', 'longcap', 'muffs', 'downcap', 'twintails', 'floppeak'].map((id) => ({ key: id, look: { hat: id } })),
-    scarves: ['classic', 'creambar', 'chunky', 'tassel', 'inkband', 'snowtip', 'streamer', 'double', 'pomtails', 'rope', 'almanacknot', 'almanacveil'].map((id) => ({ key: id, look: { scarf: id } })),
+    scarves: ['classic', 'creambar', 'chunky', 'tassel', 'inkband', 'snowtip', 'streamer', 'pomtails', 'rope', 'almanacknot', 'almanacveil'].map((id) => ({ key: id, look: { scarf: id } })),
     scarvesFound: ['firchevron', 'fangedge', 'ashmarket', 'petalhem', 'lamproad', ...Array.from({ length: 12 }, (_, i) => `ch${i + 1}scarf`)].map((id) => ({ key: id, look: { scarf: id } })),
-    burn: ['classic', 'creambar', 'inkband', 'double'].map((id) => ({ key: `${id}-flow`, look: { scarf: id, flow: 4 } })),
+    burn: ['classic', 'creambar', 'inkband', 'chunky'].map((id) => ({ key: `${id}-flow`, look: { scarf: id, flow: 4 } })),
     finishes: ['natural', 'pine', 'glacier', 'midnight', 'plum', 'cocoa', 'snow', 'ash', 'gilt', 'almanacdusk'].map((id) => ({ key: id, look: { finish: id } })),
     sleds: [0, 1, 2, 3, 4, 5].map((t) => ({ key: `flyer-${t}`, look: { tiers: t } })).concat([{ key: 'flyer-5-flow', look: { tiers: 5, flow: 4 } }]),
     sledsAll: [0, 1, 2, 3, 4, 5].flatMap((s) => [{ key: `sled${s}-stock`, look: { sled: s, tiers: 0 } }, { key: `sled${s}-5`, look: { sled: s, tiers: 5 } }]),
@@ -34,7 +34,7 @@ async (page) => {
     trailsFound: ['staglights', 'frostfeathers', 'lavadrops', 'papercranes', 'skylanterns', ...Array.from({ length: 12 }, (_, i) => `ch${i + 1}trail`)].map((id) => ({ key: id, look: { trail: id } })),
     outfits: [
       { key: 'a', look: { hat: 'floppeak', scarf: 'pomtails', finish: 'snow', tiers: 4, trail: 'kitetails' } },
-      { key: 'b', look: { hat: 'muffs', scarf: 'double', finish: 'gilt', tiers: 5, trail: 'comet' } },
+      { key: 'b', look: { hat: 'muffs', scarf: 'rope', finish: 'gilt', tiers: 5, trail: 'comet' } },
       { key: 'c', look: { hat: 'downcap', scarf: 'almanacveil', finish: 'midnight', tiers: 2, trail: 'stardust' } },
       { key: 'd', look: { hat: 'trapper', scarf: 'inkband', finish: 'plum', tiers: 0, trail: 'sparks' } },
     ],
