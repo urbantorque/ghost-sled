@@ -45,9 +45,8 @@ const BAY_END = 1.7;
  *  gablefallplan.ts townColumns, lean its face 3 cm either way: a wall in the step's own plane lost its lower half to
  *  the snow's face). Never more than a sled would notice. */
 const PROUD = 0.06;
-/** How far the fascia and the snow's lip stand out from a wall at the eave. */
+/** How far the fascia stands out from a wall at the eave. */
 const FASCIA_OUT = 0.5;
-const LIP_OUT = 0.36;
 
 const C = (h: string): Color => new Color(h);
 /** The houses' plaster: muted, cool-leaning (ART.md 1: no role's colour). */
@@ -112,6 +111,11 @@ const VIADUCT_D = C('#8A8690');
 const GALLERY_UNDER = 10.5;
 /** The old bridge's great arch over the run: half its span, its piers past the quay's limit (13 + 2 m). */
 const BRIDGE_HALF = 15.5;
+
+/** A house's painted woodwork (its shutters, its shop's board, its window boxes). */
+function fascOf(id: number): Color {
+  return SHUTTERS[Math.floor(hash(id, 14) * SHUTTERS.length)];
+}
 
 /** A small deterministic hash, 0..1. */
 function hash(a: number, b: number): number {
@@ -247,7 +251,7 @@ interface Piece3 {
  *  world. */
 function hazeMaterial(): ShaderMaterial {
   return new ShaderMaterial({
-    uniforms: { uHaze: { value: new Color('#CCCAD6') }, uNear: { value: 150 }, uFar: { value: 2600 }, uMax: { value: 0.88 }, uSunDir: shared.uSunDir, uWarm: { value: new Color('#FFB45E') }, uGlowK: { value: 0.7 }, uLight: { value: new Color(1, 1, 1) } },
+    uniforms: { uHaze: { value: new Color('#CCCAD6') }, uNear: { value: 150 }, uFar: { value: 2600 }, uMax: { value: 0.94 }, uSunDir: shared.uSunDir, uWarm: { value: new Color('#FFB45E') }, uGlowK: { value: 0.7 }, uLight: { value: new Color(1, 1, 1) } },
     vertexShader: /* glsl */ `
       attribute vec3 color;
       varying vec3 vCol;
@@ -500,13 +504,9 @@ export class GablefallWorld {
       s.quad([xa, eave(za) - 0.36, za], [xb, eave(zb) - 0.36, zb], [fb, eave(zb) - 0.36, zb], [fa, eave(za) - 0.36, za], SLATE_L, [0, -1, 0]);
       // (Its top, past the snow's lip: from the roofs the eave's edge is a dark line of slate over the drop, so the roof's
       // end is read before it is ridden off.)
-      s.quad([at(za, LIP_OUT - 0.04), eave(za) - 0.04, za], [at(zb, LIP_OUT - 0.04), eave(zb) - 0.04, zb], [fb, eave(zb) - 0.02, zb], [fa, eave(za) - 0.02, za], SLATE, [0, 1, 0]);
-      const la = at(za, LIP_OUT);
-      const lb = at(zb, LIP_OUT);
-      const ra = at(za, -0.05);
-      const rb = at(zb, -0.05);
-      s.quad([ra, eave(za) + 0.04, za], [rb, eave(zb) + 0.04, zb], [lb, eave(zb) - 0.08, zb], [la, eave(za) - 0.08, za], SNOW, [o * 0.3, 1, 0]);
-      if (!low) s.quad([la, eave(za) - 0.08, za], [lb, eave(zb) - 0.08, zb], [lb, eave(zb) - 0.24, zb], [la, eave(za) - 0.24, za], SNOW, out);
+      s.quad([at(za, -0.05), eave(za) - 0.03, za], [at(zb, -0.05), eave(zb) - 0.03, zb], [fb, eave(zb) - 0.02, zb], [fa, eave(za) - 0.02, za], SLATE, [0, 1, 0]);
+      // (The snow ends on the slate: a white lip rounding over the eave read to the third critic as a raised curb along the
+      // roof, a rail to ride.)
       if (!low && front) {
         // Icicles under the fascia: a few thin cones of ice, longer where the eave is in the lee.
         for (let j = 0; j < 3; j++) {
@@ -526,11 +526,37 @@ export class GablefallWorld {
     const nb = Math.max(1, Math.floor((L - 2 * BAY_END) / bay) + 1);
     const span = (nb - 1) * bay;
     const door = front ? Math.floor(hash(id, 3) * nb) : -1;
+    // A shop on the ground floor of some houses (Medium and High): one wide lit window under a dark fascia board with a
+    // pale emblem on it, no word, flush with the front (nothing hangs out over the street where a sled can rise).
+    const shop = front && !low && nb >= 3 && hash(id, 8) < 0.32 ? (door === 0 ? 1 : 0) : -1;
+    if (shop >= 0) {
+      const za = p.z0 + (L - span) / 2 + shop * bay - 0.55;
+      const zb = za + bay + 1.1;
+      const by = c.baseY((za + zb) / 2);
+      const x0 = at(za, 0.03);
+      const x1 = at(zb, 0.03);
+      s.quad([x0, by + 0.75, za], [x1, by + 0.75, zb], [x1, by + 2.4, zb], [x0, by + 2.4, za], LIT, out);
+      for (const k of [1 / 3, 2 / 3]) {
+        const zm = za + (zb - za) * k;
+        const xm = at(zm, 0.045);
+        s.quad([xm, by + 0.75, zm - 0.04], [xm, by + 0.75, zm + 0.04], [xm, by + 2.4, zm + 0.04], [xm, by + 2.4, zm - 0.04], MULLION, out);
+      }
+      const f0 = at(za - 0.2, 0.05);
+      const f1 = at(zb + 0.2, 0.05);
+      const fasc = SHUTTERS[Math.floor(hash(id, 9) * SHUTTERS.length)];
+      s.quad([f0, by + 2.5, za - 0.2], [f1, by + 2.5, zb + 0.2], [f1, by + 3.05, zb + 0.2], [f0, by + 3.05, za - 0.2], fasc, out);
+      const zc = (za + zb) / 2;
+      const ex2 = at(zc, 0.065);
+      s.quad([ex2, by + 2.6, zc], [ex2, by + 2.775, zc - 0.22], [ex2, by + 2.95, zc], [ex2, by + 2.775, zc + 0.22], SURROUND, out);
+    }
     for (let b = 0; b < nb; b++) {
+      // (The shop's bays have no windows of their own.)
+      const inShop = shop >= 0 && (b === shop || b === shop + 1);
       const zc = p.z0 + (L - span) / 2 + b * bay;
       const by = front ? c.baseY(zc) : c.baseY(zc) + LANE;
       for (let st = 0; st < STOREYS.length; st++) {
         if (!front && hash(id + b, st + 11) < 0.4) continue;
+        if (inShop && st === 0) continue;
         const [y0, y1] = STOREYS[st];
         if (st === 0 && b === door) {
           const d0 = at(zc - 0.6, 0.03);
@@ -575,6 +601,13 @@ export class GablefallWorld {
             s.quad([f0, by + y0, zc - 0.3], [f0, by + y0, zc + 0.3], [f0, by + y0 + 0.5, zc + 0.24], [f0, by + y0 + 0.5, zc - 0.24], DARK, out);
             s.quad([f0, by + y0 + 0.5, zc - 0.12], [f0, by + y0 + 0.5, zc + 0.12], [f0, by + y0 + 0.78, zc + 0.1], [f0, by + y0 + 0.78, zc - 0.1], DARK, out);
           }
+        }
+        if (!low && front && st === 1 && hash(id + b, 23) < 0.35) {
+          // A window box under it, its snow on top.
+          const k0 = at(zc - 0.55, 0.16);
+          const k1 = at(zc + 0.55, 0.16);
+          s.quad([k0, by + y0 - 0.32, zc - 0.55], [k1, by + y0 - 0.32, zc + 0.55], [k1, by + y0 - 0.06, zc + 0.55], [k0, by + y0 - 0.06, zc - 0.55], fascOf(id), out);
+          s.quad([k0, by + y0 - 0.06, zc - 0.55], [k1, by + y0 - 0.06, zc + 0.55], [k1, by + y0 + 0.04, zc + 0.55], [k0, by + y0 + 0.04, zc - 0.55], SNOW, out);
         }
         if (!low && lit && st === 0 && front) {
           // A lit window's sill holds a little snow.
@@ -1223,12 +1256,13 @@ export class GablefallWorld {
     }
     // The line: four rows of big ink and cream checks across the run's ice under the bridge (ART.md 12's line).
     const hwL = c.halfWidth(fz);
+    // (Each check twice as long down the run as across, so the lens sees them square: ART.md 12.)
     const sq = 1.1;
     const nq = Math.floor((hwL * 2) / sq);
     for (let row = 0; row < 4; row++) {
       for (let i = 0; i < nq; i++) {
-        const za = fz + row * sq;
-        const zb = za + sq;
+        const za = fz + row * sq * 2;
+        const zb = za + sq * 2;
         const pt = (dd: number, zz: number): V3 => {
           const x = c.centerX(zz) - hwL + dd;
           return [x, c.ground(x, zz) + 0.035, zz];
@@ -1258,7 +1292,7 @@ export class GablefallWorld {
       folk.push({ x, y: c.baseY(z) + QUAY_TOP + 0.12, z: -z, face: 1, coat: coats[k % coats.length], hat: hats[(k * 5) % hats.length] });
     }
     if (folk.length) {
-      const m = new Mesh(stillCrowd(folk, 'gablefall', low ? LOW_BOLD : 1), this.mat);
+      const m = new Mesh(stillCrowd(folk, 'gablefall', low ? LOW_BOLD * 1.1 : 1.2), this.mat);
       m.name = 'onlookers';
       m.castShadow = false;
       m.receiveShadow = true;
@@ -1298,27 +1332,28 @@ export class GablefallWorld {
         s.quad([xa, hill(xa, za), za], [xb, hill(xb, za), za], [xb, hill(xb, zb), zb], [xa, hill(xa, zb), zb], SNOW_FAR, [0, 1, -0.2]);
       }
     }
-    // The town's other half on the hill's lower slopes: terraces along the contours, each a long block under one roof with
-    // a cross gable here and there, stepping up from the river and breaking as they climb. (House by house at that
-    // distance they read to the second critic as speckle; a terrace is one shape with a roofline.)
-    const rowsN = low ? 4 : 6;
+    // The town's other half on the hill's lower slopes: houses packed shoulder to shoulder along the contours, stepping up
+    // from the river, the rows thinning and breaking as they climb. (Scattered one by one they read as dice thrown on the
+    // snow; as long terraces under one roof, to the third critic as pale unfinished slabs; packed, in the haze, as a town.)
+    const rowsN = low ? 4 : 7;
     for (let j = 0; j < rowsN; j++) {
-      const z = fz + 570 + j * 52 + hash(j, 110) * 10;
+      const z = fz + 560 + j * 46 + hash(j, 110) * 10;
       const span = 700 + j * 120;
       for (let x = cx - span, i = 0; x < cx + span; i++) {
         const id = j * 1000 + i;
-        const len = 40 + hash(id, 113) * 70;
-        const xc = x + len / 2;
-        x += len + 10 + hash(id, 119) * (20 + j * 18);
-        const y = Math.min(hill(xc - len / 2, z), hill(xc + len / 2, z));
-        const d = 10 + hash(id, 114) * 3;
-        const H = 7 + hash(id, 115) * 3;
+        const w = 7 + hash(id, 113) * 6;
+        const xc = x + w / 2;
+        x += w + (hash(id, 119) < 0.12 + j * 0.06 ? 6 + hash(id, 120) * 30 : 0.4 + hash(id, 121) * 1.5);
+        if (low && i % 2) continue;
+        const zz = z + (hash(id, 122) - 0.5) * 6;
+        const y = hill(xc, zz);
+        const d = 8 + hash(id, 114) * 4;
+        const H = 6 + hash(id, 115) * 4;
         const wall = WALLS_FAR[Math.floor(hash(id, 116) * WALLS_FAR.length)];
-        s.box(xc, y - 4, z, len, H + 4, d, wall, 0, false);
-        s.gable(xc, y + H, z, d, len, d * 0.6, 0.3, SNOW_FAR, wall, Math.PI / 2);
-        if (!low && hash(id, 117) < 0.6) s.gable(xc + (hash(id, 118) - 0.5) * len * 0.6, y + H, z - 1, 8, d + 2, 5, 0.3, SNOW_FAR, wall, 0);
-        // A few lit windows along its face toward the run.
-        for (let k = 0; k < len / 9; k++) if (hash(id + k, 123) < 0.3) s.quad([xc - len / 2 + 4 + k * 9, y + 2, z - d / 2 - 0.05], [xc - len / 2 + 5.6 + k * 9, y + 2, z - d / 2 - 0.05], [xc - len / 2 + 5.6 + k * 9, y + 3.6, z - d / 2 - 0.05], [xc - len / 2 + 4 + k * 9, y + 3.6, z - d / 2 - 0.05], LIT, [0, 0, -1]);
+        s.box(xc, y - 3, zz, w, H + 3, d, wall, 0, false);
+        const across = hash(id, 117) < 0.35;
+        s.gable(xc, y + H, zz, across ? d : w, across ? w : d, (across ? d : w) * 0.6, 0.3, SNOW_FAR, wall, across ? Math.PI / 2 : 0);
+        if (hash(id, 118) < 0.4) s.quad([xc - 0.6, y + 2, zz - d / 2 - 0.05], [xc + 0.6, y + 2, zz - d / 2 - 0.05], [xc + 0.6, y + 3.3, zz - d / 2 - 0.05], [xc - 0.6, y + 3.3, zz - d / 2 - 0.05], LIT, [0, 0, -1]);
       }
     }
     // Its church, its spire over the roofs.
@@ -1429,8 +1464,8 @@ export class GablefallWorld {
     (this.haze.uniforms.uLight.value as Color).copy(p.snowLit);
     this.haze.uniforms.uGlowK.value = 0.45 + 0.4 * lampK;
     // The lamps' light on the snow by them: a street of soft amber pools with the grey between, stronger as the day goes.
-    const pool = 0.12 + 0.16 * Math.max(0, Math.min(1, (lampHour - 0.4) / 1));
-    for (const [x, y, z, r] of this.lamps) if (z > s.z - 20 && z < s.z + 120) pushLocalLight(x, y, -z, LAMP_LIN.r, LAMP_LIN.g, LAMP_LIN.b, r * 0.8, pool);
+    const pool = 0.1 + 0.12 * Math.max(0, Math.min(1, (lampHour - 0.4) / 1));
+    for (const [x, y, z, r] of this.lamps) if (z > s.z - 20 && z < s.z + 120) pushLocalLight(x, y, -z, LAMP_LIN.r, LAMP_LIN.g, LAMP_LIN.b, r * 0.6, pool);
     // (A step under the sky's own grey, so it reads against it: in the clouds' pale it did not show at all.)
     (this.smokeMat.uniforms.uLit.value as Color).copy(p.fog).lerp(p.snowShade, 0.2);
     (this.smokeMat.uniforms.uShade.value as Color).copy(p.snowShade).lerp(p.snowDeep, 0.25);

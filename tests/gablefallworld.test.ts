@@ -72,7 +72,7 @@ describe("Gablefall's ground", () => {
     expect(pavedAt(c, 400)).toBe(1);
     expect(pavedAt(c, placesOf(c).quay + 40)).toBe(0);
     expect(riverAt(c, placesOf(c).quay)).toBe(0);
-    expect(riverAt(c, c.finishZ)).toBe(1);
+    expect(riverAt(c, c.finishZ)).toBeGreaterThan(0.6);
   });
 });
 

@@ -106,7 +106,8 @@ export function pavedAt(c: Course, z: number): number {
 /** How much of the corridor at sim z is the river's ice (0..1): from where the quay's ice begins (gablefall.ts RIVER_ICE,
  *  20 m into the quay) on, drawn as the frozen lake is (materials.ts), black ice with blown snow lying toward its banks. */
 export function riverAt(c: Course, z: number): number {
-  return smooth01((z - placesOf(c).quay - 16) / 14);
+  // (Most of it: wholly a mirror, the beams over the line lay long streaks on it toward the lens.)
+  return 0.72 * smooth01((z - placesOf(c).quay - 16) / 14);
 }
 
 /** The street's share across at `adx` metres from its middle: the cobbles, to a little short of their edge. */

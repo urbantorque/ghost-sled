@@ -1666,6 +1666,8 @@ export function makeSnowMaterial(track = false, street = false): ShaderMaterial 
             float wornN = vnoise(vec2(cu * 0.42, cv * 0.11) + 2.3) * 0.6 + vnoise(vec2(cu * 1.1, cv * 0.37) + 7.1) * 0.4;
             // (In scuffed patches only, a sixth of the street: a whole floor of setts read to the first critic as graph paper.)
             float worn = smoothstep(0.66, 0.9, wornN) * (1.0 - smoothstep(2.0, 3.6, abs(cu)));
+            // (Never right under the lens, where a sett is a hand across and their joints rule the frame's foot as a grid.)
+            worn *= smoothstep(5.0, 10.0, dist);
             // (Setts laid by hand in arcs across the street, each row its own depth and stagger, each stone its own width and
             // rounded, the snow lying in wide joints between them: stones, never a ruled grid.)
             cv += 0.55 * (1.0 - cos(clamp(cu, -4.0, 4.0) * 0.55));

@@ -392,7 +392,8 @@ function biomeBase(biome: BiomeId): Palette {
       p.lowLit = c('#7A7C94');
       // (The props' accent is a painted door's deep green, never the rider's vermillion.)
       p.accentProp = c('#2E4A4E');
-      p.ridge = [c('#D0CEDA'), c('#B4B4C8'), c('#9696B0')];
+      // (A step deeper each than the sky's pale: a pale range on a pale sky left the third critic no far plane.)
+      p.ridge = [c('#C2C0D0'), c('#A2A2BA'), c('#82829E')];
       p.massif.peak = 'hills';
       p.massif.rock = c('#6A6880');
       p.massif.sea = 0;
@@ -1065,7 +1066,7 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       // The snow cloud: a pale ceiling of soft billows over the whole sky, a little lighter low toward the hidden sun.
       p.deck = { k: 0.62, lit: c('#B4B2C6'), shade: c('#7E8098'), glow: c('#D8D0D0'), edge: 0 };
       p.clouds = { low: 0.25, high: 0, top: 0.15, lit: c('#E6E2E8'), shade: c('#9496AE'), rim: c('#EEE6E4'), shadow: 0 };
-      p.grade = { lift: c('#0E1028'), gain: c('#FFF8F4'), saturation: 1.02, contrast: 1.16, grain: 0.8, foot: 0.32, shafts: 0, lens: 0.2, focal: 0.5, gust: 0, glitter: 0.18 };
+      p.grade = { lift: c('#0C0E26'), gain: c('#FFF8F4'), saturation: 1.02, contrast: 1.16, grain: 0.8, foot: 0.32, shafts: 0, lens: 0.2, focal: 0.5, gust: 0, glitter: 0.18 };
       p.poster.shafts = 0;
       Object.assign(p.poster, { rim: 0.35, bands: 3, stripe: 0, rings: 0 });
       p.atmo = { rays: 0, halo: 0, meteors: 0, banner: 0, slide: 0, sweep: 0, valley: 0.6, valleyColor: c('#D4D0DA'), drift: 0.45 };
@@ -1073,7 +1074,7 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.shadowK = 0.7;
       p.bloom = 0.34;
       // (A steady fall, not a storm: heavier, its big flakes at the lens read to the critics as smudges on the glass.)
-      p.snowfall = 0.52;
+      p.snowfall = 0.42;
       p.sparkle = 0.45;
       return;
     case 'alpine':
@@ -1701,7 +1702,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.fog = c('#C4C2D0');
         p.skyZenith = c('#62667E');
         p.skyMid = c('#9294AE');
-        p.snowfall = 0.66;
+        p.snowfall = 0.55;
         p.lamps = 0.65;
         p.massif.veil = 0.7;
         p.sunGlow = 0.45;
@@ -1720,7 +1721,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyHorizon = c('#E6E2E2');
         p.deck.lit = c('#C8C6D6');
         p.deck.glow = c('#ECE4DE');
-        p.snowfall = 0.4;
+        p.snowfall = 0.34;
         p.lamps = 0.5;
         p.massif.veil = 0.4;
         // (The cloud breaks over the river: a pale silver-gold sun through the gap, the shadows firm, the snow thinning.)
