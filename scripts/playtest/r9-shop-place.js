@@ -45,7 +45,15 @@ async (page) => {
   });
   await page.evaluate(() => window.__gs.applyLook());
   // The way in: the title's Garage door (the app's own path; the title is the ui lane's).
-  await page.evaluate(() => window.__gs.openGarage());
+  // (Focused first, as a keyboard player's would be, so the close can be seen to hand focus back to it.)
+  const door = await page.$('[data-fk="sleds"]');
+  if (door) {
+    await door.focus();
+    await page.keyboard.press('Enter');
+  } else {
+    errors.push('missing: the title Garage door');
+    await page.evaluate(() => window.__gs.openGarage());
+  }
   await page.waitForFunction(() => window.__gs.garageCost && window.__gs.garageCost.firstFrameMs > 0, null, { timeout: 60000 });
   out.cost = await page.evaluate(() => ({ ...window.__gs.garageCost, heapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null }));
   await wait(1500);
@@ -118,5 +126,15 @@ async (page) => {
   await wait(1200);
   await shot('closed');
   out.closeCost = await page.evaluate(() => ({ phase: window.__gs.phase, open: !!window.__gs.garagePlace, focus: document.activeElement ? document.activeElement.dataset.fk || document.activeElement.tagName : null }));
+  // The results' "Ready in the shop" path: the garage opened at a piece (the Comet Bob), then closed by its Back button.
+  await page.evaluate(() => window.__gs.openGarage('sled:3'));
+  await wait(2200);
+  await shot('at-piece');
+  out.atPiece = await page.evaluate(() => {
+    const on = document.querySelector('.gs-gar-tile[aria-pressed="true"]');
+    return { tab: (document.querySelector('.gs-gar-tab.is-on') || {}).textContent || null, picked: on ? on.dataset.fk : null };
+  });
+  await click('[data-fk="close-garage"]');
+  await wait(1000);
   return JSON.stringify(out);
 }

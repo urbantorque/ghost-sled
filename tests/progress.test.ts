@@ -214,8 +214,10 @@ describe('next unlock', () => {
   it('moves from the next mountain to the next sled to nothing', () => {
     expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 2 })).toEqual({ kind: 'mountain', name: 'Frostfang Glacier', biome: 'glacier', have: 2, need: 4 });
     expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 13 })).toEqual({ kind: 'mountain', name: 'Sakura Ridge', biome: 'blossom', have: 13, need: 24 });
-    expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 60, gifts: 50 })).toEqual({ kind: 'sled', name: 'Whirl Saucer', gifts: 70 });
-    expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 60, gifts: 500, ownedSleds: [0, 1] })).toEqual({ kind: 'sled', name: 'Lodge Toboggan', gifts: 0 });
+    // (Round 9: the garage's prices, and the Whirl Saucer is the Almanac's, never the shop's.)
+    expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 60, gifts: 50 })).toEqual({ kind: 'sled', name: 'Lodge Toboggan', gifts: 250, price: 300, piece: 'sled:2' });
+    expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 60, gifts: 500, ownedSleds: [0, 1] })).toEqual({ kind: 'sled', name: 'Lodge Toboggan', gifts: 0, price: 300, piece: 'sled:2' });
+    expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 60, gifts: 500, ownedSleds: [0, 2] })).toEqual({ kind: 'sled', name: 'Comet Bob', gifts: 100, price: 600, piece: 'sled:3' });
     expect(nextUnlock({ ...defaultSave('A'), ghostsPassed: 60, ownedSleds: [0, 1, 2, 3, 4, 5] })).toBeNull();
   });
 });
