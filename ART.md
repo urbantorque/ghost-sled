@@ -1146,6 +1146,44 @@ stays the dark shape in the street.
   the kilometre pillars carry string courses and a graded paper head; the bridge of lights' piers carry a lantern storey
   and a slot of light; the FINISH board is lilac paper.
 
+### The Old Run: a winter afternoon on the old ice track (new in round 9)
+
+- **Feeling.** An old resort's afternoon: the grand hotel's track cut down a bare wood, ridden high on its banked ice
+  while the sun goes down over the lake below. It ends in the first blue of evening, the lamps lit.
+- **How it rides.** The walls carry a sled round each bend at the height its speed settles it: a fast rider sits high
+  on the glaze, which is faster still; a slow one sinks into the floor's slush. Riding the glaze is the line, the floor
+  the safe and slower way.
+- **Colour script.** A low late sun ahead and to the left through the wood, a soft disc over a slate-blue sky; cream
+  snow, slate-lavender shade, the ice a step cooler.
+
+  | Metres | Place | Light and grade |
+  | --- | --- | --- |
+  | 0 to 160 | The start house and the hotel | Late gold on the hotel's facade, the track leaving the start house's dark mouth. |
+  | 160 to 950 | The Hotel Straights | Low sun through the bare wood: bars of trunk shadow across the ice, the glaze catching it. |
+  | 950 to 1950 | The Labyrinth | The deepest walls hold the shade; the light on the high glaze and the crests, the lamps telling. |
+  | 1950 to 2880 | The Horseshoe | The sun sets in rose over the lake far below; the far ridges lit along their crests. |
+  | 2880 to the line at 3000 | The outrun | The first blue of evening under an amber band; the lamps and the timing house's windows the light. |
+
+- **What it is not.** No hero peak at the end of the track and no sea of cloud: low wooded ridges round a lake of open
+  water far below. No pine: a bare wood of beeches and birches, lace against the sky. No grandstands, no square, no
+  arch: a timing house with its clock at the line.
+- **The track.** Ice from wall to wall, polished blue-white with rime, a clear heart and bubbles; the glaze a deep
+  clear band high on each bend's outside wall exactly where the sim lays it, cool, a frost-white hairline at its edges,
+  never warm or long (a warm band reads as gold-white's line); the slush dull in a bend's floor. Past the lip a crest of
+  snow and a timber rail, never rock; iron lamps on it the length of the run.
+- **Architecture and people.** The grand hotel down the start straight: cream render, green shutters, slate mansards
+  with dormers, a glazed veranda, two spired towers on a terrace. The start house a timber shed with a bell turret; the
+  timing house a clock tower with a low hipped cap and an open cupola (a pointed cap reads as Pinecrest's steeple).
+  Onlookers in the resort's greatcoats and hats, still, on the terrace, the crests and in two stands at the Horseshoe.
+- **Its other hour: by Lamplight.** A half moon, the lamps' soft wash on the ice in a pale warm white (silver pools are
+  Lanternfall's alone), the hotel's windows lit and spilling on the snow, snow falling through the lamplight from the
+  Labyrinth on.
+- **The set pieces as light.** The bells bronze, the next breathing, a rung one swinging and lighting the wall; the
+  Labyrinth's dial sweeping its split, its lamp marigold while the rider is up on it; the Horseshoe's lanterns lighting
+  down the hook with the hold.
+- **Low** is a poster of it: spikes for twigs, one rail, the places drawn only within reach; on a held Low run about
+  Pinecrest's GL calls, under them in the Labyrinth.
+
 ### Tiers, designed
 
 - **Ultra and High** carry the whole direction: the shafts, the scatter, the ambient occlusion, the reflections.

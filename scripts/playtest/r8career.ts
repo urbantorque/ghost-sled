@@ -1125,7 +1125,9 @@ function nearGoals(M: Mods, d: Any, hist: CareerRun[], at: { today: string; week
     if (np) {
       const xs = recent.map((r) => r.xp).sort((a, b) => a - b);
       const per = xs.length ? xs[(xs.length - 1) >> 1] : 0;
-      out.push({ kind: 'page', text: np.label, reachable: per > 0 && np.need <= per, gap: np.need, names: [np.label] });
+      // (Round 9: the game says a page as Rider Rank, "Rider Rank 15" where rank.ts's label still says "Page 15"; the
+      // goal is the same, so either name is the button naming it.)
+      out.push({ kind: 'page', text: np.label, reachable: per > 0 && np.need <= per, gap: np.need, names: [np.label, `Rider Rank ${np.page}`] });
     }
   }
   // Contracts (today's not met, and the form contract): in reach when one of the last runs met the measure.

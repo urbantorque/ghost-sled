@@ -4531,3 +4531,57 @@ straight through.
     - ART.md 10 takes the lane's text: no name or feeling line under the logo, the title's one job at a time, Ride's
       reason, the rooms, the results' three beats, one system of tokens; photo and Save Clip from the results' Photo and
       Details; the Trial in the Daily and Cup room.
+
+397. **The Old Run built and merged** (`r9-oldrun`, 7387799 to 13b45ff, 22 commits, merged at b55e21b;
+    `notes/r9-oldrun.md`, `notes/r9-oldrun-world.md`).
+    - *Why the glaze cost time:* the bank turned the sled's nose and the runners turned its motion after it, so a sled
+      riding the wall at its settling height slipped through a bend as a sled steered round it on the floor did; the
+      groundwork's test hand popped at every correction; its bends lasted under a second; the run was slow (0.17); the
+      walls were the wrong height for their radius; the glaze was hardly faster than the wall under it. A softer
+      `wallYaw` (0.6 to 0.85 of it) changed nothing that mattered.
+    - *What changed, track only:* `TRACK_BANK` (the bank turns the motion as well as the nose: a sled at its settling
+      height turns for free, one held above or below it pays a steered turn's slip); turns that hold their radius
+      through their middle half (bends 40% of the run's length, from 29%); a 0.28 grade from a 0.36 start house of its
+      own kind; walls 420 / R m; the glaze's drag 0.25 over 0.4 to 0.9 of the wall, track ice 0.45, slush 1.3; the lab's
+      skilled pilots and the bot hold a height on the wall, not a heading. The five's fingerprint held at every commit.
+    - *The bar, every line met:* the mid pilot 89.6 s at 35.8 m/s (127 s at 25 before), its glaze line 17% faster through
+      the bends than its own hands on the floor line; the expert 61% and the bot at 0.9 62% of their bend time on the
+      glaze (36% and 3% before); the novice 6 of 6 and a sled let go finish unhurt on the slower line; the clumsy pilot
+      30 of 30; no fall but a pop's flight landed badly. Three lines of it are promises in `tests/oldrun.test.ts`. New
+      against the five on 5 of 6 measures, 4 by 15% (83.7 s, no air, 15.6 m wide, no hazards, as `r9-courses.ts` rides
+      it with lanterns and charms); its wall in play for 43% of the mid pilot's run.
+    - *A mountain:* `MOUNTAINS[5]`, appended, id `oldrun`, seed 0x9b05688c (the lab's; no Daily's or Cup's to 2040),
+      opening at 18 ghosts; its own look (`BiomeId 'oldrun'`), out of `BIOMES`; the light storm and the spirit train only;
+      three set pieces on appended verbs (`peal` the Bend Bells, `split` the Labyrinth, `glaze` the Horseshoe), two
+      legends (The Ghost Bob, The Ballroom Night), three home riders (Count Orsolo, Gus Fennick, Lotte Bell; never a
+      duel, The Twelve stays twelve) with a star each on its mastery board; its first run laid round 92 s; a pool of 49,
+      78 to 101 s; a galop in A major at 152 for a hotel band, 4.7 MB on the desk and 2.4 to 2.9 MB on Low and phones,
+      its three stingers its own. The whole score was built again for it: every pack's stamp changed, the five's music,
+      stingers and levels did not.
+    - *Its world:* an ice track with the glaze painted where the sim lays it, a crest of snow and a timber rail past the
+      lip, a bare wood of beeches and birches, low ridges round a lake and its town, the grand hotel, the start house and
+      a timing house with its clock at the line, a low sun setting over the lake; by Lamplight its other hour. Two fresh
+      blind critics sorted its five greyscale frames together and apart from the five's ("matches none of the five
+      mountains in ART.md"); the critic loop ran two rounds, the second choosing the new frames in 11 of 12 pairs. Low on
+      a held run: 371.7 GL calls a frame on the Hotel Straights against Pinecrest's 351.9 (6% over), 376.2 in the
+      Labyrinth against 414.2 (9% under).
+    - *The main lane's calls on the lane's questions:* the pool's narrow spread (p90/p10 1.15 against the five's 1.28 to
+      1.30: nothing floors a weak rider) is kept as the Old Run's character, close racing on a forgiving track, until a
+      person has ridden it; every new mountain's hour and mirror open the same way in phase C's wiring (its hour on an
+      Almanac page of its own, its mirror when its home riders are beaten to the line), the five's as they are;
+      `BIOME_PARAMS.oldrun.slope` (0.17, a get-up's push and some far reads) goes to the track's 0.28 in phase C with
+      its pool generated again and the bar ridden again; the grade stays 0.28 (the plain mid pilot is inside the
+      concept's window, quicker with lanterns and charms); bends at 40% of the run are accepted (a fourth Labyrinth bend
+      cost the glaze); the charm gate at 110 m behind the rider's head at the opening is left for the feel pass, since
+      `START_GATE_Z` is every mountain's; the first run's thin floor margin (a run that does nothing is fourth at 93.6 s
+      against the third rider's 91.1) is kept and checked in the hand ride.
+    - *Short, carried to phase C:* a pale band across the near wall in a wall ride, the terrain's own shading, cause not
+      found (seen in the day, Low and Lamplight frames); Low's runner lines converging down the track; photo mode and Save
+      Clip on the Old Run not opened in a browser (a test cuts a pool run's reel and clip); its sky in the ui lane's
+      `screens.css`.
+    - *Merged clean* (no conflicts) on top of the title and results. tsc clean; the full suite after the merge: 112
+      files, 2,011 of 2,012. Round 8's "one run away" bar missed run 17 of the mid pilot's career: the button named
+      "Rider Rank 15" (the round's words) where the career harness still named the goal "Page 15" from `rank.ts`; the
+      Old Run's career changes only moved which goal led on that run. The harness now takes either name
+      (`r8career.ts`) and the bar holds 30 of 30; the game is unchanged.
+    - Nobody has ridden it by hand, and nobody has listened to its score. ART.md 15 takes the world's text.
