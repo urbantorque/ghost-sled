@@ -50,7 +50,8 @@ burn), `render/trailforms.ts` (new: `render/trails.ts` already holds the ruts). 
    lights the snow behind (a local light on Medium and High; Low paints its pool). The Keeper's Lantern the same.
 5. **Hats** told apart by outline from behind (below, and the critics).
 6. **Scarf forms big enough to read.** The ribbon is three vertices across, so a pattern runs across it; four forms
-   (two tails; one long and one short; four, now only the Midsummer Ribbons' since the Double Wrap's cut; one rope); ends that weigh the tips; the burn keeps the knit.
+   (two tails; one long and one short; four slim ribbons, the
+   Midsummer Ribbons' since the Double Wrap's cut; one rope); ends that weigh the tips; the burn keeps the knit.
 
 ### The critics
 
@@ -174,14 +175,56 @@ broader; the Thaw Lantern tall in thaw-blue paper, the Lantern String a garland 
 cream-gold; Lantern Sparks doubled; Drip Lights and Icicle Chimes bigger; Market Ribbons cream bows fluttering; Hollow
 Lights' edge cream.
 
-TODO-R5
+**Round 5** (after round 4's fixes and cuts, fresh critics, the last round):
+
+- Hats: Flop Peak and Long Knit Cap (two stocking caps with poms, told only by their lean), Bobble Hem and Watch Cap
+  (the ink bobbles vanish into the hair). The Pom Muffs' head reads as mostly hair.
+- Shop scarves: Fringe Knit and Long Streamer (the fringe is hairlines at that size), Ink Bands and Chunky Rib (red
+  with dark lines). The Almanac Knot a stub; Pom Tails' poms snowballs on the deck; Snow Tip's dipped end a fade.
+- Found scarves: Fir Chevron and Sunrise Bars; Hollow Stitch, Crescent Knit and Fang Edge (three pairs: soft dark
+  blotches); Folded Fan and Drip Hem. Three tiles were shot mid-flip again.
+- Burn: Ink Bands and Classic one gradient; only Cream Bar's bars survive the flame.
+- Finishes: Basalt Hex and Snowfield Frame, Burnt Scroll and Gilt Scroll, Natural and Almanac Pages.
+- Sleds: **tier I is now told from the stock sled** (the push bar shows on every tile); tiers I and II, and IV and V,
+  only by the pad and the inlay. **Every stock and built-up sled told apart** again (two of the six by the lantern
+  alone); the built-up sleds told from each other by their hulls.
+- Ornaments: Sun Disc and Paper Fan (two lilac shapes), Lantern Star and Paper Crane (pale on snow), the Lantern
+  String against a bare post.
+- Shop trails: Lantern Sparks against Fresh Powder, Petal Drift and Paper Streamers (the sparks still too few). Found
+  trails: Drip Lights, Snowballs and Icicle Chimes (three pairs, too faint), Blossom Pops and Market Ribbons, Paper
+  Cranes and Sun Motes; six found trails near-copies of shop ones.
+- The outfit critic: hats rightly described four of four (the Flop Peak "a tall pointed stocking cap, like an elf's",
+  the Down Cap's stacked rings, the Trapper, the Pom Muffs); scarves three of four (Ink Bands; the Rope Braid "the
+  widest and longest, with paler diamond cells"; the Night Veil's narrow plain tails; the Pom Tails' poms seen as a
+  cream ball on the sled again); the added parts on the two built-up sleds named (a lantern on the rear corner, the
+  push bar as a striped post, the arched bow), the stock sled rightly bare, the two-tier sled's push bar missed;
+  trails four of four (bunting, stars, gold motes, two marigold ribbons). Easiest to confuse: the Down Cap rider and
+  the Trapper rider, both a round red hat with a white band on a plain cool sled.
+
+**Cut after round 5:** the Flop Peak and Gilt Scroll (both new this round; the pair each failed in goes with them).
+Not judged again after those cuts.
+
+**Where the bars stand at the end** (round 5, with the two cuts):
+
+- **A stock and an upgraded sled told apart in a chase still: met** (six of six in rounds 4 and 5).
+- **What the rider wears named from a chase still: met for hats, trails and the sled's added parts, not quite for
+  scarves** (three of four each round; a scarf's end pieces, the Pom Tails' poms and the Night Veil's lamps, are read
+  as something on the sled).
+- **Every pair on a shelf told apart: not met.** Still failing at round 5 (each pair below is two pieces a save may
+  already hold, or a decided piece, so the lane did not cut them; section 11 says what to do): hats Bobble Hem and
+  Watch Cap; scarves Fringe Knit and Long Streamer, Ink Bands and Chunky Rib, and five found-scarf pairs; finishes
+  Basalt Hex and Snowfield Frame, Natural and Almanac Pages; tiers I and II, IV and V; ornaments Sun Disc and Paper
+  Fan, Lantern Star and Paper Crane, the Lantern String unseen; shop trails three pairs, all Lantern Sparks; found
+  trails five pairs. The rounds also show the pairs move: each fix that separated one pair made another (Chunky Rib
+  left Ink Bands in round 3 and returned in round 5; the finishes' grey trio became three new pairs). At race size a
+  piece shows one big feature, and the shelves hold more pieces than there are features to give them.
 
 ## 2. The model (src/game)
 
 - `garage.ts`: every shelf's pieces with their source (free, shop, an Almanac page, a mountain's set, a month's
-  chapter) and their looks: 11 hats, 28 scarves (9 shop and free, 2 Almanac, 5 sets, 12 chapters), 29 trails (9 and
+  chapter) and their looks: 10 hats, 28 scarves (9 shop and free, 2 Almanac, 5 sets, 12 chapters), 29 trails (9 and
   free, 3, 5, 12), 18 ornaments (the lamp, 5 sets, 12 chapters), the audio lane's 5 sounds; `SETS`, `onSale`,
-  `sourceLine`, `setPiecesFor`, `chapterPieces`. `paints.ts`: the finishes (10 on the shelf; round 8's twelve chapter
+  `sourceLine`, `setPiecesFor`, `chapterPieces`. `paints.ts`: the finishes (9 on the shelf; round 8's twelve chapter
   paints kept for a save that holds one). `tracks.ts` (new): the sleds' garage prices and signatures, the tiers, the
   lines, `creditLines`, `fitTier`, `giveTiers`, `tierState`.
 - **Lines credited after the run** (`app.ts settleShop`, after mastery in the results' settle): the stage lines the
@@ -202,7 +245,7 @@ TODO-R5
   `glints` Gold Leaf, `cocoa` Burnt Scroll, `snow` Snowfield Frame, `ash` Basalt Hex,
   `almanacdusk` Almanac Pages); round 8's chapter paints stay wearable; the new save fields are optional and
   sanitised; an old save loads whole (`tests/shop.test.ts` "the garage on an old save"). A save that held a cut piece
-  (the Crest Knit, the Double Wrap, Racing Stripe) cannot exist: each was new this round.
+  (the Crest Knit, the Flop Peak, the Double Wrap, Racing Stripe, Gilt Scroll) cannot exist: each was new this round.
 
 ## 3. The looks in render, and what they cost on Low
 
@@ -229,13 +272,14 @@ interleaved; frames to `shots/r9/shop/glv/`):
 | This lane, stock rider (two passes) | 447.4, 446.5 | 44.3, 44.3 | 211.6, 211.3 | 2,127, 2,126 |
 | Pom Tails, four tiers and the lamp, Paper Snow | 454.4 (+7) | 45.4 | 213.7 | 2,162 |
 | Almanac Knot, three tiers, Comet Tail | 461.3 (+14) | 46.2 | 213.5 | 2,159 |
-| Double Wrap, Flop Peak, Snowfield, all five tiers and the lamp, Kite Tails | 468.8 (+21, +4.7%) | 47.4 | 219.9 | 2,252 |
+| Double Wrap, Flop Peak, Snowfield, all five tiers and the lamp, Kite Tails (since cut: the first two) | 468.8 (+21, +4.7%) | 47.4 | 219.9 | 2,252 |
 
 A stock rider costs what it did (the scarf's three-across ribbon, its ends and patterns are the same one draw). What a
 dressed rider adds is by design and bounded: the lamp's paper and the inlay are one draw each, a trail's form one or
 two (instanced flakes; ribbons; kite bows and their lines), and a four-tailed scarf one more (the Midsummer Ribbons, since
-the Double Wrap's cut). The worst dressing measured is 21 calls a frame on Low, under 5%. (The dressed run was measured before the
-Double Wrap's cut, with the Snowfield finish's chequer since changed to a frame; neither changes a draw.)
+the Double Wrap's cut). The worst dressing measured is 21 calls a frame on Low, under 5%. (The dressed run was measured before
+the Double Wrap's and Flop Peak's cuts, with the Snowfield finish's chequer since a frame; the Midsummer Ribbons'
+four tails draw the same, so the figure stands.)
 
 ## 4. The place (G1)
 
@@ -263,11 +307,11 @@ Garage door is pressed from the keyboard on the mid-50 fixture, a warmed browser
 
 | Tier | Open to first frame | Import / build / first frame | Draw calls first, settled | Triangles | Geometries, textures, programs | JS heap (page) |
 | --- | --- | --- | --- | --- | --- | --- |
-| Desk, High (1280x720) | 133 to 206 ms | 20 to 70 / 60 to 79 / 36 ms | 43, 34 to 36 | 73,000 to 74,000 | 119 to 121, 33 to 34, 104 to 105 | 179 to 247 MB |
-| Desk, Low | 139 to 154 ms | 16 to 40 / 55 to 59 / 38 to 42 ms | 23, 16 | 23,300 to 24,300 | 87, 8, 82 | 137 to 205 MB |
-| Phone (390x844, DPR 2, Medium) | 139 to 160 ms | 17 to 23 / 70 to 79 / 33 to 38 ms | 38, 34 | 73,300 to 73,800 | 104, 23, 93 | 238 to 254 MB |
+| Desk, High (1280x720) | 133 to 206 ms | 20 to 70 / 60 to 91 / 36 ms | 43, 34 to 36 | 73,000 to 74,400 | 119 to 121, 33 to 34, 104 to 105 | 148 to 247 MB |
+| Desk, Low | 104 to 154 ms | 7 to 40 / 51 to 59 / 30 to 42 ms | 23, 16 | 23,300 to 24,300 | 87, 8, 82 | 137 to 205 MB |
+| Phone (390x844, DPR 2, Medium) | 130 to 160 ms | 12 to 23 / 65 to 79 / 33 to 38 ms | 38, 34 | 73,300 to 73,800 | 104, 23, 93 | 238 to 254 MB |
 
-Ranges are the passes of 26 November (two to three a tier). The import is the dev server's module fetch; in a
+Ranges are the passes of 26 November (three to four a tier). The import is the dev server's module fetch; in a
 production build the scene is one 16.5 kB chunk (6.6 kB gzipped) and the UI 10.9 kB plus 7.1 kB of CSS. Low's cheaper
 scene is a third of High's triangles and half its draws. Closing puts the title back with the console clean on every
 pass, and focus on the Garage door (checked by script on Low, the phone and reduced motion; one High pass lost the door
@@ -289,25 +333,25 @@ Bob on the Sled shelf; 'hat:muffs' a hat), and `nextUnlock` now gives the piece 
 
 The careers were ridden in the heavy slot on this lane's build (`r9-garage-economy.ts --ride`: mid 35.1 s, novice 35.7
 s) and spent by `--econ shop` with milestone 0's player's rule over the catalogue the game ships
-(`scripts/playtest/r9-shop-catalogue.ts`, `r9-shop-econ.ts`), last on 26 November after the cuts (the Crest Knit, the Double Wrap, Racing Stripe). Full output:
+(`scripts/playtest/r9-shop-catalogue.ts`, `r9-shop-econ.ts`), last on 26 November after the cuts (the Crest Knit, the Flop Peak, the Double Wrap, Racing Stripe, Gilt Scroll). Full output:
 `shots/r9/shop/economy/tables.txt`. Lifetime gifts are the build's own and equal milestone 0's (the garage changes no
 income).
 
-Sinks: sleds 3,250 (four to buy), tracks 9,930, hats 3,690, scarves 2,190, trails 2,760, finishes 2,130, sounds 660:
-the base shop 14,680 plus the tracks; the months' chapters 11,520 (960 a month); the Lantern Row 16,500.
+Sinks: sleds 3,250 (four to buy), tracks 9,930, hats 2,840, scarves 2,190, trails 2,760, finishes 1,480, sounds 660:
+the base shop 13,180 plus the tracks; the months' chapters 11,520 (960 a month); the Lantern Row 16,500.
 
 | Run | Mid: earned | Mid: owns | Mid: goals left that are not lanterns | Novice: earned | Novice: owns | Novice: goals left |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 140 | the Pine Flyer's runners | 64 (16,910 gifts) | 80 | the Pine Flyer's runners | 64 (16,910) |
-| 5 | 805 | 2 tiers, a hat, a scarf, a trail, a finish, a sound, the Lodge Toboggan | 63 (17,670) | 670 | 2 tiers, a hat, a scarf, a trail, a finish, a sound, the Lodge Toboggan | 63 (17,670) |
-| 20 | 4,655 | 7 tiers, 2 sleds, 5 hats, 4 scarves, 4 trails, 4 finishes, 3 sounds, the month's chapter set, 4 set pieces | 40 (14,270) | 2,895 | 6 tiers, 2 sleds, 2 hats, 2 scarves, 2 trails, a finish, a sound, the month's chapter set | 57 (16,340) |
-| 50 | 9,530 | 14 tiers, 3 sleds, 7 hats, 5 scarves, 4 trails, 4 finishes, 4 sounds, the chapter set, 8 set pieces | 30 (11,720) | 5,520 | 10 tiers, 2 sleds, 4 hats, 4 scarves, 3 trails, 3 finishes, 2 sounds, the chapter set, a set piece | 45 (13,860) |
-| 100 | 16,595 | 23 tiers, 5 sleds (the Tea Tray), 8 hats, 6 scarves, 6 trails, 5 finishes, 4 sounds, the chapter set, 11 set pieces | 22 (8,790) | 10,805 | 19 tiers, 4 sleds (the Wisp), 6 hats, 5 scarves, 5 trails, 3 finishes, 3 sounds, the chapter set, a set piece | 42 (12,800) |
+| 1 | 140 | the Pine Flyer's runners | 62 (15,410 gifts) | 80 | the Pine Flyer's runners | 62 (15,410) |
+| 5 | 805 | 2 tiers, a hat, a scarf, a trail, a finish, a sound, the Lodge Toboggan | 61 (16,170) | 670 | 2 tiers, a hat, a scarf, a trail, a finish, a sound, the Lodge Toboggan | 61 (16,170) |
+| 20 | 4,655 | 7 tiers, 2 sleds, 5 hats, 4 scarves, 4 trails, 4 finishes, 3 sounds, the month's chapter set, 4 set pieces | 38 (12,770) | 2,895 | 6 tiers, 2 sleds, 2 hats, 2 scarves, 2 trails, a finish, a sound, the month's chapter set | 55 (14,840) |
+| 50 | 9,530 | 14 tiers, 3 sleds, 7 hats, 5 scarves, 4 trails, 4 finishes, 4 sounds, the chapter set, 8 set pieces | 28 (10,220) | 5,520 | 10 tiers, 2 sleds, 4 hats, 4 scarves, 3 trails, 3 finishes, 2 sounds, the chapter set, a set piece | 43 (12,360) |
+| 100 | 16,595 | 23 tiers, 5 sleds (the Tea Tray), 8 hats, 6 scarves, 6 trails, 5 finishes, 4 sounds, the chapter set, 11 set pieces | 20 (7,290) | 10,805 | 19 tiers, 4 sleds (the Wisp), 6 hats, 5 scarves, 5 trails, 3 finishes, 3 sounds, the chapter set, a set piece | 40 (11,300) |
 
 - **Something worth having within one to three runs after every run:** 100 of 100 for both pilots (runs with nothing
   but a lantern in reach: 0 and 0; milestone 0's today, the base garage bought first: 70 of the mid pilot's runs and
   38 of the novice's).
-- **Garage goals at runs 50 and 100 that are not lanterns:** mid 30 and 22, novice 45 and 42 (tiers, sets and sleds
+- **Garage goals at runs 50 and 100 that are not lanterns:** mid 28 and 20, novice 43 and 40 (tiers, sets and sleds
   among them).
 - **The dearest pieces, a dedicated player's weeks:** at the harness's four runs a day the mid pilot finishes the
   Lodge Toboggan's track at run 27 (day 7), the Comet Bob's at 48 (day 12), the Wisp's at 69 (day 18), and is fitting
@@ -322,7 +366,7 @@ What each piece is at race distance (its line on the card, written to be what th
 where it is found, and what Low and the phone draw. `npx tsx scripts/playtest/r9-shop-list.ts` prints these tables
 from the game's own catalogue.
 
-**Hats** (11)
+**Hats** (10)
 
 | Piece | What it is | Price or where | Low and phone |
 | --- | --- | --- | --- |
@@ -336,7 +380,6 @@ from the game's own catalogue.
 | Pom Muffs | A broad knit band over the crown and two big fur muffs | 440 gifts | the same outline, fewer facets |
 | Down Cap | A big puffed dome in fat quilted rings, a real brim | 580 gifts | the same outline, fewer facets |
 | Twin Tails | Two long knit tails streaming back off the crown, poms at their ends | 700 gifts | the same outline, fewer facets |
-| Flop Peak | A tall felt peak flopped over to one side, a cream pom at its tip | 850 gifts | the same outline, fewer facets |
 
 **Scarves** (28)
 
@@ -405,7 +448,7 @@ from the game's own catalogue.
 | Snowballs | Little snowballs that roll off the runners and burst | First Snow's chapter (380 gifts in its month) | 80 flakes in the air, not 220, thrown at half the rate |
 | Star Strings | Strings of paper stars fluttering off the stern | Lantern Night's chapter (380 gifts in its month) | 7 shapes a string, not 11 |
 
-**Finishes** (10)
+**Finishes** (9)
 
 | Piece | What it is | Price or where | Low and phone |
 | --- | --- | --- | --- |
@@ -417,7 +460,6 @@ from the game's own catalogue.
 | Burnt Scroll | Walnut stain with scrolls burnt into the slats' ends | 250 gifts | the same motif on Low's three-slat sled |
 | Snowfield Frame | Snow-white slats in a dark walnut frame | 310 gifts | the same motif on Low's three-slat sled |
 | Basalt Hex | Dark slate under a fine cream hex lattice | 380 gifts | the same motif on Low's three-slat sled |
-| Gilt Scroll | Oxblood lacquer, cream scrollwork along the rails | 650 gifts | the same motif on Low's three-slat sled |
 | Almanac Pages | A parchment deck ruled in ink like a page of the Almanac | Found on Almanac page 38 | the same motif on Low's three-slat sled |
 
 **Sounds** (5)
@@ -535,24 +577,26 @@ parts, `src/render/garagescene.ts`, `trailforms.ts`, `src/ui/garage.ts`, `garage
 > the mountains' sets' and the months' chapters'). The five mountains' sets open at a third, two thirds and all of each
 > mastery board (scarf, trail, ornament). The Almanac never empties a page: a Saucer already bought gets its first two
 > tiers, a chapter piece already bought pays its price back. A purchase and a tier are each a moment (a gift opened,
-> the piece put on, a cheer, a sound of its own), skippable, still under reduced motion. Eleven hats, 28 scarves, 29
-> trails, 10 finishes (round 8's chapter paints kept), 18 ornaments, 5 sounds 6 sleds (the critics cut the Crest
-> Knit, the Double Wrap and Racing Stripe); prices in `garage.ts`, `paints.ts` and `tracks.ts`. The economy on this build: something worth having
+> the piece put on, a cheer, a sound of its own), skippable, still under reduced motion. Ten hats, 28 scarves, 29
+> trails, 9 finishes (round 8's chapter paints kept), 18 ornaments, 5 sounds 6 sleds (the critics cut the Crest
+> Knit, the Flop Peak, the Double Wrap, Racing Stripe and Gilt Scroll); prices in `garage.ts`, `paints.ts` and `tracks.ts`. The economy on this build: something worth having
 > within one to three runs after every one of 100 runs for both pilots; garage goals that are not lanterns at run 100:
-> mid 22, novice 42; the dearest tracks a dedicated player's weeks (the mid pilot's Wisp at run 69, the Tea Tray's
-> fifth at 100). TODO-CRITIC-LINE
+> mid 20, novice 40; the dearest tracks a dedicated player's weeks (the mid pilot's Wisp at run 69, the Tea Tray's
+> fifth at 100). Five rounds of fresh critics: a stock and an upgraded sled told apart in a
+> chase still (met); what the rider wears named from one (hats, trails and the sled's parts; scarves three of four);
+> every pair on a shelf told apart (not met: the pairs left are listed in notes/r9-shop.md).
 
-**For ART.md 5, the hats** (replacing "Hats are told apart by their outline from behind ..."): eleven outlines from
+**For ART.md 5, the hats** (replacing "Hats are told apart by their outline from behind ..."): ten outlines from
 behind, each in the player's vermillion with the beanie's cream or an ink trim: the cuffed pom beanie; a low watch
-cap, plain red, a thick rolled cuff, nothing on top; two big cream poms hung low beside the jaw on cords; a trapper's
-cream fur band and long flaps; a hem of cream bobbles hanging across the nape; a pointed chullo with long braids; a
-long stocking cap streaming back, a pom at its end; a broad knit band over the crown and two big fur muffs; a big
+cap, plain red, a thick rolled cuff, nothing on top; a plain crown and two big cream poms hung low beside the jaw on cords; a
+trapper's cream fur band and long flaps; a hem of ink bobbles hanging across the nape; a chullo with a middling point and long
+cream-and-red braids behind the ears; a long stocking cap streaming back past one shoulder, a pom at its end; a broad knit band over the crown and two big fur muffs; a big
 quilted dome in fat rings with a cream ring under it; two long knit tails streaming back off the crown, poms at their
-ends; a tall felt peak flopped forward over the brow. None is one of The Twelve's (no crown, antlers, horns, fox
+ends. None is one of The Twelve's (no crown, antlers, horns, fox
 ears, stovepipe or topknot).
 
 **ART.md 5, the scarf**: the knot and the wrap stay the classic vermillion; a scarf varies its form (two tails; one
-long and one short; four, a pair to each side; one thick rope), what weights the ends (a big cream pom, a little paper
+long and one short; four slim ribbons; one thick rope), what weights the ends (a big cream pom, a little paper
 lamp, a snowball, a drop, a point, flame tongues, a tassel, a long ink fringe, a bow at the throat) and a pattern in
 cream or ink that runs along and across the knit (bars, bands, a rib, chevrons, a braid, dots, crescents). **Spirit
 Flow keeps the knit:** each stitch burns at its own value (an ink band stays dark in the flame, a cream bar burns
@@ -566,9 +610,10 @@ lantern on a line; in the lantern's warm family only (paper, cream, honey, gold,
 vermillion.
 
 **ART.md 13, sled finishes** (replacing "Sled paints recolour ..."): a finish is a ground and a motif where the lens
-sees a sled (a pinstripe round the deck, stars across the tail, a cream frame, burnt scrolls, a chequer band, a hex
-lattice, one racing stripe, scrollwork, ruled lines), painted over the sled and its fitted tiers together; the trim
-stays vermillion. No ground is the coat's ink navy or any locked role's colour, and no more than one is a dark slate.
+sees a sled (a pinstripe round the deck, stars across the tail, a cream frame, burnt scrolls, a dark walnut frame round
+snow-white slats, a fine hex lattice, ruled lines), painted over the sled and its fitted tiers together; the trim
+stays vermillion. No ground or line is the coat's ink navy or any locked role's colour (the dark is a warm umber), no
+motif is the finish line's ink-and-cream check, and no more than one ground is a dark slate.
 
 **ART.md 13, a sled's track**: five tiers built where the chase lens sees a sled, each sled its own (runner tails
 swept up into handles or a skid ring, a quilted pad or cushion, a crest board in one wood, a curled tail, low fins at
@@ -613,7 +658,21 @@ race-distance sheet. Touched only by scripts or tests, never seen or heard by me
    next sled is now the Lodge Toboggan at 300 (the Whirl Saucer is never a price to save for), with `price` given.
 2. **The Crest Knit is cut** (two critics: a rooster's comb, The Twelve's topknot). ART.md 5's hat list is eleven.
    Whether to fill the twelfth hat later is the main lane's call; the hat sink is 3,690.
-3. TODO-PAIRS
+3. **The pairs that still fail** (round 5) are each two pieces a save may already hold or a decided piece, so the lane
+left them for the main lane. What I would do, in order:
+   - **Cut the chapter scarves** (the found-scarf pairs: Sunrise Bars, Folded Fan, Drip Hem, Crescent Knit and
+     Hollow Stitch are chapter pieces). Four rounds have not told the months' scarves apart at race distance; a
+     chapter would be its trail, its ornament and its title, its page 3 gifts; a save that holds a chapter scarf
+     keeps it, as round 8's chapter paints are kept. DECISIONS 392 made a chapter three pieces, so this is yours.
+   - **Stop selling one of each failing pair of base pieces, owners keeping theirs** (the kept-paint way, for hats,
+     scarves and trails too): Bobble Hem or Watch Cap; Long Streamer or Fringe Knit; Chunky Rib or Ink Bands; and
+     make Lantern Sparks show at race distance (or stop selling it), which settles all three shop trail pairs.
+   - **Finishes:** Snowfield Frame against Basalt Hex and Almanac Pages against Natural: the frame darker or the
+     slate darker; the parchment a stronger colour than the wood.
+   - **Tiers:** tier II (the pad) and tier V (the inlay) do not read from behind on their own; each wants a part that
+     shows past the rider (a blanket roll over the tail; an inlay along the outside of the runners).
+   - **Ornaments and found trails:** the chapter ornaments and trails that fail are small and pale: bigger, or cut
+     with the chapter scarves if the chapters are thinned.
 4. **Not this lane's, seen by every critic:** the flow rim on the coat and sled reads magenta-pink, toward the
    grudge's rose (ART.md 1, 13), in every burn tile of rounds 1 and 2; the Wisp's stock paint is pale mint, the ghosts'
    colour (round 1); a rose blotch in the spray beside the rider (round 2). The Wisp's colour is the sled's own and was
