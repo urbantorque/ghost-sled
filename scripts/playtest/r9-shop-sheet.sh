@@ -13,7 +13,8 @@ mkdir -p "$OUT/full" "$KEYS"
 CFG="$ROOT/.playwright/cli-headless.config.json"
 S="r9-shop-sheet"
 SLOT="C:/Users/roger/OneDrive/Desktop/Ghost Sled/scripts/playtest/browser-slot.sh"
-bash "$SLOT" take ${R9_LANE:-r9-shop-sheet} >/dev/null || { echo "no slot"; exit 2; }
+# (R9_HELD=1: the caller holds the slot already and gives it back.)
+[ -n "$R9_HELD" ] || bash "$SLOT" take ${R9_LANE:-r9-shop-sheet} >/dev/null || { echo "no slot"; exit 2; }
 echo "$(date +%H:%M:%S) took the slot"
 playwright-cli -s="$S" open --config="$CFG" >/dev/null 2>&1
 # A fresh browser's first loads stall 9 to 13 s: load the origin once before anything is judged.
@@ -26,5 +27,5 @@ for shelf in $SHELVES; do
   echo "$(date +%H:%M:%S) $shelf $(head -c 300 "$KEYS/key-$shelf.json")"
 done
 playwright-cli -s="$S" close >/dev/null 2>&1
-bash "$SLOT" give ${R9_LANE:-r9-shop-sheet} >/dev/null
+[ -n "$R9_HELD" ] || bash "$SLOT" give ${R9_LANE:-r9-shop-sheet} >/dev/null
 echo "$(date +%H:%M:%S) gave the slot back"

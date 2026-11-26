@@ -1131,7 +1131,7 @@ export function paintSled(geo: BufferGeometry, hex: string): BufferGeometry {
 
 /** The cream and the ink a finish's motif is drawn in (ART.md 5's accents: never a role's colour). */
 const FIN_CREAM = new Color('#F3E6D4');
-const FIN_INK = new Color('#1E2236');
+const FIN_INK = new Color('#2E2420');
 
 /** A finish as render needs it (game/paints.ts Paint). */
 export interface FinishLook {
@@ -1234,7 +1234,7 @@ export function finishSled(geo: BufferGeometry, f: FinishLook, round: boolean): 
         const d1 = Math.abs(fract(cx / s + cz / (s * 1.73)) - 0.5);
         const d2 = Math.abs(fract(cx / s - cz / (s * 1.73)) - 0.5);
         const d3 = Math.abs(fract((cz + cy) / (s * 0.87)) - 0.5);
-        mark = (top || back) && (d1 > 0.45 || d2 > 0.45 || d3 > 0.46);
+        mark = (top || back) && (d1 > 0.47 || d2 > 0.47 || d3 > 0.475);
         break;
       }
       case 'stripes':
@@ -1320,7 +1320,7 @@ function crestBoard(half: number, y0: number, rise: number, z: number, lite: boo
     const p0 = top[i];
     const p1 = top[i + 1];
     const h = (p0.y + p1.y) / 2 - y0;
-    out.push(part(new BoxGeometry(p1.x - p0.x + 0.004, h, 0.04), C.wood, { pos: [(p0.x + p1.x) / 2, y0 + h / 2, z] }));
+    out.push(part(new BoxGeometry(p1.x - p0.x + 0.004, h, 0.04), shade(C.wood, i % 2 ? 0.9 : 1.04), { pos: [(p0.x + p1.x) / 2, y0 + h / 2, z] }));
   }
   out.push(...tube(top.map((p) => p.clone().setZ(z + 0.005)), 0.018, 0.018, C.accent, lite ? 4 : 6));
   if (!lite) for (const sx of [-1, 1]) out.push(part(new TorusGeometry(0.05, 0.016, 4, 10, Math.PI * 1.5), C.accent, { pos: [sx * (half + 0.02), y0 + 0.1, z], rot: [0, Math.PI / 2, sx * 0.6] }));
@@ -1498,8 +1498,8 @@ export function sledTrackParts(id: number, tiers: number, lite = false): TrackPa
             const k = i / steps;
             sweep.push(new Vector3(sx * (1 + 0.25 * k), 0.1 + 0.48 * Math.sin(k * Math.PI * 0.5), 0.86 + 0.26 * k - 0.1 * k * k * k));
           }
-          body.push(...tube(sweep, 0.036, 0.016, C.accent, sides));
-          body.push(part(new SphereGeometry(0.035, sides, 4), C.accent, { pos: [sx * 1.25, 0.6, 1.02] }));
+          body.push(...tube(sweep, 0.042, 0.022, C.wood, sides));
+          body.push(part(new SphereGeometry(0.05, sides, 4), FIN_CREAM, { pos: [sx * 1.25, 0.6, 1.02] }));
         }
       }
       if (t >= 2) body.push(...quilt(0.66, 0.5, 0.23, 0.28, lite ? 2 : 4, lite ? 2 : 3));
@@ -1547,16 +1547,16 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       break;
     }
     case 'icefang': {
-      for (let i = 0; i < 4; i++) body.push(part(new ConeGeometry(0.1 - i * 0.02, 0.16, lite ? 4 : 6), new Color('#EAF6FF'), { pos: [0.04 * i, 0.08 + i * 0.14, 0], rot: [0, 0, -0.18 * i] }));
-      glow.push(part(new ConeGeometry(0.04, 0.4, 4), new Color('#F4FBFF').multiplyScalar(1.5), { pos: [0.06, 0.22, 0], rot: [0, 0, -0.3] }));
+      for (let i = 0; i < 4; i++) body.push(part(new ConeGeometry(0.1 - i * 0.02, 0.16, lite ? 8 : 12), FIN_CREAM, { pos: [0.04 * i, 0.08 + i * 0.14, 0], rot: [0, 0, -0.18 * i] }));
+      glow.push(part(new SphereGeometry(0.05, s, 5), new Color('#FFF4E0').multiplyScalar(1.5), { pos: [0.14, 0.58, 0] }));
       break;
     }
     case 'basaltcrown': {
       for (const [x, z, h] of [[-0.06, 0, 0.3], [0.06, 0.02, 0.22], [0, -0.07, 0.38]] as const) {
-        body.push(part(new CylinderGeometry(0.055, 0.055, h, 6), new Color('#5A5560'), { pos: [x, h / 2, z] }));
+        body.push(part(new CylinderGeometry(0.055, 0.055, h, 6), new Color('#9A8676'), { pos: [x, h / 2, z] }));
         body.push(part(new CylinderGeometry(0.056, 0.056, 0.02, 6), new Color('#B8B2B0'), { pos: [x, h + 0.01, z] }));
       }
-      glow.push(part(new BoxGeometry(0.016, 0.26, 0.016), new Color('#FF9A4A').multiplyScalar(1.6), { pos: [0.0, 0.15, -0.015] }));
+      glow.push(part(new BoxGeometry(0.02, 0.26, 0.02), new Color('#FFE2A8').multiplyScalar(1.5), { pos: [0.0, 0.15, -0.015] }));
       break;
     }
     case 'papercrane': {
@@ -1585,7 +1585,7 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       body.push(part(new TorusGeometry(0.15, 0.02, 4, s + 2), FIN_CREAM, { pos: [0, 0.03, 0], rot: [Math.PI / 2, 0, 0] }));
       for (let i = 0; i < 10; i++) {
         const a = (i / 10) * Math.PI * 2;
-        body.push(part(new ConeGeometry(0.03, 0.14 + (i % 2) * 0.1, 4), new Color('#F2FAFF'), { pos: [Math.sin(a) * 0.15, -0.06 - (i % 2) * 0.05, Math.cos(a) * 0.15], rot: [Math.PI, 0, 0] }));
+        body.push(part(new ConeGeometry(0.03, 0.14 + (i % 2) * 0.1, lite ? 6 : 8), FIN_CREAM, { pos: [Math.sin(a) * 0.15, -0.06 - (i % 2) * 0.05, Math.cos(a) * 0.15], rot: [Math.PI, 0, 0] }));
       }
       break;
     }
@@ -1594,7 +1594,7 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       for (const dx of [-0.03, 0.02]) body.push(part(new SphereGeometry(0.022, 5, 4), FIN_CREAM, { pos: [dx, -0.5 - Math.abs(dx), 0.14], scale: [1, 1.8, 1] }));
       break;
     case 'ch4orn': {
-      body.push(...tube([new Vector3(0, 0, 0), new Vector3(0.08, 0.14, 0), new Vector3(0.02, 0.3, 0), new Vector3(0.1, 0.42, 0)], 0.014, 0.008, new Color('#4A3428'), 4));
+      body.push(...tube([new Vector3(0, 0, 0), new Vector3(0.08, 0.14, 0), new Vector3(0.02, 0.3, 0), new Vector3(0.1, 0.42, 0)], 0.016, 0.01, new Color('#8A6444'), 4));
       for (const [x, y] of [[0.14, 0.14], [-0.04, 0.27], [0.14, 0.42]] as const) {
         for (let k = 0; k < 5; k++) {
           const a = (k / 5) * Math.PI * 2;
@@ -1609,16 +1609,17 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       glow.push(part(new SphereGeometry(0.11, s, 4, 0, Math.PI * 2, 0, Math.PI / 2), new Color('#FF9A4A').multiplyScalar(1.6), { pos: [0, 0.11, 0], scale: [1, 0.55, 1] }));
       break;
     case 'ch6orn': {
-      body.push(part(new CylinderGeometry(0.11, 0.11, 0.03, s + 6), FIN_CREAM, { pos: [0, 0.2, 0], rot: [Math.PI / 2, 0, 0] }));
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2;
-        body.push(part(new SphereGeometry(0.03, 6, 4), shade(FIN_CREAM, 0.92), { pos: [Math.sin(a) * 0.16, 0.2 + Math.cos(a) * 0.16, 0], scale: [1, 1.5, 0.5], rot: [0, 0, -a] }));
+      body.push(part(new TorusGeometry(0.17, 0.025, 5, s + 8), C.wood, { pos: [0, 0.22, 0] }));
+      body.push(part(new CylinderGeometry(0.045, 0.045, 0.05, s), FIN_CREAM, { pos: [0, 0.22, 0], rot: [Math.PI / 2, 0, 0] }));
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        body.push(part(new BoxGeometry(0.018, 0.16, 0.018), C.woodDark, { pos: [Math.sin(a) * 0.09, 0.22 + Math.cos(a) * 0.09, 0], rot: [0, 0, -a] }));
       }
       break;
     }
     case 'ch7orn':
       body.push(...tube([new Vector3(0, 0, 0), new Vector3(0, 0, 0.1), new Vector3(0.04, -0.12, 0.2), new Vector3(0.06, -0.26, 0.28)], 0.006, 0.006, FIN_INK, 3));
-      for (const [x, y, z] of [[0.0, -0.06, 0.12], [0.04, -0.16, 0.2], [0.06, -0.28, 0.28]] as const) glow.push(part(new SphereGeometry(0.035, s, 5), warm(1.6), { pos: [x, y, z], scale: [1, 1.3, 1] }));
+      for (const [x, y, z] of [[0.0, -0.06, 0.12], [0.04, -0.16, 0.2], [0.06, -0.28, 0.28]] as const) glow.push(part(new SphereGeometry(0.058, s, 5), warm(1.6), { pos: [x, y, z], scale: [1, 1.3, 1] }));
       break;
     case 'ch8orn': {
       for (let i = 0; i < 7; i++) body.push(part(new BoxGeometry(0.04, 0.2, 0.006), shade(FIN_CREAM, i % 2 ? 0.88 : 1), { pos: [Math.sin((i / 6 - 0.5) * 2.2) * 0.1, 0.06 + Math.cos((i / 6 - 0.5) * 2.2) * 0.1, 0], rot: [0, 0, -(i / 6 - 0.5) * 2.2] }));
@@ -1629,9 +1630,9 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       break;
     case 'ch10orn':
       body.push(...tube([new Vector3(0, 0, 0), new Vector3(0, 0.02, 0.12)], 0.012, 0.01, C.woodDark, 4));
-      glow.push(part(new SphereGeometry(0.13, s, s - 2), warm(1.5), { pos: [0, -0.16, 0.12], scale: [1, 0.9, 1] }));
+      glow.push(part(new SphereGeometry(0.13, s, s - 2), new Color('#E2B4E8').multiplyScalar(1.35), { pos: [0, -0.16, 0.12], scale: [1, 0.9, 1] }));
       body.push(part(new CylinderGeometry(0.05, 0.08, 0.04, s), FIN_INK, { pos: [0, -0.03, 0.12] }));
-      for (const sx of [-1, 1]) body.push(part(new SphereGeometry(0.026, 5, 4), FIN_INK, { pos: [sx * 0.045, -0.13, 0.12 + 0.122], scale: [1, 1.4, 0.4] }));
+      for (let i = 0; i < 4; i++) body.push(part(new TorusGeometry(0.131 * Math.sin(((i + 1) / 5) * Math.PI), 0.006, 3, s + 4), new Color('#7A4E86'), { pos: [0, -0.16 + 0.117 * Math.cos(((i + 1) / 5) * Math.PI), 0.12], rot: [Math.PI / 2, 0, 0] }));
       break;
     case 'ch11orn':
       body.push(part(new IcosahedronGeometry(0.11, lite ? 0 : 1), new Color('#FFFDF6'), { pos: [0, 0.11, 0] }), part(new IcosahedronGeometry(0.08, lite ? 0 : 1), new Color('#FFFDF6'), { pos: [0, 0.27, 0] }));
@@ -1642,9 +1643,9 @@ export function ornamentParts(id: string, lite = false): { body: BufferGeometry[
       body.push(...tube([new Vector3(0, 0, 0), new Vector3(0, 0.02, 0.12)], 0.012, 0.01, C.woodDark, 4));
       for (let i = 0; i < 5; i++) {
         const a = (i / 5) * Math.PI * 2;
-        glow.push(part(new ConeGeometry(0.04, 0.12, 4), warm(1.55), { pos: [Math.sin(a) * 0.07, -0.13 + Math.cos(a) * 0.07, 0.12], rot: [0, 0, -a] }));
+        glow.push(part(new ConeGeometry(0.065, 0.19, 4), warm(1.55), { pos: [Math.sin(a) * 0.11, -0.18 + Math.cos(a) * 0.11, 0.12], rot: [0, 0, -a] }));
       }
-      glow.push(part(new SphereGeometry(0.05, 6, 5), warm(1.7), { pos: [0, -0.13, 0.12] }));
+      glow.push(part(new SphereGeometry(0.08, 6, 5), warm(1.7), { pos: [0, -0.18, 0.12] }));
       break;
     }
     default:
@@ -2094,7 +2095,7 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
       // past one shoulder, a pom-pom at its end; the tail takes the pom-pom's spring, more toward its tip.
       out.push(dome(), ribbed(0.268, 0.274, 0.095, 0.905), stripe(), seam());
       out.push(part(new TorusGeometry(0.27, 0.018, 4, 18), shade(C.accent, 0.9), { pos: [0, 0.952, 0.01], rot: [Math.PI / 2, 0, 0] }));
-      const path = [new Vector3(0, 1.08, 0.04), new Vector3(0.02, 1.18, 0.16), new Vector3(0.05, 1.19, 0.31), new Vector3(0.1, 1.12, 0.44), new Vector3(0.15, 1.01, 0.52), new Vector3(0.19, 0.9, 0.56)];
+      const path = [new Vector3(0, 1.08, 0.04), new Vector3(0.01, 1.2, 0.18), new Vector3(0.02, 1.22, 0.36), new Vector3(0.03, 1.14, 0.54), new Vector3(0.05, 1.0, 0.68), new Vector3(0.06, 0.84, 0.76)];
       const rad = [0.17, 0.13, 0.1, 0.075, 0.058, 0.045];
       for (let i = 0; i < path.length - 1; i++) {
         const w0 = (i / (path.length - 1)) * 0.9;
@@ -2105,7 +2106,7 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
           return [w0 + (w1 - w0) * t, 0];
         }));
       }
-      out.push(pom(0.2, 0.86, 0.57, 0.075, 1));
+      out.push(pom(0.065, 0.79, 0.78, 0.085, 1));
       flaps();
       goggles();
       out.push(strap());
@@ -2114,11 +2115,11 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
     case 'twinpom':
       // Round 9's second pass: the poms hang low over the ears on short cords, as the name says (stood on the crown
       // they read as fox ears, The Twelve's). From behind: a red dome and a big cream ball at each side of the jaw.
-      out.push(dome(), ribbed(0.268, 0.274, 0.095, 0.905), stripe(), seam());
+      out.push(dome(), ribbed(0.268, 0.274, 0.095, 0.905), seam());
       out.push(part(new TorusGeometry(0.27, 0.018, 4, 18), shade(C.accent, 0.9), { pos: [0, 0.952, 0.01], rot: [Math.PI / 2, 0, 0] }));
       for (const sx of [-1, 1]) {
-        out.push(sway(capsule(new Vector3(sx * 0.262, 0.87, 0.03), new Vector3(sx * 0.37, 0.64, 0.05), 0.018, 0.016, cuff, lite ? 4 : 5), [0.25, 0]));
-        out.push(pom(sx * 0.38, 0.55, 0.06, 0.13, 0.7));
+        out.push(sway(capsule(new Vector3(sx * 0.262, 0.87, 0.03), new Vector3(sx * 0.39, 0.64, 0.08), 0.018, 0.016, cuff, lite ? 4 : 5), [0.25, 0]));
+        out.push(pom(sx * 0.41, 0.53, 0.1, 0.155, 0.7));
       }
       goggles();
       out.push(strap());
@@ -2136,7 +2137,7 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
         const z = 0.03 + Math.cos(a) * 0.27;
         const y = 0.74 - 0.025 * (i % 2);
         out.push(sway(capsule(new Vector3(Math.sin(a) * 0.27, 0.87, 0.01 + Math.cos(a) * 0.27), new Vector3(x, y + 0.04, z), 0.01, 0.01, cuff, 4), [0.3, 0]));
-        out.push(pom(x, y, z, 0.058, 0.55));
+        out.push(sway(part(new IcosahedronGeometry(0.068, lite ? 0 : 1), FIN_INK, { pos: [x, y, z], jitter: 0.02 }), [0.55, 0]));
       }
       flaps();
       goggles();
@@ -2213,7 +2214,7 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
       // cream pom swinging at its tip; felt, so smooth and unribbed. From behind it is the tallest hat, a rounded
       // hump; the Long Knit Cap's tail streams back and to one side.
       out.push(dome(1.06), part(new TorusGeometry(0.266, 0.045, lite ? 4 : 6, lite ? 14 : 24), cuff, { pos: [0, 0.9, 0.01], rot: [Math.PI / 2, 0, 0] }));
-      const path = [new Vector3(0, 1.0, 0.03), new Vector3(0, 1.2, 0.05), new Vector3(0, 1.38, 0.03), new Vector3(0, 1.47, -0.07), new Vector3(0, 1.45, -0.2), new Vector3(0, 1.36, -0.29)];
+      const path = [new Vector3(0, 1.0, 0.03), new Vector3(-0.01, 1.22, 0.05), new Vector3(-0.05, 1.42, 0.04), new Vector3(-0.15, 1.53, 0.03), new Vector3(-0.28, 1.5, 0.03), new Vector3(-0.36, 1.38, 0.03)];
       const rad = [0.24, 0.19, 0.13, 0.09, 0.062, 0.045];
       for (let i = 0; i < path.length - 1; i++) {
         const w0 = (i / (path.length - 1)) * 0.75;
@@ -2225,7 +2226,8 @@ function playerHat(hat: HatId, lite = false): BufferGeometry[] {
           return [w0 + (w1 - w0) * t, 0];
         }));
       }
-      out.push(pom(0, 1.3, -0.31, 0.078, 1));
+      out.push(pom(-0.37, 1.29, 0.03, 0.09, 1));
+      out.push(part(new TorusGeometry(0.262, 0.03, lite ? 4 : 5, lite ? 14 : 22), C.pom, { pos: [0, 0.96, 0.01], rot: [Math.PI / 2, 0, 0] }));
       goggles(0.99, -0.236);
       out.push(strap(0.25, 0.975));
       break;

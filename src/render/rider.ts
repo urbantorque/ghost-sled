@@ -253,7 +253,7 @@ function endShape(ends: ScarfEnds, accent: Color, width: number): ScarfShape | n
       return shapeOf([{ geo: new LatheGeometry(prof, 8), color: V.clone().multiplyScalar(0.9) }], END_V);
     }
     case 'point':
-      return shapeOf([{ geo: new ConeGeometry(w * 0.32, 0.2 * RIDER_SCALE, 4), color: accent, m: mAt(0, 0.08 * RIDER_SCALE, 0, Math.PI, Math.PI / 4, 0, 1, 1, 0.35) }], END_V);
+      return shapeOf([{ geo: new ConeGeometry(w * 0.3, 0.22 * RIDER_SCALE, 6), color: accent, m: mAt(0, 0.08 * RIDER_SCALE, 0, Math.PI, Math.PI / 4, 0, 1, 1, 0.7) }], END_V);
     case 'flame': {
       const parts = [-1, 0, 1].map((k) => ({ geo: new ConeGeometry(w * 0.14, (0.16 - 0.04 * Math.abs(k)) * RIDER_SCALE, 4), color: k === 0 ? CREAM_KNIT : V.clone().multiplyScalar(0.9), m: mAt(k * w * 0.26, 0.06 * RIDER_SCALE, 0, Math.PI, 0, k * 0.35, 1, 1, 0.4) }));
       return shapeOf(parts, END_V);
@@ -295,6 +295,7 @@ function knitAt(def: ScarfDef, r: number, c: number, out: Color): Color {
   const edge = c !== 1;
   let k = r < 3 ? 0.86 : 1;
   let accent = false;
+  if (r < 4) return out.copy(V).multiplyScalar(k);
   switch (def.pattern) {
     case 'tipStripes':
       if (r === R - 6 || r === R - 3) k = 0.68;
@@ -303,14 +304,14 @@ function knitAt(def: ScarfDef, r: number, c: number, out: Color): Color {
       accent = r === R - 10 || r === R - 9 || r === R - 4 || r === R - 3;
       break;
     case 'tip':
-      accent = r >= R - 5;
-      if (r === R - 6) k = 0.8;
+      accent = r >= R - (def.accent === 'cream' ? 6 : 5);
+      if (r === R - (def.accent === 'cream' ? 7 : 6)) k = 0.8;
       break;
     case 'bands':
       accent = r >= 3 && r % 3 === 0;
       break;
     case 'rib':
-      if (r >= 2 && r % 2 === 0) return out.copy(V).lerp(INK_KNIT, 0.62);
+      if (r % 2 === 0) return out.copy(V).multiplyScalar(0.7);
       break;
     case 'piping':
       accent = r >= 2 && edge;
@@ -319,7 +320,8 @@ function knitAt(def: ScarfDef, r: number, c: number, out: Color): Color {
       accent = r >= 3 && (edge ? r % 4 === 0 : r % 4 === 1);
       break;
     case 'braid':
-      if (r >= 2) k = c === r % 3 ? 0.62 : (r + c) % 2 ? 0.9 : 1.04;
+      accent = c === r % 3;
+      if (!accent) k = (r + c) % 2 ? 0.86 : 1;
       break;
     case 'graded':
       accent = r >= 3 && (r % 3 === 0 || (r > 10 && r % 3 === 1));
@@ -1322,7 +1324,7 @@ export class Rider {
     const im = this.sledInlay?.material as MeshBasicMaterial | undefined;
     if (!im) return;
     if (k <= 0.01) im.color.copy(CREAM_KNIT);
-    else im.color.copy(CREAM_KNIT).lerp(this.burnHot.copy(BURN_MID).lerp(BURN_TIP, k).multiplyScalar(1.35), Math.min(1, k * 1.4));
+    else im.color.copy(CREAM_KNIT).lerp(this.burnHot.copy(BURN_MID).multiplyScalar(1.3), Math.min(1, k * 1.4));
   }
 
   private readonly burnHot = new Color();
@@ -2965,11 +2967,20 @@ export class Rider {
           tv += 3;
           continue;
         }
-        const f0 = j / TASSELS;
-        const f1 = (j + 0.95) / TASSELS;
+        // (Four broad strands: the odd ones fold away into their neighbours.)
+        if (j % 2 === 1) {
+          for (let q = 0; q < 3; q++) {
+            pos.setXYZ(tv + q, ex, ey, ez);
+            nrm.setXYZ(tv + q, nx, ny, nz);
+          }
+          tv += 3;
+          continue;
+        }
+        const f0 = Math.max(0, (j - 0.3) / TASSELS);
+        const f1 = Math.min(1, (j + 1.3) / TASSELS);
         const fm = (f0 + f1) / 2;
-        const spread = (fm - 0.5) * 2.4;
-        const len = TASSEL_L * 3.2 * (0.85 + 0.3 * ((j * 37 + k * 11) % 5) / 4) * look.length;
+        const spread = (fm - 0.5) * 1.5;
+        const len = TASSEL_L * 4.4 * (0.85 + 0.3 * ((j * 37 + k * 11) % 5) / 4) * look.length;
         const wave = Math.sin(time * 14 + j * 1.7 + k) * 0.02;
         const bx = lx + (rx - lx) * fm;
         const by = ly + (ry - ly) * fm;

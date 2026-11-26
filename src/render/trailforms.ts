@@ -288,30 +288,36 @@ export class TrailForms {
       this.kiteBows.frustumCulled = false;
       const lg = new BufferGeometry();
       lg.setAttribute('position', new BufferAttribute(new Float32Array(2 * (per - 1) * 2 * 3), 3).setUsage(DynamicDrawUsage));
-      this.kiteLines = new LineSegments(lg, new LineBasicMaterial({ color: new Color('#6A5440') }));
+      this.kiteLines = new LineSegments(lg, new LineBasicMaterial({ color: new Color('#F2E4C8') }));
       this.kiteLines.frustumCulled = false;
       this.kitePts = [0, 1].map(() => Array.from({ length: per }, () => new Vector3()));
       this.kiteInit = false;
       this.root.add(this.kiteBows, this.kiteLines);
     } else if (form.kind === 'moths') {
-      this.moths = new InstancedMesh(new IcosahedronGeometry(0.07, 1), new MeshBasicMaterial({ color: hex(form.body, true) }), 3);
+      this.moths = new InstancedMesh(new IcosahedronGeometry(0.14, 1), new MeshBasicMaterial({ color: hex(form.body, true) }), 3);
       this.moths.instanceMatrix.setUsage(DynamicDrawUsage);
       this.moths.frustumCulled = false;
       this.root.add(this.moths);
     } else if (form.kind === 'keeper') {
       const g = new Group();
-      const paper = new Mesh(new CylinderGeometry(0.21, 0.24, 0.46, this.low ? 8 : 12, 4), new MeshBasicMaterial({ color: new Color('#FFE7B0').multiplyScalar(1.55) }));
-      // Ribs: the paper's bands a little darker, a dark cap and foot (ART.md 14).
-      const ink = new MeshBasicMaterial({ color: new Color('#24202C') });
-      const cap = new Mesh(new CylinderGeometry(0.1, 0.24, 0.09, 10), ink);
-      cap.position.y = 0.27;
-      const foot = new Mesh(new CylinderGeometry(0.2, 0.12, 0.06, 10), ink);
-      foot.position.y = -0.26;
-      g.add(paper, cap, foot);
+      // Ribs: four bands of paper, palest at the waist, a small umber cap and foot (ART.md 14).
+      const sides = this.low ? 8 : 12;
+      for (let i = 0; i < 4; i++) {
+        const m = (i + 0.5) / 4;
+        const band = new Mesh(new CylinderGeometry(0.2 + 0.05 * Math.sin(((i + 1) / 4) * Math.PI), 0.2 + 0.05 * Math.sin((i / 4) * Math.PI), 0.118, sides), new MeshBasicMaterial({ color: new Color('#FFE7B0').multiplyScalar(1.25 + 0.45 * Math.sin(m * Math.PI)) }));
+        band.position.y = -0.23 + 0.115 * (i + 0.5);
+        g.add(band);
+      }
+      const ink = new MeshBasicMaterial({ color: new Color('#5A4030') });
+      const cap = new Mesh(new CylinderGeometry(0.08, 0.2, 0.06, 10), ink);
+      cap.position.y = 0.26;
+      const foot = new Mesh(new CylinderGeometry(0.18, 0.1, 0.05, 10), ink);
+      foot.position.y = -0.255;
+      g.add(cap, foot);
       for (const o of g.children) o.frustumCulled = false;
       const lg = new BufferGeometry();
       lg.setAttribute('position', new BufferAttribute(new Float32Array(6), 3).setUsage(DynamicDrawUsage));
-      this.keeperLine = new LineSegments(lg, new LineBasicMaterial({ color: new Color('#5A4A36') }));
+      this.keeperLine = new LineSegments(lg, new LineBasicMaterial({ color: new Color('#F2E4C8') }));
       this.keeperLine.frustumCulled = false;
       this.keeper = g;
       this.keeperInit = false;
@@ -543,9 +549,9 @@ export class TrailForms {
       pts[0].set(ax, ay, az);
       for (let i = 1; i < pts.length; i++) {
         const swing = Math.sin(s.time * 3.2 + i * 0.55 + k * 1.7) * (0.12 + 0.05 * i);
-        const wx = pts[i - 1].x - fwd.x * seg * 0.25 + side.x * (sx * 0.13 + swing);
+        const wx = pts[i - 1].x - fwd.x * seg * 0.25 + side.x * (sx * 0.3 + swing);
         const wy = pts[i - 1].y + 0.24 + Math.sin(s.time * 4.1 + i) * 0.05;
-        const wz = pts[i - 1].z - fwd.z * seg * 0.25 + side.z * (sx * 0.13 + swing);
+        const wz = pts[i - 1].z - fwd.z * seg * 0.25 + side.z * (sx * 0.3 + swing);
         pts[i].lerp(v1.set(wx, wy, wz), Math.min(1, dt * 12));
         const d = v1.subVectors(pts[i], pts[i - 1]);
         const dl = d.length() || 1;
@@ -573,8 +579,8 @@ export class TrailForms {
     if (!m) return;
     for (let i = 0; i < 3; i++) {
       const a = s.time * (2.6 + i * 0.4) + (i * Math.PI * 2) / 3;
-      const r = 0.95 + 0.15 * Math.sin(s.time * 1.7 + i);
-      m.setMatrixAt(i, m1.makeTranslation(s.pos.x + Math.cos(a) * r, s.pos.y + 1.0 + Math.sin(s.time * 3 + i * 2) * 0.25, s.pos.z + Math.sin(a) * r));
+      const r = 1.25 + 0.2 * Math.sin(s.time * 1.7 + i);
+      m.setMatrixAt(i, m1.makeTranslation(s.pos.x + Math.cos(a) * r, s.pos.y + 1.35 + Math.sin(s.time * 3 + i * 2) * 0.3, s.pos.z + Math.sin(a) * r));
     }
     m.count = 3;
     m.instanceMatrix.needsUpdate = true;

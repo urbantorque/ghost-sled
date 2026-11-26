@@ -8,7 +8,8 @@ OUT="C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r9/shop/place/"
 BASE="${R9_BASE:-http://127.0.0.1:4960/}"
 SLOT="C:/Users/roger/OneDrive/Desktop/Ghost Sled/scripts/playtest/browser-slot.sh"
 mkdir -p "$OUT"
-bash "$SLOT" take r9-shop >/dev/null || { echo "no slot"; exit 2; }
+# (R9_HELD=1: the caller holds the slot already and gives it back.)
+[ -n "$R9_HELD" ] || bash "$SLOT" take r9-shop >/dev/null || { echo "no slot"; exit 2; }
 echo "$(date +%H:%M:%S) took the slot"
 run() { # form config tag tier
   local S="r9-shop-$1"
@@ -28,5 +29,5 @@ run() { # form config tag tier
 run desk cli-headless.config.json desk:high desk-low:low
 run phone mobile-headless.config.json phone:medium
 if [ $# -gt 0 ]; then R9_LANE=r9-shop R9_Z="${R9_Z:-620}" bash "$ROOT/scripts/playtest/r9-shop-sheet.sh" "$@"; fi
-bash "$SLOT" give r9-shop >/dev/null
+[ -n "$R9_HELD" ] || bash "$SLOT" give r9-shop >/dev/null
 echo "$(date +%H:%M:%S) gave the slot back"
