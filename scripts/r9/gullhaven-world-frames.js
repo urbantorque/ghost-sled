@@ -52,7 +52,10 @@ async (page) => {
       async ({ hour, mirror }) => {
         const w = window.__gs.world;
         if (hour === 'alt') {
-          const pal = await import('/src/render/palette.ts');
+          // (The module the app itself loaded: after the dev server's hot updates its URL carries a ?t= stamp, and a bare
+          // import would load a second copy whose hour the world never reads.)
+          const url = performance.getEntriesByType('resource').map((e) => e.name).find((n) => n.includes('/src/render/palette.ts')) ?? '/src/render/palette.ts';
+          const pal = await import(url);
           pal.setHour('alt');
           w.relight();
         }

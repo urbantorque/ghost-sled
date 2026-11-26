@@ -37,9 +37,9 @@ import type { ViewMode } from './world';
 
 type V3 = [number, number, number];
 
-const ROCK = new Color('#4A4C66');
-const ROCK_D = new Color('#363850');
-const ROCK_L = new Color('#6A6A84');
+const ROCK = new Color('#363850');
+const ROCK_D = new Color('#26283C');
+const ROCK_L = new Color('#4C4E68');
 const POST_C = new Color('#5A4A44');
 const LATH = new Color('#7A6656');
 const RAIL_C = new Color('#4E403C');
@@ -424,7 +424,11 @@ export class GullhavenWorld {
     this.mat = makeToonMaterial({ coolShade: 0.5, stone: true });
     this.glow = makeToonMaterial({ coolShade: 0.4, emissive: LAMP_HEX.clone(), emissiveStrength: 0 });
     this.cloth = makeToonMaterial({ coolShade: 0.45, cloth: true, doubleSided: true });
-    this.rockMat = makeToonMaterial({ coolShade: 0.55, stone: true, doubleSided: true });
+    // (The sea's rock keeps its own dark in shade: at the props' cool shade, seen against the low sun, the stacks and
+    // the clefts' walls took the snow's pale shade and read as white posts.)
+    // (Not the stone shader: it lays snow on whatever faces up, and from the cliff top a stack is all ledges and crown;
+    // its beds are the form's own three values, rockforms.ts.)
+    this.rockMat = makeToonMaterial({ coolShade: 0.12, doubleSided: true, rim: 0.12 });
     this.cloth.uniforms.uCloth.value = 0.16;
     this.seaMat = seaMaterial(sea, 1);
     this.seaMesh = new Mesh(discGeometry(4800, 28, 96), this.seaMat);
@@ -877,7 +881,7 @@ export class GullhavenWorld {
     forms.forEach((g, k) => {
       const list = spots[k];
       if (!list.length) return;
-      const im = this.inst(g, list.length);
+      const im = this.inst(g, list.length, this.rockMat);
       list.forEach(([x, z, w, yaw], i) => {
         q4.setFromAxisAngle(up, yaw);
         // (Its foot well under the water.)

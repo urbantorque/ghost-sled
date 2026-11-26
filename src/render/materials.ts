@@ -75,6 +75,9 @@ export const shared = {
    *  settles on the course's floor (uFogFloor), so the corridor far ahead and the hollows past the banks
    *  sit in a soft layer of it while the banks, the treetops and the rider stand clear. */
   uMist: { value: new Vector2(0, 7) },
+  /** Round 9 (Gullhaven): how far the low mist keeps off what lies far under the course's floor (0 on every other
+   *  mountain: the hollows past the banks brim with it). Over the sea the air under the cliff is clear. */
+  uMistDeep: { value: 0 },
   uMistColor: { value: new Color(1, 1, 1) },
   /** The floor the mist settles on, a plane down the stretch of course ahead in three.js coordinates:
    *  y = x + y * z. Terrain fits it to the course's base height as the chunks stream. */
@@ -337,6 +340,7 @@ export function applyPalette(full: Palette): void {
   // A drifting mist (Haunted Hollow's above all) lies a little deeper, so its banks roll round the
   // hazards' feet and the hollows past the banks brim with it.
   shared.uMist.value.set((p.mist ? 0.5 + 0.3 * p.mistK : 0.58) * (1 - 0.5 * dense), 5 + 4 * dense + 3 * p.atmo.drift * (p.mist ? 1 : 0.4));
+  shared.uMistDeep.value = p.massif.seaOcean > 0 ? 1 : 0;
   mistDriftK = p.atmo.drift;
   shared.uMistDrift.value = cloudShadowsOn ? mistDriftK : 0;
   // Forward scatter toward the sun, strongest by day; a moon gets a little.
@@ -554,6 +558,7 @@ vec3 lanternLight(vec3 col, vec3 base, vec3 wp, vec3 n) {
 }
 
 uniform vec2 uMist;
+uniform float uMistDeep;
 uniform vec3 uMistColor;
 uniform vec2 uFogFloor;
 uniform float uFogSun;
@@ -576,6 +581,8 @@ float mistNoise(vec2 p) {
 float mistAt(vec3 wp, float d) {
   float h = wp.y - (uFogFloor.x + uFogFloor.y * wp.z);
   float m = uMist.x * exp(-max(h, 0.0) / max(uMist.y, 0.5)) * smoothstep(18.0, 120.0, d);
+  // (Round 9: and none of it down the sea cliff, where the stacks and the clefts' walls stand in clear air.)
+  m *= 1.0 - uMistDeep * smoothstep(-30.0, -160.0, h);
   if (uMistDrift > 0.0) {
     // The mist drifts: banks some 30 m across roll slowly over the course on the wind, thinning to
     // gaps between them and changing as they go. It never lies thicker than the still mist did, so a
