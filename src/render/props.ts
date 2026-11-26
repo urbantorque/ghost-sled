@@ -29,7 +29,7 @@ import { airMotes, flameMatrix, glowMatrix, spiritFlameGeometry, spiritFlameMate
 // treeline, gifts, kicker lips, vents and spirit gates. Instance lists are rebuilt only when the
 // window moves or something is collected or smashed.
 
-const KINDS: ObstacleKind[] = ['pine', 'rock', 'log', 'snowman', 'spire', 'serac', 'iceblock', 'basalt', 'lavarock', 'charpine', 'blossom', 'lantern', 'pillar'];
+const KINDS: ObstacleKind[] = ['pine', 'rock', 'log', 'snowman', 'spire', 'serac', 'iceblock', 'basalt', 'lavarock', 'charpine', 'blossom', 'lantern', 'pillar', 'chimney'];
 
 interface Batch {
   mesh: InstancedMesh;

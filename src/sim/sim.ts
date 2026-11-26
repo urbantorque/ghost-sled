@@ -64,6 +64,10 @@ const GET_UP_INVULN = 150;
 const HIT_HARD = 12;
 const HIT_FAST = 6;
 const HIT_FAST_SPEED = 24;
+/** Round 9, Gablefall's held street (levelHold): ground more than LEVEL_RISE over where a sled was, where it moves to in a
+ *  tick, is a wall to it unless it is in the air over it. Riding up a drift, across a roof's gable or up an alley's floor
+ *  rises far less in a tick; a house front, a drift's side mid-ramp and an alley's floor seen from the pavement are walls. */
+const LEVEL_RISE = 0.3;
 /** (The old name for the count: the get-ups a rider starts with.) */
 export const TUMBLES = GET_UPS;
 /** Before this distance a fall is always free: nobody's first minute ends in a wreck. */
@@ -148,7 +152,7 @@ const FLOW_HEAT_MAX = 7;
 const LEGEND_WARN = 220;
 const LEGEND_PACE = 20;
 
-export type CrashCause = 'tree' | 'rock' | 'forest' | 'landing' | 'yeti' | 'avalanche' | 'daylight';
+export type CrashCause = 'tree' | 'rock' | 'forest' | 'landing' | 'yeti' | 'avalanche' | 'daylight' | 'chimney';
 export type TumbleCause = Exclude<CrashCause, 'avalanche' | 'daylight'>;
 export type TakeoffKind = 'lip' | 'pop' | 'geyser';
 export type LandQuality = 'perfect' | 'clean' | 'sketchy' | 'hop';
@@ -497,6 +501,9 @@ export class Sim {
     this.trackOn = this.course.layout.grammar === 'oldrun';
     // (Round 9, Gullhaven: air that lifts a sled over a gully's mouth. Read once here, false on every other course.)
     this.liftOn = this.course.hasLift;
+    // (Round 9, Gablefall: ground on two levels, the street and the roofs, and a sled held to the street from the side.
+    // Read once here, false on every other course.)
+    this.levelOn = this.course.hasLevels;
     this.sled = sledById(config.sled);
     this.mood = moodInfo(config.chaos.mood).params;
     this.combo = new Combo(this.sled.comboWindow * this.mood.comboWindow);
@@ -674,6 +681,9 @@ export class Sim {
   /** Gullhaven's lift: the sea wind climbing a gully holds a sled in the air over its mouth (round 9, notes/r9-ground.md
    *  section 3, C). False on every other course. */
   private readonly liftOn: boolean;
+  /** Gablefall's held street: a sled is never moved across onto ground that rises from where it was, from the side (round
+   *  9, notes/r9-ground.md section 3, D; levelHold). False on every other course. */
+  private readonly levelOn: boolean;
   readonly charms: number[] = [];
   charmMask = 0;
   synergyMask = 0;
@@ -1306,8 +1316,10 @@ export class Sim {
     s.lean = approach(s.lean, s.drifting ? s.driftDir * 0.9 : s.steer * clamp(s.speed / 18, 0.3, 1), 5 * DT);
 
     // Integrate along the ground and detect natural launches.
-    const nx = s.x + s.vx * DT;
+    let nx = s.x + s.vx * DT;
     const nz = s.z + s.vz * DT;
+    // (Round 9, Gablefall: a house front or a drift's side is met as a wall before the ground there is read: D.)
+    if (this.levelOn) nx = this.levelHold(nx, nz, s.z, s.y);
     const ny = c.ground(nx, nz);
     const vyFollow = (ny - s.y) / DT;
     const stick = action ? 1.7 : 1;
@@ -1698,6 +1710,8 @@ export class Sim {
     s.x += s.vx * DT;
     s.z += s.vz * DT;
     s.y += s.vy * DT;
+    // (Round 9, Gablefall: a sled in the air under a roof's level meets its side as a wall, not as a landing: D.)
+    if (this.levelOn) s.x = this.levelHold(s.x, s.z, s.z - s.vz * DT, s.y - s.vy * DT);
     const gy = c.ground(s.x, s.z);
     if (s.y <= gy) {
       s.y = gy;
@@ -2227,6 +2241,48 @@ export class Sim {
       this.bumpCombo(false);
       this.events.push({ type: 'scrape', side, speed: sp });
     }
+  }
+
+  /** Round 9, Gablefall (hook D, notes/r9-ground.md section 3): its ground is one height a point, so a roof over the
+   *  street is a step in it, and a sled meeting a step from the side would be lifted onto it in a tick (the ground step
+   *  and the landing both set y to the ground there). So before the ground is read where a sled moves to this tick (from
+   *  prevX at z0, its height y0), ground more than LEVEL_RISE over y0 there is a wall to it unless it is in the air over
+   *  it: the sled is turned back to where it was across the street (the street bends under a sled, so where it was in x
+   *  alone may be on the roofs by now), inside the street's own level if that is not enough, and its motion across the
+   *  street reflected as edge() reflects it. A house front, a drift's side mid-ramp and an alley's floor seen from the
+   *  pavement only scrape. A drift's foot is flush with the street, so a sled steers onto it there; riding up a drift,
+   *  across a roof's gable or up an alley's floor rises far less in a tick. (The design put this in edge(), which runs
+   *  after the step: by then the ground step or the landing has set the sled on what it met.) */
+  private levelHold(nx: number, nz: number, z0: number, y0: number): number {
+    const s = this.s;
+    const c = this.course;
+    const g1 = c.ground(nx, nz);
+    if (g1 <= y0 + LEVEL_RISE) return nx;
+    if (!s.grounded && s.y > g1) return nx;
+    const cx0 = c.centerX(z0);
+    const cx1 = c.centerX(nz);
+    let x = cx1 + (this.prevX - cx0);
+    if (c.ground(x, nz) > y0 + LEVEL_RISE) {
+      const st = c.streetAt(nz);
+      x = st ? clamp(x, st.x0 + 0.02, st.x1 - 0.02) : cx1;
+    }
+    const side: -1 | 1 = nx > cx1 ? 1 : -1;
+    const bend = nz !== z0 ? (cx1 - cx0) / (nz - z0) : 0;
+    const out = (s.vx - s.vz * bend) * side;
+    if (out > 0) s.vx -= side * out * 1.5;
+    const sp = Math.sqrt(s.vx * s.vx + s.vz * s.vz) * (out > 3 ? 0.93 : 0.985);
+    s.velHeading = datan2(s.vx, s.vz);
+    s.heading = s.velHeading;
+    s.speed = sp;
+    s.vx = sp * dsin(s.velHeading);
+    s.vz = sp * dcos(s.velHeading);
+    if (out > 3) {
+      s.wobble = 14;
+      this.coolFlow(this.has(CHARM.spirit) ? 2 : 1);
+      this.bumpCombo(false);
+      this.events.push({ type: 'scrape', side, speed: sp });
+    }
+    return x;
   }
 
   /** Stage lines and the finish. */
@@ -3007,7 +3063,8 @@ export class Sim {
           }
           const vn = -(s.vx * hit.nx + s.vz * hit.nz);
           if (s.invuln === 0 && (vn > (this.has(CHARM.bark) ? 15 : HIT_HARD) || (vn > HIT_FAST && s.speed > HIT_FAST_SPEED))) {
-            this.wipeout(o.kind === 'pine' || o.kind === 'blossom' || o.kind === 'charpine' ? 'tree' : 'rock');
+            // (Round 9, Gablefall: a chimney is named; no course of the five stands one.)
+            this.wipeout(o.kind === 'pine' || o.kind === 'blossom' || o.kind === 'charpine' ? 'tree' : o.kind === 'chimney' ? 'chimney' : 'rock');
             return;
           }
           // Glancing blow: push out, deflect, wobble, bank the combo.

@@ -163,7 +163,7 @@ const ENC_KINDS: Record<BiomeId, Kind[]> = {
 };
 /** How likely a section's piece is to span the run: narrow ones mostly (a ravine's walls hide anything on
  *  its banks), wide ones mostly a bank piece. */
-const SPAN_CHANCE: Record<SectionKind, number> = { chute: 0.8, gully: 0.85, ravine: 1, treerun: 0.7, cruise: 0.55, switchbacks: 0.5, benches: 0.35, bowl: 0.3, split: 0.3, fork: 0.3, lake: 0.15, terraces: 0.2, leap: 0.15, start: 0, street: 0, bridge: 0, tunnel: 0, finish: 0, track: 0, labyrinth: 0, outrun: 0, house: 0, cliffpath: 0, geo: 0, beacon: 0, descent: 0, sheds: 0, harbour: 0 };
+const SPAN_CHANCE: Record<SectionKind, number> = { chute: 0.8, gully: 0.85, ravine: 1, treerun: 0.7, cruise: 0.55, switchbacks: 0.5, benches: 0.35, bowl: 0.3, split: 0.3, fork: 0.3, lake: 0.15, terraces: 0.2, leap: 0.15, start: 0, street: 0, bridge: 0, tunnel: 0, finish: 0, track: 0, labyrinth: 0, outrun: 0, house: 0, cliffpath: 0, geo: 0, beacon: 0, descent: 0, sheds: 0, harbour: 0, nave: 0, square: 0, rooftops: 0, quay: 0 };
 /** Sections whose walls stand close: a tall bank piece behind one rears over the run. */
 const WALLED: ReadonlySet<SectionKind> = new Set<SectionKind>(['ravine', 'gully', 'tunnel', 'treerun']);
 /** Kinds that gather a crowd on the banks (both banks for spans, mostly their own side otherwise). */

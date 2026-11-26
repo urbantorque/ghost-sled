@@ -980,7 +980,18 @@ export function obstacleGeometry(kind: ObstacleKind, p: Palette, low = false, bi
       return logGeometry(p);
     case 'snowman':
       return snowmanGeometry();
+    case 'chimney':
+      return chimneyGeometry();
   }
+}
+
+/** Round 9, Gablefall's chimney (a stand-in until its world draws its own): a stack of cool grey stone with a cap of
+ *  snow, about as tall as the sim's collider (1.6 to 2.2 m over the roof), never warm (a hazard). */
+function chimneyGeometry(): BufferGeometry {
+  return merge([
+    part(kitBox(1.1, 1.9, 1.1), new Color('#565C70'), { pos: [0, 0.95, 0] }),
+    part(new BoxGeometry(1.25, 0.16, 1.25), SNOW, { pos: [0, 1.98, 0] }),
+  ]);
 }
 
 /** Natural size the geometry was modelled at, used to scale instances to collider size. */

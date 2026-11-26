@@ -6,11 +6,11 @@ export type BiomeId = 'alpine' | 'glacier' | 'volcanic' | 'blossom' | 'lantern' 
 /** What a course is built as. Since Lanternfall's world was built this is the look itself; the name is kept for
  *  the sim's tables. (Round 9: and a new mountain that lays its own ground, under its own id, until its world lane makes
  *  it a look of its own: it borrows one meanwhile, LOOK below. The Old Run's is its own.) */
-export type CourseBiome = BiomeId;
+export type CourseBiome = BiomeId | 'gablefall';
 export type MountainId = 'pinecrest' | 'frostfang' | 'ember' | 'sakura' | 'lanternfall' | 'oldrun' | 'gullhaven' | 'daily';
 
 /** A new mountain's borrowed look, until its world lane gives it its own (round 9; Lanternfall's round 7 path). */
-const LOOK: Partial<Record<CourseBiome, BiomeId>> = {};
+const LOOK: Partial<Record<CourseBiome, BiomeId>> = { gablefall: 'alpine' };
 
 /** The look a course biome is drawn and scored with: its own (Lanternfall borrowed Frostfang's until its world
  *  was built), or a new mountain's borrowed one. */
@@ -178,6 +178,25 @@ const BIOME_PARAMS: Record<CourseBiome, MountainParams> = {
     snowmanChance: 0,
     rampDistance: 4800,
   },
+  // Gablefall (round 9, notes/r9-gablefall.md): a hill town ridden on its roofs, laid by its own file (gablefall.ts). Its
+  // kit stands its own chimneys and lays its own lines, so nothing here lays a feature; its slope is the street's mean
+  // grade (a get-up's push and the far terrain read it), its ramp its own 2,800 m.
+  gablefall: {
+    biome: 'gablefall',
+    slope: 0.2,
+    wander: 0,
+    halfWidthStart: 12,
+    halfWidthEnd: 12,
+    density: 0,
+    kickerChance: 0,
+    dropChance: 0,
+    mogulChance: 0,
+    iceChance: 0,
+    ventChance: 0,
+    gateChance: 0,
+    snowmanChance: 0,
+    rampDistance: 2800,
+  },
 };
 
 /** Lanternfall's seed. Chosen among eight: its descent keeps every promise the fairness test makes of a
@@ -194,6 +213,9 @@ export const OLDRUN_LAB_SEED = OLDRUN_SEED;
 export const GULLHAVEN_SEED = 0x1f83d9ab;
 /** (The name its lab knew it by.) */
 export const GULLHAVEN_LAB_SEED = GULLHAVEN_SEED;
+/** Round 9: Gablefall's lab seed (SHA-256's eighth initial word, beside Gullhaven's seventh): in BIOME_BY_SEED only until
+ *  its lane registers the mountain (no Daily's and no Cup's to 2040, tests/gablefall.test.ts). */
+export const GABLEFALL_LAB_SEED = 0x5be0cd19;
 
 export const MOUNTAINS: readonly MountainDef[] = [
   { id: 'pinecrest', name: 'Pinecrest', tagline: 'Pine forest, soft powder, snowmen', seed: 0x51ed270b, unlockGhosts: 0 },
@@ -216,6 +238,7 @@ const BIOME_BY_SEED = new Map<number, CourseBiome>([
   [LANTERNFALL_SEED, 'lantern'],
   [OLDRUN_LAB_SEED, 'oldrun'],
   [GULLHAVEN_LAB_SEED, 'gullhaven'],
+  [GABLEFALL_LAB_SEED, 'gablefall'],
 ]);
 
 const BIOMES: readonly BiomeId[] = ['alpine', 'glacier', 'volcanic', 'blossom'];

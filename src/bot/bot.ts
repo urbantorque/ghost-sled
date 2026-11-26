@@ -424,6 +424,9 @@ export class Bot {
    *  passed to the flight model, undefined elsewhere so the five's flights are stepped exactly as before). */
   private readonly kitLips: boolean;
   private readonly lift: ((x: number, y: number, z: number) => number) | undefined;
+  /** Round 9: a street between rows of roofs (Gablefall's): a flight comes down on this rider's own line, the ridge of
+   *  its row or the street, as over Gullhaven's columns. False on every other course. */
+  private readonly levels: boolean;
   private readonly grad = { x: 0, z: 0 };
 
   constructor(
@@ -445,6 +448,7 @@ export class Bot {
     this.onTrack = this.course.layout.grammar === 'oldrun';
     this.kitLips = this.course.kit?.lips !== undefined;
     this.lift = this.course.hasLift ? (x, y, z) => this.course.liftAt(x, y, z) : undefined;
+    this.levels = this.course.hasLevels;
     this.rider.skill = this.t.skill;
     // (The fork coin's own odds, read, never drawn: a new mountain's bold choices are made by nerve as the rider goes.)
     this.rider.nerve = this.t.ambition * (0.2 + 0.8 * this.t.skill);
@@ -1865,7 +1869,7 @@ export class Bot {
     const L = this.lines;
     const d = runPlan(r0, plan, n, n, this.rotP, this.res);
     // (Round 9: on a kit's course, down on the line this rider rides, a gully's far shelf off its bold line.)
-    const aim = this.feed && this.feed.z > f.z ? this.feed.x - L.safeX(this.feed.z) : this.lift ? this.lineX(f.z) - L.safeX(f.z) : 0;
+    const aim = this.feed && this.feed.z > f.z ? this.feed.x - L.safeX(this.feed.z) : this.lift || this.levels ? this.lineX(f.z) - L.safeX(f.z) : 0;
     const off = f.x + d.lat - L.safeX(f.z) - aim;
     const ahead = off + (s.vx + d.vlat - s.vz * L.dir(f.z)) * 0.5;
     let cost = (off < 0 ? -off : off) + (ahead < 0 ? -ahead : ahead);

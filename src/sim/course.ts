@@ -5,9 +5,10 @@ import { Rng, hash32 } from './prng';
 import { momentPlays, setPieceKinds } from './moments';
 import { GATE_PAST_LINE, START_GATE_Z } from './charms';
 import { ALL_EVENTS } from './chaos';
-import type { Kit, KitPlan, KitRider } from './kit';
+import type { Kit, KitPlan, KitRider, Street } from './kit';
 import { HOUSE_GRADE, OLDRUN_KIT, OLDRUN_LAYOUT, TRACK_GRADE } from './oldrun';
 import { BEACON_GRADE, DESCENT_GRADE, GULLHAVEN_KIT, GULLHAVEN_LAYOUT, HARBOUR_GRADE, HEAD_EXTRA, PATH_HW, SHEDS_GRADE, SHELF_GRADE } from './gullhaven';
+import { BACK, GABLEFALL_KIT, GABLEFALL_LAYOUT, NAVE_GRADE, NAVE_HW, QUAY_GRADE, QUAY_HW, SQUARE_GRADE, SQUARE_HW, STREET_GRADE } from './gablefall';
 import { CHUNK_LEN, FOREST_LIMIT, SAFE_LANE, THRESHOLD_AFTER, THRESHOLD_AFTER_MIN, THRESHOLD_BEFORE, THRESHOLD_BEFORE_MAX, THRESHOLD_HW, bank } from './courseparts';
 
 export { CHUNK_LEN, FOREST_LIMIT, SAFE_LANE, THRESHOLD_AFTER, THRESHOLD_AFTER_MIN, THRESHOLD_BEFORE, THRESHOLD_BEFORE_MAX, THRESHOLD_HW, bank };
@@ -33,7 +34,9 @@ export type ObstacleKind =
   | 'charpine'
   | 'blossom'
   | 'lantern'
-  | 'pillar';
+  | 'pillar'
+  // Round 9, Gablefall (gablefall.ts): a chimney beside a roof's ridge.
+  | 'chimney';
 
 export interface Obstacle {
   id: number;
@@ -242,10 +245,10 @@ export const RUN_OUT = FIVE.runOut;
 export const FINISH_SQUARE = FIVE.square;
 
 /** Each course biome's descent. */
-const LAYOUTS: Record<CourseBiome, Layout> = { alpine: FIVE, glacier: FIVE, volcanic: FIVE, blossom: FIVE, lantern: FIVE, oldrun: OLDRUN_LAYOUT, gullhaven: GULLHAVEN_LAYOUT };
+const LAYOUTS: Record<CourseBiome, Layout> = { alpine: FIVE, glacier: FIVE, volcanic: FIVE, blossom: FIVE, lantern: FIVE, oldrun: OLDRUN_LAYOUT, gullhaven: GULLHAVEN_LAYOUT, gablefall: GABLEFALL_LAYOUT };
 
 /** Each new mountain's own ground (round 9): none for the five, a Daily or a Cup. */
-const KITS: Partial<Record<CourseBiome, Kit>> = { oldrun: OLDRUN_KIT, gullhaven: GULLHAVEN_KIT };
+const KITS: Partial<Record<CourseBiome, Kit>> = { oldrun: OLDRUN_KIT, gullhaven: GULLHAVEN_KIT, gablefall: GABLEFALL_KIT };
 
 /** The descent a seed is laid as, without building its course. */
 export function layoutFor(seed: number): Layout {
@@ -306,6 +309,8 @@ const TALL: Record<CourseBiome, ObstacleKind[]> = {
   // (Round 9: the Old Run stands nothing in its track; these rows are never read there.)
   oldrun: ['pine', 'pine', 'pine'],
   gullhaven: ['rock', 'rock', 'rock'],
+  // (Round 9: Gablefall's kit stands its own chimneys; these rows are never read there.)
+  gablefall: ['rock', 'rock', 'rock'],
 };
 
 const LOW: Record<CourseBiome, ObstacleKind[]> = {
@@ -316,6 +321,7 @@ const LOW: Record<CourseBiome, ObstacleKind[]> = {
   lantern: ['lantern', 'rock', 'iceblock'],
   oldrun: ['rock', 'rock', 'log'],
   gullhaven: ['rock', 'rock', 'rock'],
+  gablefall: ['rock', 'rock', 'rock'],
 };
 
 /**
@@ -373,7 +379,13 @@ export type SectionKind =
   | 'beacon'
   | 'descent'
   | 'sheds'
-  | 'harbour';
+  | 'harbour'
+  // Round 9, Gablefall (gablefall.ts): down the church's nave at the start, the close and the market squares (each stage
+  // line's threshold), the street between its rows of roofs, the quay and the river's ice it finishes on.
+  | 'nave'
+  | 'square'
+  | 'rooftops'
+  | 'quay';
 export const SECTION_KINDS: readonly SectionKind[] = [
   'cruise',
   'chute',
@@ -403,6 +415,10 @@ export const SECTION_KINDS: readonly SectionKind[] = [
   'descent',
   'sheds',
   'harbour',
+  'nave',
+  'square',
+  'rooftops',
+  'quay',
 ];
 /** What a section does to the course. `slope`, `wander`, `wave`, `span`, `obstacles`, `kickers`,
  *  `moguls`, `drops` and `relief` are multipliers (1 = the plain corridor); the rest are as noted. */
@@ -524,6 +540,13 @@ const SHAPES: Record<SectionKind, SectionShape> = {
   descent: shaped({ pin: 1, wander: 0, span: 0, relief: 0.2, obstacles: 0, limit: 0.8, ...BARE }),
   sheds: shaped({ pin: 1, wander: 0, span: 0, relief: 0.1, obstacles: 0, limit: 0.8, ...BARE }),
   harbour: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 0.8, ...BARE }),
+  // Round 9, Gablefall: the kit draws its line, its width, its rows and its chimneys; these say that nothing of the
+  // five's stands or launches on it, that its line is the street's middle (the squares' is let wander a little, as a
+  // threshold's is), and where something turns a sled back: the rows' backs just past the corridor's edge.
+  nave: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 1, ...BARE }),
+  square: shaped({ pin: 1, wander: 0, span: 0.25, relief: 0, obstacles: 0, limit: 2, ...BARE }),
+  rooftops: shaped({ pin: 1, wander: 0, span: 0, relief: 0, obstacles: 0, limit: 0.6, ...BARE }),
+  quay: shaped({ pin: 1, wander: 0, span: 0.15, relief: 0, obstacles: 0, limit: 2, ...BARE }),
 };
 
 /** The ground's real gradient for the kinds that promise one; the rest scale the mountain's own slope. */
@@ -549,6 +572,10 @@ const GRADE: Partial<Record<SectionKind, readonly [number, number]>> = {
   descent: [DESCENT_GRADE, DESCENT_GRADE],
   sheds: [SHEDS_GRADE, SHEDS_GRADE],
   harbour: [HARBOUR_GRADE, HARBOUR_GRADE],
+  nave: [NAVE_GRADE, NAVE_GRADE],
+  square: [SQUARE_GRADE, SQUARE_GRADE],
+  rooftops: [STREET_GRADE, STREET_GRADE],
+  quay: [QUAY_GRADE, QUAY_GRADE],
 };
 
 /** The half-width of the kinds that pin it. */
@@ -571,6 +598,10 @@ const WIDTH: Partial<Record<SectionKind, readonly [number, number]>> = {
   descent: [PATH_HW, PATH_HW],
   sheds: [PATH_HW, PATH_HW],
   harbour: [PATH_HW, PATH_HW],
+  nave: [NAVE_HW, NAVE_HW],
+  square: [SQUARE_HW, SQUARE_HW],
+  rooftops: [BACK, BACK],
+  quay: [QUAY_HW, QUAY_HW],
 };
 
 const BLEND: Record<SectionKind, number> = {
@@ -602,6 +633,10 @@ const BLEND: Record<SectionKind, number> = {
   descent: 60,
   sheds: 60,
   harbour: 60,
+  nave: 1,
+  square: 40,
+  rooftops: 60,
+  quay: 60,
 };
 
 /** The metres of a section's body past its blend. Terraces and leaps work theirs out from what they hold. */
@@ -634,6 +669,10 @@ const BODY: Record<SectionKind, readonly [number, number]> = {
   descent: [0, 0],
   sheds: [0, 0],
   harbour: [0, 0],
+  nave: [0, 0],
+  square: [0, 0],
+  rooftops: [0, 0],
+  quay: [0, 0],
 };
 
 /** A slope that steepens is a crest: the blend takes long enough to stay under this curvature (a sled
@@ -678,6 +717,8 @@ const CLIFFS: Record<CourseBiome, { first: readonly [number, number]; plain: rea
   oldrun: { first: [15, 17], plain: [13.5, 16], last: [18, 21] },
   // (Round 9: Gullhaven has no leaps; never read there.)
   gullhaven: { first: [15, 17], plain: [13.5, 16], last: [18, 21] },
+  // (Round 9: Gablefall has no leaps; never read there.)
+  gablefall: { first: [15, 17], plain: [13.5, 16], last: [18, 21] },
 };
 
 /** Terraces: the lead to the first lip, the step spacing and the steps' fall. */
@@ -805,6 +846,12 @@ const SCRIPTS: Record<CourseBiome, readonly [Act, Act, Act]> = {
     { name: 'The Geos', blocks: [['geo']] },
     { name: 'The Harbour Road', blocks: [['cliffpath']] },
   ],
+  // Gablefall (round 9): its acts' names; its kit (gablefall.ts) lays their ground, not these blocks.
+  gablefall: [
+    { name: 'Church Hill', blocks: [['rooftops']] },
+    { name: 'The Market', blocks: [['rooftops']] },
+    { name: 'The Water Stairs', blocks: [['rooftops']] },
+  ],
 };
 
 /** What each mountain promises to hold, on every seed. */
@@ -816,6 +863,7 @@ const SIGNATURES: Record<CourseBiome, readonly SectionKind[]> = {
   lantern: ['ravine', 'fork', 'street', 'bridge'],
   oldrun: [],
   gullhaven: [],
+  gablefall: [],
 };
 
 /** Lanternfall's avenues: a street there stands between two rows of stone lamps, a pair every LAMP_STEP metres,
@@ -1019,6 +1067,8 @@ export class Course {
   private readonly ownSurface: boolean;
   /** Air that lifts a sled somewhere on this course (the sim's lift, kit.ts). */
   readonly hasLift: boolean;
+  /** Ground on two levels, a street between rows of roofs (Gablefall's; the sim's levelHold, kit.ts street). */
+  readonly hasLevels: boolean;
 
   constructor(seed: number) {
     this.seed = seed >>> 0;
@@ -1030,6 +1080,7 @@ export class Course {
     this.ownGround = this.kit?.ground !== undefined;
     this.ownSurface = this.kit?.surface !== undefined;
     this.hasLift = this.kit?.lift !== undefined;
+    this.hasLevels = this.kit?.street !== undefined;
     this.sC = hash32(this.seed, 1);
     this.sW = hash32(this.seed, 2);
     this.sS = hash32(this.seed, 3);
@@ -2845,6 +2896,11 @@ export class Course {
   /** A lift column's middle at z, or null. */
   liftX(z: number): number | null {
     return this.kit?.liftX ? this.kit.liftX(this, z) : null;
+  }
+
+  /** The street at z where rows of roofs stand either side of it (Gablefall's), or null: no street (and none on the five). */
+  streetAt(z: number): Street | null {
+    return this.kit?.street ? this.kit.street(this, z) : null;
   }
 
   /** The line a rider of this kind rides at z here and now: the kit's, or the safe line. */
