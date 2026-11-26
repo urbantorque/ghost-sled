@@ -147,6 +147,21 @@ describe('the one reward', () => {
   it('a run that opened nothing turns over the bar alone', () => {
     expect(storyReward(model({ spine: spineStub() }))).toBeNull();
   });
+
+  // (The merge of the garage: a mountain's set piece is no page's, so it says where it came from, as the garage lane's
+  // RewardCard.from has it, never "Reached Rider Rank".)
+  it('a set piece says the mountain whose board gave it', () => {
+    const r = storyReward(model({ spine: { ...spineStub(3), opened: [{ kind: 'garage', name: 'Pine Chevron', page: 0, chapter: null, from: "Pinecrest's set" }] } }));
+    expect(r).toMatchObject({ kind: 'prize', name: 'Pine Chevron', kicker: 'Pinecrest’s set' });
+  });
+
+  it('a sled made affordable is turned over at the garage’s price, not the sim’s older one', () => {
+    // The Lodge Toboggan: 300 in the garage, 260 in sim/sleds.ts. A wallet of 290 before this run's 40 cannot buy it.
+    const u = { kind: 'sled' as const, name: 'Lodge Toboggan', gifts: 0, price: 300, piece: 'sled:2' };
+    expect(storyReward(model({ nextUnlock: u, wallet: 330, giftsEarned: 40 }))).toEqual({ kind: 'sled', name: 'Lodge Toboggan' });
+    // A wallet that could already buy it before this run: not this run's news.
+    expect(storyReward(model({ nextUnlock: u, wallet: 380, giftsEarned: 40 }))).toBeNull();
+  });
 });
 
 describe('the one button', () => {

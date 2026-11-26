@@ -362,8 +362,10 @@ export class Menus {
     if (!ui) return;
     if (this.garage.show()) this.rememberFocus();
     this.garage.el.parentElement?.classList.add('gs-garage-on');
-    ui.show(v);
+    // (Inert lifted before it shows: over the results every other layer is inert, and the garage takes focus as it
+    // shows; opened from Details, focus fell to the page.)
     this.onChange();
+    ui.show(v);
   }
 
   /** Round 9: the purchase's line over the place ("Yours: the Pom Muffs"), for a couple of seconds. */
@@ -940,6 +942,12 @@ export class Menus {
   /** Round 9: closes the sheet on top (settings over the books over the garage), as its own Close does, for Escape,
    *  Backspace (ui.ts back) and the pad's B. False with none open: the pause card is not one. */
   closeTop(): boolean {
+    // (The garage's place, the shop lane's layer, sits under settings and the books and over the round 6 sheet, as
+    // topEl has it; its own close hands focus back to the door, silent as its Back and Escape are.)
+    if (this.garage.open && !this.settings.open && !this.books.open) {
+      this.closeGarage();
+      return true;
+    }
     const top = this.settings.open ? this.settings : this.books.open ? this.books : this.sleds.open ? this.sleds : null;
     if (!top) return false;
     this.ctx.sound('back');

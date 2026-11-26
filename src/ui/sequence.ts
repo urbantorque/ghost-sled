@@ -256,13 +256,14 @@ export function storyReward(m: ResultsModel): StoryReward | null {
   if (r) {
     // (The kicker names the rank the bar reached, whichever page gave the prize: "Rider Rank 5" over a part-filled
     // bar at page 6 read as not reached. A chapter's page is the month's chapter, not Rider Rank.)
-    const kicker = r.chapter ? 'This month’s chapter' : `Reached Rider Rank ${Math.max(r.page, sp?.after.page ?? r.page)}`;
+    // (A piece that is no page's says where it came from, "Pinecrest’s set": a mastery board gave it, not the rank.)
+    const kicker = r.from ? curly(r.from) : r.chapter ? 'This month’s chapter' : `Reached Rider Rank ${Math.max(r.page, sp?.after.page ?? r.page)}`;
     return { kind: 'prize', reward: r, kicker, name: prize(r), line: SAYS[r.name] ?? null };
   }
   // A sled this run's gifts made affordable: named, and it waits in the garage (Details has the way in).
   const u = m.nextUnlock;
   if (u?.kind === 'sled' && u.gifts <= 0) {
-    const price = SLEDS.find((s) => s.name === u.name)?.price ?? 0;
+    const price = u.price ?? SLEDS.find((s) => s.name === u.name)?.price ?? 0;
     if (price > 0 && m.wallet - m.giftsEarned < price) return { kind: 'sled', name: u.name };
   }
   return null;
@@ -406,7 +407,7 @@ export class Story {
       n.setAttribute('translate', 'no');
       got.append(art, h('span', 'gs9-got-k', 'New mountain'), n);
     } else if (reward?.kind === 'prize') {
-      rankInKicker = !reward.reward.chapter;
+      rankInKicker = !reward.reward.chapter && !reward.reward.from;
       const n = h('span', 'gs9-got-n', reward.name);
       n.setAttribute('translate', 'no');
       got.append(h('span', 'gs9-got-art is-gift', ico9(rewardGlyph(reward.reward.kind))), h('span', 'gs9-got-k', reward.kicker), n);

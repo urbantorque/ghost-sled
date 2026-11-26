@@ -153,7 +153,9 @@ export class UI implements GameUI {
     // Round 9: Escape and Backspace go back (back(), above): on the window's bubbling phase, so photo mode, which
     // takes every key at capture while it is open, keeps its own Escape. A field being typed in keeps Backspace.
     window.addEventListener('keydown', (e) => {
-      if ((e.code !== 'Escape' && e.code !== 'Backspace') || e.repeat) return;
+      // (A surface that took the key itself, the garage's Escape, has closed already: going back again would close
+      // what it was opened over, Details.)
+      if ((e.code !== 'Escape' && e.code !== 'Backspace') || e.repeat || e.defaultPrevented) return;
       const t = e.target;
       if (e.code === 'Backspace' && t instanceof HTMLElement && (t.isContentEditable || (t instanceof HTMLInputElement && t.type !== 'range' && t.type !== 'checkbox'))) return;
       if (this.back()) e.preventDefault();
@@ -175,7 +177,7 @@ export class UI implements GameUI {
       },
     });
     // (Round 9: Details' "Open the Garage" takes the title's own way into the garage.)
-    this.results = new Results(this.el, ctx, hd, { openGarage: () => this.openGarage() });
+    this.results = new Results(this.el, ctx, hd, { openGarage: (piece) => this.openGarage(piece) });
     // Menus are created before title/results for module wiring; keep them stacked on top.
     this.el.append(this.menus.pause.el, this.menus.sleds.el, this.menus.garage.el, this.menus.settings.el, this.menus.books.el);
 
@@ -213,9 +215,10 @@ export class UI implements GameUI {
     this.markOcc();
   }
 
-  /** The garage, the one way in (the title's Garage door, and the results' Details when a sled is ready there). */
-  private openGarage(): void {
-    if (this.hd.onOpenSleds) this.hd.onOpenSleds();
+  /** The garage, the one way in (the title's Garage door, and the results' Details when a sled is ready there, at
+   *  that sled's piece). */
+  private openGarage(piece?: string): void {
+    if (this.hd.onOpenSleds) this.hd.onOpenSleds(piece);
     else if (this.menus.lastSleds) this.menus.showSleds(this.menus.lastSleds.cards, this.menus.lastSleds.wallet, this.menus.lastSleds.paints, this.menus.lastSleds.shelves, this.menus.lastSleds.lanterns);
   }
 

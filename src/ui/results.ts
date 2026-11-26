@@ -50,8 +50,9 @@ const CHAL_LOCK_MS = 1500;
 const MEDAL = ['', 'Bronze', 'Silver', 'Gold'] as const;
 
 export interface ResultsHooks {
-  /** The garage, opened the way the title opens it (a sled ready in it, from Details). */
-  openGarage(): void;
+  /** The garage, opened the way the title opens it (a sled ready in it, from Details), at a piece when given
+   *  ('sled:2', nextUnlock's piece). */
+  openGarage(piece?: string): void;
 }
 
 export class Results {
@@ -235,7 +236,7 @@ export class Results {
     const f = sheetFrame(this.ctx, { cls: 'gs9-det is-right', title: 'Details', close: 'Back', closeIcon: 'back', fk: 'close-details', onClose: () => close() });
     detailsBody(f.body, m, this.ctx, this.hd, {
       mode: this.inputMode,
-      garage: () => this.hooks.openGarage(),
+      garage: (piece) => this.hooks.openGarage(piece),
       watch: this.hd.onWatchReel ? () => this.hd.onWatchReel?.() : null,
       clip: this.hd.onSaveClip ? () => this.hd.onSaveClip?.() : null,
       challenge: m.canChallenge ? this.rewarded('challenge', 'link', m.sendItBack ? 'Send It Back' : 'Challenge a Friend', false, () => this.hd.onChallenge()) : null,
@@ -321,7 +322,7 @@ export class Results {
 
 interface DetailsActs {
   mode: InputMode;
-  garage(): void;
+  garage(piece?: string): void;
   watch: (() => void) | null;
   clip: (() => void) | null;
   challenge: HTMLButtonElement | null;
@@ -434,9 +435,10 @@ function detailsBody(body: HTMLElement, m: ResultsModel, ctx: Ctx, hd: UIHandler
   const u = m.nextUnlock ?? null;
   if (u?.kind === 'mountain') lines.push(notP(`${u.name} opens at ${fmt(u.need)} ghosts passed: you have ${fmt(Math.min(u.have, u.need))}.`));
   else if (u?.kind === 'sled') {
-    const price = SLEDS.find((s) => s.name === u.name)?.price ?? 0;
+    // (The garage's price, which nextUnlock carries since the shop lane; sim/sleds.ts keeps an older one.)
+    const price = u.price ?? SLEDS.find((s) => s.name === u.name)?.price ?? 0;
     if (u.gifts > 0) lines.push(notP(`The ${u.name}: ${fmt(u.gifts)} gifts to go${price ? ` of ${fmt(price)}` : ''}.`));
-    else lines.push(h('div', 'gs9-det-act', notP(`The ${u.name} is ready in the garage.`), b9(ctx, 'secondary', 'Open the Garage', { icon: 'sledBold', fk: 'det-garage', aria: `Open the garage at the ${u.name}`, onClick: () => acts.garage() })));
+    else lines.push(h('div', 'gs9-det-act', notP(`The ${u.name} is ready in the garage.`), b9(ctx, 'secondary', 'Open the Garage', { icon: 'sledBold', fk: 'det-garage', aria: `Open the garage at the ${u.name}`, onClick: () => acts.garage(u.piece) })));
   }
   body.append(section('What It Paid', paid, ...lines));
 
