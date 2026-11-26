@@ -193,8 +193,8 @@ const FAMILY: Record<string, readonly Variant[]> = {
   // The gaps between the stacks, `off` m either side of the line in turn, `hw` m wide either side.
   stacks: [
     { key: 'weave', name: 'The weave', line: 'Thread every gap between the sea stacks', t: { off: 3, hw: 1.8 } },
-    { key: 'tight', name: 'Tight gaps', line: 'Thread the sea stacks: the gaps are tight', t: { off: 3, hw: 1.2 } },
-    { key: 'wide', name: 'A wide weave', line: 'Thread the sea stacks: they stand wide apart', t: { off: 4.5, hw: 1.8 } },
+    { key: 'tight', name: 'Tight gaps', line: 'Thread the sea stacks: the gaps are tight', t: { off: 3, hw: 1.4 } },
+    { key: 'wide', name: 'A wide weave', line: 'Thread the sea stacks: they stand wide apart', t: { off: 4, hw: 1.8 } },
   ],
   carry: [
     { key: 'still', name: 'Still air', line: 'Carry the flame to the great lantern', t: { slack: 1.03, hit: 0.3 } },

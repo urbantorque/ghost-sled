@@ -453,6 +453,9 @@ export const MECHANICS: Record<string, Mechanic> = {
     const t = trackAt(sim.course, s.z);
     return (w.side > 0 ? t.hr : t.hl) > WALL_LOW + 0.1;
   },
+  // Gullhaven (notes/r9-gullhaven.md section 1): in the air inside a gully's column of lift, the sea wind holding the sled
+  // over the mouth.
+  gullhaven: ({ sim }) => !sim.s.grounded && sim.s.tumble === 0 && sim.course.liftAt(sim.s.x, sim.s.y, sim.s.z) > 0,
 };
 
 export interface Flight {

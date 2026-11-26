@@ -932,7 +932,10 @@ export class Bot {
       if (this.inGates) this.goal = null;
       this.offTarget = mOff;
       const d = mOff - this.off;
-      this.off += d > 1.4 ? 1.4 : d < -1.4 ? -1.4 : d;
+      // (Round 9, Gullhaven: down the sea stacks the next gap is on the other side and a second and a half away: the whole
+      // way across at once.)
+      const most = verb === 'stacks' ? 6 : 1.4;
+      this.off += d > most ? most : d < -most ? -most : d;
       this.offRetarget = now + 30;
       return;
     }
@@ -949,7 +952,8 @@ export class Bot {
     this.px0 = xp;
     this.pz0 = zp;
     // (A slalom is joined at once: eased onto over a second, the line aimed at is a gate out of step.)
-    this.join = this.slalom ? 4 : Math.max(10, speed * 0.9);
+    // (Round 9, Gullhaven: so is a run of the sea stacks' gaps, a gap every second and a half at the shore road's speed.)
+    this.join = this.slalom ? 4 : this.inGates && this.sim.plays[this.sim.mo.active]?.verb === 'stacks' ? 12 : Math.max(10, speed * 0.9);
     const zEnd = zp + speed * 2.2 + 10;
     const g = this.goal;
     if (g) {
