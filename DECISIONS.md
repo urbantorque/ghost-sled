@@ -4690,3 +4690,54 @@ straight through.
       board, settings or the pause card in the game; real sticker frames, reduced motion and a real reload were not
       exercised. ART.md 10 takes the lane's text (the other screens as sheets, the pause card, the books, the board, the
       skies; the Trial's card; photo mode's words).
+
+400. **Gullhaven built and merged** (`r9-gullhaven`, 9cb038a to 02a206f, 19 commits, merged at 29132d7;
+    `notes/r9-gullhaven.md`, `notes/r9-gullhaven-world.md`; frames under `shots/r9/gullhaven/`).
+    - *Why soaring did not pay at first:* a flier keeps its lip speed and gets back of the gully's drop only what its
+      landing pays, while the path rider turns the drop into speed; lifted high it came down well paid but after 7.5 s
+      and 44 m up; held to the rim, the lift could not catch a sled falling back into it; off a steep face a pop flew four
+      seconds with no lift at all (a leap turned sideways).
+    - *What makes it pay:* a face that falls with the path at only the shelf's grade plus 0.1, a column of sea wind 70 m
+      long (120 over the Great Geo) at 0.5 g (0.65) at any height, the head's drift (drag 1.5) and the path's swing round
+      it, a 0.2 shelf of wind-packed snow (hook C, in the sim's air step and its landing prediction). The lab's pilots and
+      the bot spring a lip, hold the column and aim the landing at their own line; the bot's `lip` goal is general, for
+      Gablefall. The five's fingerprint held at every commit.
+    - *The bar, every line met:* the mid pilot's soaring 17% faster over the gullies than its own hands on the path; its
+      flights 4.3 to 6.5 s (median 4.8; the Great Geo's the longest in the game, past Pinecrest's 5.78); 9 of 9 soared
+      (the expert 9, the bot at 0.9 7 or 8), every one down on the face or far shelf; the novice and a sled let go on the
+      path through every gully; nobody past the fence; no fall but a flight of 0.75 s or more landed wrong; the clumsy
+      pilot 30 of 30; the mid pilot 154 s at 31 m/s. New against the five on 4 of 6 measures, 2 by 15% (3.96 turns a km,
+      no hazards), apart from the Old Run; in a column 15% of the run. Thirteen promises in `tests/gullhaven.test.ts`.
+    - *A mountain:* `MOUNTAINS[6]`, appended, id `gullhaven`, seed 0x1f83d9ab (the lab's; no Daily's or Cup's to 2040),
+      opening at 32 ghosts; its own look, out of `BIOMES`; the avalanche, the light storm and the spirit train (no yeti);
+      three set pieces on appended verbs (`beam` the Lighthouse, `soar` the Great Geo, `stacks` the Sea Stacks), two
+      legends (the Beacon Keeper, the Herring Lights), three home riders (Ina Corrie, Tam Skerry, Grizel Ness; never a
+      duel); its first run laid round 157 s; a pool of 53, 124 to 190 s; a reel in E dorian at 104 for squeezebox and
+      fiddle over a deep drum and a low choir, its three stingers its own, 5.25 MB on the desk and 2.78 to 3.50 MB on
+      Low and phones. The whole score was built again: every other pack's stamp changed, its music did not.
+    - *Its world:* storm light on a sea cliff, the sea at its own level drawn as water, a pale snow fence at the run's
+      limit, corniced lips over clefts cut to the sea, the wind shown (spindrift up each column, gulls hanging in it,
+      pennants standing), the beacon, the lighthouse at its set piece, the stacks and the harbour's ice with the line
+      between two pier-head lights; at Moonrise its other hour. Over a gully the lens steps out and leans to the sea,
+      inside the five's opening allowance. A fresh blind critic sorted its greyscale frames alone ("no mountain at all,
+      only a flat horizon"); three critic rounds, the last round's fixes seen only in frames since. Low on a held run:
+      434 to 439 GL calls a frame against Pinecrest's 353 to 415 and Ember's 391 to 402.
+    - *Merged* with one conflict, the per-biome sky rules the other screens' merge had removed: kept removed, and
+      Gullhaven's sky moved into `art.ts` `SKY` beside its ridges. Checked headless on a desk and a phone: the title on
+      Gullhaven over its first six seconds (no pale shaft, which the world builder once saw in a first frame), the
+      picker's seven chips in two rows with its sky, the console clean. tsc clean; the full suite 116 files, 2,091 tests.
+    - *The main lane's calls on the lane's questions:* nine gullies, not ten (ten do not fit clear of each other and the
+      thresholds at about 315 m a gully; the bar's 7 of 10 read as its share); no colliders, the concept's rocks and
+      huts the world's scenery past the fence (they floored the clumsy pilot, against the bar), as the Old Run has none;
+      the pool's wide spread (p90/p10 1.34, the path's riders and the wind's) kept as its character until a person has
+      seen a field of it, as 397 kept the Old Run's narrow one; the first run's thin margin at 157 s kept and checked in
+      the hand ride; the mid pilot with lanterns and charms quicker than the concept (139 s against about 160) accepted,
+      as the Old Run's was; the mechanic's share by its own measure (15%) accepted, the choice running through the
+      gullies' 60% of the run; the Lighthouse on the Cape, not the harbour road. Gablefall's lane is cut from round-9
+      after this merge, so its whole score build lands on top of Gullhaven's packs and nothing is built twice.
+    - *Carried to phase C:* Low's frame time beside Pinecrest's in M4's sittings (its calls 5 to 24% over, and the set
+      pieces' draws not counted since); its hour and mirror wired as 397 said; its Almanac page, album frames and G6
+      set (the lane's list in its notes); the legends still the marquee's stand-ins; no ruts of its own; for the feel
+      pass, pale upright marks on the sea under the Great Geo and on the title (they read as posts), the far coast's
+      pale streaks, soft figure-like shadows on the snow, and the strong bot's 42 to 50 m/s down the cut to the harbour.
+    - Nobody has ridden it by hand, and nobody has listened to its score. ART.md 15 takes the world's text.

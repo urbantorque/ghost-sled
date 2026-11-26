@@ -1229,6 +1229,44 @@ stays the dark shape in the street.
 - **Low** is a poster of it: spikes for twigs, one rail, the places drawn only within reach; on a held Low run about
   Pinecrest's GL calls, under them in the Labyrinth.
 
+### Gullhaven: the storm's light on the sea cliff (new in round 9)
+
+- **Feeling.** A winter's day on a sea cliff: the path along the clifftop with the fence between it and the drop, the
+  moor rising on the left, the sea a thousand metres down on the right to the horizon under a slate storm deck, and the
+  sun burning low under its edge. Wind you can see. It comes down off the cliffs to a harbour at dusk, its lights lit.
+- **How it rides.** Nine gullies cut the clifftop. At each the path swings inland round the gully's head through its
+  drift; the shelf runs straight on to a corniced lip, and a rider who pops off it is held over the gully's mouth by
+  the sea wind and comes down on its face or the far shelf, paid for the landing. Soaring is the line, the path the
+  safe and slower way.
+- **Colour script.** A low sun ahead and to the right over the sea under a slate deck lit only along its rim; snow with
+  only a trace of the sun's colour, cool violet shade; the sea dark slate-blue with a broken path of glints.
+
+  | Metres | Place | Light and grade |
+  | --- | --- | --- |
+  | 0 to 200 | The beacon | The low sun under the deck's edge, the beacon's fire on its knoll the warm note. |
+  | 200 to 1450 | The Cape and its geos | Clear storm light: the sun's path on the sea, the lighthouse limewashed at the Cape's end. |
+  | 1450 to 2050 | The squall | The deck lowers onto the sun, snow drives in on the wind, the far sea in haze. |
+  | 2050 to 2800 | The Great Geo | The sun breaks under the deck over the Great Geo, its column lit, spindrift streaming. |
+  | 2800 to 4050 | The rose sunset | The sun sets under the deck in rose, the sea a path of fire, the shade slate-violet. |
+  | 4050 to 4800 | The descent, the sheds, the harbour | Dusk: an amber band under the deck, the sheds' windows and the pier-head lights the light at the line. |
+
+- **What it is not.** No mountain peak and no sea of cloud: the sea itself, at its own level, read as water. No pine:
+  a moor of snow over dry-stone walls. No square: a harbour with its quay, its pier and the line between two pier-head
+  lights.
+- **The edge.** A pale weathered snow fence on the cliff's brink, at the run's limit, its pennants streaming inland
+  and standing up over a gully's column; past it the cliff's dark rock in beds to a wet foot at the sea. A gully's lip
+  is a corniced edge flush with the shelf, its brow overhanging the drop: a lip a rider can leave, never a wall.
+- **The wind.** Spindrift up each column, gulls hanging in it into the wind, pennants and windsocks standing up, the
+  beacon's smoke leaning inland.
+- **Its other hour: Moonrise.** The moon over the sea and its path on the swell, the lighthouse's beam turning, the
+  beacon's fire, the harbour's windows and lights.
+- **The set pieces as light.** The lighthouse's beam a pool of lamplight swinging across the path at each mark, the next
+  breathing; the Great Geo's far line two blue-banded poles with lamps, lit while the rider is in the air; the sea
+  stacks' gaps in ink jaws with a pool in each, a stack in the sea off every gap.
+- **Low** is a poster of it: the fence's posts and rails with one pennant colour, one stack form, the places drawn
+  only within reach; on a held Low run more GL calls than Pinecrest's and Ember's (the sea, the surf and the
+  spindrift), timed in the round's proof.
+
 ### Tiers, designed
 
 - **Ultra and High** carry the whole direction: the shafts, the scatter, the ambient occlusion, the reflections.
