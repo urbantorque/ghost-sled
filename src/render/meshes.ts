@@ -1242,8 +1242,9 @@ export function finishSled(geo: BufferGeometry, f: FinishLook, round: boolean): 
         const d1 = Math.abs(fract(cx / s + cz / (s * 1.73)) - 0.5);
         const d2 = Math.abs(fract(cx / s - cz / (s * 1.73)) - 0.5);
         const d3 = Math.abs(fract((cz + cy) / (s * 0.87)) - 0.5);
-        // (Round 9, G6: a bolder lattice of bigger cells, so it reads as a cream net on the slate at race distance.)
-        mark = (top || back) && (d1 > 0.4 || d2 > 0.4 || d3 > 0.42);
+        // (Round 9, G6: the fine lattice kept; made bold it read as the finish line's check, which ART.md 13 forbids. The
+        // slate is darker instead.)
+        mark = (top || back) && (d1 > 0.47 || d2 > 0.47 || d3 > 0.475);
         break;
       }
       case 'stripes':
@@ -1535,7 +1536,9 @@ export function sledTrackParts(id: number, tiers: number, lite = false): TrackPa
         for (const sx of [-1, 1]) inlay.push(...inkLine([new Vector3(sx * 0.33, 0.04, -0.62), new Vector3(sx * 0.33, 0.04, 0.74), new Vector3(sx * 0.33, 0.11, 0.87)], 0.013));
         inlay.push(...inkLine([new Vector3(-0.3, 0.165, 0.558), new Vector3(0.3, 0.165, 0.558)], 0.012));
         inlay.push(...inkLine(arch(0.27, 0.22, t >= 3 ? 0.47 : 0.11, t >= 3 ? 0.725 : 0.69, lite ? 6 : 12), 0.011));
-        // (Two scrolls inlaid on the crest's face, the part of a built-up sled the lens behind sees most of.)
+        // (A diamond and two scrolls inlaid on the crest's face, the part of a built-up sled the lens behind sees most of;
+        // lines alone along the runners were never seen from behind.)
+        if (t >= 3) inlay.push(part(new BoxGeometry(0.15, 0.15, 0.012), FIN_CREAM, { pos: [0, 0.42, 0.73], rot: [0, 0, Math.PI / 4] }));
         if (t >= 3)
           for (const sx of [-1, 1]) {
             const sp: Vector3[] = [];

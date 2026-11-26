@@ -1,7 +1,7 @@
 /*
   Round 9, the shop lane: the garage over its place (src/ui/garage.ts). Round 9, G6: in the round's language, one kit9
-  sheet (kit9.css) like every room and the other screens: at the reading edge on a desk (the right, where the place
-  keeps the rider left of it), from the bottom on a phone held upright (the rider above it). The heading in italic 900
+  sheet (kit9.css) like every room and the other screens: from the logo's side on a desk (the left, where the place
+  keeps the rider right of it), from the bottom on a phone held upright (the rider above it). The heading in italic 900
   with a quiet Close; the gifts in marigold as the results draw them; the shelves as pills, the picked one pressed as
   settings' quality is; tiles and tiers as 18 px cards with the hairline; body words at the system's text weight; the
   vermillion only on a purchase or a tier being fitted. Order on both forms: the shelves, their pieces, the piece picked.
@@ -28,8 +28,8 @@
   pointer-events: none;
 }
 
-/* The sheet: kit9's, on the right of a desk, as wide as the place leaves it (render/garagescene.ts keeps the rider 17%
-   left of centre). */
+/* The sheet: kit9's, from the logo's side of a desk, as wide as the place leaves it (render/garagescene.ts keeps the
+   rider 17% right of centre). */
 .gs-gar-sheet.gs9-sheet {
   width: clamp(330px, 32vw, 440px);
   gap: 0;
@@ -202,7 +202,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3em;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-s);
   font-weight: var(--fw-text);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
@@ -244,8 +244,8 @@
   padding: var(--sp-3) var(--sp-4) var(--sp-5) var(--sp-5);
   overscroll-behavior: contain;
   border-top: 1px solid var(--hair);
-  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 18px), transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 18px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 18px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 18px), transparent 100%);
 }
 
 .gs-gar-name {
@@ -473,7 +473,7 @@
 /* The moment of a purchase: the scene has the floor; one line names the piece, an ink chip as the results' fact. */
 .gs-gar-moment {
   position: absolute;
-  left: calc((100% - clamp(330px, 32vw, 440px) - var(--sr)) / 2);
+  left: calc((100% + var(--sl) + clamp(330px, 32vw, 440px)) / 2);
   bottom: calc(var(--sb) + var(--sp-6));
   transform: translateX(-50%);
   margin: 0;

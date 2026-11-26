@@ -48,7 +48,7 @@ export const SLED_SHOP: readonly SledShop[] = [
     factor: 1,
     signature: 'Pine Bow',
     signatureHow: 'Standing on the sled, a slow bow with both arms out',
-    tiers: ['The runner tails sweep up behind the seat into two tall handles', 'A cream quilted pad over the seat, its stitched edge proud past the hips', 'The bow becomes a carved crest twice its height, edged in vermillion', 'A stern post and its lamp, lit, that warms the snow behind', 'Red inlay down the runners and scrolled on the crest that burns with your scarf in the flow'],
+    tiers: ['The runner tails sweep up behind the seat into two tall handles', 'A cream quilted pad over the seat and a blanket roll strapped across the tail', 'The bow becomes a carved crest twice its height, edged in vermillion', 'A stern post and its lamp, lit, that warms the snow behind', 'A red diamond and scrolls inlaid on the crest, and red down the runners, that burn with your scarf in the flow'],
   },
   {
     index: 1,

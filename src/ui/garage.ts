@@ -10,8 +10,8 @@ import type { GarageAct, GarageItemView, GarageShelfKey, GarageSledView, GarageV
 // place (menus.ts showGarage), never in the first download.
 //
 // Round 9, G6: in the round's language (kit9.ts, kit9.css, tokens.css), as the other screens were brought into it (U4):
-// one ink sheet at the reading edge (the right of a desk, where the place keeps the rider left of it; the bottom on a
-// phone, under the rider), its heading "Garage" in italic 900 with a quiet Close beside it, as every room and sheet
+// one ink sheet from the logo's side as every room's (the left of a desk, where the place keeps the rider right of it;
+// the bottom on a phone, under the rider), its heading "Garage" in italic 900 with a quiet Close beside it, as every room and sheet
 // has; the gifts in their marigold, as the results draw them; the shelves as pills, the picked one pressed as
 // settings' quality is (never a filled off-white tab); body words at the system's text weight; the one vermillion
 // only on a purchase or a tier being fitted. The critics of U4's family test found the old kit out of family (an
@@ -41,7 +41,7 @@ const SHELVES: ReadonlyArray<{ key: GarageShelfKey; label: string }> = [
 /** What the shelf's pieces are for, in one line under the card (a look only, never an edge). */
 const NOTE: Record<GarageShelfKey, string> = {
   sled: 'Each sled rides its own way. Its track only changes how it looks.',
-  hat: 'Seen from behind, as on the run. Pick it again to see its front.',
+  hat: 'From behind first, as on the run. Pick it again to see its front.',
   scarf: 'Your scarf stays vermillion, so you always know which rider is you.',
   trail: 'What your sled leaves in the air behind it. A look only.',
   finish: 'Every sled rides the same in any finish.',
@@ -105,7 +105,9 @@ export class GarageUI {
     this.strip.setAttribute('aria-label', 'Pieces on this shelf');
     this.live = h('p', 'gs9-sr');
     this.live.setAttribute('aria-live', 'polite');
-    this.sheet = h('section', 'gs9-sheet is-right gs-gar-sheet', head, bar, this.tabs, this.strip, this.card, this.live);
+    // (From the logo's side, as every room and sheet comes: the place keeps the rider right of it. The family test found
+    // the garage's sheet on the far edge the one sheet out of step.)
+    this.sheet = h('section', 'gs9-sheet gs-gar-sheet', head, bar, this.tabs, this.strip, this.card, this.live);
     this.sheet.setAttribute('role', 'dialog');
     this.sheet.setAttribute('aria-modal', 'true');
     this.sheet.setAttribute('aria-labelledby', this.heading.id);
@@ -344,7 +346,7 @@ export class GarageUI {
               : !owned
                 ? h('span', 'gs-gar-tier-state', 'Once the sled is yours')
                 : t.state === 'ride'
-                  ? h('span', 'gs-gar-tier-state', `Ride ${fmt(t.linesToGo)} more stage ${t.linesToGo === 1 ? 'line' : 'lines'} on it`)
+                  ? h('span', 'gs-gar-tier-state', `Ride ${fmt(t.linesToGo)} more ${t.linesToGo === 1 ? 'stage' : 'stages'} on it`)
                   : t.state === 'short'
                     ? h('span', 'gs-gar-tier-state', gifts(t.price), h('span', 'gs-gar-dim', `, ${fmt(Math.max(0, t.price - v.wallet))} more to go`))
                     : b9(this.ctx, 'primary', this.armed === key ? `Confirm ${fmt(t.price)} Gifts` : `Fit for ${fmt(t.price)} Gifts`, { fk: 'g-act', cls: 'gs9-b-s gs-gar-fit', onClick: () => this.spend(key, () => this.act({ kind: 'fit', sled: s.id })) });
@@ -387,7 +389,7 @@ export class GarageUI {
       h('div', 'gs-gar-acts', this.action('sled', sledItem, v.wallet)),
       h('div', 'gs-gar-sig', h('p', 'gs-gar-sig-line', h('strong', '', curly(s.signature)), curly(`: ${s.signatureHow}`)), b9(this.ctx, 'quiet', 'Watch', { icon: 'play', fk: 'g-watch', cls: 'gs9-b-s', onClick: () => this.act({ kind: 'watch', sled: s.id }) })),
       h('h4', 'gs9-cap gs-gar-sub', 'Its Track'),
-      owned ? h('p', 'gs-gar-from', `${fmt(s.lines)} stage ${s.lines === 1 ? 'line' : 'lines'} ridden on it. A tier opens by riding, then fits for gifts.`) : null,
+      owned ? h('p', 'gs-gar-from', `${fmt(s.lines)} ${s.lines === 1 ? 'stage' : 'stages'} ridden on this sled. Each part opens once you have ridden enough of them; then you fit it for gifts.`) : null,
       tiers,
       ornaments,
       h('p', 'gs-gar-note', NOTE.sled),
