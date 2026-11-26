@@ -314,7 +314,7 @@ Garage door is pressed from the keyboard on the mid-50 fixture, a warmed browser
 Ranges are the passes of 26 November (three to four a tier). The import is the dev server's module fetch; in a
 production build the scene is one 16.5 kB chunk (6.6 kB gzipped) and the UI 10.9 kB plus 7.1 kB of CSS. Low's cheaper
 scene is a third of High's triangles and half its draws. Closing puts the title back with the console clean on every
-pass, and focus on the Garage door (checked by script on Low, the phone and reduced motion; one High pass lost the door
+pass, and focus on the Garage door (checked by script on every tier in the last pass; one earlier High pass lost the door
 to a redraw before it could be focused, and the script now waits for it).
 
 ## 5. The moment (G4)
