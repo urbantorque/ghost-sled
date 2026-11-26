@@ -24,6 +24,7 @@ const VERBS_OF: Record<string, string[]> = {
   lanternfall: ['follow', 'kindle', 'carry'],
   // Round 9: the Old Run's, appended to VERBS.
   oldrun: ['peal', 'split', 'glaze'],
+  gullhaven: ['beam', 'soar', 'stacks'],
 };
 
 // (Round 9: the Old Run's track, so the skilled pilots hold a height on its walls; nothing of it reaches the five.)

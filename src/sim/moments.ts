@@ -3,6 +3,7 @@ import type { Course, Ledge, Obstacle, SectionKind, SkyGate } from './course';
 import { PI, TAU, dsin } from './dmath';
 import { MOUNTAINS } from './mountains';
 import { type OldRunPlace, placeOf, wallX } from './oldrun';
+import { type GullPlace, gullPlaceOf, gulliesOf } from './gullhaven';
 import { hash32 } from './prng';
 
 // Set pieces: each mountain's three biggest places, one a stage, each with a verb of its own that the sim plays,
@@ -35,13 +36,19 @@ import { hash32 } from './prng';
 //             it, on the glaze or over it, and it rings
 //   split     beat the Labyrinth's split: from its first bend to its last inside the split's time
 //   glaze     hold the glaze through the Horseshoe: so many seconds of the hook ridden on its glaze
+// Round 9, Gullhaven (notes/r9-gullhaven.md), appended:
+//   beam      ride in the lighthouse's beam: it sweeps the clifftop path on a clock, and a mark is taken by a sled
+//             inside the beam as it passes (a gate on a clock, as the swinging lanterns are; never a hazard)
+//   soar      soar across the Great Geo: off its lip and over its mouth on the sea wind, down on its far shelf, long
+//             in the air, or stomped
+//   stacks    thread the sea stacks: pass through each gap between them along the shore road
 // This file names them and says where they are and what each holds. What happens in them is the sim's (sim.ts).
 //
 // Pure: no DOM, render or audio imports.
 
-export type MomentVerb = 'race' | 'gates' | 'rings' | 'collapse' | 'steps' | 'slide' | 'shatter' | 'surge' | 'flourish' | 'follow' | 'kindle' | 'carry' | 'peal' | 'split' | 'glaze';
+export type MomentVerb = 'race' | 'gates' | 'rings' | 'collapse' | 'steps' | 'slide' | 'shatter' | 'surge' | 'flourish' | 'follow' | 'kindle' | 'carry' | 'peal' | 'split' | 'glaze' | 'beam' | 'soar' | 'stacks';
 /** Every verb, in an order that will not change: the music's stingers and the boards key on it. */
-export const VERBS: readonly MomentVerb[] = ['race', 'gates', 'rings', 'collapse', 'steps', 'slide', 'shatter', 'surge', 'flourish', 'follow', 'kindle', 'carry', 'peal', 'split', 'glaze'];
+export const VERBS: readonly MomentVerb[] = ['race', 'gates', 'rings', 'collapse', 'steps', 'slide', 'shatter', 'surge', 'flourish', 'follow', 'kindle', 'carry', 'peal', 'split', 'glaze', 'beam', 'soar', 'stacks'];
 /** How a verb is played where it appears twice ('' where it has one way). */
 export type MomentStyle = '' | 'sprint' | 'chase' | 'sit' | 'swing' | 'stair' | 'hops';
 /** How the lens frames it: out and up over a drop ('wide'), low and close down a street or a tube
@@ -68,6 +75,12 @@ interface Variant {
  *  31.5, the strong bot at 33.5). The Horseshoe: ticks on its glaze in all (the mid pilot holds about 175 of the hook's
  *  520, the expert 207), in one hold (the expert's longest 113, the mid pilot's 73), and high on it (the expert 94). */
 export const PEAL_HW = 1.6;
+/** Round 9, Gullhaven (notes/r9-gullhaven.md): the lighthouse's marks, a mark every BEAM_STEP m; the Great Geo's long
+ *  flight, in ticks (the lab's mid pilot is about 6.5 s off its lip); a gap between the sea stacks every STACK_STEP m. */
+export const BEAM_STEP = 40;
+const BEAM_V = 32;
+export const SOAR_LONG = 360;
+export const STACK_STEP = 60;
 export const SPLIT_PACE = 31.2;
 export const GLAZE_NEED = 180;
 export const GLAZE_ROW = 90;
@@ -163,6 +176,26 @@ const FAMILY: Record<string, readonly Variant[]> = {
     { key: 'unbroken', name: 'Unbroken', line: 'Hold the glaze through the Horseshoe without a break', t: { need: GLAZE_ROW, row: 1 } },
     { key: 'high', name: 'High on it', line: 'Hold the glaze high through the Horseshoe', t: { need: GLAZE_HIGH, u: 0.7 } },
   ],
+  // Round 9, Gullhaven. The beam sweeps `amp` m either side of the path every `period` ticks and is `hw` m wide either
+  // side of its middle.
+  beam: [
+    { key: 'sweep', name: 'A slow sweep', line: 'Ride in the lighthouse beam at every mark', t: { amp: 3.5, period: 240, hw: 2.2 } },
+    { key: 'quick', name: 'A quick sweep', line: 'Ride in the beam: it sweeps quickly', t: { amp: 3.5, period: 200, hw: 2.2 } },
+    { key: 'narrow', name: 'A narrow beam', line: 'Ride in a narrow beam at every mark', t: { amp: 2.8, period: 240, hw: 1.8 } },
+  ],
+  // Off the Great Geo's lip: down past its mouth on the far shelf (`far`, m past the mouth), long in the air (`need`,
+  // ticks), or stomped after a long flight (`stomp`).
+  soar: [
+    { key: 'over', name: 'Across', line: 'Soar across the Great Geo to its far shelf', t: { far: 20 } },
+    { key: 'long', name: 'A long flight', line: 'Stay six seconds in the air over the Great Geo', t: { need: SOAR_LONG } },
+    { key: 'stomp', name: 'Stomped', line: 'Soar the Great Geo and stomp the landing', t: { stomp: 1 } },
+  ],
+  // The gaps between the stacks, `off` m either side of the line in turn, `hw` m wide either side.
+  stacks: [
+    { key: 'weave', name: 'The weave', line: 'Thread every gap between the sea stacks', t: { off: 3, hw: 1.8 } },
+    { key: 'tight', name: 'Tight gaps', line: 'Thread the sea stacks: the gaps are tight', t: { off: 3, hw: 1.2 } },
+    { key: 'wide', name: 'A wide weave', line: 'Thread the sea stacks: they stand wide apart', t: { off: 4.5, hw: 1.8 } },
+  ],
   carry: [
     { key: 'still', name: 'Still air', line: 'Carry the flame to the great lantern', t: { slack: 1.03, hit: 0.3 } },
     { key: 'wind', name: 'A wind off the Crown', line: 'Carry the flame: a wind is up, so do not slow', t: { slack: 1.01, hit: 0.18 } },
@@ -190,6 +223,7 @@ interface Def {
   machine?: string;
   /** Round 9: a mountain whose kit lays its own places stands its set piece on one of them, not on a section. */
   place?: OldRunPlace;
+  gplace?: GullPlace;
 }
 
 /** The named mountains' set pieces, one a stage, in order down each descent. */
@@ -224,6 +258,13 @@ const AUTHORED: Record<string, readonly Def[]> = {
     { key: 'bendbells', name: 'The Bend Bells', verb: 'peal', kind: 'track', nth: 0, place: 'hotel', cam: 'side', line: 'Ring every bell on the glaze' },
     { key: 'labyrinth', name: 'The Labyrinth', verb: 'split', kind: 'labyrinth', nth: 0, place: 'labyrinth', cam: 'low', line: "Beat the Labyrinth's split" },
     { key: 'horseshoe', name: 'The Horseshoe', verb: 'glaze', kind: 'track', nth: 3, place: 'hook', cam: 'wide', line: 'Hold the glaze through the Horseshoe' },
+  ],
+  // Round 9: Gullhaven's, on its own places (gullhaven.ts gullPlaceOf): the Cape's second shelf under the lighthouse, the
+  // Great Geo, the shore road among the stacks.
+  gullhaven: [
+    { key: 'lighthouse', name: 'The Lighthouse', verb: 'beam', kind: 'cliffpath', nth: 0, gplace: 'cape', cam: 'side', line: 'Ride in the lighthouse beam at every mark' },
+    { key: 'greatgeo', name: 'The Great Geo', verb: 'soar', kind: 'geo', nth: 4, gplace: 'great', cam: 'wide', line: 'Soar across the Great Geo' },
+    { key: 'seastacks', name: 'The Sea Stacks', verb: 'stacks', kind: 'descent', nth: 0, gplace: 'shore', cam: 'low', line: 'Thread every gap between the sea stacks' },
   ],
 };
 
@@ -316,11 +357,12 @@ export function planMoments(course: Course): MomentSpec[] {
   const authored = AUTHORED[namedMountain(course.seed) ?? ''];
   if (authored) {
     for (const d of authored) {
-      if (d.place) {
-        // (Round 9: on the kit's own place, a little before its first bend to a little past its last.)
-        const pl = placeOf(course, d.place);
-        const z0 = Math.round(pl.z0 - 30);
-        const z1 = Math.round(pl.z1 + 20);
+      if (d.place || d.gplace) {
+        // (Round 9: on the kit's own place, a little before its first bend to a little past its last; Gullhaven's places
+        // are laid as they are played.)
+        const pl = d.gplace ? gullPlaceOf(course, d.gplace) : placeOf(course, d.place!);
+        const z0 = Math.round(d.gplace ? pl.z0 : pl.z0 - 30);
+        const z1 = Math.round(d.gplace ? pl.z1 : pl.z1 + 20);
         const style = d.style ?? '';
         out.push({ index: 0, key: d.key, name: d.name, verb: d.verb, style, line: d.line, cam: d.cam, light: d.light ?? null, z0, z1, stage: course.stageAt(z0).index, variants: family(d.verb, style).length, machine: d.machine ?? '' });
         continue;
@@ -859,6 +901,40 @@ function build(course: Course, m: MomentSpec, vi: number, g: number): MomentPlay
       p.need = Math.round(((m.z1 - m.z0) / p.pace) * TICKS);
       p.row = !!t.clean;
       break;
+    case 'beam': {
+      // A mark every BEAM_STEP m down the shelf, on the path; the beam's middle swings across it on the clock, timed so a
+      // rider at BEAM_V finds it at the far end of its swing at each mark, one side and then the other: never on the path
+      // for a rider who only rides it.
+      const amp = k('amp', 3.5);
+      const period = k('period', 240);
+      const hw = k('hw', 2.2);
+      for (let z = m.z0 + 34, i = 0; z < m.z1 - 12; z += BEAM_STEP, i++) {
+        const at = ((z - m.z0) / BEAM_V) * TICKS;
+        p.gates.push({ z, x: course.safeX(z), hw, amp, period, phase: (i % 2 ? -PI / 2 : PI / 2) - (TAU * at) / period });
+      }
+      p.need = p.gates.length;
+      break;
+    }
+    case 'soar': {
+      // The Great Geo's lip, and what wins it: down past the mouth's end on the far shelf, so long in the air, or stomped.
+      const gs = gulliesOf(course);
+      const g = gs.find((q) => q.great) ?? gs[0];
+      p.lip = g.zL;
+      p.far = g.zL + g.mouth + k('far', 20);
+      p.need = k('need', 0);
+      p.row = !!t.stomp;
+      break;
+    }
+    case 'stacks': {
+      // A gap every STACK_STEP m down the shore road, off the line to one side and then the other.
+      let to: 1 | -1 = side;
+      for (let z = m.z0 + 70; z < m.z1 - 20; z += STACK_STEP) {
+        p.targets.push({ z, x: course.safeX(z) + to * k('off', 3), hw: k('hw', 1.8), h: 0 });
+        to = to === 1 ? -1 : 1;
+      }
+      p.need = p.targets.length;
+      break;
+    }
     case 'glaze':
       // Ticks on the glaze, in all or in one hold (row), above a share of the wall (hw: 0 anywhere on it).
       p.need = k('need', GLAZE_NEED);
@@ -1049,8 +1125,9 @@ interface LegendDef {
   alt?: SectionKind;
   amp?: number;
   wave?: number;
-  /** Round 9: on a kit's own place (oldrun.ts placeOf), not a section. */
+  /** Round 9: on a kit's own place (oldrun.ts placeOf, gullhaven.ts gullPlaceOf), not a section. */
   place?: OldRunPlace;
+  gplace?: GullPlace;
 }
 
 const LEGENDS: Record<string, readonly LegendDef[]> = {
@@ -1079,6 +1156,12 @@ const LEGENDS: Record<string, readonly LegendDef[]> = {
   oldrun: [
     { key: 'ghostbob', name: 'The Ghost Bob', line: "The hotel's first bob runs the track: follow its lights", kind: 'runner', at: 'track', nth: 3, place: 'lead', amp: 3.2, wave: 110 },
     { key: 'ballroom', name: 'The Ballroom Night', line: 'The grand hotel lights every window', kind: 'sky', at: 'labyrinth', nth: 0, place: 'labyrinth' },
+  ],
+  // Round 9: Gullhaven. The old beacon's keeper walks the Cape's last shelves with his lamp ahead of the rider; the
+  // herring fleet comes home lit across the sea below the Geos.
+  gullhaven: [
+    { key: 'keeper', name: 'The Beacon Keeper', line: "The beacon's keeper walks the clifftop: follow his lamp", kind: 'runner', at: 'cliffpath', nth: 0, gplace: 'capeend', amp: 2.6, wave: 120 },
+    { key: 'fleet', name: 'The Herring Lights', line: 'The fleet comes home, every boat lit on the sea', kind: 'sky', at: 'geo', nth: 0, gplace: 'geos' },
   ],
 };
 
@@ -1126,7 +1209,7 @@ export function planLegends(course: Course): readonly (LegendPlay | null)[] {
     let seen = 0;
     const free = (s: { z0: number; z1: number }): boolean => !pieces.some((p) => p.z0 < s.z1 && p.z1 > s.z0);
     const sec =
-      (d.place ? (({ z0, z1 }) => ({ kind: d.at, z0: z0 - 30, z1: z1 + 20 }))(placeOf(course, d.place)) : undefined) ??
+      (d.place || d.gplace ? (({ z0, z1 }) => ({ kind: d.at, z0: z0 - 30, z1: z1 + 20 }))(d.gplace ? gullPlaceOf(course, d.gplace) : placeOf(course, d.place!)) : undefined) ??
       secs.find((s) => s.kind === d.at && seen++ === d.nth) ??
       (namedMountain(course.seed) ? (d.alt ? secs.find((s) => s.kind === d.alt && s.z0 > 500 && free(s)) : undefined) : secs.find((s) => s.kind === d.at && s.z0 > 500));
     // Never over a set piece: one thing asks for the rider's eyes at a time.

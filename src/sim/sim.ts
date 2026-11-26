@@ -2298,6 +2298,8 @@ export class Sim {
       this.events.push({ type: 'moment', index: p.index, phase, n, of: mo.of });
     };
     switch (p.verb) {
+      // (Round 9, Gullhaven: the sea stacks' gaps are passed as the bend bells are rung.)
+      case 'stacks':
       case 'peal': {
         // (Round 9, the Old Run.) Under each bell as the sled passes it, on the glaze or over it, within its reach across.
         while (mo.at < p.targets.length && p.targets[mo.at].z <= s.z) {
@@ -2329,6 +2331,37 @@ export class Sim {
           mo.n = ticks <= p.need ? 1 : 0;
           this.momentEnd(p, ticks <= p.need);
         } else if (ticks > p.need) this.momentEnd(p, false);
+        break;
+      }
+      case 'soar': {
+        // (Round 9, Gullhaven.) A flight off the Great Geo's lip (`aux` 1 in the air, 2 down clean and a stomp still to
+        // come), won by coming down past its mouth, by its time in the air, or by its stomp.
+        for (const e of this.events) {
+          if (e.type === 'takeoff' && mo.aux === 0 && s.z >= p.lip - 15 && s.z <= p.lip + 5) {
+            mo.aux = 1;
+            say('step', 0);
+          } else if (e.type === 'land' && mo.aux === 2 && e.late && e.quality === 'perfect') {
+            mo.n = 1;
+            this.momentEnd(p, true);
+            return;
+          } else if (e.type === 'land' && mo.aux === 1 && !e.late) {
+            const good = e.quality !== 'sketchy' && e.botched !== true && e.airtime >= 1;
+            if (p.row && good && e.quality === 'clean' && e.airtime >= 4) {
+              mo.aux = 2;
+              mo.at = this.tick;
+              continue;
+            }
+            const won = good && (p.row ? e.quality === 'perfect' && e.airtime >= 4 : p.need > 0 ? e.airtime * TICK_RATE >= p.need : s.z >= p.far);
+            if (!won) say('miss', 0);
+            mo.n = won ? 1 : 0;
+            this.momentEnd(p, won);
+            return;
+          }
+        }
+        if (mo.aux === 2 && this.tick - mo.at > 10) {
+          say('miss', 0);
+          this.momentEnd(p, false);
+        } else if (s.z >= p.z1 && mo.aux !== 1) this.momentEnd(p, false);
         break;
       }
       case 'glaze': {
@@ -2422,6 +2455,8 @@ export class Sim {
         } else if (s.z >= p.z1) this.momentEnd(p, true);
         break;
       }
+      // (Round 9, Gullhaven: the lighthouse's marks are a gate on a clock, as the swinging lanterns are.)
+      case 'beam':
       case 'gates': {
         while (mo.at < p.gates.length && p.gates[mo.at].z <= s.z) {
           const g = p.gates[mo.at++];
@@ -3450,6 +3485,13 @@ function momentCount(p: MomentPlay): number {
       return 1;
     case 'glaze':
       return 4;
+    // (Round 9, Gullhaven: the lighthouse's marks, the Great Geo won or not, the sea stacks' gaps.)
+    case 'beam':
+      return p.gates.length;
+    case 'soar':
+      return 1;
+    case 'stacks':
+      return p.targets.length;
     default:
       return 1;
   }

@@ -49,7 +49,7 @@ describe('near-miss event fields', () => {
         seen += near.length;
       }
       // (Round 9: the Old Run stands nothing in its track, so nothing is ever nearly hit there.)
-      if (pool.mountain === 'oldrun') expect(seen).toBe(0);
+      if (pool.mountain === 'oldrun' || pool.mountain === 'gullhaven') expect(seen).toBe(0);
       else expect(seen).toBeGreaterThan(0);
     });
   }

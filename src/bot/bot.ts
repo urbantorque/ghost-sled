@@ -504,7 +504,7 @@ export class Bot {
   /** Whether the next set piece is ridden on the snow from its first metre (a line, not a leap or a pop). */
   private wantsSnow(): boolean {
     const p = this.sim.plays[this.sim.mo.next];
-    return !!p && (p.verb === 'gates' || p.verb === 'follow' || p.verb === 'kindle' || p.verb === 'slide' || p.verb === 'peal' || p.verb === 'glaze');
+    return !!p && (p.verb === 'gates' || p.verb === 'follow' || p.verb === 'kindle' || p.verb === 'slide' || p.verb === 'peal' || p.verb === 'glaze' || p.verb === 'beam' || p.verb === 'stacks');
   }
 
   /** Read what happened on the tick just simulated. */
@@ -746,7 +746,12 @@ export class Bot {
     const p = sim.plays[mo.active];
     if (!this.tries(p)) return null;
     const z = sim.s.z;
-    if (p.verb === 'gates') {
+    // (Round 9, Gullhaven: the lighthouse's marks are gates on a clock; the sea stacks' gaps are threaded in turn.)
+    if (p.verb === 'stacks') {
+      const t = p.targets[mo.at];
+      return t && t.z - z < 70 ? t.x - this.lines.safeX(t.z) : null;
+    }
+    if (p.verb === 'gates' || p.verb === 'beam') {
       // (Sitting gates are one line from the set piece's first metre to its last gate: a rider who left it
       // between gates popped there, and flew the next three.)
       if (p.style === 'sit') return p.gates.length && z < p.gates[p.gates.length - 1].z + 1 ? this.slalomOff(p, z) : null;
@@ -911,14 +916,14 @@ export class Bot {
   private updateWander(now: number): void {
     const mOff = this.momentOff();
     const verb = mOff !== null ? this.sim.plays[this.sim.mo.active]?.verb : undefined;
-    this.inGates = verb === 'gates';
+    this.inGates = verb === 'gates' || verb === 'beam' || verb === 'stacks';
     const piece = this.inGates ? this.sim.plays[this.sim.mo.active] : null;
     this.slalom = piece && piece.style === 'sit' ? piece : null;
     this.wake = verb === 'follow' ? this.sim.plays[this.sim.mo.active].path : null;
     // (A line to ride wants the runners on the snow: no pops for the fun of it meanwhile.)
     // (And a low flame not yet fed is carried on the snow to its brazier: no pop flies past it.)
     const feeding = verb === 'carry' && !(this.sim.mo.mask & 1);
-    this.onLine = verb === 'gates' || verb === 'follow' || verb === 'kindle' || verb === 'peal' || verb === 'glaze' || feeding;
+    this.onLine = verb === 'gates' || verb === 'follow' || verb === 'kindle' || verb === 'peal' || verb === 'glaze' || verb === 'beam' || verb === 'stacks' || feeding;
     this.feed = feeding ? (this.sim.plays[this.sim.mo.active].relight ?? null) : null;
     this.momentLine = mOff !== null;
     if (mOff !== null) {

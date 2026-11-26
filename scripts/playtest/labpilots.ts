@@ -188,7 +188,8 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
   // (Round 9, the Old Run: on its track the skilled pilots hold a height on the wall, not a heading. The offset square
   // to the channel is steered toward the line's, with the channel's turn, the wall's own turn and the track's damping
   // fed forward. The five have no kit, and never come here.)
-  const track = c.kit && kit.track ? kit.track : null;
+  // (Only on a track: a kit's course without one, Gullhaven's, is ridden by the heading as the five are.)
+  const track = c.kit && kit.track && c.layout?.grammar === 'oldrun' ? kit.track : null;
   const grad = { x: 0, z: 0 };
   const across = (z: number, x: number): number => {
     const p = c.channelSlope(z);
@@ -268,6 +269,8 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
     const v = Math.max(10, s.vz);
     const skilled = skill !== 'novice';
     switch (p.verb) {
+      // (Round 9, Gullhaven: the lighthouse's marks are gates on a clock.)
+      case 'beam':
       case 'gates': {
         const g = p.gates.find((q: AnySim) => q.z > s.z + 1);
         if (!g || g.z - s.z >= 45) return null;
@@ -396,6 +399,12 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         if (!p.path || !kit.pathX) return null;
         const px = kit.pathX;
         return { x: (z: number) => px(c, p.path, z), noDrift: true };
+      }
+      case 'stacks': {
+        // (Round 9, Gullhaven.) Through the next gap between the stacks, from a second and a half out.
+        const t = p.targets.find((q: AnySim) => q.z > s.z + 1);
+        if (!t || t.z - s.z > Math.max(45, s.speed * 1.6)) return null;
+        return { x: () => t.x, noDrift: true };
       }
       case 'peal': {
         // (Round 9, the Old Run.) Under the next bend bell, from a second and a half out.

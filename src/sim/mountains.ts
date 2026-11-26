@@ -7,7 +7,7 @@ export type BiomeId = 'alpine' | 'glacier' | 'volcanic' | 'blossom' | 'lantern' 
  *  the sim's tables. (Round 9: and a new mountain that lays its own ground, under its own id, until its world lane makes
  *  it a look of its own: it borrows one meanwhile, LOOK below. The Old Run's is its own.) */
 export type CourseBiome = BiomeId;
-export type MountainId = 'pinecrest' | 'frostfang' | 'ember' | 'sakura' | 'lanternfall' | 'oldrun' | 'daily';
+export type MountainId = 'pinecrest' | 'frostfang' | 'ember' | 'sakura' | 'lanternfall' | 'oldrun' | 'gullhaven' | 'daily';
 
 /** A new mountain's borrowed look, until its world lane gives it its own (round 9; Lanternfall's round 7 path). */
 const LOOK: Partial<Record<CourseBiome, BiomeId>> = {};
@@ -164,7 +164,7 @@ const BIOME_PARAMS: Record<CourseBiome, MountainParams> = {
   // the course's real mean grade (a get-up's push and the far terrain read it), its ramp its own 4,800 m.
   gullhaven: {
     biome: 'gullhaven',
-    slope: 0.22,
+    slope: 0.24,
     wander: 0,
     halfWidthStart: 10,
     halfWidthEnd: 10,
@@ -189,9 +189,11 @@ export const LANTERNFALL_SEED = 0x510e527f;
 export const OLDRUN_SEED = 0x9b05688c;
 /** (The name the groundwork and its lab knew it by.) */
 export const OLDRUN_LAB_SEED = OLDRUN_SEED;
-/** Round 9: Gullhaven's lab course (SHA-256's seventh initial word, beside the Old Run's sixth), in BIOME_BY_SEED only
- *  until the mountain registers (notes/r9-gullhaven.md). */
-export const GULLHAVEN_LAB_SEED = 0x1f83d9ab;
+/** Round 9: Gullhaven's seed (SHA-256's seventh initial word, beside the Old Run's sixth): its lab course, kept as the
+ *  mountain's own (no Daily's and no Cup's to 2040, tests/gullhaven.test.ts; its gullies are the ones the lab tuned). */
+export const GULLHAVEN_SEED = 0x1f83d9ab;
+/** (The name its lab knew it by.) */
+export const GULLHAVEN_LAB_SEED = GULLHAVEN_SEED;
 
 export const MOUNTAINS: readonly MountainDef[] = [
   { id: 'pinecrest', name: 'Pinecrest', tagline: 'Pine forest, soft powder, snowmen', seed: 0x51ed270b, unlockGhosts: 0 },
@@ -202,6 +204,7 @@ export const MOUNTAINS: readonly MountainDef[] = [
   // Round 9: the new mountains are appended, never inserted (MOUNTAINS is read by index: the Trials, The Twelve's homes,
   // ?debug&m=, the pool generator, the graveyards' naming order).
   { id: 'oldrun', name: 'The Old Run', tagline: 'An old ice track: ride high on the glaze', seed: OLDRUN_SEED, unlockGhosts: 18 },
+  { id: 'gullhaven', name: 'Gullhaven', tagline: 'A sea cape: pop off the gully lips, ride the wind', seed: GULLHAVEN_SEED, unlockGhosts: 32 },
 ];
 
 

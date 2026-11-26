@@ -40,6 +40,12 @@ function holds(c: Course, p: MomentPlay): string {
       return `${p.targets.length} bend bells: ` + p.targets.map((t) => `${Math.round(t.z)}^u${t.h.toFixed(2)}`).join(' ');
     case 'split':
       return `the split ${(p.need / 60).toFixed(1)} s at ${p.pace} m/s over ${Math.round(p.z1 - p.z0)} m${p.row ? ', clean' : ''}`;
+    case 'beam':
+      return `${p.gates.length} marks, the beam ${p.gates[0]?.hw} m either side, sweeping ${p.gates[0]?.amp} m every ${p.gates[0]?.period} ticks`;
+    case 'soar':
+      return p.row ? 'off the lip, stomped' : p.need > 0 ? `off the lip, ${(p.need / 60).toFixed(1)} s in the air` : `off the lip, down past ${Math.round(p.far - p.lip)} m`;
+    case 'stacks':
+      return `${p.targets.length} gaps ${p.targets[0]?.hw} m either side`;
     case 'glaze':
       return `${(p.need / 60).toFixed(1)} s on the glaze${p.row ? ' in one hold' : ''}${p.hw > 0 ? ` above ${p.hw} of the wall` : ''}`;
     case 'carry':

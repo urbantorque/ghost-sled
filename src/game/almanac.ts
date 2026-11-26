@@ -236,11 +236,11 @@ export function rewardName(r: Reward): string {
   }
 }
 
-const MOUNTAIN_NAMES: Readonly<Record<string, string>> = { pinecrest: 'Pinecrest', frostfang: 'Frostfang', ember: 'Ember Peak', sakura: 'Sakura Ridge', lanternfall: 'Lanternfall', oldrun: 'The Old Run' };
+const MOUNTAIN_NAMES: Readonly<Record<string, string>> = { pinecrest: 'Pinecrest', frostfang: 'Frostfang', ember: 'Ember Peak', sakura: 'Sakura Ridge', lanternfall: 'Lanternfall', oldrun: 'The Old Run', gullhaven: 'Gullhaven' };
 /** Round 8, the hours lane: each mountain's other hour as its card says it after the name ("Ember Peak at Night"). The
  *  same words as the palettes' (render/palette.ts ALT_HOURS phrase, which tests/hours.test.ts holds them to), kept here
  *  so the game layer reads no render code. */
-export const HOUR_PHRASES: Readonly<Record<string, string>> = { pinecrest: 'at Dusk', frostfang: 'at Noon', ember: 'at Night', sakura: 'in the Evening', lanternfall: 'at First Light', oldrun: 'by Lamplight' };
+export const HOUR_PHRASES: Readonly<Record<string, string>> = { pinecrest: 'at Dusk', frostfang: 'at Noon', ember: 'at Night', sakura: 'in the Evening', lanternfall: 'at First Light', oldrun: 'by Lamplight', gullhaven: 'at Moonrise' };
 /** The charms' names (charms.ts CHARMS), for the cards. */
 export const CHARM_NAMES: Readonly<Record<string, string>> = {
   slip: 'Slipstream Lantern', comet: "Comet's Tail", kite: 'Kite String', frost: 'Frost Runners', star: 'Falling Star', drum: 'Drift Drum', step: 'Ember Step', stride: 'Long Stride',

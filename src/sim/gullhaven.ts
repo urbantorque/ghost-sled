@@ -313,8 +313,32 @@ export function boldX(c: Course, g: Gully, z: number): number {
   return cx + (g.bx - cx) * smoothstep(z0, z0 + BOLD_LEAD, z) * (1 - smoothstep(g.zL + g.mouth, g.zL + g.mouth + REJOIN, z));
 }
 
-/** Gullhaven's places (moments.ts lays its set pieces on them): its gullies, the Great Geo, the shore road (the last
- *  stretch above the descent) and the harbour road's end. */
+/** Gullhaven's places for its set pieces and legends (moments.ts): the Cape's second shelf, where the lighthouse's beam
+ *  sweeps the path ('cape'); the Great Geo from its approach to its far shelf ('great'); the shore road below the cliff,
+ *  the cut and the sheds ('shore'); the Cape's last shelves ('capeend') and the Geos' middle gully ('geos'). */
+export type GullPlace = 'cape' | 'great' | 'shore' | 'capeend' | 'geos';
+export function gullPlaceOf(c: Course, place: GullPlace): { z0: number; z1: number } {
+  const d = laid(c);
+  const gs = d.gullies;
+  switch (place) {
+    case 'cape':
+      return { z0: gullySpan(gs[0]).z1 - 10, z1: gullySpan(gs[1]).z0 };
+    case 'great': {
+      const g = gs.find((q) => q.great) ?? gs[0];
+      return { z0: g.zL - 50, z1: g.zL + g.mouth + 60 };
+    }
+    case 'shore':
+      return { z0: d.descent - 10, z1: d.harbour - 30 };
+    case 'capeend':
+      return { z0: gullySpan(gs[1]).z1 - 10, z1: gullySpan(gs[2]).z0 + 60 };
+    case 'geos': {
+      const sp = gullySpan(gs[Math.min(5, gs.length - 1)]);
+      return { z0: sp.z0, z1: sp.z1 };
+    }
+  }
+}
+
+/** (The world's places, as the kit laid them.) */
 export function placesOf(c: Course): { great: Gully; descent: number; sheds: number; harbour: number } {
   const d = laid(c);
   return { great: d.gullies.find((g) => g.great) ?? d.gullies[0], descent: d.descent, sheds: d.sheds, harbour: d.harbour };
@@ -374,7 +398,8 @@ export const GULLHAVEN_KIT: Kit = {
     });
     // The path's wiggles on the shelves between gullies, away from the thresholds and the start's gate.
     const wiggles: Wiggle[] = [];
-    const calm = [{ z0: 0, z1: BEACON_LEN + 40 }, ...gates.map((t) => ({ z0: t.z0 - 130, z1: t.z1 + 20 }))];
+    // (And the shelf the lighthouse sweeps, gullPlaceOf 'cape': its beam is the swing there.)
+    const calm = [{ z0: 0, z1: BEACON_LEN + 40 }, ...gates.map((t) => ({ z0: t.z0 - 130, z1: t.z1 + 20 })), { z0: gullySpan(gullies[0]).z1 - 20, z1: gullySpan(gullies[1]).z0 + 10 }];
     let from = BEACON_LEN + 40;
     for (let i = 0; i <= gullies.length; i++) {
       const to = i < gullies.length ? gullySpan(gullies[i]).z0 : descent - 20;
