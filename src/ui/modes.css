@@ -224,24 +224,3 @@
     width: auto;
   }
 }
-
-/* ------------------------------------------------------------------ Riding a mode from where it opens
-
-   An opened Almanac page that opens a mirror or adds to the Long Night carries one small Ride (almanac.ts); the
-   title's picked mountain carries its mirror's toggle beside Ride (title.ts). Both are the soft pills the books and
-   the title already use: nothing new to learn, and neither competes with the vermillion Ride. */
-
-.gs-bk-ride {
-  justify-self: start;
-  align-self: end;
-  min-height: 32px;
-  margin-top: auto;
-  padding: 4px 12px 4px 9px;
-  font-size: 12px;
-  touch-action: manipulation;
-}
-
-.gs-bk-ride .gs-i {
-  width: 14px;
-  height: 14px;
-}

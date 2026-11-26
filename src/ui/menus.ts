@@ -316,11 +316,11 @@ export class Menus {
     });
     this.homeBtn = home;
     const title = h('h2', 'gs9-pause-h', 'Paused');
-    title.id = 'gs-pause-title';
+    title.id = 'gs9-pause-t';
     title.tabIndex = -1;
     // Under the word, what the run is working toward: each mission's live progress, Done once it popped.
     this.pauseMis = h('section', 'gs9-pause-mis');
-    this.pauseMis.setAttribute('aria-labelledby', 'gs-pause-mis-h');
+    this.pauseMis.setAttribute('aria-labelledby', 'gs9-pause-mis-h');
     this.pauseMis.hidden = true;
     this.pauseSettings = b9(ctx, 'secondary', 'Settings', { icon: 'gear', fk: 'p-settings', onClick: () => (this.lastSettings ? this.showSettings(this.lastSettings) : undefined) });
     // Round 8 (the photo lane): photo mode holds the run where it stopped and hands the lens to the player.
@@ -464,7 +464,7 @@ export class Menus {
     if (list.length > 0) {
       // (Each as the Progress room says it: its words, a check once done, and "270 of 800".)
       const head = h('h3', 'gs9-cap', 'This Run’s Missions');
-      head.id = 'gs-pause-mis-h';
+      head.id = 'gs9-pause-mis-h';
       const ul = h('ul', 'gs9-list');
       for (const mv of list) {
         const [v, t] = progFigures(Math.min(mv.progress, mv.target), mv.target, mv.dp);

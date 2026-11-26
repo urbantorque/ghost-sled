@@ -36,7 +36,7 @@ export class SettingsPanel {
     private readonly ctx: Ctx,
     private readonly hd: UIHandlers,
   ) {
-    const id = `gs-set-${++uid}`;
+    const id = `set9-${++uid}`;
     this.el = h('div', 'gs9-set');
 
     const sh = h('h3', 'gs9-block-h', 'Sound');
