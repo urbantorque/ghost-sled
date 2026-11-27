@@ -4777,7 +4777,9 @@ straight through.
       garage goals that are not lanterns at run 100, mid 25 and novice 48 (20 and 40 before); the dearest tracks the mid
       pilot's Wisp at run 69 and Tea Tray at run 97. The chapters' sink 11,520 to 3,840 gifts, the base shop's 13,180 to
       12,590; prices one table a kind.
-    - *Merged* clean; tsc clean; the full suite 116 files, 2,094 tests. Checked headless by the main lane on a desk and a phone (mid-50): the title's Garage door opens the sheet, Escape closes it to the title, the console clean; but focus fell to the page after Escape, not to the Garage door the lane found it on (to look into first in phase C).
+    - *Merged* clean; tsc clean; the full suite 116 files, 2,094 tests. Checked headless by the main lane on a desk and a phone (mid-50): the title's Garage door opens the sheet, Escape closes it to the title, the console clean; focus after Escape is the door's when the garage was opened from the keyboard, and the page's when it was opened
+      with a mouse, as the title means it (ui.ts blurs a title button a mouse pressed, so Space and Enter stay the game's):
+      not a fault, probed step by step after the main lane's first check found the page.
     - *The main lane's calls on the lane's questions:* the months' trails stay cut (a critic placed three at the shop
       lane's size, and a chapter is plainer as one object and a title); the four base pieces stay kept, not sold; no
       more pieces leave the shelves on race-size tiles alone this round: the pairs still failing (the Trapper with the
