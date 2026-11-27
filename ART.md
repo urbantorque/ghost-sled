@@ -1291,6 +1291,49 @@ stays the dark shape in the street.
   only within reach; on a held Low run more GL calls than Pinecrest's and Ember's (the sea, the surf and the
   spindrift), timed in the round's proof.
 
+### Gablefall: a snowfall over the roofs of a hill town (new in round 9)
+
+- **Feeling.** A winter afternoon in a hill town so snowed in that its roofs are the way down: from the church's nave
+  at the head of the town over the roofs, the street below between the lit fronts, down to the frozen river, the snow
+  falling the whole way. It ends in daylight under the old stone bridge.
+- **How it rides.** Two rows of houses down a street; each roof a gable of snow on slate a step under the last, the
+  alleys drifted full between blocks, corner drifts from the street up onto the rows. A rider on the roofs hops each
+  step and alley and stomps the landings; one who drops off an eave rides the street until a drift takes it back up.
+  The roofs are the line, the street the slow way.
+- **Colour script.** A snowfall in a grey afternoon: a pale lilac-grey snow cloud over the whole sky, a pale coin of
+  sun through it ahead and to the left, soft shadows, the snow white with a lilac-grey shade; the windows a lamp behind
+  glass, lamplit as the day goes.
+
+  | Metres | Place | Light and grade |
+  | --- | --- | --- |
+  | 0 to 180 | The church and the close | The nave's snow between its pale pinnacles, bunting strung between them, the town's roofs below in the falling snow. |
+  | 180 to 900 | Church Hill | The grey afternoon, the far side of the valley a ghost in the snow, chimneys smoking. |
+  | 900 to 1,850 | The Market | The snow thickest, the windows and the market's arcades telling, the gallery over the square lit. |
+  | 1,850 to 2,660 | The Water Stairs | The cloud breaking over the river, a pale sun through the gap, the viaduct across the valley clear. |
+  | 2,660 to the line at 2,800 | The quay and the river | Daylight on the river's ice, the bridge's banner of checks over the line, the snow still falling. |
+
+- **What it is not.** No peak, no panorama, no sea of cloud, no pine: low hills in the snow, the town's other half on
+  the valley's far side behind a viaduct. No square and no lamplit town at the line: the river under the bridge, in
+  daylight.
+- **The town.** The roofs are the run's snow on slate; their eaves end on a dark slate edge (never a white lip, which
+  reads as a rail); fronts painted from a damp foot to a pale head, windows with glazing bars and shutters, shops and
+  window boxes, the alleys' mouths walled with timber gates, the corner drifts held by boards with flags over them; the
+  street trodden and swept, a step cooler and duller than the roofs (no setts showing: bare stone on the ridden line);
+  chimneys the hazards, stone stacks as tall as their colliders, half of them smoking in round puffs.
+- **Its places.** The church at the head, the run starting on its nave between pinnacles; two market squares with a
+  gallery bridged high over each, three arched lights in it over the charm gate's three lanes; the quay's tall gabled
+  houses and the boathouse; the old stone bridge at the line, a banner of checks hung from its parapet, the townsfolk on
+  it; the viaduct and the town's other half across the valley, fading into the snow from the head of the town.
+- **Its other hour: Evensong.** The same snowfall at the day's end, the cloud lit faintly warm from under by the
+  town, every window lit, the lamps' pools on the snow with the blue between, the church's windows at the head and the
+  bridge's lamps at the line; no moon, no stars.
+- **The set pieces.** The Roof Run's lanterns under the eaves lit roof by roof, an ember when the chain breaks; Market
+  Day's striped awnings shaking their snow off when a stomp lands under them; the washing lines across the alleys,
+  jumping and throwing their frost when rung (section 1b). Never on the snow a sled rides.
+- **Its set:** Market Awning, Pinwheels and the Gable House.
+- **Low** is a poster of it: the town past the rows merged into each segment's one draw, two rows deep, no window
+  dressing; on a held Low run 8 to 24% under Pinecrest's GL calls on the same stretches, at half its triangles.
+
 ### Tiers, designed
 
 - **Ultra and High** carry the whole direction: the shafts, the scatter, the ambient occlusion, the reflections.

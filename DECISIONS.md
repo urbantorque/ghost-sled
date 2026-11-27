@@ -4795,3 +4795,71 @@ straight through.
       Gablefall's set on its mountain; the flow's flame after its last change and the fifth tier's crest (the lane's own
       look only); chapters on a real calendar; a kept piece worn in a run; the pad, touch, a screen reader, frame rate and
       the new pieces' Low cost. ART.md 5, 10, 13 and 15 take the lane's text.
+
+402. **Gablefall built and merged, and the game is eight** (`r9-gablefall`, 4776790 to bdb6272, 16 commits, merged at
+    c50a2cf; `notes/r9-gablefall.md`, `notes/r9-gablefall-world.md`; frames under `shots/r9/gablefall/`).
+    - *Low first:* a stand-in town at the planned density, the town past the rows one baked piece a 128 m segment and the
+      windows glowing in the house material with no lights, cost 310 to 315 GL calls and 33 to 34 draws on a held Low
+      run against Pinecrest's 350 to 417 and 37 to 43. The world was built on that design; as built, Low is 8 to 24%
+      under Pinecrest's calls on the same stretches, 2 to 7 draws under, at half its triangles or less.
+    - *Why the roofs did not pay at first:* the lab's pilots and the bot aimed every flight at the street's middle; every
+      roof step was a lip, and a pop on a slope flies two seconds whatever the step, so riders flew off their rows and
+      the stomps ran the roofs to the speed cap; a ramped house front lifted a sled riding its face, the street bending
+      under a held sled lifted another 6 m, and a landing beside a sheer wall threw a sled up at 50 m/s.
+    - *What makes it pay:* small steps and lips only over alleys and drifts; deep snow on the roofs (drag 1.7) and cobbles
+      in the street (1.25), so a stomped landing at each alley is what pays; sheer fronts, with the held street (hook D)
+      acting inside the ground and air steps before the ground is read (in `edge()` it came too late), and `land()`
+      reading the slope across a sled's way beside a wall; corner drifts every 130 to 170 m and at every row's head; the
+      pilots and the bot riding the ridge of their row and aiming there. Both sim changes sit behind `levelOn`, never on
+      another course: sim behaviour beyond new numbers, as 394's track changes were. The five's fingerprint held at
+      every commit.
+    - *The bar:* the mid pilot's roofs 19% faster than its own hands in the street (105 s against 130); the novice in the
+      street, 6 of 6 finished; the bot at 0.9 on the roofs 55 to 73% of the rows, most hops perfect; a drift back up
+      within 181 m; nobody lifted more than 0.29 m in a tick; no fall but a chimney met (2) or a long flight landed wrong
+      (18); the clumsy pilot 30 of 30; the mid pilot 105 s at 27 m/s (the concept's about 100 at 28). Short as worded:
+      the expert on the roofs 58% of the run, since 28% of it has no rows (the nave, the close, the two market squares
+      the thresholds' rules hold at 190 m or more, the quay): 95% of the rows with the set pieces off, 79% with them on.
+      New against the five on 4 of 6 measures, all four by 15%; apart from the Old Run and Gullhaven; on the roofs 42% of
+      the mid pilot's run.
+    - *A mountain:* `MOUNTAINS[7]`, appended, id `gablefall`, seed 0x5be0cd19 (the lab's; no Daily's or Cup's to 2040),
+      opening at 8 ghosts between Frostfang and Ember; its own look, out of `BIOMES`; all four events (a clean rider in
+      the street outruns the avalanche in every mood); `'chimney'` a crash cause ("Met a chimney"); three set pieces on
+      appended verbs (`chain` the Roof Run, `awnings` Market Day, `washing` the Washing Lines), two legends (Candlemas,
+      the Lamplighter), three home riders (Wren Slater, Abel Thorne, Hettie Lamb; never a duel); its first run laid
+      round 124 s; a pool of 53, 89 to 173 s, the widest (p90/p10 1.49); a winter march in F at 95 for hand-bells and a
+      toy piano over pizzicato strings (128 had no room: the stems test keeps every course's tempo 8% from the others'),
+      5.79 MB on the desk and 3.08 to 3.56 MB on Low and phones, the whole score built again on top of Gullhaven's packs.
+      Its set (401's Market Awning, Pinwheels and Gable House) is live with it.
+    - *Its world:* a snowfall on a grey afternoon over a hill town, the run on the church's nave between pale pinnacles,
+      two rows of steep slate roofs under snow with lit windows over a street of trodden snow, stone chimneys half of
+      them smoking, a gallery with three arched lights over each market square's charm gate, the quay, the boathouse, the
+      frozen river and the old stone bridge over the line in daylight; across the valley the town's other half and a
+      viaduct. At Evensong its other hour (drawn, not wired). A fresh blind critic sorted its greyscale frames alone; five
+      critic rounds, the blind pairs choosing the newer frames 9, 4, 7 and 5 of 10; the set pieces' props and the last
+      palette change seen by no critic.
+    - *Eight:* the Long Night rides sixteen legs in the ladder's order (Pinecrest, Frostfang, Gablefall, Ember, the Old
+      Run, Sakura, Gullhaven, Lanternfall, then the eight mirrored), switched by `modes.ts` once all three were registered;
+      a saved best stays a count of legs. The Trials turn over all eight from `EIGHT_FROM` '2028-W01' with `EIGHT_START`
+      5, a placeholder; two faults the switch woke fixed in `trial.ts` without touching a past week (an eight week made
+      plain by its mountain's events keeps a charm family; a Trial says "Old Run", as its chip does). The picker holds
+      eight chips in two rows of four on a desk and a phone. `save.ts` untouched; an old save loads.
+    - *Merged* clean on top of G6 and The Twelve's gate fix; tsc clean; the full suite 118 files, 2,144 tests (the
+      lane gave `r8bars.test.ts`'s clumsy bar five minutes, its 48 rides past the suite's two under full load). Checked headless by
+      the main lane on a desk and a phone (mid-50): the title on Gablefall over its first six seconds riding the roofs, its
+      tagline whole on both, the picker's eight chips in two rows of four in the ladder's order, the console clean.
+    - *The main lane's calls on the lane's questions:* the expert's 85% is read of the rows (79 to 95%): the market squares
+      stay at the street's level, since the thresholds' ground is every mountain's; Market Day stays the street's set
+      piece, a skilled rider's choice to spend the street's slowness for it, judged in the hand ride; popped flights of
+      2 to 2.5 s stand, the pop rule being everyone's; the widest pool is kept as its character until a person has seen
+      a field of it, as 400 kept Gullhaven's; the first run's 2 s margin at 124 s is checked in the hand ride; the march
+      at 95 stands; hook D in the step and `land()`'s slope across beside a wall are accepted behind `levelOn`.
+      `EIGHT_FROM` and `EIGHT_START` stay the placeholder until the owner names the release week (the round's report
+      asks); a week inside 2027-W11 to W40 would change `tests/five.test.ts`'s chaos digest and the fingerprint would be
+      taken again.
+    - *Carried to phase C:* Low's frame time in M4's sittings; its hour (Evensong) and mirror wired as 397 said, its
+      Almanac page and album frames; the title's key art on Gablefall following the reel's ghost (on novice-5 it rides
+      the street and a house front fills a third of the frame: the reel should prefer a roof rider there); for the feel
+      pass, the far hills reading as peaks in the haze, the nave reading as a snowfield more than a church's roof, a
+      dotted seam at the nave's brink, the near snowflakes as smudges at the lens, a streak on the river's ice, the
+      fronts orange at Evensong, the quay's folk as boxes, the far town's speckle.
+    - Nobody has ridden it by hand, and nobody has listened to its score. ART.md 15 takes the world's text.
