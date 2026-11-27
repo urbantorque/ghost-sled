@@ -1250,6 +1250,10 @@ stays the dark shape in the street.
   clear band high on each bend's outside wall exactly where the sim lays it, cool, a frost-white hairline at its edges,
   never warm or long (a warm band reads as gold-white's line); the slush dull in a bend's floor. Past the lip a crest of
   snow and a timber rail, never rock; iron lamps on it the length of the run.
+- **The glaze's edges** are a hairline on screen, a pixel or two wherever they are, gone within a few metres of the
+  lens (measured in the wall's own shares, the hairline was 10 to 20 cm of ice at the lens and lay down the near wall in
+  a wall ride as a pale band). A glint on the ice is a point, never a star; the sled's lantern lights the walls only
+  near the sled's height; the ghosts' lights keep to the near track.
 - **Architecture and people.** The grand hotel down the start straight: cream render, green shutters, slate mansards
   with dormers, a glazed veranda, two spired towers on a terrace. The start house a timber shed with a bell turret; the
   timing house a clock tower with a low hipped cap and an open cupola (a pointed cap reads as Pinecrest's steeple).
@@ -1291,6 +1295,14 @@ stays the dark shape in the street.
 - **The edge.** A pale weathered snow fence on the cliff's brink, at the run's limit, its pennants streaming inland
   and standing up over a gully's column; past it the cliff's dark rock in beds to a wet foot at the sea. A gully's lip
   is a corniced edge flush with the shelf, its brow overhanging the drop: a lip a rider can leave, never a wall.
+- **The sea's air.** What stands in the sea far under the cliff (the stacks, the clefts' walls) keeps the sea's own
+  clear air, so a stack is the cliff's dark rock on the dark water, never a pale post. The far coast's cliffs are bare
+  rock in one value up over the moor's brow; the moor's snow begins inland of the brow. The snow's ripples lie half as
+  deep as elsewhere (under the low sun their troughs lay on the shelves as figures).
+- **Its legends.** The Beacon Keeper, a pale figure of light twice a man's height in an oilskin and sou'wester, walks
+  the clifftop beside the legend's line ahead of the rider, his lamp held out and its pool soft on the snow. The Herring
+  Lights: the harbour's boats coming home along the coast far below the Geos in two columns, a lamp at each masthead
+  and its light lying on the swell, a pale wake astern.
 - **The wind.** Spindrift up each column, gulls hanging in it into the wind, pennants and windsocks standing up, the
   beacon's smoke leaning inland.
 - **Its other hour: Moonrise.** The moon over the sea and its path on the swell, the lighthouse's beam turning, the
@@ -1313,8 +1325,8 @@ stays the dark shape in the street.
   step and alley and stomps the landings; one who drops off an eave rides the street until a drift takes it back up.
   The roofs are the line, the street the slow way.
 - **Colour script.** A snowfall in a grey afternoon: a pale lilac-grey snow cloud over the whole sky, a pale coin of
-  sun through it ahead and to the left, soft shadows, the snow white with a lilac-grey shade; the windows a lamp behind
-  glass, lamplit as the day goes.
+  sun through it ahead and to the left, soft shadows, the snow white with a lilac-grey shade; the windows a lamp behind glass, lamplit as the day goes. The near flakes few and never
+  darker than the air behind them; the river's ice holds no streak of the sun, a pale coin behind the cloud.
 
   | Metres | Place | Light and grade |
   | --- | --- | --- |
@@ -1324,21 +1336,22 @@ stays the dark shape in the street.
   | 1,850 to 2,660 | The Water Stairs | The cloud breaking over the river, a pale sun through the gap, the viaduct across the valley clear. |
   | 2,660 to the line at 2,800 | The quay and the river | Daylight on the river's ice, the bridge's banner of checks over the line, the snow still falling. |
 
-- **What it is not.** No peak, no panorama, no sea of cloud, no pine: low hills in the snow, the town's other half on
+- **What it is not.** No peak, no panorama, no sea of cloud, no pine: low rounded hills in the snow (its own panorama, never another mountain's
+  ridges, which stood in its haze as peaks), the town's other half on
   the valley's far side behind a viaduct. No square and no lamplit town at the line: the river under the bridge, in
   daylight.
 - **The town.** The roofs are the run's snow on slate; their eaves end on a dark slate edge (never a white lip, which
   reads as a rail); fronts painted from a damp foot to a pale head, windows with glazing bars and shutters, shops and
   window boxes, the alleys' mouths walled with timber gates, the corner drifts held by boards with flags over them; the
   street trodden and swept, a step cooler and duller than the roofs (no setts showing: bare stone on the ridden line);
-  chimneys the hazards, stone stacks as tall as their colliders, half of them smoking in round puffs.
+  chimneys the hazards, stone stacks as tall as their colliders, half of them smoking in round puffs; the lamps' light pools on the snow before the doors.
 - **Its places.** The church at the head, the run starting on its nave between pinnacles; two market squares with a
   gallery bridged high over each, three arched lights in it over the charm gate's three lanes; the quay's tall gabled
   houses and the boathouse; the old stone bridge at the line, a banner of checks hung from its parapet, the townsfolk on
   it; the viaduct and the town's other half across the valley, fading into the snow from the head of the town.
 - **Its other hour: Evensong.** The same snowfall at the day's end, the cloud lit faintly warm from under by the
-  town, every window lit, the lamps' pools on the snow with the blue between, the church's windows at the head and the
-  bridge's lamps at the line; no moon, no stars.
+  town, every window lit, the lamps' pools on the snow with the blue between, the church's windows at the head and the bridge's lamps at the line; no moon, no stars; the sled's lantern low, so the
+  street's fronts keep the night's value and the windows are the light.
 - **The set pieces.** The Roof Run's lanterns under the eaves lit roof by roof, an ember when the chain breaks; Market
   Day's striped awnings shaking their snow off when a stomp lands under them; the washing lines across the alleys,
   jumping and throwing their frost when rung (section 1b). Never on the snow a sled rides.

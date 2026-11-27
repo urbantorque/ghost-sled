@@ -4948,3 +4948,50 @@ straight through.
     - *Only scripts have seen it:* headless Chrome on Windows at 1280 by 720 and 390 by 844; the apostrophe on macOS,
       iOS and Android; an album row with a real frame; the mirror switched on; the pad, touch and a screen reader on the
       new switch and doors. ART.md 10 takes the lane's text.
+
+405. **The three new worlds' feel pass, their critic loops at five, and the sort across all eight** (`r9-look`, 6305d33
+    to 3b053c7, 8 commits, merged at 2c61c19; `notes/r9-look.md`, frames under `shots/r9/look/`; milestone 4's feel pass
+    and M4's look).
+    - *The faults, each traced by turning systems off one at a time until it went:* the Old Run's pale band down the
+      near wall in a wall ride was the glaze's scribed edge, sized in the wall's own units (10 to 20 cm of ice at the
+      lens), now a hairline on screen that fades near the lens; Low's converging runner lines were the ghosts' trails, now
+      thinned from 16 m and gone by 55 m on the Old Run; and a half moon by Lamplight, the lantern's pool kept to the
+      sled's height, no shafts at the outrun, a glint a point, the rider's scratches half as strong. Gullhaven's posts on
+      the sea and the title were the sea stacks fogged to the sky's pale air (a `DEEP_CLEAR` define, compiled only by its
+      rock, keeps the sea's clear air on them); the far coast's teeth were the panorama's moor edge zigzagging over its
+      columns (the cliff now one dark value up over the brow); the figure-like shadows the snow's own ripple troughs (half
+      as deep where the snow's bands are under 1); its legends were staging Pinecrest's Lantern Fleet (they share the key
+      `fleet`) and now have their own module: the Beacon Keeper walking beside his line with a lamp pool, the herring
+      fleet coming home in two columns. Gablefall's peaks were the Old Run's `hills` panorama (it has its own `vale` now);
+      the orange fronts at Evensong the sled's lantern (lowered); the river's streak the ice's sun sheen; the smudges the
+      near flakes darker than the sky (a third as many, none darker than the air); and the nave's pinnacles taller, the
+      quay's folk forward and fewer, the far town's windows dim by day. Not found: Gablefall's dotted seam at the nave's
+      brink.
+    - *The five's frames:* every shared hunk compiles out or holds the five's value on the five; Pinecrest and Ember at
+      High and Low, and Pinecrest's Mirror Lake ice for the trail's change, the same as the base within capture noise.
+    - *Five passes each:* fresh blind critics on pairs of the previous pass against this one; the Old Run's third,
+      fourth and fifth chose the new frames 10, 5 and 9 of 12, Gullhaven's fourth, fifth and an extra sixth 6, 7 and 6 of
+      11, Gablefall's sixth 7 of 11. The losses were mostly the capture (name pills, the scarf, the lens) and two attempts
+      taken back (a stronger ice mirror on the Old Run, the quay's folk set too far back).
+    - *The sort:* the five's stills and each new mountain's opening, three places and finish, 40 frames shuffled, placed
+      40 of 40 in greyscale and 40 of 40 in colour by a fresh critic with only ART.md; all three new mountains named most
+      unlike the rest; its only confusions among the five's shared finishes.
+    - *Low on a held run* (mid-100, 30 m/s, about 600 frames a window, against Pinecrest's on the same windows, counts
+      not frames a second): the Old Run 7 to 10% under on the Bells and the Labyrinth and 5 to 9% over at the Horseshoe and
+      the line; Gullhaven 10 to 24% over on every stretch, worst at the Lighthouse (454.8 calls and 47.6 draws against
+      367.6 and 39.6); Gablefall 3 to 15% under on every stretch, at about half Pinecrest's triangles.
+    - *Merged* clean; tsc clean; the full suite 119 files, 2,162 tests.
+    - *The main lane's calls on the lane's questions:* the Old Run's ice still reads as snow to every critic, and a
+      stronger mirror made streaks and lost: accepted as it is this round, a design question for the next (the report
+      says so); the shared hunks stand (`vale`, `DEEP_CLEAR`, the troughs halved, the `TRACK` and `STREET` terms, the
+      weather's `near` and `pale`, the trails' strength a course), the troughs and bands keyed on `massif.seaOcean`, so a
+      future sea mountain inherits them; the legends' look as the lane designed it; no seventh pass, the round's proof
+      and the owner's play route judging what no critic has seen; Gullhaven's Low and the Old Run at the Horseshoe go to
+      the main lane's frame-rate sittings before any cut. Port 5040 is held by Windows on this machine: lanes skip it.
+    - *Short, carried to the report:* the Old Run's dotted mast in the sky (hiding scene children 9 to 19 together
+      removes it, no group of them alone does) and a gold path on the glaze; Gablefall's dotted seam, the shadow stripes
+      on the nave and plain chimneys; Gullhaven's slab-like lip and shelf, its sea haze toward the sun, block-like walls,
+      and Low going grey; from the critics, outside the worlds, the name pills over the hat, the ghosts' lines and discs,
+      the outrun's speed blur.
+    - *Only scripts and the lane have seen:* every frame staged; the Keeper's last change, the fleet's shorter wakes,
+      Gablefall's quay and Evensong's cloud; nobody has ridden any of it by hand. ART.md 15 takes the lane's text.
