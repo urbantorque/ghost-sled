@@ -519,13 +519,17 @@ Round 7:
 - **The title has one job at a time (round 9).** The logo; the mountains as a picker of chips, each its sky and its
   short name ("Frostfang", "Ember"), the picked one larger with your best on it in words ("Best 1:52.2"; on a phone the
   best stands under Ride, the chips being small, and the strip scrolls so every name is whole); Ride with its reason on
-  it; under Ride, once open, the picked mountain's hour (each half with a swatch of its sky) and its mirror (a new
+  it; under Ride, once open, the picked mountain's hour (each half with a swatch of its sky and the light it rides by: the sun, a low sun, the moon, a glow under the range,
+  lamps) and its mirror, a switch with its word apart from the hour's pair (a new
   mountain's mirror opens when its three home riders are beaten to the line; until then, where the toggle would stand,
   a quiet line with a lock says the way in five words at most, "Mirrored: beat its 3 riders", words and not a control,
   and its board says it in full under its home riders); one quiet
   line of what you are working toward (a glyph and at most nine words: the next mountain by ghosts, Lanternfall by The
-  Twelve, else the next Rider Rank named as a prize); and four labelled doors: Daily and Cup (wearing the flame, "13-day
-  flame", marigold), Progress, Garage (wearing the gifts, "90 gifts") and Settings. No mountain name or feeling line
+  Twelve, else the next Rider Rank named as a prize: how far and the prize, "1,281 XP to the
+  Crane's Memory charm"; a locked chip pressed says the same sentence for its mountain, "3 more ghosts open The Old
+  Run"); and four labelled doors: Daily and Cup (wearing the flame, "13-day
+  flame", marigold), Progress, Garage (wearing the gifts as the results and the garage draw them, the glyph and "90
+  gifts" in marigold) and Settings, on a phone the same pills two by two. No mountain name or feeling line
   under the logo: the picked chip names the place and the veil says its feeling while travelling. A first visit keeps
   the logo, its tagline, Ride, the line "Pass ghosts to unlock new mountains" and a labelled Sound On.
 - **Ride's reason is the next run's purpose**, first that applies: a friend's challenge (Accept); the duel with the next
@@ -543,19 +547,23 @@ Round 7:
 - **The results are three beats over the scene (round 9)**, about 2.5 s: how you did (the place, its word and the time
   in italic 900 at the top of the logo's side, gold-white for a win, the silver step for a podium, off-white for a
   finish, off-white and a little crooked for a wreck; then one fact on an
-  ink chip that keeps inside the headline's rule, clear of the rider); the one reward that matters most, turned over,
+  ink chip that keeps inside the headline's rule, clear of the rider, beside the figure on a phone as on a desk); the one reward that matters most, turned over,
   with Rider Rank's bar filling at its foot (bare: the next prize is named on the title's quiet line and in Details) and every gift the run paid as one figure in words ("+124 gifts": a prize
   of gifts is never a card of its own); and the one button, vermillion, always the run, its reason under its words
   and served by that run, then Home, Photo and Details, each with its word. A Daily's or a Cup's medal leads with the
   time it was won on and the medal in words, the race's place its fact, so the two never read as disagreeing; a Trial
   leads with its figure ("0 perfects / This week's Trial"), a Long Night with its depth ("2 legs / Your deepest
   night"). A tap or a key lands it; reduced motion shows the end. Everything else is Details, one level down, a sheet from the
-  column's side: the race, your run, what it paid point by point (the XP it lists adds up to the total it says), the
+  column's side, its one button in its own foot under the list: the race, your run, what it paid point by point (the XP it lists adds up to the total it says), the
   missions, and keeping the run (Watch Your Run, Save Clip, Challenge a Friend).
 - **One system (round 9, `tokens.css`, `kit9.css`):** eight type sizes on one unit, three weights, two radii (full pills
-  and 18 px cards), three button ranks with words on every one (primary vermillion, one a screen and always the run;
-  secondary an ink pill with a hairline; quiet a thin ink wash), one ink sheet for a room or Details, four durations and
-  two easings, all zero under reduced motion.
+  and 18 px cards), three button ranks with words on every one told apart at a glance (primary a vermillion fill, one a screen and always the run;
+  secondary an ink pill ringed in off-white; quiet a thin ink wash with only a faint hairline; Photo secondary wherever
+  it stands, Home quiet), one ink sheet for a room or Details, four durations and
+  two easings, all zero under reduced motion. A gift figure is marigold with its glyph and word wherever it stands (the
+  results, the garage, the Garage door, Details). The curly apostrophe is drawn from a face that keeps it a comma at 800
+  and 900 (an installed Arial, by `local()` and a `unicode-range`; Windows' system font draws it there as a wedge that
+  reads as an acute accent), never a straight quote.
 - **The garage is a place, not a sheet (round 9).** A sled-maker's workshop at dusk drawn by the game's own renderer:
   your rider on your sled on a stand, hats on wooden head blocks, a scarf rail, a door onto a snowy yard, the Lantern
   Row in the rafters. The UI is one kit9 sheet from the logo's side, as every room's (the left of a desk, the place keeping
@@ -572,12 +580,13 @@ Round 7:
   sheet over the title takes the title's own column out of sight, so the sheet and the scene are all there is. Every
   figure has its word ("90%", "0 of 4", "1,281 XP to go", "Bronze 13, Silver 16, Gold 18 perfects").
 - **The pause card** is the one of them with a primary: its word set like the wordmark, the run's missions as the
-  Progress room says them, Resume (its key on it, P or Start), then Settings, Photo and Home. The settings are a press
+  Progress room says them, Resume (its key on it, P or Start), then Settings, Photo and Home, its ink whole so nothing of the run reads
+  through it. The settings are a press
   away, not on the card.
 - **The books** open one at a time over the Progress room. The Almanac is this month's chapter, then the fifty Rider
   Ranks a row each (its glyph, its prizes in words a line each, a marigold check once reached), the next lit with the
-  XP it still needs, opening at it. The Spirit Album opens at its contents, a page a row (a mountain's in its sky, the
-  rest their glyph on ink) with how many are found; a page holds the stickers found (a frame from the run, else
+  XP it still needs, opening at it. The Spirit Album opens at its contents, a page a row, each wearing one of its
+  stickers (a frame from its run, else its sky, its kind's glyph in the corner) with how many are found; a page holds the stickers found (a frame from the run, else
   painted in the mountain's sky, its kind's glyph in the corner) and those still to find (an outline with the glyph,
   and where to find it).
 - **A mountain's mastery board** opens from the medal wall: every star's goal in its row (medals, sky gates, set pieces,

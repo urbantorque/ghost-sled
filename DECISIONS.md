@@ -4909,3 +4909,42 @@ straight through.
     - *Only scripts have seen it:* the hours told and the mirrors opened, on staged runs (a sled set near the line, the
       home riders written into the save as beaten); nobody has ridden the Old Run since its grade changed; nobody has
       looked at a Great Geo frame in a player's album; no critic has judged the key art.
+
+404. **The screens' carried faults fixed** (`r9-polish`, c5b25ad to 7961885, 6 commits, merged at 33ae8c7;
+    `notes/r9-polish.md`, frames under `shots/r9/polish/`).
+    - *What changed:* Details holds its one button in a foot of its own under the list it ends (sticky over the
+      scrolling list, it stood over the last rows); one gift figure, marigold with its glyph and word, on the results,
+      the garage, the Garage door and Details; the curly apostrophe drawn from an installed Arial (`local()`,
+      `unicode-range`, nothing shipped), where Windows' system font drew it at 800 and 900 as an acute accent ("Crane´s");
+      the phone's fact beside its figure inside the headline's rule, as on a desk; the quiet line names the prize in at
+      most nine words ("1,281 XP to the Crane's Memory charm", a test holds every page), a locked chip pressed saying
+      the same sentence for its mountain; the three button ranks apart at a glance (secondary ringed in off-white, quiet
+      a wash with a faint hairline, Photo secondary wherever it stands); the phone's doors the kit's pills two by two;
+      each hour's swatch carrying its light, so Ember's day and night are two; the mirror a switch with its word, apart
+      from the hour's pair; "Stages" and "Run" over the medal discs; the album's rows cards wearing a sticker each.
+      Beyond the list, from the critics: the pause card's ink whole (the run's callouts read through it on a phone), a
+      sheet's first line clear of its top fade, the Almanac's next rank on its column, a sheet's Close on the body's edge.
+    - *Judged blind:* two family tests across the title, results, rooms, books, pause card and garage on both forms,
+      "mostly yes" both; the second raised none of the nine listed faults but the medal discs' size, its scores 7 to
+      8.5 (U4's second 7 to 9; the garage 8 and 7, against 7 and 6 at U4 and 7 to 8 at G6).
+    - *Merged* with one conflict, `title.ts`: the polish lane's mirror switch where a mirror is open, the wiring lane's
+      way in where it is not. tsc clean; the full suite 119 files, 2,162 tests. Checked headless by the main lane on a
+      desk and a phone (mid-50, Frostfang and the Old Run): the apostrophe a comma, the door's gifts marigold, the quiet
+      line at seven words, the console clean.
+    - *The main lane's calls on the lane's questions:* the quiet line names the prize; the apostrophe from an installed
+      Arial stands (seen on Windows only: macOS and iOS should take Arial's comma, Android falls through to Roboto as
+      before; the canvas's labels are not covered); the stronger secondary ring and Photo as secondary stand across the
+      game; every fix beyond the list stands. The title's words are measured with the round's counter in M4's proof
+      (the lane's base, seven chips: run-50 39 on a desk, novice-50 42; the main lane's rough count on the merged build,
+      eight chips: run-50 41 on Frostfang and 44 on the Old Run with its mirror's way in, one fewer on a phone). If a
+      title stays over 40 there, the new mountains' way in leaves the title for their boards first (the five's unopened
+      mirrors say nothing there either), then The Twelve's nine-word line shortens.
+    - *Settled by the merges:* "6 legs: every mountain" beside seven chips was the lane's base, the night still ten legs;
+      with eight mountains it reads "6 mountains back to back". The album's rows summed to 243 of 248 in a critic's frame:
+      on the merged tree they sum to the total, 311 of 311 (the frame was cut at its fold).
+    - *Carried to the feel pass:* the picked chip no larger in the two-row picker (ART.md 10 says larger); Resume's "P"
+      drawn as a round pad cap; the results' time upright and small; content clipped in the garage's tile strip; on a
+      phone's first visit, Sound On over the logo's last letter (the ui lane's frame shows it too).
+    - *Only scripts have seen it:* headless Chrome on Windows at 1280 by 720 and 390 by 844; the apostrophe on macOS,
+      iOS and Android; an album row with a real frame; the mirror switched on; the pad, touch and a screen reader on the
+      new switch and doors. ART.md 10 takes the lane's text.
