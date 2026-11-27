@@ -522,13 +522,16 @@
     overflow-y: hidden;
     padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-4);
     scroll-padding-inline: var(--sp-4);
-    -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent 100%);
-    mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 44px), transparent 100%);
+    mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 44px), transparent 100%);
   }
 
+  /* Two whole tiles and the edge of a third, which fades out at the strip's end: the row says it goes on and never cuts
+     a name in two. (Round 9, the feelui lane: each tile as wide as its name, the third was cut wherever the screen
+     ended, "Lodge Tobogga", under a fade too short to read as one.) A long name wraps in its tile. */
   .gs-gar-tile {
-    flex: 0 0 auto;
-    min-width: 8.6em;
+    flex: 0 0 calc((100% - 6px) / 2.14);
+    min-width: 0;
   }
 
   .gs-gar-card {
