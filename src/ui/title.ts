@@ -305,11 +305,19 @@ export class Title {
     const strip = h('div', 'gs9-strip');
     strip.setAttribute('role', 'group');
     strip.setAttribute('aria-label', 'Where you ride');
-    for (const c of pickerOrder(m.mountains)) strip.append(this.chip(c, c.id === m.selected));
-    // (Eight mountains do not fit one row on a 1280 desk or a 390 px phone with every name whole: two rows of four.)
-    strip.classList.toggle('is-many', m.mountains.length > STRIP_ONE_ROW);
-    // (The picked chip takes two of the rows' columns; with the Daily, the Cup or a Trial chosen no chip is picked.)
-    strip.classList.toggle('has-pick', m.mountains.some((c) => c.id === m.selected));
+    const order = pickerOrder(m.mountains);
+    const at = order.findIndex((c) => c.id === m.selected);
+    // (Eight mountains do not fit one row on a 1280 desk or a 390 px phone with every name whole: two rows of four. The
+    // picked chip is twice as wide as the others in its row, and both rows end on one edge: screens.css. With the Daily,
+    // the Cup or a Trial chosen no chip is picked. Round 9, the feelui lane.)
+    const many = m.mountains.length > STRIP_ONE_ROW;
+    order.forEach((c, i) => {
+      const chip = this.chip(c, i === at);
+      if (many && at >= 0 && i < 8 && (i < 4) === (at < 4)) chip.classList.add('in-pick-row');
+      strip.append(chip);
+    });
+    strip.classList.toggle('is-many', many);
+    strip.classList.toggle('has-pick', many && at >= 0 && order.length === 8);
     // A mouse wheel turns the strip when it scrolls (a phone's five chips).
     strip.addEventListener(
       'wheel',

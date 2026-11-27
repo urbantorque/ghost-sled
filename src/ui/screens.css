@@ -436,21 +436,18 @@
   color: var(--text-dim);
 }
 
-/* Eight mountains (phase B): two rows of four, every name whole, and the picked one larger as in one row: twice as wide,
-   with its ring and its best. A grid of five equal columns, each as wide as the widest name needs: the picked chip spans
-   two, so its row is full and the other row ends a column short; the fifth chip always starts the second row, so the
-   rows stay four and four in the picker's order. (Round 9, the feelui lane: four equal chips a row left the pick only
-   its ring, against ART.md 10. A row of eight is wider than the logo's column at 1280 and than a phone.) With the
-   Daily, the Cup or a Trial chosen no chip is picked, and the rows are four equal columns. */
+/* Eight mountains (phase B): two rows of four, every name whole, and the picked one larger as in one row: twice as wide
+   as the others in its row, with its ring and its best. A grid of twenty columns, as narrow as the names allow: in the
+   picked chip's row it spans eight and the others four; in the other row each spans five; so both rows end on one edge
+   and the fifth chip always starts the second row, in the picker's order (title.ts marks the picked chip's row). (Round
+   9, the feelui lane: four equal chips a row left the pick only its ring, against ART.md 10; a grid of five left a hole
+   at the end of one row. A row of eight is wider than the logo's column at 1280 and than a phone.) With the Daily, the
+   Cup or a Trial chosen no chip is picked, and the rows are four equal columns. */
 .gs9-strip.is-many {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   width: max-content;
   max-width: 100%;
-}
-
-.gs9-strip.is-many.has-pick {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .gs9-strip.is-many .gs9-chip,
@@ -464,8 +461,20 @@
   grid-column-start: 1;
 }
 
-.gs9-strip.is-many > .gs9-chip.is-sel {
-  grid-column-end: span 2;
+.gs9-strip.is-many.has-pick {
+  grid-template-columns: repeat(20, minmax(0, 1fr));
+}
+
+.gs9-strip.is-many.has-pick > .gs9-chip {
+  grid-column-end: span 5;
+}
+
+.gs9-strip.is-many.has-pick > .gs9-chip.in-pick-row {
+  grid-column-end: span 4;
+}
+
+.gs9-strip.is-many.has-pick > .gs9-chip.is-sel {
+  grid-column-end: span 8;
 }
 
 /* The picked mountain is the larger chip: its name, and your best there in words. */
@@ -904,7 +913,9 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .gs9-strip.is-many > .gs9-chip.is-sel {
+  .gs9-strip.is-many.has-pick > .gs9-chip,
+  .gs9-strip.is-many.has-pick > .gs9-chip.in-pick-row,
+  .gs9-strip.is-many.has-pick > .gs9-chip.is-sel {
     grid-column-end: auto;
   }
 }
