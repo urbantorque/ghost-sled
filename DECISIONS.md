@@ -4863,3 +4863,49 @@ straight through.
       dotted seam at the nave's brink, the near snowflakes as smudges at the lens, a streak on the river's ice, the
       fronts orange at Evensong, the quay's folk as boxes, the far town's speckle.
     - Nobody has ridden it by hand, and nobody has listened to its score. ART.md 15 takes the world's text.
+
+403. **The three new mountains wired** (`r9-wiring`, d020444 to d8350d9, 4 commits, merged at 6560b11;
+    `notes/r9-wiring.md`, frames under `shots/r9/wiring/`; milestone 3's M3).
+    - *Their hours on the Almanac:* Gablefall at Evensong on page 16, the Old Run by Lamplight on 23, Gullhaven at
+      Moonrise on 29, each beside the charm or gifts the page held and between the five's hours as its mountain opens
+      between theirs. Never silent: a save past the page is told the hour on its next results, one a run ("New on Rider
+      Rank 16: Gablefall at Evensong"), and it opens only once told (an optional `RankSave.told`, read by `readRank`).
+      mid-5 is owed none; mid-50 two; mid-100 all three.
+    - *Their mirrors:* each opens when its three home riders are beaten to the line, told on that run's results ("The Old
+      Run's riders beaten"); said on its board under its home riders and on the title where the toggle would stand, a
+      quiet line with a lock ("Mirrored: beat its 3 riders", then "1 rider to beat"). The five's two ways as they were.
+    - *The Old Run's grade:* `BIOME_PARAMS.oldrun.slope` 0.17 to the track's 0.28: a get-up's push 11.1 to 14.4 m/s (18.8
+      with Quick Feet), the ride home after a wreck 14.0 to 17.3; its pool generated again alone in the heavy slot, 48 of
+      49 records byte for byte the same (Lotte Bell 99.9 to 97.4 s), its spread as it was (77.9 to 100.7 s, p90/p10
+      1.15); its first run still laid round 92 s (93 put a steering-only run third on one seed); the lab's bar every line
+      met as before; the clumsy pilot 147.6 to 143.8 s and 0.83 to 0.70 falls a run, the mid, novice and expert
+      unchanged.
+    - *The album:* 212 stickers, then 266 as the three registered, now 311: each new page 33, The Twelve's records there
+      and its own riders'; a save keeps every sticker it holds; the Great Geo's frame taken in its flight over the cleft.
+    - *The key art:* Gablefall's reel drew its riders from mid-pool, and two of three rode the street; a shot now names
+      where in its pool its reel draws, Gablefall's from riders on the roofs 95 to 97% of a stretch that starts at 2,120 m,
+      past the market square: the hero on the roofs 98% of the reel, from its first frame. All eight mountains' key art
+      looked at on a desk and a phone at mid-1, mid-50 and mid-100, the console clean. No title reel draws The Hollow King
+      before his duel.
+    - *Kept off the new mountains:* The Twelve's duels, the Daily, the Cup, the league and the missions, held by
+      `tests/wiring.test.ts`. Only two missions name a look, both the five's (snowmen on Pinecrest, spirit gates on
+      Sakura); none is offered on a shut mountain.
+    - *Photo mode and Save Clip* opened on all three on the merged build as a player opens them, the console clean.
+    - *Merged* clean; tsc clean; the full suite 119 files, 2,161 tests. Its `title.ts` hunks meet the polish lane's at
+      that merge.
+    - *The main lane's calls on the lane's questions:* the hours' pages (16, 23, 29) and one owed hour told a run stand
+      (all at once would bury a run's results under three cards); the mirrors open only by the home riders, whose row
+      opens on a mountain's fourth ride, so none opens sooner; no missions of their own this round (one appended reorders
+      every save's rotation and moves the economy and career bars: a next round's, said in the report); Gablefall's Wren
+      Slater keeps the key `'wren'` she shares with The Twelve's Old Wren (harmless today, her sticker marked `.home`),
+      and takes a key of her own the next time Gablefall's pool is generated; the reel's stretch from 2,120 m stands. The
+      title's words are measured with the round's own counter after the polish merge, in M4's proof: the lane counts a
+      new mountain's run-50 title at 45 to 49 on a desk against the bar's 40, and Ember's at 43 with nothing of its own
+      changed; the three new chips' names alone add four words to every title the bar was set on (39 at 396). If a new
+      mountain's title stays over, its mirror line is the first to shorten.
+    - *Carried to the feel pass:* each time the title reel loops the lens glides back to the hero over about half a
+      second, and on Gullhaven (the shortest loop, about 6 s) it starts 260 m off with no rider in frame; snapping it would
+      touch the five's titles too.
+    - *Only scripts have seen it:* the hours told and the mirrors opened, on staged runs (a sled set near the line, the
+      home riders written into the save as beaten); nobody has ridden the Old Run since its grade changed; nobody has
+      looked at a Great Geo frame in a player's album; no critic has judged the key art.

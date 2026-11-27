@@ -519,7 +519,10 @@ Round 7:
 - **The title has one job at a time (round 9).** The logo; the mountains as a picker of chips, each its sky and its
   short name ("Frostfang", "Ember"), the picked one larger with your best on it in words ("Best 1:52.2"; on a phone the
   best stands under Ride, the chips being small, and the strip scrolls so every name is whole); Ride with its reason on
-  it; under Ride, once open, the picked mountain's hour (each half with a swatch of its sky) and its mirror; one quiet
+  it; under Ride, once open, the picked mountain's hour (each half with a swatch of its sky) and its mirror (a new
+  mountain's mirror opens when its three home riders are beaten to the line; until then, where the toggle would stand,
+  a quiet line with a lock says the way in five words at most, "Mirrored: beat its 3 riders", words and not a control,
+  and its board says it in full under its home riders); one quiet
   line of what you are working toward (a glyph and at most nine words: the next mountain by ghosts, Lanternfall by The
   Twelve, else the next Rider Rank named as a prize); and four labelled doors: Daily and Cup (wearing the flame, "13-day
   flame", marigold), Progress, Garage (wearing the gifts, "90 gifts") and Settings. No mountain name or feeling line
@@ -1331,6 +1334,9 @@ stays the dark shape in the street.
   Day's striped awnings shaking their snow off when a stomp lands under them; the washing lines across the alleys,
   jumping and throwing their frost when rung (section 1b). Never on the snow a sled rides.
 - **Its set:** Market Awning, Pinwheels and the Gable House.
+- **Its key art** rides the roofs of the Water Stairs from 2,120 m, its three riders drawn from the part of the pool that
+  rides the roofs there, so the hero is on a ridge with the roofs stepping down and the viaduct beyond, never in the
+  street between the fronts.
 - **Low** is a poster of it: the town past the rows merged into each segment's one draw, two rows deep, no window
   dressing; on a held Low run 8 to 24% under Pinecrest's GL calls on the same stretches, at half its triangles.
 
