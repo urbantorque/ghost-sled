@@ -159,9 +159,10 @@ export class VerbWorld {
   }
 
   /** Whether this file draws this set piece's verb (the fifth mountain's are the lanternworld lane's; round 9, the
-   *  Old Run's three are its own world's, oldrunworld.ts, and Gullhaven's three its own, gullhavenpieces.ts). */
+   *  Old Run's three are its own world's, oldrunworld.ts, Gullhaven's three its own, gullhavenpieces.ts, and Gablefall's
+   *  three its own, gablefallpieces.ts). */
   owns(p: MomentPlay): boolean {
-    return p.verb !== 'follow' && p.verb !== 'kindle' && p.verb !== 'carry' && p.verb !== 'peal' && p.verb !== 'split' && p.verb !== 'glaze' && p.verb !== 'beam' && p.verb !== 'soar' && p.verb !== 'stacks';
+    return p.verb !== 'follow' && p.verb !== 'kindle' && p.verb !== 'carry' && p.verb !== 'peal' && p.verb !== 'split' && p.verb !== 'glaze' && p.verb !== 'beam' && p.verb !== 'soar' && p.verb !== 'stacks' && p.verb !== 'chain' && p.verb !== 'awnings' && p.verb !== 'washing';
   }
 
   build(c: Course, plays: readonly MomentPlay[]): void {

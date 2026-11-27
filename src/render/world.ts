@@ -976,7 +976,7 @@ export class World {
     if (this.gablefallLoading || !isGablefall(this.course)) return;
     this.gablefallLoading = true;
     void import('./gablefallworld').then((m) => {
-      const w = new m.GablefallWorld();
+      const w = new m.GablefallWorld(this.particles);
       w.setDetail(this.quality.detail);
       w.setCourse(this.course);
       this.gablefallRoot.add(w.root);

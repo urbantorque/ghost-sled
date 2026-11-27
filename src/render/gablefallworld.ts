@@ -13,6 +13,8 @@ import { LOW_BOLD, type StillFigure, crowdColors, stillCrowd } from './crowd';
 import { type Palette, getPalette } from './palette';
 import { reduced } from '../ui/motion';
 import type { Detail } from './postfx/tiers';
+import { GablefallPieces } from './gablefallpieces';
+import type { Particles } from './particles';
 import type { ViewMode } from './world';
 
 // Gablefall's own world (round 9, notes/r9-gablefall-world.md), loaded with its course (world.ts imports this file on
@@ -370,8 +372,12 @@ export class GablefallWorld {
   /** Triangles built: the rows, the town past them, the places, the valley's far side (the notes' counts). */
   tris = { near: 0, far: 0, places: 0, valley: 0 };
 
-  constructor() {
+  /** The three set pieces' props (gablefallpieces.ts): the Roof Run's lanterns, Market Day's awnings, the washing lines. */
+  private readonly sets: GablefallPieces;
+
+  constructor(particles: Particles | null = null) {
     this.root.name = 'gablefall-world';
+    this.sets = new GablefallPieces(particles);
     this.mat = makeToonMaterial({ coolShade: 0.3, glowMask: true, emissive: C('#FFB45E'), emissiveStrength: 0.8, rim: 0.2 });
     this.haze = hazeMaterial();
     this.smokeMat = smokeMaterial();
@@ -389,9 +395,14 @@ export class GablefallWorld {
     this.build(c);
   }
 
-  reset(): void {}
+  reset(): void {
+    this.sets.reset();
+  }
 
-  beats(_list: readonly Beat[], _s: Snap): void {}
+  /** The set pieces' named moments this frame (a run's only): a roof landed, a stall stomped, a line rung. */
+  beats(list: readonly Beat[], s: Snap): void {
+    this.sets.beats(list, s);
+  }
 
   private dispose(): void {
     for (const o of [...this.root.children]) this.root.remove(o);
@@ -448,6 +459,8 @@ export class GablefallWorld {
     this.tris.places = placed - t0;
     this.valley(c, low);
     this.smoke(c, low);
+    // (The set pieces' props are built from the plays on the first frame: a run's own, or the course's on the title.)
+    this.root.add(this.sets.root);
   }
 
   // ------------------------------------------------------------------ the rows
@@ -1465,7 +1478,7 @@ export class GablefallWorld {
 
   // ------------------------------------------------------------------ each frame
 
-  update(_dt: number, _time: number, _mode: ViewMode, s: Snap, _sim: Sim | null, _camera: PerspectiveCamera, p: Palette): void {
+  update(_dt: number, time: number, mode: ViewMode, s: Snap, sim: Sim | null, _camera: PerspectiveCamera, p: Palette): void {
     if (!this.course) return;
     const reach = REACH[this.detail];
     for (const g of this.pieces) {
@@ -1491,6 +1504,7 @@ export class GablefallWorld {
     (this.smokeMat.uniforms.uLit.value as Color).copy(p.fog).lerp(p.snowShade, 0.2);
     (this.smokeMat.uniforms.uShade.value as Color).copy(p.snowShade).lerp(p.snowDeep, 0.25);
     this.smokeMat.uniforms.uLive.value = reduced() ? 0 : 1;
+    this.sets.update(this.course, time, s, sim, mode === 'run', this.detail === 'low', reduced(), lampK);
   }
 }
 

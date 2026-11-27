@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { Mesh } from 'three';
+import { InstancedMesh, Mesh } from 'three';
 import { describe, expect, it } from 'vitest';
 import { courseFor } from '../src/sim/course';
 import { GABLEFALL_LAB_SEED, MOUNTAINS } from '../src/sim/mountains';
@@ -7,6 +7,8 @@ import { BACK, FRONT, HOLD, PAVE, placesOf, rowsOf, streetOf } from '../src/sim/
 import { groundOf } from '../src/render/ground';
 import { LANE, isGablefall, pavedAt, riverAt, townColumns, townGround } from '../src/render/gablefallplan';
 import { GablefallWorld } from '../src/render/gablefallworld';
+import { GablefallPieces } from '../src/render/gablefallpieces';
+import { momentPlays } from '../src/sim/moments';
 import { lateralOffsets } from '../src/render/terrain';
 
 // Round 9, Gablefall's world (notes/r9-gablefall-world.md): the ground drawn past the corridor's edges (the lanes behind
@@ -154,5 +156,57 @@ describe("Gablefall's world", () => {
     const world = readFileSync('src/render/world.ts', 'utf8');
     expect(world).toContain("import('./gablefallworld')");
     expect(world).not.toMatch(/^import \{[^}]*\} from '\.\/gablefallworld'/m);
+  });
+});
+
+describe("Gablefall's set pieces", () => {
+  // (gablefallpieces.ts: the Roof Run's lanterns, Market Day's awnings, the washing lines, from the course's own plays.)
+  const plays = momentPlays(c);
+  const built = (low: boolean): { g: GablefallPieces; meshes: Mesh[]; glass: number; pools: number } => {
+    const g = new GablefallPieces(null);
+    g.build(c, plays, low);
+    const meshes: Mesh[] = [];
+    let glass = 0;
+    let pools = 0;
+    g.root.traverse((o) => {
+      if (o instanceof InstancedMesh) {
+        if (o.geometry.type === 'BoxGeometry') glass = o.count;
+        else pools = o.instanceMatrix.count;
+      } else if (o instanceof Mesh) meshes.push(o);
+    });
+    return { g, meshes, glass, pools };
+  };
+
+  it('stands all three on their plays, a lantern a house down the Roof Run and a line an alley', () => {
+    expect(plays.map((p) => p.verb)).toEqual(['chain', 'awnings', 'washing']);
+    const high = built(false);
+    const low = built(true);
+    const run = plays[0];
+    let houses = 0;
+    for (const r of rowsOf(c)) for (const p of r.pieces) if (p.kind === 'house' && p.z1 - p.z0 >= 5 && (p.z0 + p.z1) / 2 >= run.z0 && (p.z0 + p.z1) / 2 <= run.z1) houses++;
+    expect(high.glass).toBe(houses);
+    expect(houses).toBeGreaterThan(20);
+    // (A pool for each stall that has a front to hang from and for each line; on High a mesh a line to jump when rung.)
+    expect(high.pools).toBeGreaterThan(plays[2].targets.length);
+    expect(high.meshes.length).toBe(plays[2].targets.length + 1);
+    expect(low.meshes.length).toBe(1);
+  });
+
+  it("stands none of it on the snow a sled rides, nor in the street under a rider's head", () => {
+    for (const low of [false, true]) {
+      for (const q of built(low).meshes) {
+        const pos = q.geometry.getAttribute('position');
+        for (let i = 0; i < pos.count; i++) {
+          const x = pos.getX(i);
+          const y = pos.getY(i);
+          const z = -pos.getZ(i);
+          const dx = Math.abs(x - c.centerX(z));
+          const st = streetOf(c, z);
+          const held = st ? Math.min(c.centerX(z) - st.x0, st.x1 - c.centerX(z)) : 0;
+          if (st && dx < held - 0.7) expect(y - c.baseY(z), `in the street at ${z.toFixed(0)}`).toBeGreaterThan(2.6);
+          if (dx > FRONT + 0.2 && dx < BACK - 0.2) expect(y - c.ground(x, z), `on the roofs at ${z.toFixed(0)}`).toBeGreaterThan(0.1);
+        }
+      }
+    }
   });
 });
