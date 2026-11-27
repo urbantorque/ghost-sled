@@ -4,12 +4,15 @@ A downhill sled race for the browser. You carve, drift, pop and trick your way d
 through ravines, frozen lakes, village streets and off real cliffs, racing the translucent ghosts of
 twelve signature riders and a crowd of others to a finish town. Spirit lights on the brave lines, and
 your skill, fill a lantern you either spend on a dash (through trees, faster) or keep as a ward that
-takes the next hit. There are five mountains; the fifth, Lanternfall, is the finale, opened by beating
-The Twelve one duel at a time. Each mountain's three biggest places are set pieces, fifteen in all on
-twelve different verbs (fly a ring line, hold a slide across a frozen lake, outrun a falling span, race a
+takes the next hit. There are eight mountains: the first five, Lanternfall their finale, opened by beating
+The Twelve one duel at a time, and three added in round 9 that ride like none of them (the Old Run, an old ice
+track ridden high on its banked glaze; Gullhaven, a sea cape where the wind over each gully holds a rider who
+pops off its lip; Gablefall, a snowed-in hill town ridden down its roofs). Each mountain's three biggest places
+are set pieces, twenty-four in all on twenty-one different verbs (fly a ring line, hold a slide across a frozen lake, outrun a falling span, race a
 cable car, thread lantern gates, ring bells, carry a flame to the line), each with two or three variants
 picked by the run's seed, and a board of goals on each teaches it. Every mountain has its own produced
-score in its own genre, sequenced to the run, and a garage dresses the rider. Every run rolls a little
+score in its own genre, sequenced to the run, and a garage, a sled-maker's workshop drawn by the game's own
+renderer, dresses the rider and builds up each sled. Every run rolls a little
 controlled chaos (a mood, maybe an event, now and then a legend), so no two runs feel the same. After the
 finish, Watch Your Run cuts a highlight reel from the run's own record.
 
@@ -24,7 +27,8 @@ ahead of their time. The title shows who is next and the full ladder. Eleven ope
 Hollow King waits, and after him one last race against all twelve at once.
 
 **Set pieces.** Each mountain has three, one a stage, each with its own verb: rings, slide, steps, collapse,
-race, gates, surge, flourish, shatter, and Lanternfall's follow, kindle and carry. No verb is used more than
+race, gates, surge, flourish, shatter, Lanternfall's follow, kindle and carry, and the Old Run's peal, split and glaze, Gullhaven's beam, soar
+and stacks, and Gablefall's chain, awnings and washing. No verb is used more than
 twice, and each set piece has two or three variants chosen by the run's seed, so a ghost rides the variant of its
 own run. Beating a set piece lights a whole lantern and earns its star on the mountain's board.
 
@@ -35,6 +39,16 @@ lantern dragon on the benches, the aurora come down to the snow. They never hurt
 lamps to light, and a flame to carry to the great lantern at the line. A fall or a spent ward gutters the flame.
 Ride back up to speed within four seconds and it catches again; fall again while it gutters and it is out. The
 Hollow King's home.
+
+**The three new mountains (round 9).** Each has its own world, score, set pieces, legends, three home riders
+(never a duel: The Twelve stay twelve) and a garage set opened by its mastery board, and stays out of the Daily
+and the Cup. **The Old Run** (from 18 ghosts) is a grand hotel's ice track: its walls carry a sled round each bend at
+the height its speed settles it, and the glaze high on the outside wall is the fast line, the slush in the floor
+the safe one. **Gullhaven** (from 32) runs along a sea cliff: at each of nine gullies the path swings inland round
+the gully's head, and a rider who pops off the corniced lip instead is held over the mouth by the sea wind and paid
+for the landing. **Gablefall** (from 8) is a hill town so snowed in that its roofs are the way down: each roof a
+step under the last, the alleys hopped, the street below the slow way and its corner drifts the way back up. Each
+new mountain's other hour opens on an Almanac page of its own, and its mirror when its home riders are beaten.
 
 **The race.** From your second run on a mountain seven ghosts ride with you, spread from a little quicker than
 your best recent run to your slowest: whichever run you have, someone is near. Every one is a real record.
@@ -69,7 +83,8 @@ are no ads.
 **After The Twelve.** Mirror mountains turn a course left for right (picture, steering and sound). The Long Night
 rides whole mountains back to back, carrying the lantern, the get-ups and the last three charms from leg to leg.
 Every mountain has a second hour to earn (Pinecrest at Dusk, Frostfang at Noon, Ember at Night, Sakura in the Evening,
-Lanternfall at First Light), picked under Ride.
+Lanternfall at First Light, the Old Run by Lamplight, Gullhaven at Moonrise, Gablefall at Evensong), picked
+under Ride. With eight mountains the Long Night is sixteen legs, the eight and then the eight mirrored.
 
 **Trials (from Almanac page 35, or the crown).** Every week a twist on a named mountain, the same for everyone:
 mirrored, a mood, the other hour or an event, one charm family, and what counts (the clock, the clock without a
@@ -115,7 +130,7 @@ Dev switches (on in `npm run dev`, or anywhere with `?debug`):
 | `?fps` | Frame-time overlay (fps, p90, tier) |
 | `?tier=low\|medium\|high\|ultra` | Force a quality tier instead of the automatic one |
 | `?autoride=1` | Skip the title and start a run |
-| `?m=N` | Mountain 0 to 4 (unlocks ignored; 4 is Lanternfall) |
+| `?m=N` | Mountain 0 to 7 (unlocks ignored; 4 is Lanternfall, 5 the Old Run, 6 Gullhaven, 7 Gablefall) |
 | `?variant=N` | Ride every set piece's Nth variant (0 to 2) |
 | `?legend=1` or `2` | Ride the mountain's first or second legend moment |
 | `?post=none` | Round 6's post stack on this tier: every round 7 pass off |
@@ -129,8 +144,9 @@ Dev switches (on in `npm run dev`, or anywhere with `?debug`):
 | `?mood=N`, `?event=N` | Force a chaos mood or mid-run event |
 | `?demo=N` | Replay the Nth-best pool ghost as the player, with its chaos roll (it dashes and wards as it did) |
 | `?riders=N` | Dress the field as the signature riders from roster index N (render only) |
-| `?jukebox` | The music jukebox over the title: the main theme, each of the five mountains' produced score by section, the live band, the drops, the lift, the breath, the finale, the results reprise, a stinger for every set-piece verb, the twelve riders' motifs and every cue, on demand (`LISTENING.md` is the route for listening to the game) |
+| `?jukebox` | The music jukebox over the title: the main theme, each of the eight mountains' produced score by section, the live band, the drops, the lift, the breath, the finale, the results reprise, a stinger for every set-piece verb, the twelve riders' motifs and every cue, on demand (`LISTENING.md` is the route for listening to the game) |
 | `?save=<name>` | Dev server only: play on a save fixture instead of your save (`fresh`, `mid-1`, `mid-5`, `mid-20`, `mid-50`, `mid-100`, `novice-1` to `novice-100`), its days moved to today, held in memory so your own save is never read or written (`src/game/devsave.ts`; `npx tsx scripts/playtest/r9-fixtures.ts` makes them from the career harness) |
+| `?gifts=<n>` | Dev server only: set the wallet to n gifts, so a fixture can buy and fit in the garage |
 
 The UI harness (`ui-harness.html` on the dev server) shows screens with fake models; round 7 added `title-twelve`,
 `title-twelve-wait`, `title-twelve-king`, `title-twelve-final`, `title-twelve-crowned`, `results-win`,
@@ -226,7 +242,8 @@ Runs the bot (`src/bot`) on the real simulation at a spread of skill levels, wit
 mistakes, and writes `src/data/ghosts/<mountain>.json` in race order, with each ghost's stage splits.
 Each pool is 30 crowd runs, one run by each of the twelve signature riders (`src/bot/roster.ts`), ridden
 with its style, and a fast end of up to eight racers (the quickest of 96 more runs, each half a second from the
-next): 46 to 50 riders and 34 to 40 KB a mountain, five mountains, about three minutes to generate. `npm run generate-ghosts -- --falls` re-reads where each ghost fell (wards count) without
+next): 49 to 53 riders and 38 to 47 KB a mountain (a new mountain's pool holds its three home riders too),
+eight mountains, about three minutes to generate. `npm run generate-ghosts -- --falls` re-reads where each ghost fell (wards count) without
 riding anything again.
 The slowest bots finish in about 2:30, so `src/game/slowriders.ts` fills the race down to 5:00 at load
 with real runs played at a slower pace. Re-run it whenever simulation behaviour
@@ -246,7 +263,8 @@ run, which `allowScripts` in `package.json` permits). It writes the packs to `pu
 `src/audio/produced.json` and its measurements to `scripts/music/analysis.json`. About 10 minutes on a quiet
 machine, 30 on a busy one. `npm run music ember` rebuilds one piece, but stamps the new version on that piece
 only, so finish any change with a full build. `npm run music -- --wav` also writes every stem and a sequenced
-reference run of each course as WAV files under `dist/music/wav/`. The packs are committed (56.8 MB): rebuild
+reference run of each course as WAV files under `dist/music/wav/`. The packs are committed (90.7 MB with the three new
+mountains' scores): rebuild
 only when the score changes, because every changed pack adds its size to the repository's history.
 
 The game streams the music after the first frame: the title's pack first, a mountain's pack when it is picked,
@@ -260,16 +278,16 @@ npm run release
 ```
 
 Runs the tests, builds, and writes `dist/ghost-sled.zip` (index.html at the root). The script fails if the
-whole build is over 80 MB, has more than 1,500 files, or its initial download is over 20 MB. The initial
+whole build is over 110 MB (80 until round 9 added three scores, each fetched only when its mountain is picked), has more than 1,500 files, or its initial download is over 20 MB. The initial
 download is counted as every file outside `music/`, the title theme's packs, the decode probes and the largest
 course's desktop pack, since no music is fetched before the first frame and a course's pack only when it is
 picked.
 
 | | The check | Measured at the last merge | CrazyGames allows |
 | --- | --- | --- | --- |
-| Whole build | at most 80 MB | 60.33 MB | 250 MB |
-| Files | at most 1,500 | 35 | 1,500 |
-| Initial download | at most 20 MB | 11.29 MB | 50 MB, and 20 MB for the mobile homepage |
+| Whole build | at most 110 MB | 94.69 MB | 250 MB |
+| Files | at most 1,500 | 59 | 1,500 |
+| Initial download | at most 20 MB | 11.72 MB | 50 MB, and 20 MB for the mobile homepage |
 
 (CrazyGames' figures are from docs.crazygames.com/requirements/technical, read 2026-11-12.) Upload the zip in
 the CrazyGames developer portal and enable "Progress Save" so the data module is active.
@@ -1084,6 +1102,30 @@ What this does not show: whether any of it feels better under a person's hands (
 whether the trick language is found by a person; how the new sounds and the score sit together (`LISTENING.md`); Low
 on a real low-end phone rather than this laptop throttled six times; and a quiet machine, which none of the three
 sittings was.
+
+## Round 9: clear screens, a garage worth it, and three new mountains
+
+The round's report is `notes/r9-report.md` (what changed, what was measured, what needs a person, the open questions
+and a fifteen-minute route); its decisions are DECISIONS 388 to 407. In short: the title has one job at a time and the
+results three beats, every other screen is a sheet in the same language, the garage is a workshop drawn by the game's
+own renderer with a track of five tiers a sled and a set a mountain, and three new mountains ride like none of the
+five: the Old Run's banked glaze, Gullhaven's sea wind over its gullies, Gablefall's roofs. The five ride exactly as
+they did (`tests/five.test.ts`).
+
+### Round 9 performance
+
+One sitting on this laptop on mains power (`scripts/playtest/perf-r9.sh`, then `perf-r9-low.sh` with each Low pass in a
+fresh browser); medians, fps.
+
+| | Round 8 | Round 9 |
+| --- | --- | --- |
+| Pinecrest, the Old Run, Gullhaven, Gablefall at Ultra, High and Medium (two passes) | | 60, the Old Run on Ultra 57 and 59 |
+| The phone's Medium and Low, the same four | | 60 |
+| The five at High and Medium (one pass each) | 60 | 60, one Pinecrest High pass 47 |
+| Low at 6x: Pinecrest, Ember, Sakura (A B B A A B B A) | 18, 18.5, 18 | 20, 18, 17 |
+| Low at 6x: the Old Run, Gullhaven, Gablefall beside Pinecrest's 18 | | 23.5, 20, 20.5 |
+
+The machine slowed through the sitting (Low read 47 to 59 early and 16 to 23 late), so compare only within a row.
 
 ## Layout
 

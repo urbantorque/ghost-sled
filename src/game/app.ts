@@ -469,6 +469,9 @@ export class App {
     await this.platform.init();
     this.platform.loadingStart();
     this.save.rebind(this.platform.storage);
+    // (Round 9, dev server only: `?debug&gifts=<n>` sets the wallet once the platform's save is read, so the owner's
+    // play route can buy and fit in the garage on a fixture. The release compiles this away.)
+    if (import.meta.env.DEV && DEV.has('gifts')) this.save.data.gifts = Math.max(0, Math.floor(Number(DEV.get('gifts')) || 0));
     // The platform's save may differ from the local one: wear what it says (paint, hat, scarf, trail, sound).
     this.applyLook();
     if (this.platform.muteAudio) this.audio.setMuted('sdk', true);

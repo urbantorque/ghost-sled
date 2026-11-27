@@ -5028,3 +5028,32 @@ straight through.
     - *Only scripts have seen it:* headless Chrome on Windows at 1280 by 720 and 390 by 844 (375 and 360 for the picker);
       "Lanternfall" in a fifth of a phone with a pixel to spare on Windows fonts only; the reel's cut by script and
       contact sheets. ART.md 10 takes the lane's text.
+
+407. **M4's proof, and the round's report** (`notes/r9-report.md`; the sittings in `shots/r9/main/perf/`, the release's
+    logs in `shots/r9/main/proof/`).
+    - *The tests:* determinism and fairness on all eight and the five's pools and records byte for byte, in the full
+      suite at the round's last commit: tsc clean, 119 files and 2,162 tests green, the five's fingerprint among them.
+    - *The lab* (`scripts/playtest/r9-courses.ts` on the merged build): the Old Run outside the five on 5 of 6 measures, 4
+      by 15%; Gullhaven 4, 2 by 15%; Gablefall 4, 4 by 15%; the three apart from each other (2, 0 and 1 measures within
+      10%); the clumsy pilot finishing 100% on each against the five's hardest's 90%; each mountain's own mechanic in play
+      for 43%, 15% and 42% of the mid pilot's run. Every bar met.
+    - *The look:* each new mountain's critic loop at five passes or more, and the sort of all eight 40 of 40 (405).
+    - *Size:* the release check's whole-build cap was still 80 MB, though 392 and the owner's word in 393 raised it to
+      110 for the three new scores: `scripts/package.ts` now holds 110. The build 94.69 MB, 59 files, the first download
+      11.72 MB of 20 (round 8: 11.29).
+    - *Perf* (one sitting on mains power, held awake; `perf-r9.sh`, then `perf-r9-low.sh`, each Low pass in a fresh
+      browser, since late in a long probe list Low read a third of its fresh speed): Pinecrest and the three new mountains
+      at Ultra, High and Medium, two passes, 60 fps medians but the Old Run on Ultra at 57 and 59; the phone 60 on Medium
+      and Low on all four. The five against round 8 at High and Medium from one pass each (the first pass of each build
+      lost to a page load past 30 s, and a type check overlapped round 8's): 60 but one Pinecrest High pass on round 9 at
+      47, which the later two read at 60. Low at 6x against round 8, A B B A A B B A, medians of four: Pinecrest 18 to 20,
+      Ember 18.5 to 18, Sakura 18 to 17, level; the Old Run 23.5, Gullhaven 20 and Gablefall 20.5 beside Pinecrest's 18 on
+      round 9, so Gullhaven's extra GL calls (405) cost no frames and no cut is made. The machine slowed through the
+      sitting (Low 47 to 59 early, 16 to 23 late): only side-by-side figures compare. Not measured: Ultra on Frostfang,
+      Ember, Sakura and Lanternfall, and the first frame's time.
+    - *For the owner's route:* `?debug&gifts=<n>` (dev server only) sets the wallet once the platform's save is read, so a
+      fixture can buy and fit in the garage; checked headless (mid-50, 3,000 gifts on the Garage door).
+    - *The report* (`notes/r9-report.md`) says what changed for a player, what was measured, what only scripts have seen,
+      what needs a person, the open questions (the Trials' release week first) and a fifteen-minute route; the README
+      takes the eight mountains, the new hours and the release's sizes. Nothing is merged to `main`, pushed or
+      published: that waits for the owner's word.
