@@ -440,12 +440,17 @@
    with its ring and its best. A grid of five equal columns, each as wide as the widest name needs: the picked chip spans
    two, so its row is full and the other row ends a column short; the fifth chip always starts the second row, so the
    rows stay four and four in the picker's order. (Round 9, the feelui lane: four equal chips a row left the pick only
-   its ring, against ART.md 10. A row of eight is wider than the logo's column at 1280 and than a phone.) */
+   its ring, against ART.md 10. A row of eight is wider than the logo's column at 1280 and than a phone.) With the
+   Daily, the Cup or a Trial chosen no chip is picked, and the rows are four equal columns. */
 .gs9-strip.is-many {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   width: max-content;
   max-width: 100%;
+}
+
+.gs9-strip.is-many.has-pick {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .gs9-strip.is-many .gs9-chip,
@@ -530,7 +535,12 @@
   line-height: 1;
 }
 
+/* (Its reason wraps rather than run out of the pill: on a 360 px phone Gullhaven's ten words ran past its edge. Round 9,
+   the feelui lane.) */
 .gs9-ride-why {
+  white-space: normal;
+  text-wrap: balance;
+  line-height: 1.15;
   font-size: max(12px, 0.52em);
   font-style: normal;
   font-weight: var(--fw-label);
@@ -890,7 +900,7 @@
 /* A phone narrower than 390 px: a fifth of it would cut "Lanternfall", so the eight stay four equal chips a row and the
    pick is its ring and its heavier name (round 9, the feelui lane; every name whole comes first). */
 @media (max-aspect-ratio: 1/1) and (max-width: 389px) {
-  .gs9-strip.is-many {
+  .gs9-strip.is-many.has-pick {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 

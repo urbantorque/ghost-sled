@@ -308,6 +308,8 @@ export class Title {
     for (const c of pickerOrder(m.mountains)) strip.append(this.chip(c, c.id === m.selected));
     // (Eight mountains do not fit one row on a 1280 desk or a 390 px phone with every name whole: two rows of four.)
     strip.classList.toggle('is-many', m.mountains.length > STRIP_ONE_ROW);
+    // (The picked chip takes two of the rows' columns; with the Daily, the Cup or a Trial chosen no chip is picked.)
+    strip.classList.toggle('has-pick', m.mountains.some((c) => c.id === m.selected));
     // A mouse wheel turns the strip when it scrolls (a phone's five chips).
     strip.addEventListener(
       'wheel',
