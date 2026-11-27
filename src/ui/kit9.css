@@ -262,8 +262,8 @@
 }
 
 /* A sheet's scrolling body fades at its edges, so a row cut by the head or the foot reads as more to scroll, not as
-   broken (round 9, U4; Details keeps its button at its foot, unfaded). */
-.gs9-sheet:not(.gs9-det) > .gs9-sheet-body {
+   broken (round 9, U4; Details too since its button stands in a foot of its own, under the body: the polish lane). */
+.gs9-sheet > .gs9-sheet-body {
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 18px), transparent 100%);
   mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 18px), transparent 100%);
 }
