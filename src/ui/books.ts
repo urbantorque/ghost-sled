@@ -87,13 +87,31 @@ export function almanacBody(m: AlmanacModel, ctx: Ctx, ride?: (mode: RideMode) =
 
 /** A page of the album's sky: a mountain's own, else the page's glyph on ink. */
 const PAGE_GLYPH: Readonly<Record<string, IconName>> = { tricks: 'feather', twelve: 'rider', charms: 'star', night: 'lantern' };
+/** A sticker's kind, as the glyph in its corner. */
+const GROUP_GLYPH: Readonly<Record<string, IconName>> = { variant: 'star', legend: 'ghost', mood: 'snowflake', rival: 'trophy', mirror: 'flag', trick: 'feather', duel: 'rider', charm: 'star', synergy: 'bolt', night: 'lantern' };
 
-function pageArt(id: string): HTMLElement {
+/** A page's row wears one of its stickers (round 9, the polish lane: a critic asked the contents to show a sticker on
+ *  each row): one found, as the page draws it (its frame where one was kept, else the page's sky), with its kind's glyph
+ *  in the corner; with none found yet, the page's sky dimmed under the glyph of one still to find. */
+function pageArt(sec: AlbumModel['sections'][number]): HTMLElement {
+  const id = sec.id;
   const biome = mountainBiome(id);
-  const art = h('span', `gs9-bk-sky${biome ? '' : ' is-glyph'}`);
+  const s = sec.stickers.find((x) => x.got && x.img) ?? sec.stickers.find((x) => x.got) ?? null;
+  const art = h('span', `gs9-bk-sky${biome || s?.img ? '' : ' is-glyph'}${s ? '' : ' is-none'}`);
   art.setAttribute('aria-hidden', 'true');
-  if (biome) art.innerHTML = biomeArt(biome);
+  if (s?.img) {
+    const img = h('img', 'gs9-bk-img');
+    img.src = s.img;
+    img.alt = '';
+    img.decoding = 'async';
+    img.loading = 'lazy';
+    img.width = 64;
+    img.height = 44;
+    art.append(img);
+  } else if (biome) art.innerHTML = biomeArt(biome);
   else art.append(ico9(PAGE_GLYPH[id] ?? 'sticker'));
+  const kind = (s ?? sec.stickers[0])?.group;
+  if (kind && (biome || s?.img)) art.append(h('span', 'gs9-bk-sg', ico9(GROUP_GLYPH[kind] ?? 'sticker')));
   return art;
 }
 
@@ -112,7 +130,7 @@ export function albumContents(m: AlbumModel, ctx: Ctx, open: (id: string, from: 
     const name = h('span', 'gs9-bk-pn', sec.name);
     name.setAttribute('translate', 'no');
     const all = sec.got >= sec.of;
-    const b = b9(ctx, 'quiet', [pageArt(sec.id), h('span', 'gs9-bk-pt', name, h('span', 'gs9-bk-pc gs9-num', all ? `All ${fmt(sec.of)} found` : `${fmt(sec.got)} of ${fmt(sec.of)} found`)), ico9('chevR', 'gs9-bk-chev')], {
+    const b = b9(ctx, 'quiet', [pageArt(sec), h('span', 'gs9-bk-pt', name, h('span', 'gs9-bk-pc gs9-num', all ? `All ${fmt(sec.of)} found` : `${fmt(sec.got)} of ${fmt(sec.of)} found`)), ico9('chevR', 'gs9-bk-chev')], {
       fk: `album-${sec.id}`,
       cls: 'gs9-bk-page',
       onClick: () => open(sec.id, b),
@@ -122,8 +140,6 @@ export function albumContents(m: AlbumModel, ctx: Ctx, open: (id: string, from: 
   out.append(list);
   return out;
 }
-
-const GROUP_GLYPH: Readonly<Record<string, IconName>> = { variant: 'star', legend: 'ghost', mood: 'snowflake', rival: 'trophy', mirror: 'flag', trick: 'feather', duel: 'rider', charm: 'star', synergy: 'bolt', night: 'lantern' };
 
 /** A sticker found: a frame from its run where one was kept, else painted in its mountain's sky; its name under it. */
 function stickerFound(s: StickerCard): HTMLElement {

@@ -147,6 +147,39 @@
   height: 22px;
 }
 
+/* A page's row wears one of its stickers (round 9, the polish lane): a frame from its run, else its sky, with the
+   sticker's kind on a small ink disc in the corner, as on the page; a page with none found yet is dimmed. */
+.gs9-bk-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gs9-bk-sg {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.gs9-bk-sg .gs9-i {
+  width: 12px;
+  height: 12px;
+}
+
+.gs9-bk-sky.is-none > svg,
+.gs9-bk-sky.is-none > .gs9-i {
+  opacity: 0.45;
+}
+
 .gs9-bk-pt {
   display: grid;
   flex: 1;

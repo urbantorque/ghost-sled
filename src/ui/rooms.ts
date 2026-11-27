@@ -365,8 +365,14 @@ function ladder(body: HTMLElement, m: TitleModel, f: Fill): void {
 /** The medal wall: every mountain's place on its ladder, its medals and its mastery stars, in the picker's order; the
  *  week's Cup and Trial. Round 9 (U4): an open mountain's row opens its mastery board. */
 function medalWall(body: HTMLElement, m: TitleModel, f: Fill): void {
-  body.append(h('p', 'gs9-block-p', 'Each mountain’s medals: its three stages, then the whole run, the larger disc. Its stars are on its board.'));
+  body.append(h('p', 'gs9-block-p', 'Each mountain’s place on its ladder, its medals and its stars. A row opens its board.'));
   const list = h('ul', 'gs9-list gs9-wall');
+  // The discs' legend stands over their column, "Stages" over the three and "Run" over the larger, where a glance at a
+  // row finds it (round 9, the polish lane: a critic asked for a closer legend than a line at the top). Each row says
+  // its medals in words to a reader, so the key is for the eye.
+  const key = h('li', 'gs9-wall-key', h('span', 'gs9-wall-key-t'), h('span', 'gs9-wall-key-d', h('span', 'k-st', 'Stages'), h('span', 'k-run', 'Run')), h('span', 'gs9-wall-key-s'));
+  key.setAttribute('aria-hidden', 'true');
+  list.append(key);
   const place = (c: MountainCard): string => (c.top ? 'Top of its ladder' : typeof c.rank === 'number' ? `${ordinal9(c.rank)} of ${c.rankOf ?? c.rank} on its ladder` : 'No run yet');
   for (const c of pickerOrder(m.mountains)) {
     const name = h('span', 'gs9-wall-n', c.name);
@@ -386,8 +392,9 @@ function medalWall(body: HTMLElement, m: TitleModel, f: Fill): void {
   }
   // (A week's medal with no figure kept for it says the medal, not "No run yet" beside a disc.)
   const week = (medal: number, best: string | null): string => (best ? `Best ${best}` : medal > 0 ? `${MEDAL[medal]} this week` : 'No run yet');
-  if (m.cup) list.append(h('li', 'gs9-row', h('span', 'gs9-row-t', h('span', 'gs9-wall-n', `Week ${m.cup.week} Cup`), h('span', 'gs9-wall-p', week(m.cup.medal, m.cup.best > 0 ? clock(m.cup.best) : null))), medalDots({ stages: [], run: m.cup.medal })));
-  if (m.trial) list.append(h('li', 'gs9-row', h('span', 'gs9-row-t', h('span', 'gs9-wall-n', `Week ${m.trial.week} Trial`), h('span', 'gs9-wall-p', week(m.trial.medal, m.trial.best ?? null))), medalDots({ stages: [], run: m.trial.medal })));
+  // (A week's one disc stands in the Run column, the chevron's room kept beside it.)
+  if (m.cup) list.append(h('li', 'gs9-row', h('span', 'gs9-row-t', h('span', 'gs9-wall-n', `Week ${m.cup.week} Cup`), h('span', 'gs9-wall-p', week(m.cup.medal, m.cup.best > 0 ? clock(m.cup.best) : null))), medalDots({ stages: [], run: m.cup.medal }), h('span', 'gs9-wall-key-s')));
+  if (m.trial) list.append(h('li', 'gs9-row', h('span', 'gs9-row-t', h('span', 'gs9-wall-n', `Week ${m.trial.week} Trial`), h('span', 'gs9-wall-p', week(m.trial.medal, m.trial.best ?? null))), medalDots({ stages: [], run: m.trial.medal }), h('span', 'gs9-wall-key-s')));
   body.append(list);
 }
 
