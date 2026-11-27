@@ -41,6 +41,10 @@ export interface MountainCard {
   /** Mastery stars held of the mountain's board. Round 9 (U4): and the board itself, each star's goal and whether it
    *  is held (mastery.ts masteryBoard), for the medal wall's board of each mountain. */
   stars?: { got: number; of: number; board?: Array<{ label: string; group: 'medal' | 'gate' | 'moment' | 'rider' | 'clean'; done: boolean }> };
+  /** Round 9 (M3): a new mountain's mirror opens when its home riders are all beaten to the line (almanac.ts
+   *  mirrorOpen): how many are beaten, of how many, and whether it is open. Absent on a mountain whose mirror opens
+   *  another way (the five's). */
+  mirrorRiders?: { beaten: number; of: number; open: boolean };
 }
 
 /** Your medals on a mountain: 0 none, 1 bronze, 2 silver, 3 gold, one per stage and the whole run. */

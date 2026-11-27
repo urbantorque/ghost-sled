@@ -412,6 +412,9 @@ export class Title {
       b.setAttribute('aria-pressed', String(on));
       seg.append(b);
       out.append(seg);
+    } else {
+      const way = mirrorWay(named);
+      if (way) out.append(way);
     }
     if (out.childElementCount === 1 && named.bestTime) out.classList.add('is-best-only');
     return out.childElementCount > 0 ? out : null;
@@ -596,6 +599,24 @@ export function titleAim(m: TitleModel, locked: MountainCard | null = null): { i
   // (The XP and the rank first, the prize after: "900 XP to Rider Rank 26: the Crane's Memory charm".)
   if (bar && next) return { icon: 'book', text: `${fmt(bar.need)}${NBSP}XP to Rider Rank ${bar.page + 1}: ${prizeLower(next)}`, tone: 'plain' };
   return { icon: 'book', text: 'Every page of the Almanac turned', tone: 'plain' };
+}
+
+/** Round 9 (M3): where the hour and the mirror stand, a new mountain's way to its mirror while it is shut: its home
+ *  riders, beaten to the line (its board's row names them). Words, not a control, five at most: "Mirrored: beat its 3
+ *  riders", then "Mirrored: 1 rider to beat". Nothing for a mountain whose mirror opens another way, or once it is open
+ *  (the toggle stands there then). */
+export function mirrorWayText(c: Pick<MountainCard, 'mirrorRiders'>): string | null {
+  const r = c.mirrorRiders;
+  if (!r || r.open || r.of <= 0) return null;
+  const left = r.of - r.beaten;
+  return r.beaten > 0 ? `Mirrored: ${left} ${left === 1 ? 'rider' : 'riders'} to beat` : `Mirrored: beat its ${r.of} riders`;
+}
+
+function mirrorWay(c: MountainCard): HTMLElement | null {
+  const text = mirrorWayText(c);
+  if (!text) return null;
+  // (A reader hears the rest: where they are beaten, and what it opens.)
+  return h('span', 'gs9-how-way', ico9('lock'), h('span', '', text), sr(` to the line, to ride ${c.name} mirrored`));
 }
 
 const MEDAL = ['', 'Bronze', 'Silver', 'Gold'] as const;

@@ -9,6 +9,11 @@ import frostfang from '../data/ghosts/frostfang.json';
 import lanternfall from '../data/ghosts/lanternfall.json';
 import pinecrest from '../data/ghosts/pinecrest.json';
 import sakura from '../data/ghosts/sakura.json';
+// (Round 9: the new mountains' pools, for the album's rival stickers there, riderTimeOn. The Twelve ride them and never
+// duel on them, since none of The Twelve calls one home.)
+import gablefall from '../data/ghosts/gablefall.json';
+import gullhaven from '../data/ghosts/gullhaven.json';
+import oldrun from '../data/ghosts/oldrun.json';
 
 // The Twelve: the campaign spine (round 7). Beat each signature rider on their home ground, one duel at a
 // time, from the gentlest to The Hollow King. A duel is a normal run on that rider's home mountain in which
@@ -40,7 +45,7 @@ export function poolStanding(g: Pick<PoolGhostData, 'distance' | 'finishTick'>):
 }
 
 /** The bundled pools by mountain id: the records the duels are ridden against. */
-const POOLS: Record<string, { ghosts: PoolGhostData[] }> = { pinecrest, frostfang, ember, sakura, lanternfall };
+const POOLS: Record<string, { ghosts: PoolGhostData[] }> = { pinecrest, frostfang, ember, sakura, lanternfall, oldrun, gullhaven, gablefall };
 
 /** A signature rider's time on any bundled mountain (seconds), or null with no finished record there: what a rival
  *  sticker asks you to beat (album.ts). */

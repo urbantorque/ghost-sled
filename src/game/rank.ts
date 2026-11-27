@@ -1,4 +1,4 @@
-import { ALMANAC, CHAPTER_EXTRAS, CHAPTER_PAGES, CHAPTER_PAGE_XP, GARAGE_EXTRAS, PAGES, type Reward, chapterKey, chapterOf, chapterRewards, featureOpen, pageAt, rewardName } from './almanac';
+import { ADDED_HOURS, ALMANAC, CHAPTER_EXTRAS, CHAPTER_PAGES, CHAPTER_PAGE_XP, GARAGE_EXTRAS, PAGES, type Reward, chapterKey, chapterOf, chapterRewards, featureOpen, owedRewards, pageAt, rewardName } from './almanac';
 import { giveTiers, setFitted, sledShop, trackOf, trackPrice } from './tracks';
 import { type AlbumRun, awardStickers, stickersFor } from './album';
 import { type ContractRun, settleContracts } from './contracts';
@@ -340,15 +340,26 @@ export function settleSpine(d: SaveData, run: SpineRun, prior: SpineSettlement |
   // (Round 8, the rewards paced: one page opens a run, its reward a card on the results; pages turned faster wait for
   // the next runs, so a big first run opens one page and the next runs each open one more.)
   const claimed = Math.min(pageAfter, claimedBefore + 1);
-  d.rank = { xp: xpAfter, claimed };
+  const toldBefore = d.rank?.told;
+  d.rank = { xp: xpAfter, claimed, ...(toldBefore ? { told: toldBefore } : {}) };
   const opened: OpenedReward[] = [];
   for (let n = claimedBefore + 1; n <= claimed; n++) {
     for (const r of ALMANAC[n - 1].rewards) {
       const said = grant(d, r, st);
       opened.push({ page: n, reward: r, name: said ?? rewardName(r) });
       if (r.kind === 'open') gains.push({ kind: 'unlock', text: MOUNTAIN_NAME[r.mountain] ?? r.mountain, durable: true });
+      // (Round 9: a new mountain's hour, given on its page, is told as it is given: almanac.ts hourOpen.)
+      if (r.kind === 'hour' && ADDED_HOURS[r.mountain] !== undefined) tell(d, `hour:${r.mountain}`);
     }
     gains.push({ kind: 'page', text: `Page ${n}`, durable: true });
+  }
+  // Round 9 (M3): what the save is owed that no page turned now gave it (almanac.ts owedRewards): a new mountain's other
+  // hour on a page it had turned before the page held it, and a new mountain's mirror once its home riders are all
+  // beaten to the line (app.ts settles the mastery board before this). Never silent: each is told here once, on a card
+  // as a page's prize is, and opens only once told.
+  for (const o of owedRewards(d)) {
+    opened.push({ page: o.page, from: o.from, reward: o.reward, name: rewardName(o.reward) });
+    tell(d, o.key);
   }
 
   // The month's chapter, and once it is done the oldest one unfinished.
@@ -399,6 +410,12 @@ export function settleSpine(d: SaveData, run: SpineRun, prior: SpineSettlement |
     league,
     settlement: st,
   };
+}
+
+/** Round 9: marks a reward told (RankSave.told), once. */
+function tell(d: SaveData, key: string): void {
+  if (!d.rank || d.rank.told?.includes(key)) return;
+  d.rank = { ...d.rank, told: [...(d.rank.told ?? []), key] };
 }
 
 /** A mountain's name, as the unlock card and the career harness call it (sim/mountains.ts MOUNTAINS). */

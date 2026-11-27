@@ -413,6 +413,13 @@ function masteryBoard(body: HTMLElement, c: MountainCard, st: MountainCard['star
     const ul = h('ul', 'gs9-list');
     // (Held is the check, in the gifts' marigold as a mission done; a reader hears it.)
     for (const s of stars) ul.append(row([check(s.done), curly(s.label), sr(s.done ? ', held' : ', not yet')], null, s.done ? 'is-done' : ''));
-    body.append(h('section', '', h('h3', 'gs9-cap', title), ul));
+    body.append(h('section', '', h('h3', 'gs9-cap', title), ul, g === 'rider' ? boardMirror(c) : null));
   }
+}
+
+/** Round 9 (M3): under a new mountain's Home Riders, what beating them all opens (almanac.ts mirrorOpen). */
+function boardMirror(c: MountainCard): HTMLElement | null {
+  const r = c.mirrorRiders;
+  if (!r) return null;
+  return h('p', 'gs9-block-p', r.open ? `All ${r.of} beaten: ride ${c.name} mirrored from the title.` : `Beat all ${r.of} to the line and ${c.name} rides mirrored.`);
 }

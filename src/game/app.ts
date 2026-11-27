@@ -58,7 +58,7 @@ import { charmGatesOf, charmPoolOf, firstRunOf } from './charmpool';
 import { lanternSignals } from './charmsignals';
 import { ALL_CHARMS, CHARMS } from '../sim/charms';
 import { TRICKS } from '../sim/tricks';
-import { CHAPTER_EXTRAS, GARAGE_EXTRAS, type GarageExtra, almanacOpens, featureOpen, hourOpen, legsOpen, mirrorOpen, monthsOpen, shelfExtras } from './almanac';
+import { CHAPTER_EXTRAS, GARAGE_EXTRAS, type GarageExtra, almanacOpens, featureOpen, homeRiders, hourOpen, legsOpen, mirrorOpen, monthsOpen, shelfExtras } from './almanac';
 import { type Trial, type TrialOutcome, type TrialTally, type TrialTargets, daysLeftWords, figureShort, figureText, newTally, startWords, settleTrial, stageWords, tallyStep, trialConfig, trialFor, trialKey, trialMedalNow, trialMountain, trialTargets, trialValue } from './trial';
 import { type Night, depthWords, mirrorKey, nightBeat, nightDepth, nightLeg, nightOn, settleLongNight, startNight } from './modes';
 import { showNightBeat } from '../ui/nightbeat';
@@ -75,7 +75,7 @@ import { type BestRun, type Climb, Grudge, INTROS_KEPT, INTROS_SEEN_KEPT, SHELF_
 import { useFixture } from './devsave';
 import { type GrudgeRow, type SettleResult, Settlement, cupMedalNow, dailyMedalNow, dailyStreakNow, isNemesis, medalFor, medalThresholds, settleBest, settleGrudge, settleRun, topScore } from './settle';
 import { inReach } from './pacer';
-import { PLAIN_SHOT, type TitleShot, devShot, titleShot } from './keyart';
+import { PLAIN_SHOT, type TitleShot, devShot, reelField, titleShot } from './keyart';
 import { CROWN_GIFTS, DUEL_GIFTS, type Duel, KING, TWELVE, type TwelveOutcome, duelMountain, duelOn, duelRecord, duelStartLine, finalField, gateLine, hasBeaten, lockText, mountainOpen, nextDuel, outcomeLine, poolStanding, readTwelve, settleTwelve, tallyLine, waitingRider, withheldRiders } from './twelve';
 import { type Standing, aheadOf, byStanding, clock, finishZOf, marginPhrase, placeAtFinish, predictedTime, recordStanding } from './standing';
 
@@ -862,8 +862,9 @@ export class App {
 
   private setAttractField(): void {
     const pool = this.poolForMountain(this.mountain);
-    // Mid-pool riders: stylish but clean, so the hero reel is carving and flying, not tumbling.
-    const picks = pool.length ? [pool[Math.floor(pool.length * 0.6)], pool[Math.floor(pool.length * 0.72)], pool[Math.floor(pool.length * 0.84)]].filter(Boolean) : [];
+    // Mid-pool riders: stylish but clean, so the hero reel is carving and flying, not tumbling. (Round 9: where in the
+    // pool is the shot's, keyart.ts reelField, and never The Hollow King before his duel.)
+    const picks = reelField(pool.map((g) => g.name), this.mountain.id, withheldRiders(this.save.data.twelve)).map((i) => pool[i]).filter(Boolean);
     const entries = picks.map((g) => ({ name: g.name, kind: 'pool' as GhostKind, score: g.score, record: g.record }));
     this.ghosts.setField(entries);
     this.world.setGhostField(this.ghostField());
@@ -981,6 +982,8 @@ export class App {
           get stars() {
             return stars();
           },
+          // (Round 9, M3: a new mountain's mirror and its riders, for its board and the title's hour pair.)
+          ...this.mirrorRidersOf(m.id),
         };
       }),
       selected: tp ? 'trial' : this.mountain.id,
@@ -1755,6 +1758,13 @@ export class App {
   private mirrorOpenHere(): boolean {
     const named = MOUNTAINS.some((m) => m === this.mountain);
     return named && (mirrorOpen(this.save.data, this.mountain.id) || (DEV_ON && DEV.has('mirror')));
+  }
+
+  /** Round 9 (M3): a new mountain's way to its mirror, its home riders beaten to the line (almanac.ts homeRiders), for
+   *  its card: nothing for a mountain whose mirror opens another way. */
+  private mirrorRidersOf(id: string): Pick<MountainCard, 'mirrorRiders'> {
+    const h = homeRiders(this.save.data, id);
+    return h ? { mirrorRiders: { ...h, open: mirrorOpen(this.save.data, id) } } : {};
   }
 
   /** The picture and the sound mirrored, or not (world.ts setMirrored, the audio's last node). */

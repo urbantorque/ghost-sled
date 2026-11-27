@@ -103,7 +103,9 @@ const hue = (c: Color): number => {
 describe('the hours lane', () => {
   it('gives every mountain whose Almanac page promises an hour one, its card naming it as the palette does', () => {
     const pages = ALMANAC.flatMap((pg) => pg.rewards).filter((r) => r.kind === 'hour');
-    expect(pages.length).toBe(5);
+    // (Round 9: the three new mountains' hours joined pages 16, 23 and 29: one a mountain, all eight.)
+    expect(pages.length).toBe(MOUNTAINS.length);
+    expect(new Set(pages.map((r) => (r.kind === 'hour' ? r.mountain : ''))).size).toBe(MOUNTAINS.length);
     for (const r of pages) {
       if (r.kind !== 'hour') continue;
       const m = MOUNTAINS.find((x) => x.id === r.mountain)!;
