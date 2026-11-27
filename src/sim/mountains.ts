@@ -141,11 +141,13 @@ const BIOME_PARAMS: Record<CourseBiome, MountainParams> = {
     rampDistance: DESCENT,
   },
   // The Old Run (round 9): an old ice track down a forest, laid by its own file (oldrun.ts). Its channel is the kit's,
-  // so nothing here lays a feature: no colliders, kickers, drops, moguls, ice patches, vents or gates; its grade is
-  // the track's steady 0.17 and its ramp its own 3,000 m.
+  // so nothing here lays a feature: no colliders, kickers, drops, moguls, ice patches, vents or gates; its ramp is its
+  // own 3,000 m. Its sections' grades are set absolutely (oldrun.ts: the track's 0.28, the start house's 0.36); `slope` is
+  // the track's 0.28 too (round 9, DECISIONS 397: it read 0.17, the groundwork's), since a get-up's push (Sim.cruiseSpeed)
+  // and the far terrain read it. Its pool was generated again with it.
   oldrun: {
     biome: 'oldrun',
-    slope: 0.17,
+    slope: 0.28,
     wander: 0,
     halfWidthStart: 7.5,
     halfWidthEnd: 7.5,
