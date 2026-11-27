@@ -1826,7 +1826,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.clouds.shadow = 0;
         p.massif.glowK = 0.4;
         p.massif.glowLine = 200;
-        p.grade.shafts = 0.25;
+        // (Round 9's feel pass: no shafts once the sun is behind the ridge. At 0.25 they fanned over the outrun's snow and
+        // across the rider from the line, the third critic.)
+        p.grade.shafts = 0;
         p.grade.saturation = 1.06;
         p.grade.hi = c('#FFF0DC');
         p.grade.lo = c('#DCE0FF');
@@ -3051,7 +3053,8 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       // (The moon's shadows a little higher: low, the rider's lay detached beside the sled as a dark blob.)
       setSun(p, 22, 11, 40, 22);
       p.moon = true;
-      p.moonPhase = 0.35;
+      // (Round 9's feel pass: a half moon, ART.md 15. At 0.35 the third critic saw a crescent.)
+      p.moonPhase = 0.52;
       p.sunDisc = 1;
       p.sunColor = c('#C8D2F4');
       p.sunCore.setRGB(1.9, 1.95, 2.25);
@@ -3215,7 +3218,9 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.hemiSky = c('#5A62A0');
       p.air = { far: c('#3A3E6A'), cool: c('#D8DCF6'), low: 0.5, scatter: 0.8 };
       // (The snow cloud low over the town, lit warm from under by its windows.)
-      p.deck = { k: 0.66, lit: c('#5C5A86'), shade: c('#262A50'), glow: c('#8E7A8C'), edge: 0 };
+      // (Round 9's feel pass: the whole sky, k 0.86. At 0.66 the sixth critic saw broken cloud with clear deep-blue gaps,
+      // where Evensong is still the snowfall's one cloud.)
+      p.deck = { k: 0.86, lit: c('#5C5A86'), shade: c('#262A50'), glow: c('#8E7A8C'), edge: 0 };
       p.clouds = { low: 0.2, high: 0, top: 0.1, lit: c('#6A6890'), shade: c('#2E3258'), rim: c('#A890A0'), shadow: 0 };
       p.ridge = [c('#5A5E8A'), c('#464A78'), c('#363A66')];
       p.massif.rock = c('#2E3258');

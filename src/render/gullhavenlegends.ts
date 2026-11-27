@@ -50,7 +50,7 @@ function hash(a: number, b: number): number {
 
 /** A soft point of light turned to the lens (instanced: each instance's position, size and colour), for the lamps far
  *  off, where a lamp is a few pixels and its glow is what reads; and flat on the water, its light lying on the swell. */
-function glowMaterial(flat: boolean): ShaderMaterial {
+export function glowMaterial(flat: boolean): ShaderMaterial {
   return new ShaderMaterial({
     vertexShader: /* glsl */ `
       varying vec2 vUv;

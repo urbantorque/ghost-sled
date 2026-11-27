@@ -91,7 +91,7 @@ export const shared = {
   uSnowFx: { value: 1 },
   /** Round 9 (Gullhaven): how much of the broad dunes and the wind slab's bands the snow carries (1 on every other
    *  mountain). Seen from a long flight over a wide open moor they lay in even rings, and next to the sea read as sand.
-   *  At 0.5 the near ripples' troughs are a third as deep too (the feel pass: soft figure-like shadows). */
+   *  Under 1, the near ripples' troughs are half as deep too (the feel pass: soft figure-like shadows). */
   uSnowBands: { value: 1 },
   /** Round 7, the air (fogColor): what the haze turns to in the far plane, what it cools to away from the
    *  sun, and x: how far the far colour comes in (1 is the palette's own reach), y: how much thicker the air
@@ -345,7 +345,9 @@ export function applyPalette(full: Palette): void {
   // hazards' feet and the hollows past the banks brim with it.
   shared.uMist.value.set((p.mist ? 0.5 + 0.3 * p.mistK : 0.58) * (1 - 0.5 * dense), 5 + 4 * dense + 3 * p.atmo.drift * (p.mist ? 1 : 0.4));
   shared.uMistDeep.value = p.massif.seaOcean > 0 ? 1 : 0;
-  shared.uSnowBands.value = p.massif.seaOcean > 0 ? 0.5 : 1;
+  // (Round 9's feel pass: 0.3 on Gullhaven, where at 0.5 the shelf seen from the air over a gully still lay in even
+  // wavy bands, read as contour lines.)
+  shared.uSnowBands.value = p.massif.seaOcean > 0 ? 0.3 : 1;
   mistDriftK = p.atmo.drift;
   shared.uMistDrift.value = cloudShadowsOn ? mistDriftK : 0;
   // Forward scatter toward the sun, strongest by day; a moon gets a little.
@@ -1618,10 +1620,10 @@ export function makeSnowMaterial(track = false, street = false): ShaderMaterial 
         }
         // Periwinkle settles in the ripple troughs.
         // (Round 8: deeper in powder, where the wind has worked the snow.)
-        // (Round 9's feel pass, Gullhaven, where uSnowBands is 0.5: a third as deep. Under its low sun the troughs' lobes
-        // lay on the shelves as soft figure-like shadows, which every critic read as cast by something not there; on every
-        // other mountain uSnowBands is 1 and the troughs are as they were.)
-        if (uSnowBands < 1.0) trough *= mix(0.35, 1.0, smoothstep(0.5, 1.0, uSnowBands));
+        // (Round 9's feel pass, Gullhaven, where uSnowBands is under 1: half as deep. Under its low sun the troughs' lobes
+        // lay on the shelves as soft figure-like shadows, which critics read as cast by something not there; at a third, the
+        // next critic missed them as the fence's long shadows. On every other mountain the troughs are as they were.)
+        if (uSnowBands < 1.0) trough *= 0.5;
         col = mix(col, col * mix(vec3(1.0), uSnowShade / max(uSnowLit, vec3(0.05)), 0.5 + 0.2 * powderK * shadow), trough * (0.8 + 0.15 * powderK * shadow));
         // Wind-scoured patches: broad, soft-edged hollows a step cooler than the powder around them,
         // scattered over the near and middle run, so the groomed corridor under the lens is never one
@@ -2005,6 +2007,11 @@ export function makeSnowMaterial(track = false, street = false): ShaderMaterial 
             q = mix(q, o / max(vec2(fwx, fwz) * 1.7, vec2(0.0005)), farG);
             float core = smoothstep(1.0, 0.0, length(q));
             float rays = (smoothstep(0.3, 0.0, abs(q.y)) * smoothstep(3.0, 0.0, abs(q.x)) + smoothstep(0.3, 0.0, abs(q.x)) * smoothstep(3.0, 0.0, abs(q.y))) * (1.0 - farG);
+            #ifdef TRACK
+              // (Round 9's feel pass, the Old Run's walls: a glint on ice is a point. Its rays on a wall at the lens read to the
+              // third critic as a four-point star stuck on the ice.)
+              rays *= 1.0 - tIn;
+            #endif
             vec2 ftilt = (vec2(hash13(vec3(cell, 2.3)), hash13(vec3(cell, 6.1))) - 0.5) * 2.2;
             float fm = facetMirror(n, ftilt, v);
             float on = smoothstep(0.94 - 0.1 * nightK - 0.03 * gather, 0.985 - 0.06 * nightK - 0.015 * gather, fm);
@@ -2168,7 +2175,9 @@ export function makeSnowMaterial(track = false, street = false): ShaderMaterial 
           #ifdef TRACK
             // (The pool is measured across the ground; up the Old Run's steep walls everything over or under the sled
             // was in it, a column of lamplight from the lip to the floor. It falls off with height too there.)
-            pool *= 1.0 - smoothstep(0.9, 2.6, abs(vWorldPos.y - uLanternLow.y));
+            // (Round 9's feel pass: within a metre and a half of the sled's height. Up to 2.6 m it lay along the wall behind a
+            // wall-riding sled as a long warm smear by Lamplight, the third critic.)
+            pool *= 1.0 - smoothstep(0.6, 1.5, abs(vWorldPos.y - uLanternLow.y));
           #endif
           vec3 lamp = lanternLamp(uLanternColor);
           // The lantern sits low, so it rakes the ripples too: crests facing the sled glow.

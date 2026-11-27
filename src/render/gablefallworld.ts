@@ -1329,15 +1329,15 @@ export class GablefallWorld {
       const f = hash(k, 92) < 0.5 ? -1 : 1;
       folk.push({ x: bx + x, y: deck + 0.05, z: -(fz + f * (BD / 2 - 1.1)), face: 0, coat: coats[k % coats.length], hat: hats[(k * 3) % hats.length] });
     }
-    // (Round 9's feel pass: along the quay a few, stood back from its edge, so the quay's lip takes their feet and the lens
-    // on the ice sees heads and shoulders over it. At its edge, a few metres from the lens, a still figure is boxes, and
-    // the quay's folk read to the critics as boxes at speed.)
+    // (Round 9's feel pass: along the quay a few, stood a step back from its edge, so the quay's lip takes their feet and
+    // the lens on the ice sees them from the waist. At its edge, a few metres from the lens, a still figure is boxes, and
+    // the quay's folk read to the critics as boxes at speed; set back behind the lip, the next critic found the quay empty.)
     for (let z = fz - 110; z < fz + 20; z += 2.6) {
       k++;
       if (low && k % 2) continue;
       if (hash(k, 93) < 0.5 || Math.abs(z - fz) < 8) continue;
       // (Between the quay's edge and its houses, which stand from 5.5 m back.)
-      const x = c.centerX(z) - c.halfWidth(z) - c.edgeLimit(z) - 2.4 - hash(k, 94) * 2.6;
+      const x = c.centerX(z) - c.halfWidth(z) - c.edgeLimit(z) - 1.4 - hash(k, 94) * 1.6;
       folk.push({ x, y: c.baseY(z) + QUAY_TOP + 0.12, z: -z, face: 1, coat: coats[k % coats.length], hat: hats[(k * 5) % hats.length] });
     }
     if (folk.length) {

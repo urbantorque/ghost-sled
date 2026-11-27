@@ -342,6 +342,7 @@ const VERT = /* glsl */ `
   uniform float uSeaY;
   varying vec3 vPos;
   varying vec3 vHero;
+  varying float vFace;
   ${NOISE}
   const float TAU = 6.2831853;
   // Ridged multifractal: sharp crests where the noise crosses zero, the faces between them falling
@@ -429,6 +430,7 @@ const VERT = /* glsl */ `
   void main() {
     float layer = position.z;
     vec3 P;
+    vFace = 0.0;
     if (layer < 2.5) {
       float az = position.x * TAU;
       float v = position.y;
@@ -472,6 +474,9 @@ const VERT = /* glsl */ `
         float coastX = -30.0 + 0.45 * wob + 1900.0 * smoothstep(2400.0, 4800.0, fwd);
         float inland = coastX - p.x;
         float land = smoothstep(-20.0, 90.0, inland);
+        // (Round 9's feel pass: which vertices stand on the cliff's face, the coast's first 90 m inland. FRAG cuts the snow
+        // and the stepped light by it, between the vertices and not at a facet's edge.)
+        vFace = 1.0 - smoothstep(55.0, 95.0, inland);
         float moor = 40.0 + min(inland, 4000.0) * 0.09 + 460.0 * uRange.x * pow(clamp(rg, 0.0, 1.2), uRange.y) * smoothstep(150.0, 1500.0, inland);
         float hl = -0.22 * clamp(fwd, -900.0, 7000.0) + moor;
         hl = max(hl, uSeaY + 140.0 * smoothstep(0.0, 70.0, inland));
@@ -589,6 +594,7 @@ const FRAG = /* glsl */ `
   uniform float uCoast;
   varying vec3 vPos;
   varying vec3 vHero;
+  varying float vFace;
   ${SEA_GLSL}
   float steps3(float l) {
     float q = clamp(l, 0.0, 0.999) * 3.0;
@@ -615,11 +621,11 @@ const FRAG = /* glsl */ `
     // drew icicle teeth on a frosted cake, the second critic.)
     float hold = uCoast > 0.5 ? 0.62 : 0.36 - 0.12 * smoothstep(snowLine, snowLine + 600.0, vPos.y);
     float snow = smoothstep(hold, hold + 0.06, slope + n2 * 0.08 + n1 * 0.04) * smoothstep(snowLine - 12.0, snowLine + 12.0, vPos.y);
-    // (Round 9's feel pass, Gullhaven's coast: the sea cliffs, under the moor's edge 140 m over the sea, are one flat
-    // value of bare rock. Far off, the panorama's facets span a cliff from its top to its foot, gentle enough to take snow
-    // on their upper half and each lit on its own step: pale teeth and stripes down every cliff, the frosted cake the
-    // critics kept finding. A gentle low moor keeps its snow and its light.)
-    float cliffK = uCoast > 0.5 ? (1.0 - smoothstep(uSeaY + 110.0, uSeaY + 135.0, vPos.y)) * (1.0 - smoothstep(0.78, 0.92, slope)) : 0.0;
+    // (Round 9's feel pass, Gullhaven's coast: the sea cliffs are one flat value of bare rock. Far off, the panorama's facets
+    // span a cliff from the moor's edge to the sea, gentle enough to take snow on their upper part and each lit on its own
+    // step: pale teeth hanging down every cliff and stripes on its face, the frosted cake the critics kept finding. The
+    // face is told by its vertices (vFace, VERT), so the moor's snow ends along a line between them, not at a facet.)
+    float cliffK = uCoast > 0.5 ? smoothstep(0.3, 0.7, vFace) : 0.0;
     snow *= 1.0 - cliffK;
     float ice = 0.0;
     float crater = 0.0;

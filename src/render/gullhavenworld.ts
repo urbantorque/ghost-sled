@@ -18,7 +18,7 @@ import { Mood } from '../sim/chaos';
 import { LOW_BOLD, type StillFigure, crowdColors, stillCrowd } from './crowd';
 import type { Particles } from './particles';
 import { GullhavenPieces } from './gullhavenpieces';
-import { GullhavenLegends } from './gullhavenlegends';
+import { GullhavenLegends, glowMaterial } from './gullhavenlegends';
 import { momentPlays } from '../sim/moments';
 import type { Detail } from './postfx/tiers';
 import { reduced } from '../ui/motion';
@@ -431,6 +431,11 @@ export class GullhavenWorld {
   private windows: Array<{ m: Object3D; z0: number; z1: number }> = [];
   /** Lamps and lit windows that light the snow once the day has gone (sim x, y, z, radius). */
   private lamps: Array<[number, number, number, number]> = [];
+  /** The two pier-head lamps (sim x, y, z), and the halo each holds in the air as the day goes (round 9's feel pass: a
+   *  lamp's glass alone, a metre across, read to the critic as a pale tower with no light at the line). */
+  private pierLamps: Array<[number, number, number]> = [];
+  private pierHalo: InstancedMesh | null = null;
+  private readonly haloMat = glowMaterial(false);
   /** The beacon's fire (sim x, y, z), the lighthouse's lantern and its beam. */
   private fire: V3 | null = null;
   private light: V3 | null = null;
@@ -513,6 +518,8 @@ export class GullhavenWorld {
     this.pieces.clear();
     this.windows = [];
     this.lamps = [];
+    this.pierLamps = [];
+    this.pierHalo = null;
     this.fire = null;
     this.light = null;
     this.beam = null;
@@ -569,6 +576,18 @@ export class GullhavenWorld {
     this.pieces.lantern = this.light;
     this.root.add(this.pieces.root);
     this.root.add(this.legends.root);
+    if (this.pierLamps.length) {
+      const im = new InstancedMesh(this.keep(new PlaneGeometry(1, 1)), this.haloMat, this.pierLamps.length);
+      this.pierLamps.forEach(([x, y, z], i) => {
+        im.setMatrixAt(i, new Matrix4().compose(new Vector3(x, y, -z), new Quaternion(), new Vector3(7, 7, 7)));
+        im.setColorAt(i, new Color(0, 0, 0));
+      });
+      im.frustumCulled = false;
+      im.renderOrder = 7;
+      im.name = 'pier-halos';
+      this.root.add(im);
+      this.pierHalo = im;
+    }
   }
 
   // ------------------------------------------------------------------ the fence
@@ -1285,6 +1304,7 @@ export class GullhavenWorld {
       pier.push(part(new ConeGeometry(1.15, 1.0, 10, 1), IRON, { pos: [hx, top + 9.9, -fz] }));
       lit.push(part(new CylinderGeometry(0.8, 0.8, 1.3, 8, 1), GLASS, { pos: [hx, top + 9.0, -fz] }));
       this.lamps.push([hx, top + 9.0, fz, 18]);
+      this.pierLamps.push([hx, top + 9.0, fz]);
     }
     sheds.push(...pier);
     // The boats, frozen into the basin at angles between the corridor and the pier: a hull, a wheelhouse, a mast.
@@ -1493,6 +1513,15 @@ export class GullhavenWorld {
     this.pieces.update(this.course, time, s, sim, mode === 'run', low, reduced(), lampK);
     const course = this.course;
     this.legends.update(course, time, dt, s, sim, mode === 'run', low, reduced(), this.sea, (z) => shoreX(course, z, this.sea));
+    if (this.pierHalo) {
+      const near = this.pierLamps.some((q) => Math.abs(q[2] - s.z) < 700);
+      this.pierHalo.visible = near && lit > 0.02;
+      if (this.pierHalo.visible) {
+        const k = Math.min(1, lit) * (0.85 + 0.15 * Math.sin(time * 2.1 * live));
+        for (let i = 0; i < this.pierLamps.length; i++) this.pierHalo.setColorAt(i, new Color().copy(LAMP_HEX).multiplyScalar(k));
+        if (this.pierHalo.instanceColor) this.pierHalo.instanceColor.needsUpdate = true;
+      }
+    }
     if (lit <= 0.02) return;
     for (const [x, y, z, r] of this.lamps) if (z > s.z - 30 && z < s.z + 160) pushLocalLight(x, y, -z, LAMP_LIN.r, LAMP_LIN.g, LAMP_LIN.b, r, 0.5 * Math.min(1, lit));
   }
