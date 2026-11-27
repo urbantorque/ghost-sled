@@ -271,7 +271,10 @@
   padding-top: 14px;
 }
 
+/* (And its right edge is the body's, so Close or Back ends on the column every block ends on: the second family critic saw
+   it stand 8 px out. The garage, whose rows keep the head's edge, is left as it is.) */
 .gs9-sheet > .gs9-sheet-head:has(+ .gs9-sheet-body) {
+  padding-right: var(--sp-5);
   padding-bottom: 0;
 }
 
@@ -635,5 +638,9 @@
 
   .gs9-sheet-body {
     padding: 0 var(--sp-4) var(--sp-4);
+  }
+
+  .gs9-sheet > .gs9-sheet-head:has(+ .gs9-sheet-body) {
+    padding-right: var(--sp-4);
   }
 }
