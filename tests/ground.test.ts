@@ -4,6 +4,8 @@ import { MOUNTAINS } from '../src/sim/mountains';
 import { coastOn, rodeHome } from '../src/render/ghosts';
 import { HANDOVER_TO, MID_ROW, cliffGround, crestE, crestGround, facetNoise, groundOf, handoverRow, openFoot, rampart, rockWeight, standable, visualGround, wallK } from '../src/render/ground';
 import { gullhavenClearings } from '../src/render/gullhavenplan';
+import { gablefallClearings, townGround } from '../src/render/gablefallplan';
+import { NAVE_LEN } from '../src/sim/gablefall';
 import { type Clearing, inClearing } from '../src/render/dressing';
 import { buildTerrainGeometry } from '../src/render/terrain';
 
@@ -135,6 +137,31 @@ describe('the handover at a ledge', () => {
         expect(moor).toBeGreaterThan(300);
         continue;
       }
+      // (Gablefall has no ledge either. Its terrain meets the mid-ground on the ground its world draws past the corridor
+      // (groundOf, gablefallplan.ts townGround): the town's lanes behind its rows, its paving, the hill under its church,
+      // the quay and the river, where no snow drifts: exactly.)
+      if (c.kit?.id === 'gablefall') {
+        expect(c.ledges.length).toBe(0);
+        const drawn = groundOf(c);
+        let seen = 0;
+        for (const i of [4, 23, 40]) {
+          const g = buildTerrainGeometry(c, i, DETAIL);
+          const pos = g.getAttribute('position');
+          const edge = g.getAttribute('aEdge');
+          for (let v = 0; v < pos.count; v++) {
+            if (edge.getX(v) < HANDOVER_TO + 1) continue;
+            const x = pos.getX(v);
+            const z = -pos.getZ(v);
+            expect(handoverRow(c, z)).toBe(false);
+            expect(drawn(x, z)).toBe(townGround(c, x, z));
+            expect(Math.abs(pos.getY(v) - townGround(c, x, z)), `the town at ${z}`).toBeLessThan(0.01);
+            seen++;
+          }
+          g.dispose();
+        }
+        expect(seen).toBeGreaterThan(300);
+        continue;
+      }
       if (c.kit) {
         expect(c.ledges.length).toBe(0);
         const drawn = groundOf(c);
@@ -213,6 +240,26 @@ describe('what can stand', () => {
         }
         continue;
       }
+      // (Gablefall has no wall and no ledge: its rows' backs, its squares' houses, the hill under its church and its quay
+      // bound the run. No tree stands in its town: the five's forest and dressing keep off both sides from the edge out
+      // (gablefallplan.ts gablefallClearings). Its drawn ground is the sim's out to the limit, then the town's: the lanes
+      // behind the rows at the street's level, never a pit or a wall.)
+      if (c.kit?.id === 'gablefall') {
+        expect(c.ledges.length).toBe(0);
+        const keep: Clearing[] = [];
+        gablefallClearings(c, 0, c.finishZ + c.runOut, keep);
+        for (let z = 20; z < c.finishZ; z += 25) {
+          expect(c.shapeAt(z).wall, `${z}`).toBeLessThanOrEqual(0.3);
+          for (const side of [-1, 1]) for (const e of [FOREST_LIMIT, 30, 60, 300]) expect(inClearing(keep, side, e, z), `${z} ${side} ${e}`).toBe(true);
+          const cx = c.centerX(z);
+          const hw = c.halfWidth(z);
+          const lim = c.edgeLimit(z);
+          for (const side of [-1, 1]) for (const e of [0, lim * 0.5, lim]) expect(townGround(c, cx + side * (hw + e), z), `${z} ${side} ${e}`).toBe(c.ground(cx + side * (hw + e), z));
+          // (Past the church, whose nave and hill stand over the run by design: the lanes behind the rows.)
+          if (z >= NAVE_LEN + 40) for (const side of [-1, 1]) expect(Math.abs(townGround(c, cx + side * (hw + 30), z) - c.baseY(z)), `the town at ${z}`).toBeLessThan(12);
+        }
+        continue;
+      }
       if (c.kit) {
         expect(c.ledges.length).toBe(0);
         for (let z = 20; z < c.finishZ; z += 25) {
@@ -280,6 +327,22 @@ describe('an animal at the treeline', () => {
         }
         continue;
       }
+      // (Gablefall: what bounds its run is its rows' backs, its squares' houses and its quay, within a metre or two past
+      // the edge, so Life stands nothing at a treeline there: its folk are its world's own, in its churchyard, at its
+      // windows, on its bridge and its quay. Past the edge the ground is the town's (townGround), and nowhere a gorge.)
+      if (c.kit?.id === 'gablefall') {
+        for (let z = 80; z < c.finishZ; z += 3) {
+          for (const e of EDGES) {
+            expect(openFoot(c, z, e), `a figure at the rows' backs at ${z}`).toBe(false);
+            for (const side of [-1, 1]) {
+              const x = c.centerX(z) + side * (c.halfWidth(z) + e);
+              expect(visualGround(c, x, z), `the town at ${z}`).toBe(townGround(c, x, z));
+            }
+          }
+          expect(c.shapeAt(z).fall, `over a gorge at ${z}`).toBeLessThan(1);
+        }
+        continue;
+      }
       if (c.kit) {
         for (let z = 80; z < c.finishZ; z += 3) {
           for (const e of EDGES) {
@@ -329,6 +392,22 @@ describe('an animal at the treeline', () => {
             for (const side of [-1, 1]) {
               const x = c.centerX(z) + side * (c.halfWidth(z) + e);
               expect(visualGround(c, x, z), `the cliff or the moor at ${z}`).toBe(cliffGround(c, x, z));
+            }
+          }
+          expect(c.shapeAt(z).fall, `over a gorge at ${z}`).toBeLessThan(1);
+        }
+        continue;
+      }
+      // (Gablefall: what bounds its run is its rows' backs, its squares' houses and its quay, within a metre or two past
+      // the edge, so Life stands nothing at a treeline there: its folk are its world's own, in its churchyard, at its
+      // windows, on its bridge and its quay. Past the edge the ground is the town's (townGround), and nowhere a gorge.)
+      if (c.kit?.id === 'gablefall') {
+        for (let z = 80; z < c.finishZ; z += 3) {
+          for (const e of [3.6, 4.6, 6.4, 8.4]) {
+            expect(openFoot(c, z, e + 1), `a figure at the rows' backs at ${z}`).toBe(false);
+            for (const side of [-1, 1]) {
+              const x = c.centerX(z) + side * (c.halfWidth(z) + e);
+              expect(visualGround(c, x, z), `the town at ${z}`).toBe(townGround(c, x, z));
             }
           }
           expect(c.shapeAt(z).fall, `over a gorge at ${z}`).toBeLessThan(1);

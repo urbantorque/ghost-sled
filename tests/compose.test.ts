@@ -12,6 +12,7 @@ import { framingGeometry } from '../src/render/framing';
 import { getPalette } from '../src/render/palette';
 import { START_HOUSE, TIMING, oldrunClearings } from '../src/render/oldrunplan';
 import { BEACON, gullhavenClearings } from '../src/render/gullhavenplan';
+import { gablefallClearings } from '../src/render/gablefallplan';
 import type { Clearing } from '../src/render/dressing';
 import { Mood } from '../src/sim/chaos';
 
@@ -57,6 +58,19 @@ describe('the composed places', () => {
         const keep: Clearing[] = [];
         gullhavenClearings(c, fz - 10, fz + 10, keep);
         for (const side of [-1, 1]) expect(keep.some((k) => k.side === side && k.z0 < fz && k.z1 > fz && k.e - k.w <= 0)).toBe(true);
+        return;
+      }
+      // (Gablefall composes none: its banks are its rows' backs, its squares' houses and its quay, and its places are its
+      // world's, the church over the nave at its head and the bridge over its line, with the town's ground past both
+      // edges its world's own, gablefallplan.ts.)
+      if (c.kit?.id === 'gablefall') {
+        expect(list).toEqual([]);
+        expect(c.section(10).kind).toBe('nave');
+        expect(c.section(c.finishZ).kind).toBe('quay');
+        const fz = c.finishZ;
+        const keep: Clearing[] = [];
+        gablefallClearings(c, fz - 10, fz + 10, keep);
+        for (const side of [-1, 1]) expect(keep.some((k) => k.side === side && k.z0 < fz && k.z1 > fz)).toBe(true);
         return;
       }
       if (c.kit) {
@@ -154,6 +168,13 @@ describe('the composed places', () => {
     for (const m of NAMED.filter((q) => courseFor(q.seed).kit)) {
       const own = getPalette(courseFor(m.seed).biome, Mood.None).massif;
       expect(peaks.has(own.peak), m.id).toBe(false);
+      // (Gablefall's far hills are the Old Run's low ones, but dry and in its own stone, behind its snowfall: its look past
+      // the banks is its world's, the town's other half and the viaduct across the valley, gablefallworld.ts valley.)
+      if (courseFor(m.seed).kit?.id === 'gablefall') {
+        expect(own.peak, m.id).toBe('hills');
+        expect(own.sea + own.seaLake + own.seaOcean, m.id).toBe(0);
+        continue;
+      }
       expect(kits.has(own.peak), m.id).toBe(false);
       kits.add(own.peak);
       if (courseFor(m.seed).kit?.id === 'gullhaven') expect(own.seaOcean, m.id).toBe(1);

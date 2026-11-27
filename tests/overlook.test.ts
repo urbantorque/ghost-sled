@@ -10,6 +10,7 @@ import { getPalette } from '../src/render/palette';
 import { buildTerrainGeometry } from '../src/render/terrain';
 import { cliffGround, crestGround, visualGround } from '../src/render/ground';
 import { BEACON, pointAt } from '../src/render/gullhavenplan';
+import { townGround } from '../src/render/gablefallplan';
 import { HOTEL, START_HOUSE, oldrunClearings } from '../src/render/oldrunplan';
 import type { Clearing } from '../src/render/dressing';
 
@@ -57,6 +58,25 @@ describe('overlook plan', () => {
         expect(own.seaOcean).toBe(1);
         expect(own.seaLake).toBe(0);
         expect(own.peak).toBe('coast');
+        return;
+      }
+      // (Gablefall has none: no lip and no drop either side, its edges its rows' backs, its squares' houses and its quay;
+      // past them the town's ground, gablefallplan.ts townGround; far off, low dry hills behind the snowfall.)
+      if (c.kit?.id === 'gablefall') {
+        expect(list).toEqual([]);
+        for (let z = 0; z < c.finishZ; z += 20) {
+          for (const side of [-1, 1]) {
+            expect(plan.fall(z, side)).toBe(0);
+            for (const e of [2, 10, 30]) {
+              expect(plan.drop(z, side, e)).toBe(0);
+              const x = c.centerX(z) + side * (c.halfWidth(z) + e);
+              expect(visualGround(c, x, z)).toBe(townGround(c, x, z));
+            }
+          }
+        }
+        const own = getPalette(c.biome, Mood.None).massif;
+        expect(own.peak).toBe('hills');
+        expect(own.sea + own.seaLake + own.seaOcean).toBe(0);
         return;
       }
       if (c.kit) {
@@ -150,6 +170,12 @@ describe('overlook plan', () => {
         expect(pointAt(c, BEACON.e, BEACON.z)).toBe(1);
         const x = c.centerX(BEACON.z) + c.halfWidth(BEACON.z) + BEACON.e;
         expect(cliffGround(c, x, BEACON.z)).toBeGreaterThan(c.ground(x, BEACON.z) + 50);
+        continue;
+      }
+      // (Gablefall has none either: what stands at its head is its church, the run starting on the nave's snow.)
+      if (c.kit?.id === 'gablefall') {
+        expect(lifts).toEqual([]);
+        expect(c.section(10).kind).toBe('nave');
         continue;
       }
       if (c.kit) {

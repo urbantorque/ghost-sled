@@ -384,7 +384,7 @@ function biomeBase(biome: BiomeId): Palette {
       // shade, the town's slate and stone for what is hard (chimneys are stone, never warm), no trees, and no hero, no
       // peaks and no sea of cloud: a valley's low hills far off in the haze, the town's other half on them.
       p.snowLit = c('#FAF8F6');
-      p.snowShade = c('#8890BC');
+      p.snowShade = c('#9A96C6');
       p.snowDeep = c('#545C8E');
       p.tall = c('#4A4E66');
       p.tallDark = c('#2E3246');
@@ -1055,7 +1055,7 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.skySpread = 0.7;
       p.skyCurve = 0.62;
       p.rim = c('#ECE8F0');
-      p.fog = c('#CCCAD6');
+      p.fog = c('#D8D4DE');
       p.fogNear = 40;
       p.fogFar = 760;
       p.hemiSky = c('#A8AAC6');
@@ -1699,7 +1699,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       from: 500, at: 1150, dusk: 0.05,
       edit: (p) => {
         p.fogFar = 560;
-        p.fog = c('#C4C2D0');
+        p.fog = c('#D2CEDC');
         p.skyZenith = c('#62667E');
         p.skyMid = c('#9294AE');
         p.snowfall = 0.55;
@@ -3503,6 +3503,14 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.grade.hi = c('#FFF2E4');
         p.lift.bounce = 0.52;
         lamps(p, 0.7);
+      },
+    },
+    {
+      // (The roofs and the street between them: the shade a step cooler, the windows telling in the grey.)
+      kind: 'rooftops',
+      edit: (p) => {
+        p.grade.lo = c('#DCE0F4');
+        lamps(p, 0.45);
       },
     },
     {

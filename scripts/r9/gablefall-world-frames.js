@@ -37,13 +37,14 @@ async (page) => {
   page.on('console', (m) => {
     if (m.type() === 'error' || m.type() === 'warning') errors.push(m.type() + ': ' + m.text().slice(0, 300));
   });
-  await page.goto(c.base);
+  // (A dev server busy with another lane's edits or a heavy run can take a minute to serve a load.)
+  await page.goto(c.base, { timeout: 240000 });
   await page.evaluate(() => {
     try {
       localStorage.clear();
     } catch {}
   });
-  await page.goto(`${c.base}?platform=mock&debug&save=${c.save ?? 'fresh'}&tier=${c.tier}&autoride=1${c.m !== undefined ? '&m=' + c.m : '&seed=5be0cd19'}${c.query}`);
+  await page.goto(`${c.base}?platform=mock&debug&save=${c.save ?? 'fresh'}&tier=${c.tier}&autoride=1${c.m !== undefined ? '&m=' + c.m : '&seed=5be0cd19'}${c.query}`, { timeout: 240000 });
   await page.waitForFunction(() => window.__gs && (window.__gs.phase === 'run' || window.__gs.dailyReady), null, { timeout: 300000 });
   await page.evaluate(() => window.__gs.phase === 'run' || window.__gs.ride());
   await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run' && window.__gs.run, null, { timeout: 120000 });

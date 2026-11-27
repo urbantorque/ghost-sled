@@ -15,6 +15,7 @@ import { HOTEL, START_HOUSE, TIMING, oldrunClearings } from '../src/render/oldru
 import { OldRunWorld } from '../src/render/oldrunworld';
 import type { Clearing } from '../src/render/dressing';
 import { GullhavenWorld } from '../src/render/gullhavenworld';
+import { GablefallWorld } from '../src/render/gablefallworld';
 import { BEACON, lighthouseZ } from '../src/render/gullhavenplan';
 import { makeSeaUniforms } from '../src/render/massif';
 
@@ -89,6 +90,19 @@ describe('the plan is the course', () => {
           const harbour = secs.find((q) => q.kind === 'harbour')!;
           expect(harbour.z0).toBeLessThan(c.finishZ - 50);
           expect(harbour.z1).toBeGreaterThanOrEqual(c.finishZ + c.runOut);
+          return;
+        }
+        // (Gablefall's sections are its own as well: the church's nave at its head, the town's squares and its runs of
+        // rooftops, the quay holding the line and the whole run-out; its world stands the church over the nave and the
+        // bridge over the line, gablefallworld.ts.)
+        if (c.kit?.id === 'gablefall') {
+          expect(list).toEqual([]);
+          const secs = sections(c);
+          expect(secs[0].kind).toBe('nave');
+          expect(secs.filter((q) => q.kind === 'rooftops').length).toBeGreaterThanOrEqual(3);
+          const quay = secs.find((q) => q.kind === 'quay')!;
+          expect(quay.z0).toBeLessThan(c.finishZ - 50);
+          expect(quay.z1).toBeGreaterThanOrEqual(c.finishZ + c.runOut);
           return;
         }
         if (c.kit) {
@@ -322,6 +336,9 @@ describe('the finish line', () => {
     for (const m of MOUNTAINS) {
       const c = courseFor(m.seed);
       const F = c.finishZ;
+      // (Gablefall's checks are its world's, 3.5 cm over the ice across the run between the corridor's edges,
+      // gablefallworld.ts quay; past the edge the quay's bank curves up, which a coarse tier's columns cut across.)
+      const gab = c.kit?.id === 'gablefall';
       for (const detail of [{ inner: 1.6, row: 3, reach: 60 }, { inner: 1.1, row: 2.2, reach: 90 }, { inner: 0.85, row: 2, reach: 110 }]) {
         let over = -Infinity;
         for (let k = Math.floor((F - 12) / CHUNK_LEN); k <= Math.floor((F + 12) / CHUNK_LEN); k++) {
@@ -335,13 +352,13 @@ describe('the finish line', () => {
               const x = (p.getX(v[a]) + p.getX(v[b])) / 2;
               const y = (p.getY(v[a]) + p.getY(v[b])) / 2;
               const z = -(p.getZ(v[a]) + p.getZ(v[b])) / 2;
-              if (Math.abs(z - F) > (LINE_ROWS * LINE_DEPTH) / 2 || c.edgeExcess(x, z) > c.edgeLimit(z)) continue;
+              if (Math.abs(z - F) > (LINE_ROWS * LINE_DEPTH) / 2 || c.edgeExcess(x, z) > (gab ? 0 : c.edgeLimit(z))) continue;
               over = Math.max(over, y - c.ground(x, z));
             }
           }
           t.dispose();
         }
-        expect(over, `${m.name} row ${detail.row}`).toBeLessThan(LINE_LIFT - 0.03);
+        expect(over, `${m.name} row ${detail.row}`).toBeLessThan(gab ? 0.03 : LINE_LIFT - 0.03);
       }
     }
   });
@@ -359,6 +376,21 @@ function oldrunPlaces(c: Course, low: boolean): Map<string, BufferAttribute[]> {
     list.push(o.geometry.getAttribute('position') as BufferAttribute);
     out.set(o.name, list);
   }
+  return out;
+}
+
+/** Gablefall's own places as its world draws them on a tier (gablefallworld.ts, by name): world positions. */
+function gablefallPlaces(c: Course, low: boolean): Map<string, BufferAttribute[]> {
+  const w = new GablefallWorld();
+  w.setDetail(low ? 'low' : 'high');
+  w.setCourse(c);
+  const out = new Map<string, BufferAttribute[]>();
+  w.root.traverse((o) => {
+    if (!(o instanceof Mesh) || !o.name) return;
+    const list = out.get(o.name) ?? [];
+    list.push(o.geometry.getAttribute('position') as BufferAttribute);
+    out.set(o.name, list);
+  });
   return out;
 }
 
@@ -408,6 +440,18 @@ describe('the start', () => {
         const folk = (pl: Map<string, BufferAttribute[]>) => (pl.get('onlookers') ?? []).reduce((n, p) => n + p.count, 0);
         expect(folk(low), m.name).toBeGreaterThan(folk(full) * 0.35);
         expect(trisOf(full.get('harbour')) + trisOf(full.get('lighthouse')) + trisOf(full.get('beacon')), m.name).toBeLessThanOrEqual(42000);
+        continue;
+      }
+      // (Gablefall's start is its church: the run leaves from its nave's snow between the pinnacles, its folk in the
+      // churchyard below; its world's, on both tiers, Low the cheaper or the same.)
+      if (c.kit?.id === 'gablefall') {
+        const full = gablefallPlaces(c, false);
+        const low = gablefallPlaces(c, true);
+        for (const name of ['church', 'churchyard-folk']) {
+          expect(trisOf(low.get(name)), `${m.name} ${name} low`).toBeGreaterThan(0);
+          expect(trisOf(low.get(name)), `${m.name} ${name}`).toBeLessThanOrEqual(trisOf(full.get(name)));
+        }
+        expect(trisOf(full.get('church')) + trisOf(full.get('churchyard-folk')), m.name).toBeLessThanOrEqual(42000);
         continue;
       }
       if (c.kit) {
@@ -469,6 +513,24 @@ describe('the start', () => {
             const list = pl.get(name) ?? [];
             expect(list.length, `${m.name} ${name}`).toBeGreaterThan(0);
             for (const p of list) for (let v = 0; v < p.count; v++) expect(c.edgeExcess(p.getX(v), -p.getZ(v)), `${name} at ${Math.round(-p.getZ(v))}`).toBeGreaterThanOrEqual(c.edgeLimit(-p.getZ(v)));
+          }
+        }
+        continue;
+      }
+      // (Gablefall's folk stand past its limit, in the churchyard, on the quay and up on the bridge over the line, the
+      // bridge's deck well over a sled's air: none on the run's snow.)
+      if (c.kit?.id === 'gablefall') {
+        for (const low of [false, true]) {
+          const pl = gablefallPlaces(c, low);
+          for (const name of ['onlookers', 'churchyard-folk']) {
+            const list = pl.get(name) ?? [];
+            expect(list.length, `${m.name} ${name}`).toBeGreaterThan(0);
+            for (const p of list)
+              for (let v = 0; v < p.count; v++) {
+                const x = p.getX(v);
+                const z = -p.getZ(v);
+                if (c.edgeExcess(x, z) < c.edgeLimit(z) - 0.1) expect(p.getY(v) - c.ground(x, z), `${name} over the run at ${z.toFixed(1)}`).toBeGreaterThan(7);
+              }
           }
         }
         continue;
