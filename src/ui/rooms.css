@@ -23,6 +23,11 @@
   font-weight: var(--fw-label);
 }
 
+/* (A medal's disc and its word never part across a line.) */
+.gs9-nw {
+  white-space: nowrap;
+}
+
 .gs9-stack {
   display: grid;
   gap: var(--sp-2);
@@ -186,4 +191,48 @@
 
 .gs9-wall-chev {
   color: var(--text-dim);
+}
+
+/* The discs' legend over their column (round 9, the polish lane): laid out as a row is (its padding, the words' share,
+   the discs, the chevron's room), so "Stages" stands over the three stage discs and "Run" over the larger one. */
+.gs9-wall-key {
+  display: flex;
+  align-items: end;
+  gap: 0.55em;
+  margin-bottom: -2px;
+  padding: 0 var(--sp-3);
+  color: var(--text-dim);
+  font-size: var(--fs-m);
+  font-weight: var(--fw-label);
+  line-height: 1.1;
+}
+
+.gs9-wall-key-t {
+  flex: 1;
+}
+
+.gs9-wall-key-d {
+  display: flex;
+  gap: 3px;
+  font-size: var(--fs-xs);
+}
+
+/* (Three 11 px discs and their two 3 px gaps; then the hairline's 5 px and its gaps before the larger disc.) */
+.gs9-wall-key-d .k-st {
+  width: 39px;
+  margin-right: 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.gs9-wall-key-d .k-run {
+  width: 14px;
+  display: flex;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.gs9-wall-key-s {
+  flex: none;
+  width: 1.15em;
 }

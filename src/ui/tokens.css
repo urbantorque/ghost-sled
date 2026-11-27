@@ -18,6 +18,35 @@
   scoped --hair) still win, so no screen changes until a screen is moved onto the tokens.
 */
 
+/* The curly apostrophe (U+2019) and nothing else, from a face that draws it as a comma at every weight (round 9, the
+   polish lane). Windows' system font draws it at 800 and 900 as a thin slanted wedge, which in "Crane’s" and
+   "TODAY’S" read as an acute accent ("Crane´s"); its 700 is a comma, and so is Arial's at every weight. local()
+   only: an installed face, never a file shipped. Where none of these is installed (Android) the character falls
+   through to the system font as before. Synthetic italic slants it with the words. */
+@font-face {
+  font-family: 'GS Apostrophe';
+  src: local('Arial'), local('ArialMT');
+  font-weight: 100 649;
+  unicode-range: U+2019;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'GS Apostrophe';
+  src: local('Arial Bold'), local('Arial-BoldMT');
+  font-weight: 650 799;
+  unicode-range: U+2019;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'GS Apostrophe';
+  src: local('Arial Black'), local('Arial-Black'), local('Arial Bold'), local('Arial-BoldMT');
+  font-weight: 800 1000;
+  unicode-range: U+2019;
+  font-display: swap;
+}
+
 :root,
 .gs-ui {
   /* ---- colour roles (ART.md 1, locked) ---- */
@@ -41,11 +70,13 @@
   --surface-raised: rgba(30, 40, 80, 0.94); /* a secondary control under the pointer */
   --hair: rgba(245, 243, 255, 0.1); /* the panel's inner hairline */
   --hair-strong: rgba(245, 243, 255, 0.2); /* a control's edge */
+  --edge-secondary: rgba(245, 243, 255, 0.42); /* a secondary button's edge: the one thing quiet has not */
   --text-dim: rgba(245, 243, 255, 0.72); /* second-rank words: about 8:1 on the ink panel, 6:1 with snow under it */
   --scrim: linear-gradient(90deg, rgba(10, 14, 32, 0.55), rgba(10, 14, 32, 0) 48%);
 
   /* ---- type ---- */
-  --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* (GS Apostrophe draws the curly apostrophe alone, ahead of the system font: see its faces below.) */
+  --font: 'GS Apostrophe', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   /* The base unit grows with the screen (today's --u): 14 px on a phone, about 14.5 on a 1280 x 720 desk, about 18
      on a wide one. Every size below is a step of it, and nothing is under 11 px (ART.md 10). */
   --u: clamp(14px, calc(8px + 0.9vmin), 18px);
@@ -171,18 +202,22 @@
   box-shadow: var(--focus), var(--shadow-primary);
 }
 
-/* Secondary: an ink pill with a hairline edge. A door, a choice, Details. */
+/* Secondary: an ink pill with a hairline edge you see at a glance. A door, a choice, Details. (Round 9, the polish lane:
+   at a 20% edge beside quiet's 10% the two ranks read alike; the edge is what tells them apart now.) */
 .gs9-b-secondary {
   background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--hair-strong), var(--shadow);
+  box-shadow: inset 0 0 0 1.5px var(--edge-secondary), var(--shadow);
 }
 
-/* Quiet: a thin ink wash and its words, a step under secondary. Home, Back, Close. Over the scene the wash keeps the
-   words readable on white snow. */
+/* Quiet: a thin ink wash and its words, a step under secondary: a faint hairline so it still reads as a pill on a dark
+   scene (with none it read as a loose label), no off-white ring and no lift. Home, Back, Close. Over the scene the wash
+   (as dark as before: thinner, its words fell to about 2.4:1 on white snow) and a soft ink halo keep the words
+   readable. */
 .gs9-b-quiet {
   background: rgba(18, 25, 51, 0.55);
   box-shadow: inset 0 0 0 1px var(--hair);
   color: rgba(245, 243, 255, 0.86);
+  text-shadow: 0 0 6px rgba(18, 25, 51, 0.85);
 }
 
 @media (hover: hover) {
@@ -193,6 +228,7 @@
     background: var(--surface-raised);
   }
   .gs9-b-quiet:hover:not(:disabled) {
+    background: rgba(18, 25, 51, 0.72);
     color: var(--c-text);
   }
 }

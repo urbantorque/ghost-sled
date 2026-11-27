@@ -249,7 +249,7 @@ export class Results {
     const from = this.el.querySelector<HTMLElement>('[data-fk="details"]');
     let close = (): void => {};
     const f = sheetFrame(this.ctx, { cls: 'gs9-det is-right', title: 'Details', close: 'Back', closeIcon: 'back', fk: 'close-details', onClose: () => close() });
-    detailsBody(f.body, m, this.ctx, this.hd, {
+    const foot = detailsBody(f.body, m, this.ctx, this.hd, {
       mode: this.inputMode,
       garage: (piece) => this.hooks.openGarage(piece),
       watch: this.hd.onWatchReel
@@ -272,6 +272,8 @@ export class Results {
         this.hd.onSwapMission?.(id);
       },
     });
+    // (The one button stands in the sheet's own foot, under the scrolling list: the last rows end above it.)
+    f.el.append(foot);
     if (!fresh) f.el.classList.add('is-static');
     this.el.append(f.el);
     this.el.dataset.view = 'details';
@@ -376,7 +378,8 @@ function medalWords(m: MedalSet): string {
   return parts.length > 0 ? parts.join(', ').replace(/^./, (c) => c.toUpperCase()) : 'None yet';
 }
 
-function detailsBody(body: HTMLElement, m: ResultsModel, ctx: Ctx, hd: UIHandlers, acts: DetailsActs): void {
+/** Details' sections into `body`; returns its foot, the one button, for the sheet to hold under the body. */
+function detailsBody(body: HTMLElement, m: ResultsModel, ctx: Ctx, hd: UIHandlers, acts: DetailsActs): HTMLElement {
   const fin = m.finish ?? null;
   // The race: the finishing order, you in it; what was said, and why the place is not the one you fell in.
   if (m.ghosts.length > 0) {
@@ -433,7 +436,7 @@ function detailsBody(body: HTMLElement, m: ResultsModel, ctx: Ctx, hd: UIHandler
   if (lad) {
     const place = lad.top ? 'Top of the ladder' : lad.rank !== null ? `${ordinal(lad.rank)} of ${lad.of}${lad.up > 0 ? `, up ${lad.up}` : ''}` : 'Not on it yet';
     run.append(row(`The ${m.mountain} ladder`, place));
-    if (lad.moment) run.append(row(curly(lad.moment), lad.gifts > 0 ? `${fmt(lad.gifts)} gifts` : null));
+    if (lad.moment) run.append(row(curly(lad.moment), lad.gifts > 0 ? giftsN(lad.gifts) : null));
     run.append(row('Medals held here', medalWords(lad.medals)));
   }
   if (m.mastery) run.append(row('Mastery', `${m.mastery.got} of ${m.mastery.of} stars${m.mastery.fresh.length ? `, ${m.mastery.fresh.length} new` : ''}`));
@@ -447,7 +450,8 @@ function detailsBody(body: HTMLElement, m: ResultsModel, ctx: Ctx, hd: UIHandler
     for (const t of sp.ticks) paid.append(row(t.label, `${fmt(t.xp)}${NBSP}XP`));
     paid.append(row(h('b', '', `Rider Rank ${sp.after.page}`), `${fmt(total)}${NBSP}XP this run`, 'is-total'));
   }
-  paid.append(row('Gifts', `${fmt(m.giftsEarned)} this run${m.doubled ? ', doubled' : ''}, ${fmt(m.wallet)} to spend`));
+  // (The row's word is "Gifts"; its figures in marigold, as every gift figure is.)
+  paid.append(row('Gifts', h('span', 'gs9-gift-n', ico9('gift'), h('span', 'gs9-num', `${fmt(m.giftsEarned)} this run${m.doubled ? ', doubled' : ''}, ${fmt(m.wallet)} to spend`))));
   const lines: Array<Node> = [];
   const opened = [...(m.unlockedMountains ?? []).map((u) => u.name), ...(sp?.opened ?? []).filter((r) => r.kind !== 'open').map((r) => prize(r))];
   if (opened.length) lines.push(notP(`Opened: ${opened.join(', ')}.`));
@@ -462,7 +466,8 @@ function detailsBody(body: HTMLElement, m: ResultsModel, ctx: Ctx, hd: UIHandler
   else if (u?.kind === 'sled') {
     // (The garage's price, which nextUnlock carries since the shop lane; sim/sleds.ts keeps an older one.)
     const price = u.price ?? SLEDS.find((s) => s.name === u.name)?.price ?? 0;
-    if (u.gifts > 0) lines.push(notP(`The ${u.name}: ${fmt(u.gifts)} gifts to go${price ? ` of ${fmt(price)}` : ''}.`));
+    // (As the garage says what a piece waits on: "600 gifts, 93 more to go".)
+    if (u.gifts > 0) lines.push(price ? notP(`The ${u.name}: `, giftsN(price), `, ${fmt(u.gifts)} more to go.`) : notP(`The ${u.name}: `, giftsN(u.gifts, 'to go'), '.'));
     else lines.push(h('div', 'gs9-det-act', notP(`The ${u.name} is ready in the garage.`), b9(ctx, 'secondary', 'Open the Garage', { icon: 'sledBold', fk: 'det-garage', aria: `Open the garage at the ${u.name}`, onClick: () => acts.garage(u.piece) })));
   }
   body.append(section('What It Paid', paid, ...lines));
@@ -472,7 +477,7 @@ function detailsBody(body: HTMLElement, m: ResultsModel, ctx: Ctx, hd: UIHandler
     const mis = h('ul', 'gs9-list');
     for (const mv of m.missions) {
       const [v, t] = progFigures(Math.min(mv.progress, mv.target), mv.target, mv.dp);
-      const li = row([h('span', 'gs9-check', mv.done ? ico9('check') : null), mv.text], mv.done ? (mv.justCompleted ? `Done this run, ${fmt(mv.reward)} gifts` : 'Done') : `${v} of ${t}`, mv.done ? 'is-done' : '');
+      const li = row([h('span', 'gs9-check', mv.done ? ico9('check') : null), mv.text], mv.done ? (mv.justCompleted ? h('span', '', 'Done this run, ', giftsN(mv.reward)) : 'Done') : `${v} of ${t}`, mv.done ? 'is-done' : '');
       mis.append(li);
     }
     const swap = acts.swap;
@@ -491,7 +496,8 @@ function detailsBody(body: HTMLElement, m: ResultsModel, ctx: Ctx, hd: UIHandler
   );
   if (keep.childElementCount > 0) body.append(section('Keep This Run', keep));
 
-  // And the same one button at its foot, so Details never has to be closed to ride.
+  // And the same one button at its foot, so Details never has to be closed to ride. (Round 9, the polish lane: the
+  // sheet's own foot, under the list it ends, not over its last rows: openDetails puts it there.)
   const bw = storyButton(m);
   const t = h('span', 'gs9-go-t', h('span', 'gs9-go-v', bw.label), bw.why ? h('span', 'gs9-go-why', bw.why) : null);
   t.querySelector('.gs9-go-v')?.setAttribute('translate', 'no');
@@ -499,11 +505,15 @@ function detailsBody(body: HTMLElement, m: ResultsModel, ctx: Ctx, hd: UIHandler
   key?.setAttribute('aria-hidden', 'true');
   const again = b9(ctx, 'primary', [t, key], { icon: 'play', fk: 'again-det', sound: 'confirm', gameKey: true, aria: bw.aria, cls: `gs9-go${[...bw.label].length > 18 ? ' is-long' : ''}`, onClick: () => hd.onRunAgain() });
   if (key) again.setAttribute('aria-keyshortcuts', 'Space');
-  body.append(h('div', 'gs9-det-go', again));
+  return h('div', 'gs9-det-go', again);
 }
 
-const notP = (t: string): HTMLParagraphElement => {
-  const p = h('p', 'gs9-det-p', t);
+const notP = (...t: Array<string | Node>): HTMLParagraphElement => {
+  const p = h('p', 'gs9-det-p', ...t);
   p.setAttribute('translate', 'no');
   return p;
 };
+
+/** A gift figure with its word and the gift's glyph, in marigold wherever it stands, as the results, the Garage door
+ *  and the garage draw it (ART.md 1; round 9, the polish lane): "77 gifts", "600 gifts". */
+const giftsN = (n: number, tail = ''): HTMLSpanElement => h('span', 'gs9-gift-n', ico9('gift'), h('span', 'gs9-num', `${fmt(n)}${NBSP}gifts${tail ? ` ${tail}` : ''}`));

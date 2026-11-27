@@ -55,7 +55,8 @@
   pointer-events: none;
   color-scheme: dark;
   color: var(--text);
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* (tokens.css: the system stack, with the curly apostrophe drawn from a face that keeps it a comma at 900.) */
+  font-family: var(--font);
   font-size: var(--u);
   line-height: 1.25;
   font-variant-numeric: tabular-nums;

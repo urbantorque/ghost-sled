@@ -594,32 +594,66 @@
   color: var(--c-text);
 }
 
+/* An hour's swatch: its sky, and the light it rides by (title.ts hourLight), so two skies near one colour still read as
+   two hours (round 9, the polish lane: Ember's day and night read as one brown). The lights are pale and warm or
+   moon-white, never the gifts' marigold. */
 .gs9-swatch {
-  width: 14px;
-  height: 14px;
+  --sky: linear-gradient(180deg, var(--z), var(--hz));
+  flex: none;
+  width: 18px;
+  height: 18px;
   border-radius: var(--r-pill);
-  background: linear-gradient(180deg, var(--z), var(--hz));
+  background: var(--sky);
   box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.35);
 }
 
-.gs9-tick {
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  border-radius: var(--r-pill);
-  box-shadow: inset 0 0 0 2px rgba(245, 243, 255, 0.6);
+.gs9-swatch.l-sun {
+  background: radial-gradient(circle at 50% 40%, #fff6dc 0 3.4px, rgba(255, 246, 220, 0.4) 4.4px, transparent 6.5px), var(--sky);
 }
 
-[aria-pressed='true'] > .gs9-tick {
+.gs9-swatch.l-low {
+  background: radial-gradient(circle at 50% 96%, #ffe0b0 0 4.6px, rgba(255, 224, 176, 0.38) 5.8px, transparent 8.5px), var(--sky);
+}
+
+.gs9-swatch.l-moon {
+  background: radial-gradient(circle at 63% 32%, var(--z) 0 3.6px, transparent 4.1px), radial-gradient(circle at 47% 44%, #eef0ff 0 4.4px, transparent 5px), var(--sky);
+}
+
+.gs9-swatch.l-glow {
+  background: radial-gradient(ellipse 90% 60% at 50% 100%, rgba(255, 222, 186, 0.95), rgba(255, 222, 186, 0) 75%), var(--sky);
+}
+
+.gs9-swatch.l-lamp {
+  background: radial-gradient(circle at 34% 70%, #ffd3a8 0 1.8px, transparent 2.5px), radial-gradient(circle at 66% 62%, #ffd3a8 0 1.8px, transparent 2.5px), var(--sky);
+}
+
+/* The mirror: a switch with its word, on or off as settings' are, standing apart from the hour's pair (round 9, the
+   polish lane: a third pill beside the pair read as a third hour). */
+.gs9-mirror.gs9-b {
+  gap: 0.6em;
+  min-height: 42px;
+  margin-left: var(--sp-1);
+  padding: 0 0.55em 0 1em;
+  font-size: var(--fs-s);
+}
+
+.gs9-mirror .gs9-switch {
+  width: 34px;
+  height: 20px;
+}
+
+.gs9-mirror .gs9-switch::after {
+  width: 14px;
+  height: 14px;
+}
+
+.gs9-mirror[aria-checked='true'] .gs9-switch {
   background: var(--c-text);
-  color: var(--c-ink);
-  box-shadow: none;
 }
 
-.gs9-tick .gs9-i {
-  width: 12px;
-  height: 12px;
+.gs9-mirror[aria-checked='true'] .gs9-switch::after {
+  background: var(--c-ink);
+  transform: translateX(14px);
 }
 
 /* ---- the one quiet line: what you are working toward ---- */
@@ -678,6 +712,21 @@
 
 .gs9-door-s.is-flame {
   color: var(--c-gift);
+}
+
+/* The Garage door wears the gifts as the results and the garage draw them: the glyph, the figure and its word, in
+   marigold (ART.md 1: marigold is the gifts'). */
+.gs9-door-s.is-gift {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  color: var(--c-gift);
+  font-weight: var(--fw-label);
+}
+
+.gs9-door-s.is-gift .gs9-i {
+  width: 1.1em;
+  height: 1.1em;
 }
 
 .gs9-new {
@@ -789,7 +838,7 @@
   .gs9-t-aim {
     display: block;
     justify-self: center;
-    margin: var(--sp-3) 0 0;
+    margin: var(--sp-2) 0 0;
     text-align: center;
   }
 
@@ -798,36 +847,25 @@
     vertical-align: -0.2em;
   }
 
+  /* The doors are the kit's pills here too, two by two, each its glyph beside its words and the figure it wears (round
+     9, the polish lane: four to a row, the glyph stacked over the words in a 62 px block, they read as tiles where
+     the desk's read as buttons). */
   .gs9-doors {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
+    margin-top: var(--sp-2);
   }
 
   .gs9-door {
-    flex-direction: column;
-    gap: 3px;
-    min-height: 62px;
-    padding: 6px 4px;
-    white-space: normal;
-  }
-
-  .gs9-door-t {
-    justify-items: center;
-    text-align: center;
+    justify-content: flex-start;
+    min-height: var(--hit);
+    padding: 0 0.9em 0 0.85em;
+    gap: 0.55em;
   }
 
   .gs9-door-l {
-    font-size: var(--fs-s);
     line-height: 1.05;
-  }
-
-  .gs9-door-long {
-    display: none;
-  }
-
-  .gs9-door-short {
-    display: inline;
   }
 
   .gs9-door-s {
@@ -838,6 +876,18 @@
     position: absolute;
     top: -6px;
     right: -2px;
+  }
+}
+
+/* (Under 340 px "Daily & Cup", so the door's words keep one line: the family critic read the two spellings as two
+   names, so a 390 px phone says "Daily and Cup" as every other screen does.) */
+@media (max-aspect-ratio: 1/1) and (max-width: 339px) {
+  .gs9-door-long {
+    display: none;
+  }
+
+  .gs9-door-short {
+    display: inline;
   }
 }
 

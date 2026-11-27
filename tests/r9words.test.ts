@@ -107,13 +107,33 @@ describe('the quiet line', () => {
     const bar = rankBar(31299);
     const spine = { bar } as unknown as NonNullable<TitleModel['spine']>;
     const t = plain(titleAim(title({ mountains: all, spine })).text);
-    expect(t).toMatch(/^[\d,]+ XP to Rider Rank \d+: /);
+    expect(t).toMatch(/^[\d,]+ XP to the /);
     expect(bare(t)).toBe(0);
   });
 
-  it('a locked chip pressed says what opens it', () => {
+  it('a locked chip pressed says what opens it, as the line says it', () => {
     const m = title();
-    expect(titleAim(m, m.mountains[3]).text).toBe('Sakura Ridge: pass 3 more ghosts to open it');
+    expect(titleAim(m, m.mountains[3]).text).toBe('3 more ghosts open Sakura Ridge');
+    expect(titleAim(m, m.mountains[4]).text).toBe('Beat 6 more of The Twelve to open Lanternfall');
+    expect(titleAim(m, card('oldrun', 'The Old Run', { locked: true, unlockText: 'Pass 1 more ghost to unlock' })).text).toBe('1 more ghost opens The Old Run');
+  });
+
+  // Round 9, the polish lane: ART.md 10 gives the line a glyph and at most nine words. "1,281 XP to Rider Rank 26: the
+  // Crane's Memory charm" was ten; the line says how far and the prize, every page of the Almanac within nine.
+  it('is nine words at most, on every page of the Almanac and for every locked chip', () => {
+    const count = (t: string): number => plain(t).split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+    const open = title().mountains.map((c) => ({ ...c, locked: false, unlockText: '' }));
+    let xp = 0;
+    let most = 0;
+    for (let p = 0; p < 50; p++) {
+      const bar = rankBar(xp);
+      most = Math.max(most, count(titleAim(title({ mountains: open, spine: { bar } as unknown as NonNullable<TitleModel['spine']> })).text));
+      xp += bar.need + 1;
+    }
+    const locked = [card('oldrun', 'The Old Run', { locked: true, unlockText: 'Pass 18 more ghosts to unlock' }), card('lanternfall', 'Lanternfall', { locked: true, unlockText: 'Beat 12 more of The Twelve to unlock' })];
+    for (const c of locked) most = Math.max(most, count(titleAim(title(), c).text));
+    console.log(`  the quiet line's longest: ${most} words`);
+    expect(most).toBeLessThanOrEqual(9);
   });
 });
 

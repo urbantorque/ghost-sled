@@ -395,7 +395,9 @@ export class Title {
       seg.setAttribute('aria-label', 'Hour');
       for (const alt of [false, true]) {
         const [z, hz] = alt ? hr.alt : hr.day;
-        const sw = h('span', 'gs9-swatch');
+        // (Each sky carries its light, so two skies near one colour still read as two hours: Ember's day and night
+        // were one brown. Round 9, the polish lane.)
+        const sw = h('span', `gs9-swatch l-${hourLight(alt ? hr.name : 'Day')}`);
         sw.style.setProperty('--z', z);
         sw.style.setProperty('--hz', hz);
         sw.setAttribute('aria-hidden', 'true');
@@ -405,14 +407,16 @@ export class Title {
       }
       out.append(seg);
     }
+    // The mirror is a switch, on or off, as settings' switches are, apart from the hour's pair (one of two): drawn as a
+    // third pill beside them it read as a third hour. Round 9, the polish lane.
     if (m.mirror) {
       const on = m.mirror.on;
-      const seg = h('div', 'gs9-seg');
-      const b = b9(this.ctx, 'quiet', [h('span', 'gs9-tick', on ? ico9('check') : null), 'Mirrored'], { fk: 'mirror', aria: `Ride ${name} mirrored`, onClick: () => this.hd.onMirror?.(!on) });
-      b.setAttribute('aria-pressed', String(on));
-      seg.append(b);
-      out.append(seg);
+      const b = b9(this.ctx, 'quiet', ['Mirrored', h('span', 'gs9-switch')], { fk: 'mirror', aria: `Ride ${name} mirrored`, cls: 'gs9-mirror', onClick: () => this.hd.onMirror?.(!on) });
+      b.setAttribute('role', 'switch');
+      b.setAttribute('aria-checked', String(on));
+      out.append(b);
     } else {
+      // (A new mountain's mirror not yet open says its way in, words and not a control. Round 9, the wiring lane.)
       const way = mirrorWay(named);
       if (way) out.append(way);
     }
@@ -461,17 +465,17 @@ export class Title {
       status = `${n}-day flame`;
       aria += `. Your flame: ${n} ${n === 1 ? 'day' : 'days'}${sp.flame.litToday ? ', lit today' : ', ride today to keep it'}`;
     } else if (d === 'progress' && sp) aria += `. Rider Rank ${sp.bar.page}`;
-    else if (d === 'garage') {
-      status = `${fmt(m.wallet)} gifts`;
-      aria += `. ${fmt(m.wallet)} gifts to spend`;
-    }
+    else if (d === 'garage') aria += `. ${fmt(m.wallet)} gifts to spend`;
     // (A reader hears what is behind a room's door, so every system is named from the title.)
     if (d === 'events') aria += `. Inside: your flame, today's Daily and contracts, this week's Cup and its league${m.trial ? ', the Trial' : ''}`;
     else if (d === 'progress') aria += `. Inside: the Almanac, The Twelve${sp?.longNight ? ', the Long Night' : ''}${sp?.album ? ', the Spirit Album' : ''}, medals and mastery stars, and missions`;
     const intro = this.introFor(d, m);
-    // (A phone's door is a quarter of the width: "Daily & Cup" there, so it keeps one line over its flame.)
+    // (A phone under 340 px says "Daily & Cup", so the door's words keep one line over its flame; screens.css.)
     const label = d === 'events' ? h('span', 'gs9-door-l', h('span', 'gs9-door-long', DOOR_LABEL[d]), h('span', 'gs9-door-short', 'Daily & Cup')) : h('span', 'gs9-door-l', DOOR_LABEL[d]);
-    const words = h('span', 'gs9-door-t', label, status ? h('span', `gs9-door-s${d === 'events' ? ' is-flame' : ''}`, status) : null);
+    // (The gifts drawn as the results and the garage draw them: the glyph, the figure and its word, in marigold. Round
+    // 9, the polish lane: in the door's grey they were a third look for one currency, ART.md 1.)
+    const said = d === 'garage' ? h('span', 'gs9-door-s is-gift', ico9('gift'), h('span', 'gs9-num', `${fmt(m.wallet)}${NBSP}gifts`)) : status ? h('span', `gs9-door-s${d === 'events' ? ' is-flame' : ''}`, status) : null;
+    const words = h('span', 'gs9-door-t', label, said);
     const b = b9(this.ctx, 'secondary', [words, intro ? h('span', 'gs9-tag is-gift gs9-new', 'New') : null], { icon: DOOR_ICON[d], fk: `door-${d}`, cls: 'gs9-door', aria: intro ? `${aria}. Something new` : aria, onClick: () => this.openDoor(d, b) });
     if (d === 'events' || d === 'progress') b.setAttribute('aria-haspopup', 'dialog');
     return b;
@@ -579,11 +583,18 @@ export function titleRide(m: TitleModel): { verb: string; why: string; aria: str
 
 /** The one quiet line: the nearest thing you are working toward, in words, and never what Ride already says. A
  *  locked chip just pressed (what opens it); the next mountain by ghosts; Lanternfall by The Twelve; the next page of
- *  the Almanac, named as a prize. */
+ *  the Almanac, named as a prize. Nine words at most (ART.md 10): each says the goal and how far, in the same words
+ *  whichever way it comes ("3 more ghosts open The Old Run"). */
 export function titleAim(m: TitleModel, locked: MountainCard | null = null): { icon: IconName; text: string; tone: 'ghost' | 'plain' } {
   if (m.firstVisit) return { icon: 'ghost', text: 'Pass ghosts to unlock new mountains', tone: 'ghost' };
   const c = locked;
   if (c) {
+    // (Round 9, the polish lane: "The Old Run: pass 3 more ghosts to open it" was ten words; the line's own sentence
+    // for that mountain is six.)
+    const g = /^Pass (\d+) more ghosts? to unlock$/.exec(c.unlockText);
+    const tw = /^Beat (\d+) more of The Twelve to unlock$/.exec(c.unlockText);
+    if (g) return { icon: 'lock', text: `${g[1]} more ${g[1] === '1' ? 'ghost opens' : 'ghosts open'} ${c.name}`, tone: 'plain' };
+    if (tw) return { icon: 'lock', text: `Beat ${tw[1]} more of The Twelve to open ${c.name}`, tone: 'plain' };
     const what = c.unlockText.replace(/ to unlock$/, '').replace(/^Pass/, 'pass').replace(/^Beat/, 'beat');
     return { icon: 'lock', text: `${c.name}: ${what} to open it`, tone: 'plain' };
   }
@@ -596,8 +607,10 @@ export function titleAim(m: TitleModel, locked: MountainCard | null = null): { i
   if (lf) return { icon: 'trophy', text: `Beat ${/(\d+)/.exec(lf.unlockText)?.[1] ?? 'more'} more of The Twelve to open ${lf.name}`, tone: 'plain' };
   const bar = m.spine?.bar;
   const next = bar?.next?.[0];
-  // (The XP and the rank first, the prize after: "900 XP to Rider Rank 26: the Crane's Memory charm".)
-  if (bar && next) return { icon: 'book', text: `${fmt(bar.need)}${NBSP}XP to Rider Rank ${bar.page + 1}: ${prizeLower(next)}`, tone: 'plain' };
+  // (How far, then the prize: "1,281 XP to the Crane's Memory charm". Round 9, the polish lane: with "Rider Rank 26:"
+  // between them the line was ten words against ART.md's nine; the prize and the XP are what it is for, and the
+  // Progress door's room names the rank whole.)
+  if (bar && next) return { icon: 'book', text: `${fmt(bar.need)}${NBSP}XP to ${prizeLower(next)}`, tone: 'plain' };
   return { icon: 'book', text: 'Every page of the Almanac turned', tone: 'plain' };
 }
 
@@ -620,6 +633,16 @@ function mirrorWay(c: MountainCard): HTMLElement | null {
 }
 
 const MEDAL = ['', 'Bronze', 'Silver', 'Gold'] as const;
+
+/** The light an hour's swatch carries, by the hour's name (palette.ts ALT_HOURS): the sun high, the sun low, the moon,
+ *  a glow under the range, a lamp. */
+export function hourLight(name: string): 'sun' | 'low' | 'moon' | 'glow' | 'lamp' {
+  if (/night|moon/i.test(name)) return 'moon';
+  if (/dusk|evening|sunset/i.test(name)) return 'low';
+  if (/first light|dawn/i.test(name)) return 'glow';
+  if (/lamp/i.test(name)) return 'lamp';
+  return 'sun';
+}
 
 /** What a row of medals says to a reader: "Stage 1 gold, whole run bronze", only what you hold. */
 export function medalWords(m: MedalSet): string {

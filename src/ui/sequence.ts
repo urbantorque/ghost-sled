@@ -358,7 +358,6 @@ export class Story {
     offers: HTMLElement[],
   ) {
     const mo = resultsMoment(m);
-    const phone = typeof window !== 'undefined' && window.matchMedia?.('(max-aspect-ratio: 1/1)').matches === true;
     this.el = h('section', `gs9-story ${reduced() ? 'is-done' : 'is-playing'}`);
 
     // Beat one: how you did, at the top of the logo's side, over the scene.
@@ -386,9 +385,10 @@ export class Story {
       factEl.append(h('span', 'gs9-mo-fact-t', f.before, who, f.after));
       factEl.dataset.beat = '2';
       factEl.setAttribute('aria-hidden', 'true');
-      // (On a phone the fact leads the column at the bottom: the top keeps to the figure and its word, clear of the
-      // rider's head. On a desk it stays inside the headline's rule, clear of the rider.)
-      if (!phone) moEl.append(factEl);
+      // (Beside the figure, inside the headline's rule, clear of the rider: on a desk and on a phone alike. Round 9, the
+      // polish lane: on a phone it led the column at the foot of the screen, the rider between it and its headline.)
+      moEl.append(factEl);
+      moEl.classList.add('has-fact');
     }
     // What a reader hears for beat one: the same words, once.
     const said = sr(`${mo.figure}${mo.of ? ` ${mo.of}` : ''}. ${mo.word}${mo.time ? `, ${mo.time}` : ''}.${mo.fact ? ` ${factText(mo.fact)}.` : ''}`);
@@ -428,10 +428,10 @@ export class Story {
       this.fillEl.style.transform = `scaleX(${(reduced() ? barShare(a) : this.segs.length > 0 ? this.segs[0].from : barShare(a)).toFixed(4)})`;
       this.pageEl = h('span', 'gs9-num', String(reduced() || this.segs.length === 0 ? a.page : this.segs[0].page));
       const label = rankInKicker ? null : h('span', 'gs9-rank-l', 'Rider Rank ', this.pageEl);
-      const gifts = all > 0 ? h('span', 'gs9-gifts', ico9('gift'), h('span', 'gs9-num', `+${fmt(all)}`), `${NBSP}gifts`) : null;
+      const gifts = all > 0 ? h('span', 'gs9-gifts', ico9('gift'), h('span', 'gs9-num', `+${fmt(all)}${NBSP}gifts`)) : null;
       const xp = sp.ticks.reduce((s, t) => s + t.xp, 0);
       got.append(h('div', `gs9-rank${label ? '' : ' is-bare'}`, label, bar, gifts), sr(`Rider Rank ${a.page}, ${fmt(xp)} XP this run.${all > 0 ? ` ${fmt(all)} gifts.` : ''}`));
-    } else if (all > 0) got.append(h('div', 'gs9-rank is-bare', h('span', 'gs9-gifts', ico9('gift'), h('span', 'gs9-num', `+${fmt(all)}`), `${NBSP}gifts`)));
+    } else if (all > 0) got.append(h('div', 'gs9-rank is-bare', h('span', 'gs9-gifts', ico9('gift'), h('span', 'gs9-num', `+${fmt(all)}${NBSP}gifts`))));
     const showCard = got.childElementCount > 0;
 
     // Beat three: the one button with its reason, then Home, Photo and Details.
@@ -450,13 +450,13 @@ export class Story {
       'div',
       'gs9-foot',
       b9(ctx, 'quiet', 'Home', { icon: 'back', fk: 'home', sound: 'back', onClick: () => this.hooks.home() }),
-      photo ? b9(ctx, 'quiet', 'Photo', { icon: 'camera', fk: 'photo', onClick: () => photo() }) : null,
+      // (Photo is secondary, as on the pause card; Home alone is quiet on both. Round 9, the polish lane.)
+      photo ? b9(ctx, 'secondary', 'Photo', { icon: 'camera', fk: 'photo', onClick: () => photo() }) : null,
       send ? b9(ctx, 'secondary', 'Send It Back', { icon: 'link', fk: 'send', aria: 'Send your run back to your friend', onClick: () => send() }) : null,
       ...offers,
       b9(ctx, 'secondary', 'Details', { icon: 'chevR', fk: 'details', aria: 'Details: the race, your run and what it paid', onClick: () => this.hooks.details() }),
     );
     foot.dataset.beat = '5';
-    if (phone && factEl) col.append(factEl);
     if (showCard) col.append(got);
     col.append(go, foot);
     this.el.append(moEl, said, col);
