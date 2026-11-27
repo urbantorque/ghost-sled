@@ -143,7 +143,7 @@ function eightTitle(): Partial<TitleModel> {
     open(ember, { unlockGhosts: 12, bestTime: 121.9 }),
     { ...sakura, unlockGhosts: 24, unlockText: 'Pass 6 more ghosts to unlock' },
     { ...lantern, unlockGhosts: 48, finale: true },
-    { id: 'gablefall', name: 'Gablefall', tagline: 'A snowed-in hill town, ridden on its roofs', biome: 'alpine', locked: false, unlockText: '', best: 0, bestTime: 96.4, unlockGhosts: 8 },
+    { id: 'gablefall', name: 'Gablefall', tagline: 'A snowed-in town: ride its roofs down', biome: 'gablefall', locked: false, unlockText: '', best: 0, bestTime: 96.4, unlockGhosts: 8 },
     { id: 'oldrun', name: 'The Old Run', tagline: 'An old banked ice track through the forest', biome: 'glacier', locked: false, unlockText: '', best: 0, unlockGhosts: 18 },
     { id: 'gullhaven', name: 'Gullhaven', tagline: 'From the beacon to the harbour, on the wind', biome: 'blossom', locked: true, unlockText: 'Pass 14 more ghosts to unlock', best: 0, unlockGhosts: 32 },
   ];

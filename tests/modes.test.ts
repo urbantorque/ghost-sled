@@ -14,19 +14,21 @@ import { rideNight } from '../scripts/playtest/r8night';
 // sim untouched, the words that would read backwards built turned over to meet the flip).
 
 describe('the Long Night', () => {
-  it('opens only with legs to ride, never more than its ten', () => {
+  // (Round 9: sixteen legs once all eight mountains are registered: DECISIONS 394, answer 6.)
+  it('opens only with legs to ride, never more than its sixteen', () => {
     expect(startNight(1, 0)).toBeNull();
     expect(startNight(1, 3)).toMatchObject({ leg: 0, legs: 3, carry: null });
     expect(startNight(1, 99)?.legs).toBe(LEGS.length);
   });
 
-  it('rides whole mountains in order, the second five mirrored, each leg under its own key', () => {
-    const n = startNight(7, 10)!;
+  it('rides whole mountains in order, the second eight mirrored, each leg under its own key', () => {
+    const n = startNight(7, 16)!;
     const first = nightLeg(n);
-    expect(first).toMatchObject({ mountain: 'pinecrest', mirror: false, key: 'night:pinecrest', n: 1, of: 10, carry: undefined });
-    const sixth = nightLeg({ ...n, leg: 5 });
-    expect(sixth).toMatchObject({ mountain: 'pinecrest', mirror: true, key: `night:${mirrorKey('pinecrest')}`, n: 6 });
-    expect(isNightKey(sixth.key)).toBe(true);
+    expect(first).toMatchObject({ mountain: 'pinecrest', mirror: false, key: 'night:pinecrest', n: 1, of: 16, carry: undefined });
+    expect(nightLeg({ ...n, leg: 2 })).toMatchObject({ mountain: 'gablefall', mirror: false, n: 3 });
+    const ninth = nightLeg({ ...n, leg: 8 });
+    expect(ninth).toMatchObject({ mountain: 'pinecrest', mirror: true, key: `night:${mirrorKey('pinecrest')}`, n: 9 });
+    expect(isNightKey(ninth.key)).toBe(true);
     expect(nightKey('ember', false)).toBe('night:ember');
   });
 
@@ -70,7 +72,7 @@ describe('the Long Night', () => {
   it('says between legs where the next one is, how the night deepens and what rides in', () => {
     const two = nightOn(startNight(5, 10)!, { lantern: 150, getUps: 3, charms: [0, 1] })!;
     const v = nightBeat(two);
-    expect(v).toMatchObject({ n: 2, of: 10, mountain: 'Frostfang', mirror: false, event: '', lantern: 1.5, getUps: 3 });
+    expect(v).toMatchObject({ n: 2, of: 16, mountain: 'Frostfang', mirror: false, event: '', lantern: 1.5, getUps: 3 });
     expect(v.mood.length).toBeGreaterThan(0);
     expect(v.charms).toHaveLength(2);
   });
