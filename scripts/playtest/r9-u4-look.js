@@ -47,9 +47,10 @@ async (page) => {
     }
     // (`results`: a run ridden to its line, pinned on the safe line at 30 m/s as r9-truth.js does, then its results.)
     const want = s.run || s.results ? 'run' : 'title';
-    const where = `${s.stage}${s.run ? ':run' : s.results ? ':results' : ''}`;
+    // (Round 9, the feelui lane: `q` adds to the query, a mountain picked by `&m=<i>` say.)
+    const where = `${s.stage}${s.run ? ':run' : s.results ? ':results' : ''}${s.q || ''}`;
     if (at !== where || s.fresh) {
-      await page.goto(`${c.base}?debug&tier=${c.tier}&save=${s.stage}${s.run || s.results ? '&autoride=1' : ''}`, { waitUntil: 'domcontentloaded', timeout: 90000 });
+      await page.goto(`${c.base}?debug&tier=${c.tier}&save=${s.stage}${s.run || s.results ? '&autoride=1' : ''}${s.q || ''}`, { waitUntil: 'domcontentloaded', timeout: 90000 });
       await phase(want);
       await page.waitForTimeout(2500);
       if (s.results) {
