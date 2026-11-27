@@ -38,6 +38,9 @@ export interface TitleShot {
   light: number | null;
   desk: TitleLens;
   phone: TitleLens;
+  /** Round 9: where in the pool (weakest first, as fractions of its length) the reel draws its three riders, where the
+   *  mid-pool riders (REEL_FIELD) do not ride the line the shot is composed for. */
+  field?: readonly number[];
 }
 
 const DESK: TitleLens = { r: 4.7, up: 1.0, sweep: null, drift: 0.2, ahead: 5, lift: 1.25, crane: 1, hero: [0.14, 0.26] };
@@ -124,19 +127,45 @@ export const TITLE_SHOTS: Readonly<Record<string, TitleShot>> = {
   // Round 9, Gablefall (notes/r9-gablefall-world.md): a rider on the snowed-in roofs high over the street, the roofs
   // stepping down toward the river and the viaduct across the valley in the snow. The reel rides the Water Stairs where
   // the cloud breaks over the river; the lens high and swung to the hero's right, over the street, so the roof run, the
-  // street's canyon below it and the far side of the valley lie past the hero's shoulder.
+  // street's canyon below it and the far side of the valley lie past the hero's shoulder. (Round 9, the wiring lane: of
+  // the mid-pool riders at 0.6, 0.72 and 0.84 of the pool as the app holds it, slow riders and all, two rode the street
+  // there, 98, 0 and 0% of the stretch on the roofs, so a hero in the street rode between the fronts with one filling a
+  // third of the frame; the field is drawn where every rider rides the roofs through it, 97 to 98%, among neighbours who
+  // do too: scripts/r9/wiring-reel.ts, held by tests/wiring.test.ts. And the stretch starts 80 m on, past the stage's
+  // market square at the street's level: from 2,040 m the hero opened each loop on the square, 13% of the reel, and is
+  // on the roofs 98% of it from 2,120 to 2,480, its first frame included.)
   gablefall: {
-    from: 2040,
-    to: 2460,
+    from: 2120,
+    to: 2480,
     light: 2300,
     desk: { r: 6.4, up: 2.8, sweep: 0.4, drift: 0.12, ahead: 40, lift: 0.3, crane: 0.2, hero: [0.08, 0.2] },
     phone: { r: 7.4, up: 2.4, sweep: 0.16, drift: 0.05, ahead: 30, lift: 0.4, crane: 0, hero: [-0.06, -0.06] },
+    field: [0.6, 0.63, 0.66],
   },
 };
 
 /** The shot for a mountain id (a Daily, a Cup and anything unknown get the plain reel). */
 export function titleShot(id: string): TitleShot {
   return TITLE_SHOTS[id] ?? PLAIN_SHOT;
+}
+
+/** Where in its pool (weakest first) the title reel draws its three riders: mid-pool riders, stylish but clean, so the
+ *  hero reel is carving and flying, not tumbling. A shot's own `field` takes its place. */
+export const REEL_FIELD: readonly number[] = [0.6, 0.72, 0.84];
+
+/**
+ * The pool indices of the title reel's riders on a mountain, from its pool's names as the app holds it (app.ts poolFor,
+ * slow riders and all, weakest first): the shot's field, else REEL_FIELD. A rider still withheld from every field (The
+ * Hollow King before his duel, twelve.ts withheldRiders) gives his place to the next rider up the pool. No field meets
+ * him in today's pools, so every reel is as it was; the rule keeps it so when a pool is generated again.
+ */
+export function reelField(names: readonly string[], id: string, withheld: readonly string[] = []): number[] {
+  const n = names.length;
+  return (TITLE_SHOTS[id]?.field ?? REEL_FIELD).map((f) => {
+    let i = Math.floor(n * f);
+    for (let k = 0; k < n && withheld.includes(names[i]); k++) i = (i + 1) % n;
+    return i;
+  });
 }
 
 /**
