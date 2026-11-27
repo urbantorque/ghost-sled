@@ -13,8 +13,10 @@ const OUT = join(ROOT, 'dist', 'ghost-sled.zip');
 // round 7): a build of at most 250 MB and 1,500 files; an initial download (everything fetched up to
 // the first start of gameplay) of at most 50 MB, and of at most 20 MB to be eligible for the mobile
 // homepage. Ours are tighter on the whole build and take the mobile figure for the first download.
+// (Round 9, DECISIONS 392 and the owner's word in 393: the whole build's cap rises from 80 to 110 MB for the three new
+// mountains' scores, each loaded only when its mountain is picked; the first download's 20 MB stands.)
 const MB = 1024 * 1024;
-const MAX_BUILD = 80 * MB;
+const MAX_BUILD = 110 * MB;
 const MAX_FILES = 1500;
 const MAX_INITIAL = 20 * MB;
 
