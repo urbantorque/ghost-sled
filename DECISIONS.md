@@ -5058,15 +5058,18 @@ straight through.
       takes the eight mountains, the new hours and the release's sizes. Nothing is merged to `main`, pushed or
       published: that waits for the owner's word.
 
-408. **Round 9 merged and pushed on the owner's word** ("Push and merge into the main and finish this off", 28
+408. **Round 9 merged, pushed and published on the owner's word** ("Push and merge into the main and finish this off", 28
     November).
     - *Merged:* `main` fast-forwarded to `round-9` (53c0304), as rounds 7 and 8 were, and pushed with the `round-9`
       branch (`main` 67439e6 to 53c0304 on origin). The release check on `main` (`npm run release`) green: 119 test files
       and 2,162 tests, tsc and the build, the package 94.69 MB of 110 in 59 files, the first download 11.72 MB of 20.
-    - *Not yet published:* publishing the release build to `gh-pages` (the live game at
-      https://urbantorque.github.io/ghost-sled/, still round 8's stretch at e0cc335) was held for the owner's explicit
-      word, as publishing the public site is a step past merging and pushing. The build is staged in a `gh-pages`
-      worktree, not committed.
+    - *Published on the owner's word* ("Yes, publish it", asked for separately: publishing the public site is a step
+      past merging and pushing): the release build to `gh-pages` (e0cc335 to 780c9f4), live at
+      https://urbantorque.github.io/ghost-sled/ 45 s after the push. Checked live in headless Chrome on a desk and a phone
+      (`shots/r9/main/live/`): a first visit's title and a ride, and Gablefall loaded on demand and ridden 212 to 217 m
+      with its Roof Run card up; the console and the network clean on both. Ride came up 18 to 22 s after a fresh
+      headless browser opened the page: that browser's first-load stall and the CrazyGames SDK timing out off the
+      portal (up to about 5 s, by design), as round 8 found.
     - *Left for the owner:* the release week for the Trials' switch to eight (`EIGHT_FROM`, a placeholder at 2028-W01
       until named), the report's open questions and fifteen-minute route (`notes/r9-report.md`). Nobody has played round 9
       by hand.
