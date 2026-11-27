@@ -209,12 +209,13 @@
   box-shadow: inset 0 0 0 1.5px var(--edge-secondary), var(--shadow);
 }
 
-/* Quiet: a thin ink wash and its words, a step under secondary, with no edge and no lift. Home, Back, Close. Over the
-   scene the wash (as dark as before: thinner, its words fell to about 2.4:1 on white snow) and a soft ink halo keep
-   the words readable. */
+/* Quiet: a thin ink wash and its words, a step under secondary: a faint hairline so it still reads as a pill on a dark
+   scene (with none it read as a loose label), no off-white ring and no lift. Home, Back, Close. Over the scene the wash
+   (as dark as before: thinner, its words fell to about 2.4:1 on white snow) and a soft ink halo keep the words
+   readable. */
 .gs9-b-quiet {
   background: rgba(18, 25, 51, 0.55);
-  box-shadow: none;
+  box-shadow: inset 0 0 0 1px var(--hair);
   color: rgba(245, 243, 255, 0.86);
   text-shadow: 0 0 6px rgba(18, 25, 51, 0.85);
 }

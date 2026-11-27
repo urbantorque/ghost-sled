@@ -456,9 +456,18 @@
   color: var(--c-best);
 }
 
-/* A gift figure in Details, in marigold with its word (ART.md 1). */
+/* A gift figure in Details, as the results draw it: the glyph, the figure and its word, in marigold (ART.md 1). */
 .gs9-gift-n {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
   color: var(--c-gift);
+  vertical-align: bottom;
+}
+
+.gs9-gift-n .gs9-i {
+  width: 1.05em;
+  height: 1.05em;
 }
 
 .gs9-row.is-total {

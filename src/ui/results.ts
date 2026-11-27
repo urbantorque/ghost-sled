@@ -451,7 +451,7 @@ function detailsBody(body: HTMLElement, m: ResultsModel, ctx: Ctx, hd: UIHandler
     paid.append(row(h('b', '', `Rider Rank ${sp.after.page}`), `${fmt(total)}${NBSP}XP this run`, 'is-total'));
   }
   // (The row's word is "Gifts"; its figures in marigold, as every gift figure is.)
-  paid.append(row('Gifts', h('span', 'gs9-gift-n', `${fmt(m.giftsEarned)} this run${m.doubled ? ', doubled' : ''}, ${fmt(m.wallet)} to spend`)));
+  paid.append(row('Gifts', h('span', 'gs9-gift-n', ico9('gift'), h('span', 'gs9-num', `${fmt(m.giftsEarned)} this run${m.doubled ? ', doubled' : ''}, ${fmt(m.wallet)} to spend`))));
   const lines: Array<Node> = [];
   const opened = [...(m.unlockedMountains ?? []).map((u) => u.name), ...(sp?.opened ?? []).filter((r) => r.kind !== 'open').map((r) => prize(r))];
   if (opened.length) lines.push(notP(`Opened: ${opened.join(', ')}.`));
@@ -514,6 +514,6 @@ const notP = (...t: Array<string | Node>): HTMLParagraphElement => {
   return p;
 };
 
-/** A gift figure with its word, in marigold wherever it stands (ART.md 1; round 9, the polish lane): "77 gifts",
- *  "507 gifts to spend". */
-const giftsN = (n: number, tail = ''): HTMLSpanElement => h('span', 'gs9-gift-n gs9-num', `${fmt(n)}${NBSP}gifts${tail ? ` ${tail}` : ''}`);
+/** A gift figure with its word and the gift's glyph, in marigold wherever it stands, as the results, the Garage door
+ *  and the garage draw it (ART.md 1; round 9, the polish lane): "77 gifts", "600 gifts". */
+const giftsN = (n: number, tail = ''): HTMLSpanElement => h('span', 'gs9-gift-n', ico9('gift'), h('span', 'gs9-num', `${fmt(n)}${NBSP}gifts${tail ? ` ${tail}` : ''}`));

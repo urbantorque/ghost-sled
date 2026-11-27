@@ -466,11 +466,11 @@ export class Title {
     if (d === 'events') aria += `. Inside: your flame, today's Daily and contracts, this week's Cup and its league${m.trial ? ', the Trial' : ''}`;
     else if (d === 'progress') aria += `. Inside: the Almanac, The Twelve${sp?.longNight ? ', the Long Night' : ''}${sp?.album ? ', the Spirit Album' : ''}, medals and mastery stars, and missions`;
     const intro = this.introFor(d, m);
-    // (A phone's door is half the width: "Daily & Cup" there, so it keeps one line over its flame.)
+    // (A phone under 340 px says "Daily & Cup", so the door's words keep one line over its flame; screens.css.)
     const label = d === 'events' ? h('span', 'gs9-door-l', h('span', 'gs9-door-long', DOOR_LABEL[d]), h('span', 'gs9-door-short', 'Daily & Cup')) : h('span', 'gs9-door-l', DOOR_LABEL[d]);
     // (The gifts drawn as the results and the garage draw them: the glyph, the figure and its word, in marigold. Round
     // 9, the polish lane: in the door's grey they were a third look for one currency, ART.md 1.)
-    const said = d === 'garage' ? h('span', 'gs9-door-s is-gift', ico9('gift'), h('span', 'gs9-num', fmt(m.wallet)), `${NBSP}gifts`) : status ? h('span', `gs9-door-s${d === 'events' ? ' is-flame' : ''}`, status) : null;
+    const said = d === 'garage' ? h('span', 'gs9-door-s is-gift', ico9('gift'), h('span', 'gs9-num', `${fmt(m.wallet)}${NBSP}gifts`)) : status ? h('span', `gs9-door-s${d === 'events' ? ' is-flame' : ''}`, status) : null;
     const words = h('span', 'gs9-door-t', label, said);
     const b = b9(this.ctx, 'secondary', [words, intro ? h('span', 'gs9-tag is-gift gs9-new', 'New') : null], { icon: DOOR_ICON[d], fk: `door-${d}`, cls: 'gs9-door', aria: intro ? `${aria}. Something new` : aria, onClick: () => this.openDoor(d, b) });
     if (d === 'events' || d === 'progress') b.setAttribute('aria-haspopup', 'dialog');

@@ -7,7 +7,7 @@ import { STAR_GIFTS } from '../game/mastery';
 import { riderBust } from './art';
 import { barShare } from './almanac';
 import { h, sr, type Ctx } from './dom';
-import { fmt, progFigures } from './fmt';
+import { fmt, NBSP, progFigures } from './fmt';
 import { b9, ico9, medalDisc, openSheet, ordinal9, sheetFrame } from './kit9';
 import { medalDots, medalWords, pickerOrder } from './title';
 import { curly, lowerFirst, prizesLine } from './words';
@@ -49,6 +49,10 @@ export interface Room {
 
 const TITLE: Record<'events' | 'progress', string> = { events: 'Daily and Cup', progress: 'Progress' };
 const MEDAL = ['', 'Bronze', 'Silver', 'Gold'] as const;
+
+/** A medal's disc and its word as one unit that never breaks between them ("● Silver"; round 9, the polish lane: the
+ *  family critic found the disc ending one line and "Silver this week." starting the next). */
+const medalWord = (medal: number): HTMLElement => h('span', 'gs9-nw', medalDisc(medal), `${NBSP}${MEDAL[medal]}`);
 
 export function openRoom(door: TitleDoor, m: TitleModel, o: RoomOpts): Room {
   const d = door === 'progress' ? 'progress' : 'events';
@@ -154,7 +158,7 @@ function eventsRoom(f: Fill): void {
   }
   // Today's Daily.
   const dm = m.daily;
-  const dailyLine = dm.medal ? h('span', '', medalDisc(dm.medal), ` ${MEDAL[dm.medal]} today${dm.time && dm.time > 0 ? `, best ${clock(dm.time)}` : ''}.`) : 'A new mountain and a new field every day.';
+  const dailyLine = dm.medal ? h('span', '', medalWord(dm.medal), ` today${dm.time && dm.time > 0 ? `, best ${clock(dm.time)}` : ''}.`) : 'A new mountain and a new field every day.';
   body.append(block('Today’s Daily', dailyLine, choose(f, 'daily')));
   // Today's contracts and the form contract.
   if (sp && sp.contracts.length > 0) {
@@ -170,7 +174,7 @@ function eventsRoom(f: Fill): void {
   // This week's Cup and its league.
   const cup = m.cup ?? null;
   if (cup) {
-    const line = h('span', '', `${cup.mood}${cup.event ? `, with ${aOr(cup.event)}` : ''}.`, cup.medal ? h('span', '', ' ', medalDisc(cup.medal), ` ${MEDAL[cup.medal]} this week${cup.best > 0 ? `, best ${clock(cup.best)}` : ''}.`) : null);
+    const line = h('span', '', `${cup.mood}${cup.event ? `, with ${aOr(cup.event)}` : ''}.`, cup.medal ? h('span', '', ' ', medalWord(cup.medal), ` this week${cup.best > 0 ? `, best ${clock(cup.best)}` : ''}.`) : null);
     const lg = sp?.league ?? null;
     let league: HTMLElement;
     if (lg && lg.place) {
@@ -182,7 +186,7 @@ function eventsRoom(f: Fill): void {
   // The week's Trial, once Trials are open.
   const t = m.trial ?? null;
   if (t) {
-    const line = h('span', '', `${t.name}. ${t.rule}.`, t.medal ? h('span', '', ' ', medalDisc(t.medal), ` ${MEDAL[t.medal]} held${t.best ? `, best ${t.best}` : ''}.`) : null);
+    const line = h('span', '', `${t.name}. ${t.rule}.`, t.medal ? h('span', '', ' ', medalWord(t.medal), ` held${t.best ? `, best ${t.best}` : ''}.`) : null);
     const goals = t.targets ? h('p', 'gs9-block-p', `Bronze ${t.targets[0]}, silver ${t.targets[1]}, gold ${t.targets[2]}${t.unit ? ` ${t.unit}` : ''}. ${t.left}.`) : null;
     body.append(sep(), block('This Week’s Trial', line, choose(f, 'trial'), goals));
   }

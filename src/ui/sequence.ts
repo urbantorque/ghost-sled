@@ -428,10 +428,10 @@ export class Story {
       this.fillEl.style.transform = `scaleX(${(reduced() ? barShare(a) : this.segs.length > 0 ? this.segs[0].from : barShare(a)).toFixed(4)})`;
       this.pageEl = h('span', 'gs9-num', String(reduced() || this.segs.length === 0 ? a.page : this.segs[0].page));
       const label = rankInKicker ? null : h('span', 'gs9-rank-l', 'Rider Rank ', this.pageEl);
-      const gifts = all > 0 ? h('span', 'gs9-gifts', ico9('gift'), h('span', 'gs9-num', `+${fmt(all)}`), `${NBSP}gifts`) : null;
+      const gifts = all > 0 ? h('span', 'gs9-gifts', ico9('gift'), h('span', 'gs9-num', `+${fmt(all)}${NBSP}gifts`)) : null;
       const xp = sp.ticks.reduce((s, t) => s + t.xp, 0);
       got.append(h('div', `gs9-rank${label ? '' : ' is-bare'}`, label, bar, gifts), sr(`Rider Rank ${a.page}, ${fmt(xp)} XP this run.${all > 0 ? ` ${fmt(all)} gifts.` : ''}`));
-    } else if (all > 0) got.append(h('div', 'gs9-rank is-bare', h('span', 'gs9-gifts', ico9('gift'), h('span', 'gs9-num', `+${fmt(all)}`), `${NBSP}gifts`)));
+    } else if (all > 0) got.append(h('div', 'gs9-rank is-bare', h('span', 'gs9-gifts', ico9('gift'), h('span', 'gs9-num', `+${fmt(all)}${NBSP}gifts`))));
     const showCard = got.childElementCount > 0;
 
     // Beat three: the one button with its reason, then Home, Photo and Details.
@@ -450,7 +450,8 @@ export class Story {
       'div',
       'gs9-foot',
       b9(ctx, 'quiet', 'Home', { icon: 'back', fk: 'home', sound: 'back', onClick: () => this.hooks.home() }),
-      photo ? b9(ctx, 'quiet', 'Photo', { icon: 'camera', fk: 'photo', onClick: () => photo() }) : null,
+      // (Photo is secondary, as on the pause card; Home alone is quiet on both. Round 9, the polish lane.)
+      photo ? b9(ctx, 'secondary', 'Photo', { icon: 'camera', fk: 'photo', onClick: () => photo() }) : null,
       send ? b9(ctx, 'secondary', 'Send It Back', { icon: 'link', fk: 'send', aria: 'Send your run back to your friend', onClick: () => send() }) : null,
       ...offers,
       b9(ctx, 'secondary', 'Details', { icon: 'chevR', fk: 'details', aria: 'Details: the race, your run and what it paid', onClick: () => this.hooks.details() }),

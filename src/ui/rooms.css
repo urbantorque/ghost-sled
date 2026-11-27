@@ -23,6 +23,11 @@
   font-weight: var(--fw-label);
 }
 
+/* (A medal's disc and its word never part across a line.) */
+.gs9-nw {
+  white-space: nowrap;
+}
+
 .gs9-stack {
   display: grid;
   gap: var(--sp-2);

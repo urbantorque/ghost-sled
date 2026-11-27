@@ -266,6 +266,13 @@
 .gs9-sheet > .gs9-sheet-body {
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 18px), transparent 100%);
   mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 18px), transparent 100%);
+  /* (The first line starts under the fade, so before any scroll it reads whole, not dimmed as if disabled: the family
+     critic read "Your Flame", "Rider Rank 25" and "Sound" as greyed. The head gives the same space back.) */
+  padding-top: 14px;
+}
+
+.gs9-sheet > .gs9-sheet-head:has(+ .gs9-sheet-body) {
+  padding-bottom: 0;
 }
 
 /* ---- a sheet over the title: the title's own column steps out (its logo, picker, Ride, quiet line and doors), so only
@@ -524,6 +531,13 @@
 
 .gs9-pause {
   width: min(440px, 38vw);
+}
+
+/* (The card's ink is whole: at the sheets' 94% the run's callouts and chips under it, "Slipstream", a ghost's "1 m",
+   showed through behind the missions. Round 9, the polish lane, from the family critic; ART.md 10: no sheet shows
+   another's words through its ink.) */
+.gs9-sheet.gs9-pause {
+  background: var(--c-ink);
 }
 
 .gs9-pause .gs9-sheet-head {

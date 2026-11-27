@@ -91,8 +91,8 @@ const PAGE_GLYPH: Readonly<Record<string, IconName>> = { tricks: 'feather', twel
 const GROUP_GLYPH: Readonly<Record<string, IconName>> = { variant: 'star', legend: 'ghost', mood: 'snowflake', rival: 'trophy', mirror: 'flag', trick: 'feather', duel: 'rider', charm: 'star', synergy: 'bolt', night: 'lantern' };
 
 /** A page's row wears one of its stickers (round 9, the polish lane: a critic asked the contents to show a sticker on
- *  each row): one found, as the page draws it (its frame where one was kept, else the page's sky), with its kind's glyph
- *  in the corner; with none found yet, the page's sky dimmed under the glyph of one still to find. */
+ *  each row): a frame from its run where one was kept, its kind's glyph in the corner as on the page; else the page's
+ *  sky (or its glyph); with none found yet, dimmed. */
 function pageArt(sec: AlbumModel['sections'][number]): HTMLElement {
   const id = sec.id;
   const biome = mountainBiome(id);
@@ -110,8 +110,9 @@ function pageArt(sec: AlbumModel['sections'][number]): HTMLElement {
     art.append(img);
   } else if (biome) art.innerHTML = biomeArt(biome);
   else art.append(ico9(PAGE_GLYPH[id] ?? 'sticker'));
-  const kind = (s ?? sec.stickers[0])?.group;
-  if (kind && (biome || s?.img)) art.append(h('span', 'gs9-bk-sg', ico9(GROUP_GLYPH[kind] ?? 'sticker')));
+  // (The kind's glyph marks a frame as a sticker. Over a painted sky it said the same star on every mountain's row,
+  // the Charms page's own glyph: the family critic read it so, so a sky stays bare.)
+  if (s?.img) art.append(h('span', 'gs9-bk-sg', ico9(GROUP_GLYPH[s.group] ?? 'sticker')));
   return art;
 }
 
