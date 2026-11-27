@@ -119,7 +119,9 @@ describe('round 8 bars', () => {
     const f = clumsyFinishes(M, 6);
     expect(f.of).toBe(6 * M.mountains.MOUNTAINS.length);
     expect(f.finished).toBeGreaterThanOrEqual(Math.ceil((26 * f.of) / 30));
-  });
+    // (Round 9: forty-eight rides with the eighth mountain's, a clumsy run of Gablefall five or six minutes of sim: past
+    // the suite's two minutes under a full run's load.)
+  }, 300_000);
 
   // Before the spine Lanternfall had nothing left at run 50 but two legends. With it every mountain has something
   // unseen in reach: a variant, a rival's record, a star or its mirror, and Lanternfall opens to ride on Almanac page

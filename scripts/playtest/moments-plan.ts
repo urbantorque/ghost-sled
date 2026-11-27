@@ -50,7 +50,7 @@ function holds(c: Course, p: MomentPlay): string {
     case 'chain':
       return `${p.need} roofs in a row${p.row ? ', stomped' : ''}`;
     case 'awnings':
-      return `${p.targets.length} awnings at ${p.targets.map((q) => Math.round(q.z)).join(' ')}, ${p.hw} m either side, need ${p.need}`;
+      return `${p.targets.length} stalls at ${p.targets.map((q) => Math.round(q.z)).join(' ')}, ${p.need} stomps${p.row ? ' in a row' : ''}`;
     case 'washing':
       return `${p.targets.length} lines at ${p.targets.map((q) => Math.round(q.z)).join(' ')}, ${p.targets[0]?.hw} m either side, need ${p.need}`;
     case 'glaze':

@@ -3753,6 +3753,9 @@ export class App {
         return 'Hugged a tree';
       case 'rock':
         return 'Found a rock';
+      // (Round 9, Gablefall.)
+      case 'chimney':
+        return 'Met a chimney';
       case 'forest':
         return 'Lost in the forest';
       case 'landing':

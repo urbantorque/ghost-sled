@@ -1000,8 +1000,25 @@ export class Bot {
       this.offRetarget = now + 90;
     }
     // (Round 9: a lip on the line is sprung whatever else the rider is about: it is the line.)
-    if (this.kitLips && !this.goal && !this.inGates) this.lookForLip(zp, speed, zEnd);
-    if (!this.goal && !this.cooling && !this.inGates && !this.onLine && this.thinks % 2 === 0) this.lookForGoals(zp, speed, zEnd);
+    // (Round 9, Gablefall: a roof's lip is sprung from the roofs, and a rider down in the street bound for a drift's foot
+    // rides for it and nothing else: a light off its line, or a lip it cannot reach yet, cost it the drift.)
+    const street = this.levels && this.atStreet();
+    const bound = street && this.driftBound(zp);
+    if (this.kitLips && !this.goal && !this.inGates && !street) this.lookForLip(zp, speed, zEnd);
+    if (!this.goal && !this.cooling && !this.inGates && !this.onLine && this.thinks % 2 === 0 && !bound) this.lookForGoals(zp, speed, zEnd);
+  }
+
+  /** Round 9, Gablefall: on the street's level (not up on a roof, an alley's floor or a drift). */
+  private atStreet(): boolean {
+    const s = this.sim.s;
+    return s.y - this.course.baseY(s.z) < 1;
+  }
+
+  /** Round 9, Gablefall: in the street with its line leaving the street's middle for a drift's foot ahead. */
+  private driftBound(zp: number): boolean {
+    const z = zp + 30;
+    const off = this.course.lineFor(z, this.rider) - this.course.centerX(z);
+    return off > 2 || off < -2;
   }
 
   /** Round 9: a lip on this rider's line (kit.ts lips) a second or two ahead, crouched into and sprung at its edge, if
@@ -1491,6 +1508,9 @@ export class Bot {
       return cmd;
     }
     if (s.speed < 11 || s.wobble > 0) return cmd;
+    // (Round 9, Gablefall: no tuck and no pop for the fun of it on the way to a drift's foot: a crouch limits the steering,
+    // and letting it go is a pop that flies past the foot.)
+    if (this.levels && this.atStreet() && this.driftBound(zp)) return cmd;
     // A mogul field bucks the sled about; good riders pop and fly over the start of it.
     const mz = this.mogulsAhead(s.z, s.speed * 0.45, s.speed * 1.3);
     if (mz > 0 && this.mogulTry !== mz) {

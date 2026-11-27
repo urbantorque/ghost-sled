@@ -72,6 +72,8 @@ const LEVEL_RISE = 0.3;
  *  the street's level under STREET_LEVEL over it. */
 const CHAIN_UP = 1.5;
 const STREET_LEVEL = 1;
+/** A slope across steeper than LEVEL_WALL is a wall's (Gablefall's fronts and drifts' sides), never ridden ground. */
+const LEVEL_WALL = 2;
 /** (The old name for the count: the get-ups a rider starts with.) */
 export const TUMBLES = GET_UPS;
 /** Before this distance a fall is always free: nobody's first minute ends in a wreck. */
@@ -1763,6 +1765,10 @@ export class Sim {
     const s = this.s;
     const c = this.course;
     c.gradient(s.x, s.z, vec);
+    // (Round 9, Gablefall: its house fronts and drifts' sides are sheer, and a gradient read across one near a landing is
+    // a wall's, which set a sled landing beside it flying off at 50 m/s; where it reads one, the slope across is read the
+    // way the sled is going instead, as the ground step reads it. Nothing it rides slopes across more than 0.35.)
+    if (this.levelOn && (vec.x > LEVEL_WALL || vec.x < -LEVEL_WALL)) vec.x = s.vx > 0.01 || s.vx < -0.01 ? (c.ground(s.x + s.vx * DT, s.z) - gy) / (s.vx * DT) : 0;
     const vyFollow = vec.x * s.vx + vec.z * s.vz;
     const impact = vyFollow - s.vy;
     const airtime = s.airTicks / TICK_RATE;

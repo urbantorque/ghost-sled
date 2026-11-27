@@ -125,7 +125,7 @@ const FOOT_OPEN = 5;
 /** The surfaces (round 9). The street is trodden snow over cobbles, slow; the roofs snow on slate; a drift loose snow;
  *  the river's ice at the finish, where the ice charms bite. */
 export const COBBLES: Surface = { grip: 1, drag: 1.25, ice: false };
-export const ROOF: Surface = { grip: 1, drag: 2, ice: false };
+export const ROOF: Surface = { grip: 1, drag: 1.7, ice: false };
 export const DRIFT: Surface = { grip: 1, drag: 1.1, ice: false };
 export const RIVER_ICE: Surface = { grip: 0.6, drag: 0.45, ice: true };
 
