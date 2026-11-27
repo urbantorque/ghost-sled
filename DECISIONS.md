@@ -4995,3 +4995,36 @@ straight through.
       the outrun's speed blur.
     - *Only scripts and the lane have seen:* every frame staged; the Keeper's last change, the fleet's shorter wakes,
       Gablefall's quay and Evensong's cloud; nobody has ridden any of it by hand. ART.md 15 takes the lane's text.
+
+406. **The screens' feel pass, and the title's words on all eight** (`r9-feelui`, d839183 to d7cdc0f, 9 commits, merged
+    at 735fccc; `notes/r9-feelui.md`, frames under `shots/r9/feelui/`; milestone 4's feel pass).
+    - *The title's words, by the round's own counter* (`r9-truth.js` now presses every mountain's chip on the run-50 and
+      run-100 titles, desk and phone): 404's order taken in full. A new mountain's mirror's way in left the title for its
+      board (a mirror not yet open says nothing on the title, the five's and the new alike), and The Twelve's line is
+      seven words ("Lanternfall: beat 9 more of The Twelve"). 25 of 30 run-50 titles with a mountain picked met 40,
+      against 13 before. Of the five over, three were Gullhaven's ten-word tagline as Ride's reason: the main lane cut it
+      to nine ("A sea cape: pop gully lips, ride the wind"; novice-50, its worst, 40 on a desk and 39 on a phone). The
+      other two, Frostfang at mid-50 and Pinecrest at novice-50, are 41 on a desk only, by the "Space" keycap on Ride,
+      and 40 on a phone: accepted, the keycap being Ride's own control's word where a keyboard is.
+    - *The faults:* the picked chip twice as wide as the others in its row in the picker of eight (a 20-column grid, both
+      rows ending on one edge, every name whole; four equal chips under 390 px, where a fifth would cut "Lanternfall");
+      Sound On on a first visit at the column's foot, clear of the logo; Resume's "P" a key, as Ride's Space is; the
+      results' time italic 900 and a step larger than its word; the garage's phone strip ending on two whole tiles and the
+      rim of a third; Ride's reason wrapping in its pill on a 360 px phone. The title reel loops by a cut: before, after
+      each loop the lens was 240 to 1,426 m from the hero on every mountain, and on the first pick it glided up to 2 km
+      with no rider for up to 1.3 s; now the lens is put on the hero on that frame (`world.reelCut`, and one line in
+      `camera.ts` `snap`, the title's orbit only), and no frame on any of the eight is without one, desk and phone.
+    - *The family test* (a fresh blind critic): "mostly yes"; the title 5 to 7 and the results 5 against 404's 7 to 8, the
+      drops from the staged run's figures, the dev build's mock Watch Ad, the told hour's card and two faults of the lane's
+      fixed after it; none of the new time, the P key or Sound On raised.
+    - *Merged* clean; tsc clean; with the main lane's two edits the full suite 119 files, 2,162 tests.
+    - *The main lane's calls:* the two desk-only titles at 41 stand (above); the told hour's card says "From the Almanac"
+      (it said "New on Rider Rank 16" over the bar's own "Rider Rank 25"), and a run that tells one is the one results
+      first view over 35 (36 words at mid-20), once a save for each of three hours; the two-row picker stands, ART.md 10
+      says so; Sound On at the column's foot on a desk as on a phone; the `camera.ts` line stays; the title's first second
+      before a hero is picked is left as it is.
+    - *Carried to the report, from the critic:* Suki Ember's name colour in Details; "Beaten" capitalised and alone on
+      the phone; the book's glyph used three ways; a mission's "(II)" with no word; a red band in a world's trail.
+    - *Only scripts have seen it:* headless Chrome on Windows at 1280 by 720 and 390 by 844 (375 and 360 for the picker);
+      "Lanternfall" in a fifth of a phone with a pixel to spare on Windows fonts only; the reel's cut by script and
+      contact sheets. ART.md 10 takes the lane's text.

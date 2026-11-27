@@ -511,32 +511,36 @@ Round 7:
   where its reel rides, the colour script's time and where the lens sits. The logo and the controls keep the
   left of a wide screen and the top and bottom of a tall one; the hero is held right of centre (54 to 60%
   of the width) and the mountain's landmark stands in the sky over its shoulder. Moving between mountains is a
-  veil in the new place's own air (which says its feeling), never a swap. (Round 9: no name or feeling line under the
+  veil in the new place's own air (which says its feeling), never a swap. The reel loops by a cut, never a
+  glide: when it starts again, and when it first takes its shot, the lens is put on the hero on that frame, under the
+  title's dip. (Round 9: no name or feeling line under the
   logo; the picked chip names the place.)
 - **The Twelve wear their own colours.** A signature rider's bust is a glass-pale head and shoulders under
   the hat that names them, trimmed in the rider's accent; that accent is also the hairline of their card
   and the colour of their name. It is theirs alone: it is never used for an action.
 - **The title has one job at a time (round 9).** The logo; the mountains as a picker of chips, each its sky and its
-  short name ("Frostfang", "Ember"), the picked one larger with your best on it in words ("Best 1:52.2"; on a phone the
+  short name ("Frostfang", "Ember"), the picked one larger with your best on it in words (in two rows of four, past six
+  mountains, the picked chip twice as wide as the others in its row, both rows ending on one edge; on a phone narrower
+  than 390 px, where a fifth of the width would cut a name, four equal chips a row and the pick its ring) ("Best 1:52.2"; on a phone the
   best stands under Ride, the chips being small, and the strip scrolls so every name is whole); Ride with its reason on
   it; under Ride, once open, the picked mountain's hour (each half with a swatch of its sky and the light it rides by: the sun, a low sun, the moon, a glow under the range,
-  lamps) and its mirror, a switch with its word apart from the hour's pair (a new
-  mountain's mirror opens when its three home riders are beaten to the line; until then, where the toggle would stand,
-  a quiet line with a lock says the way in five words at most, "Mirrored: beat its 3 riders", words and not a control,
-  and its board says it in full under its home riders); one quiet
-  line of what you are working toward (a glyph and at most nine words: the next mountain by ghosts, Lanternfall by The
-  Twelve, else the next Rider Rank named as a prize: how far and the prize, "1,281 XP to the
+  lamps) and its mirror once open, a switch with its word apart from the hour's pair (a mirror not yet open says nothing
+  on the title, the five's and the new mountains' alike; a new mountain's, opened by beating its three home riders to
+  the line, is said on its board under them); one quiet
+  line of what you are working toward (a glyph and at most nine words: the next mountain by ghosts, Lanternfall by The Twelve ("Lanternfall: beat 9 more of
+  The Twelve"), else the next Rider Rank named as a prize: how far and the prize, "1,281 XP to the
   Crane's Memory charm"; a locked chip pressed says the same sentence for its mountain, "3 more ghosts open The Old
   Run"); and four labelled doors: Daily and Cup (wearing the flame, "13-day
   flame", marigold), Progress, Garage (wearing the gifts as the results and the garage draw them, the glyph and "90
   gifts" in marigold) and Settings, on a phone the same pills two by two. No mountain name or feeling line
   under the logo: the picked chip names the place and the veil says its feeling while travelling. A first visit keeps
-  the logo, its tagline, Ride, the line "Pass ghosts to unlock new mountains" and a labelled Sound On.
+  the logo, its tagline, Ride, the line "Pass ghosts to unlock new mountains" and a labelled Sound On (where the doors will stand, at the column's foot).
 - **Ride's reason is the next run's purpose**, first that applies: a friend's challenge (Accept); the duel with the next
   of The Twelve on the picked ground, said as the duel ("Suki Ember, head to head"), never with the rider's time, which
   set beside a faster best read as already beaten, and only when the next run is the duel; the Daily, the Cup or the
   Trial when chosen; your grudge waiting there; the rung above you on the mountain's ladder ("valo_rides is 0.1 s
-  ahead"); else how it rides (its hour, mirrored) or what it is like (its tagline), never the name the chip already says.
+  ahead"); else how it rides (its hour, mirrored) or what it is like (its tagline), never the name the chip already says. It wraps in its pill rather
+  than run past it.
 - **A door opens a room** from the logo's side (the bottom on a phone): an ink sheet of blocks, each its words and its
   one action. Daily and Cup holds the flame and its seven days, today's Daily, the day's contracts and the form, this
   week's Cup with its league place and table, and the week's Trial once open; Progress holds Rider Rank and the next
@@ -545,7 +549,7 @@ Round 7:
   the room; Ride then says what it rides. Something new is introduced once, by a marigold "New" on its door and one line
   at the top of its room. Nothing loading is shown: a block whose field is not in offers nothing until it is.
 - **The results are three beats over the scene (round 9)**, about 2.5 s: how you did (the place, its word and the time
-  in italic 900 at the top of the logo's side, gold-white for a win, the silver step for a podium, off-white for a
+  in italic 900 at the top of the logo's side, the time a step larger than the word's capitals, gold-white for a win, the silver step for a podium, off-white for a
   finish, off-white and a little crooked for a wreck; then one fact on an
   ink chip that keeps inside the headline's rule, clear of the rider, beside the figure on a phone as on a desk); the one reward that matters most, turned over,
   with Rider Rank's bar filling at its foot (bare: the next prize is named on the title's quiet line and in Details) and every gift the run paid as one figure in words ("+124 gifts": a prize
@@ -569,7 +573,8 @@ Round 7:
   Row in the rafters. The UI is one kit9 sheet from the logo's side, as every room's (the left of a desk, the place keeping
   the rider right of it; from the bottom on a phone, under the rider): "Garage" in italic 900 with a quiet Close as
   every room has, the gifts in marigold with their word, the shelves as pills (the picked one pressed as settings'
-  quality is), the shelf's pieces as tiles, then the piece picked with its one action. Every piece goes on your own rider before it is bought, and the camera goes to it
+  quality is), the shelf's pieces as tiles (on a phone a row of two whole tiles and the rim of a third under a fade, never a
+  name cut in two), then the piece picked with its one action. Every piece goes on your own rider before it is bought, and the camera goes to it
   (a hat from behind, then its front; a trail out on the yard's loop). The vermillion is spent only on a purchase or a
   tier being fitted; buying one is a moment (a marigold gift opened on the rug, the piece put on, a cheer), skipped by a
   tap or a key, still under reduced motion.
@@ -641,7 +646,9 @@ Round 7:
 - **A legend's card is moonlight on ink:** the word, the name, a hairline that draws out from the middle,
   the line. It takes none of the roles' colours.
 - **A pad's glyphs follow the HUD's keycaps:** a face button is a round cap with a 2 px rim and no keycap
-  lip (so A the button never reads as A the key), Start is a pill, the stick is drawn bare like the mouse.
+  lip (so A the button never reads as A the key), Start is a pill, the stick is drawn bare like the mouse. A key
+  on a button is a pill at least half again as wide as it is tall, with its lip (in ink on the vermillion), at the
+  button's end: one letter ("P") is a key as "Space" is, never a round cap.
   The get-up pips are 9 px rings in the HUD's text colour, solid while held, ink inside the ring when spent.
 - **Pause and loading** are set like the wordmark: italic 900, the ghosts' mint under it, a runner drawn
   beneath (the loading screen's runner is its bar).
