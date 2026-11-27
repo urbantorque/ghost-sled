@@ -227,7 +227,9 @@ export function owedRewards(d: Pick<SaveData, 'rank' | 'mastery'>): OwedReward[]
     .sort((a, b) => a[1] - b[1]);
   if (hours.length) {
     const [m, page] = hours[0];
-    out.push({ key: `hour:${m}`, page, from: `New on Rider Rank ${page}`, reward: { kind: 'hour', mountain: m } });
+    // (Round 9, the main lane: the card names its book, not the page's rank, which sat over the bar's own rank as a
+    // second, lower one: "New on Rider Rank 16" over "Rider Rank 25".)
+    out.push({ key: `hour:${m}`, page, from: 'From the Almanac', reward: { kind: 'hour', mountain: m } });
   }
   for (const m of MOUNTAINS) {
     const h = homeRiders(d, m.id);

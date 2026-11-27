@@ -230,7 +230,7 @@ export const MOUNTAINS: readonly MountainDef[] = [
   // Round 9: the new mountains are appended, never inserted (MOUNTAINS is read by index: the Trials, The Twelve's homes,
   // ?debug&m=, the pool generator, the graveyards' naming order).
   { id: 'oldrun', name: 'The Old Run', tagline: 'An old ice track: ride high on the glaze', seed: OLDRUN_SEED, unlockGhosts: 18 },
-  { id: 'gullhaven', name: 'Gullhaven', tagline: 'A sea cape: pop off the gully lips, ride the wind', seed: GULLHAVEN_SEED, unlockGhosts: 32 },
+  { id: 'gullhaven', name: 'Gullhaven', tagline: 'A sea cape: pop gully lips, ride the wind', seed: GULLHAVEN_SEED, unlockGhosts: 32 },
   // (The last of the three, and the first a player meets: at 8 ghosts, between Frostfang and Ember.)
   { id: 'gablefall', name: 'Gablefall', tagline: 'A snowed-in town: ride its roofs down', seed: GABLEFALL_SEED, unlockGhosts: 8 },
 ];

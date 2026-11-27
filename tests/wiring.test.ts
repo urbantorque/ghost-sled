@@ -81,11 +81,11 @@ describe('the new mountains’ other hours on the Almanac', () => {
     expect(hourOpen(d, 'gablefall')).toBe(false);
     expect(hourOpen(d, 'oldrun')).toBe(false);
     const first = settleSpine(d, spineRun());
-    expect(first.opened.filter((x) => x.reward.kind === 'hour')).toEqual([{ page: 16, from: 'New on Rider Rank 16', reward: { kind: 'hour', mountain: 'gablefall' }, name: 'Gablefall at Evensong' }]);
+    expect(first.opened.filter((x) => x.reward.kind === 'hour')).toEqual([{ page: 16, from: 'From the Almanac', reward: { kind: 'hour', mountain: 'gablefall' }, name: 'Gablefall at Evensong' }]);
     expect(hourOpen(d, 'gablefall')).toBe(true);
     expect(hourOpen(d, 'oldrun')).toBe(false);
     const second = settleSpine(d, spineRun());
-    expect(second.opened.filter((x) => x.reward.kind === 'hour').map((x) => [x.page, x.from, x.name])).toEqual([[23, 'New on Rider Rank 23', 'The Old Run by Lamplight']]);
+    expect(second.opened.filter((x) => x.reward.kind === 'hour').map((x) => [x.page, x.from, x.name])).toEqual([[23, 'From the Almanac', 'The Old Run by Lamplight']]);
     expect(hourOpen(d, 'oldrun')).toBe(true);
     // Gullhaven's page is not turned yet; nothing more is owed.
     expect(hourOpen(d, 'gullhaven')).toBe(false);
