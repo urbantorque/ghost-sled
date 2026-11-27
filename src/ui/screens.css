@@ -436,12 +436,16 @@
   color: var(--text-dim);
 }
 
-/* Eight mountains (phase B): two rows of four equal chips, every name whole; the picked one keeps its ring and its
-   best. Desk and phone alike: a row of eight is wider than the logo's column at 1280 and than a phone. */
+/* Eight mountains (phase B): two rows of four, every name whole, and the picked one larger as in one row: twice as wide,
+   with its ring and its best. A grid of five equal columns, each as wide as the widest name needs: the picked chip spans
+   two, so its row is full and the other row ends a column short; the fifth chip always starts the second row, so the
+   rows stay four and four in the picker's order. (Round 9, the feelui lane: four equal chips a row left the pick only
+   its ring, against ART.md 10. A row of eight is wider than the logo's column at 1280 and than a phone.) */
 .gs9-strip.is-many {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  width: min(100%, 540px);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: max-content;
+  max-width: 100%;
 }
 
 .gs9-strip.is-many .gs9-chip,
@@ -449,6 +453,14 @@
   width: auto;
   min-width: 0;
   min-height: clamp(66px, 10vmin, 88px);
+}
+
+.gs9-strip.is-many > .gs9-chip:nth-child(5) {
+  grid-column-start: 1;
+}
+
+.gs9-strip.is-many > .gs9-chip.is-sel {
+  grid-column-end: span 2;
 }
 
 /* The picked mountain is the larger chip: its name, and your best there in words. */
@@ -552,23 +564,6 @@
   font-size: var(--fs-s);
   font-weight: var(--fw-label);
   text-shadow: var(--halo);
-}
-
-/* (Round 9, M3: a new mountain's way to its mirror while it is shut: words in the hour pair's place, not a control.) */
-.gs9-how-way {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4em;
-  font-size: var(--fs-s);
-  font-weight: var(--fw-label);
-  color: rgba(245, 243, 255, 0.78);
-  text-shadow: var(--halo);
-}
-
-.gs9-how-way .gs9-i {
-  width: 14px;
-  height: 14px;
-  opacity: 0.8;
 }
 
 .gs9-seg {
@@ -733,10 +728,12 @@
   margin-left: 2px;
 }
 
+/* A first visit's Sound toggle stands where the doors will (round 9, the feelui lane: in the top right corner it sat over
+   the logo's last letter on a phone). */
 .gs9-sound {
-  position: absolute;
-  top: var(--st);
-  right: var(--sr);
+  grid-row: 7;
+  justify-self: start;
+  margin-top: var(--sp-4);
 }
 
 /* ---- the challenge banner and the Trial's rule, over Ride (style.css and trials.css draw them) ---- */
@@ -814,6 +811,12 @@
     overflow: visible;
   }
 
+  /* (A fifth of a 390 px phone is the narrowest chip that keeps "Lanternfall" whole: its name a pixel closer to its edges.) */
+  .gs9-strip.is-many .gs9-chip:not(.is-sel) .gs9-chip-name {
+    padding-right: 4px;
+    padding-left: 4px;
+  }
+
   /* (The row centred like the column, the best first: alone at the far left it read as a stray.) */
   .gs9-how.is-best-only {
     display: flex;
@@ -876,6 +879,23 @@
     position: absolute;
     top: -6px;
     right: -2px;
+  }
+
+  .gs9-sound {
+    justify-self: center;
+    margin-top: var(--sp-2);
+  }
+}
+
+/* A phone narrower than 390 px: a fifth of it would cut "Lanternfall", so the eight stay four equal chips a row and the
+   pick is its ring and its heavier name (round 9, the feelui lane; every name whole comes first). */
+@media (max-aspect-ratio: 1/1) and (max-width: 389px) {
+  .gs9-strip.is-many {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .gs9-strip.is-many > .gs9-chip.is-sel {
+    grid-column-end: auto;
   }
 }
 

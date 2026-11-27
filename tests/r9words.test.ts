@@ -102,7 +102,7 @@ describe('the quiet line', () => {
 
   it('then Lanternfall by The Twelve, then the next Rider Rank named as a prize', () => {
     const open = title().mountains.map((c) => (c.id === 'sakura' ? { ...c, locked: false, unlockText: '' } : c));
-    expect(titleAim(title({ mountains: open })).text).toBe('Beat 6 more of The Twelve to open Lanternfall');
+    expect(titleAim(title({ mountains: open })).text).toBe('Lanternfall: beat 6 more of The Twelve');
     const all = open.map((c) => ({ ...c, locked: false, unlockText: '' }));
     const bar = rankBar(31299);
     const spine = { bar } as unknown as NonNullable<TitleModel['spine']>;
@@ -114,7 +114,7 @@ describe('the quiet line', () => {
   it('a locked chip pressed says what opens it, as the line says it', () => {
     const m = title();
     expect(titleAim(m, m.mountains[3]).text).toBe('3 more ghosts open Sakura Ridge');
-    expect(titleAim(m, m.mountains[4]).text).toBe('Beat 6 more of The Twelve to open Lanternfall');
+    expect(titleAim(m, m.mountains[4]).text).toBe('Lanternfall: beat 6 more of The Twelve');
     expect(titleAim(m, card('oldrun', 'The Old Run', { locked: true, unlockText: 'Pass 1 more ghost to unlock' })).text).toBe('1 more ghost opens The Old Run');
   });
 
