@@ -28,6 +28,7 @@
   src: local('Arial'), local('ArialMT');
   font-weight: 100 649;
   unicode-range: U+2019;
+  font-display: swap;
 }
 
 @font-face {
@@ -35,6 +36,7 @@
   src: local('Arial Bold'), local('Arial-BoldMT');
   font-weight: 650 799;
   unicode-range: U+2019;
+  font-display: swap;
 }
 
 @font-face {
@@ -42,6 +44,7 @@
   src: local('Arial Black'), local('Arial-Black'), local('Arial Bold'), local('Arial-BoldMT');
   font-weight: 800 1000;
   unicode-range: U+2019;
+  font-display: swap;
 }
 
 :root,
@@ -207,9 +210,10 @@
 }
 
 /* Quiet: a thin ink wash and its words, a step under secondary, with no edge and no lift. Home, Back, Close. Over the
-   scene the wash and a soft ink halo keep the words readable on white snow. */
+   scene the wash (as dark as before: thinner, its words fell to about 2.4:1 on white snow) and a soft ink halo keep
+   the words readable. */
 .gs9-b-quiet {
-  background: rgba(18, 25, 51, 0.42);
+  background: rgba(18, 25, 51, 0.55);
   box-shadow: none;
   color: rgba(245, 243, 255, 0.86);
   text-shadow: 0 0 6px rgba(18, 25, 51, 0.85);
@@ -223,7 +227,7 @@
     background: var(--surface-raised);
   }
   .gs9-b-quiet:hover:not(:disabled) {
-    background: rgba(18, 25, 51, 0.6);
+    background: rgba(18, 25, 51, 0.72);
     color: var(--c-text);
   }
 }

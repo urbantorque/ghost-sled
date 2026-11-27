@@ -851,6 +851,15 @@
     line-height: 1.05;
   }
 
+  /* ("Daily & Cup" on a phone: one line in half the width down to 320 px, and the title's word bar held.) */
+  .gs9-door-long {
+    display: none;
+  }
+
+  .gs9-door-short {
+    display: inline;
+  }
+
   .gs9-door-s {
     font-size: 11px;
   }
@@ -859,17 +868,6 @@
     position: absolute;
     top: -6px;
     right: -2px;
-  }
-}
-
-/* (A phone under 340 px: "Daily & Cup", so the door's words keep one line.) */
-@media (max-aspect-ratio: 1/1) and (max-width: 339px) {
-  .gs9-door-long {
-    display: none;
-  }
-
-  .gs9-door-short {
-    display: inline;
   }
 }
 

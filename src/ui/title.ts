@@ -466,7 +466,7 @@ export class Title {
     if (d === 'events') aria += `. Inside: your flame, today's Daily and contracts, this week's Cup and its league${m.trial ? ', the Trial' : ''}`;
     else if (d === 'progress') aria += `. Inside: the Almanac, The Twelve${sp?.longNight ? ', the Long Night' : ''}${sp?.album ? ', the Spirit Album' : ''}, medals and mastery stars, and missions`;
     const intro = this.introFor(d, m);
-    // (A phone under 340 px says "Daily & Cup", so the door's words keep one line over its flame; screens.css.)
+    // (A phone's door is half the width: "Daily & Cup" there, so it keeps one line over its flame.)
     const label = d === 'events' ? h('span', 'gs9-door-l', h('span', 'gs9-door-long', DOOR_LABEL[d]), h('span', 'gs9-door-short', 'Daily & Cup')) : h('span', 'gs9-door-l', DOOR_LABEL[d]);
     // (The gifts drawn as the results and the garage draw them: the glyph, the figure and its word, in marigold. Round
     // 9, the polish lane: in the door's grey they were a third look for one currency, ART.md 1.)
