@@ -139,6 +139,8 @@ export class Trail {
         uIceMood: shared.uIceMood,
         uColor: { value: color ?? new Color('#8FF3E4') },
         uLife: { value: this.ghost ? 7 : 26 },
+        /** How strong the runners' frost scratches on ice are (setCourse: 1, but on the Old Run). */
+        uScratch: { value: 1 },
       },
       vertexShader: /* glsl */ `
         attribute float aAcross;
@@ -202,6 +204,7 @@ export class Trail {
         uniform float uIceMood;
         uniform vec3 uColor;
         uniform float uLife;
+        uniform float uScratch;
         varying float vAcross;
         varying float vSunSide;
         varying float vSunK;
@@ -353,7 +356,7 @@ export class Trail {
             A = kw + A * (1.0 - kw);
             // (Round 8's review loop, Pinecrest: on a glazed patch the two frost scratches ran from the sled to the frame's
             // foot as ruled white stripes. Fainter: a scratch in the glaze, not a line on it.)
-            float kc = cut * (0.36 + 0.4 * deep + 0.06 * D) * mix(1.0, 0.8, soft) * mix(1.0, 0.42, scr);
+            float kc = cut * (0.36 + 0.4 * deep + 0.06 * D) * mix(1.0, 0.8, soft) * mix(1.0, 0.42 * uScratch, scr);
             P = cutCol * kc + P * (1.0 - kc);
             A = kc + A * (1.0 - kc);
             float kwl = wallLit * 0.15;
@@ -385,7 +388,7 @@ export class Trail {
             A = kcl + A * (1.0 - kcl);
             // On ice, fine scratches either side of each runner's line, frost-white in the glaze.
             float hatch = smoothstep(0.55, 1.0, sin(x * 240.0 + nz * 9.0)) * (1.0 - smoothstep(0.03, 0.08, abs(a - ${RUNNER.toFixed(2)}))) * scr * (1.0 - smoothstep(0.004, 0.012, px));
-            float kh = hatch * 0.3;
+            float kh = hatch * 0.3 * uScratch;
             P = mix(uLit, vec3(1.0), 0.35) * kh + P * (1.0 - kh);
             A = kh + A * (1.0 - kh);
             vec3 col = P / max(A, 0.001);
@@ -420,6 +423,9 @@ export class Trail {
 
   setCourse(course: Course): void {
     this.course = course;
+    // (Round 9's feel pass, the Old Run: its ice is the whole track, and seen along a wall at the lens the runners' frost
+    // scratches ran as bright parallel streaks with kinks, read by the fourth critic as speed lines. Half as strong there.)
+    this.mat.uniforms.uScratch.value = course.kit?.id === 'oldrun' ? 0.5 : 1;
     this.clear();
   }
 

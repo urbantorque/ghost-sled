@@ -25,13 +25,13 @@ const HULL = new Color('#1C2232');
 /** How far either side of the legend's place it is drawn (metres, as the legends' own: legendworld.ts). */
 const REACH_IN = 520;
 const REACH_OUT = 150;
-/** The fleet: how many boats (Low half), how far out to sea from the cliff's foot they sail, and their speed. */
+/** The fleet: how many boats (Low half), and how far out from the cliff's foot its nearer column sails. */
 const BOATS = 16;
 const OUT_MIN = 140;
-const OUT_MAX = 1000;
 /** How far ahead of the rider the keeper walks: past the rider's head from the chase lens. And his size. */
 const KEEPER_AHEAD = 30;
 const KEEPER_SCALE = 2.3;
+const KEEPER_SIDE = 4.5;
 
 const tm = new Matrix4();
 const tq = new Quaternion();
@@ -130,6 +130,25 @@ export class GullhavenLegends {
   private boats: InstancedMesh | null = null;
   private boatLamps: InstancedMesh | null = null;
   private boatLie: InstancedMesh | null = null;
+  private boatWake: InstancedMesh | null = null;
+  private readonly wakeMat = new ShaderMaterial({
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        // A wedge widening astern (vUv.y 1 at the boat), broken, fading out behind.
+        float w = mix(0.08, 0.5, 1.0 - vUv.y);
+        float a = (1.0 - smoothstep(w * 0.6, w, abs(vUv.x - 0.5))) * smoothstep(0.0, 0.7, vUv.y) * 0.55;
+        gl_FragColor = vec4(vec3(0.86, 0.9, 0.96), a);
+      }`,
+    transparent: true,
+    depthWrite: false,
+  });
   /** The fleet's own clock while it shows (its boats sail on it), and when the legend was over. */
   private fleetT = 0;
   private overAt = -1;
@@ -174,7 +193,12 @@ export class GullhavenLegends {
     lie.visible = false;
     lie.setColorAt(0, tc.copy(LAMP));
     this.boatLie = lie;
-    this.root.add(k, kl, pool, b, bl, lie);
+    const wake = new InstancedMesh(new PlaneGeometry(1, 1).rotateX(-Math.PI / 2), this.wakeMat, n);
+    wake.frustumCulled = false;
+    wake.renderOrder = 5;
+    wake.visible = false;
+    this.boatWake = wake;
+    this.root.add(k, kl, pool, b, bl, lie, wake);
   }
 
   reset(): void {
@@ -207,7 +231,9 @@ export class GullhavenLegends {
     z = Math.max(z, s.z + Math.max(LEGEND_AHEAD, KEEPER_AHEAD));
     if (over) z = Math.max(z, Math.min(path.z1 + 40, s.z + LEGEND_AHEAD + 10));
     const zc = Math.max(path.z0, Math.min(path.z1, z));
-    const x = pathX(c, path, zc);
+    // (Beside the legend's line, on its side, not on it: on the line, from the chase lens he and his lamp stood on the rider's
+    // pom, read by the fifth critic as a white cross and an orb on the hat.)
+    const x = pathX(c, path, zc) + lg.side * KEEPER_SIDE;
     const y = c.ground(x, zc);
     const fade = over ? Math.max(0, 1 - (s.z - lg.z1) / 90) : phase === 1 ? 0.75 : 1;
     if (fade <= 0.01) return;
@@ -255,15 +281,17 @@ export class GullhavenLegends {
     const b = this.boats!;
     const bl = this.boatLamps!;
     const lie = this.boatLie!;
+    const wake = this.boatWake!;
     const n = b.count;
-    const span = lg.z1 - lg.z0 + 700;
+    // (In two columns homeward down the coast, boat after boat at a steady spacing, each with its wake: scattered at random
+    // the fifth critic read the lamps as specks over the sea, with no form.)
+    const lead = lg.z0 + 320 + this.fleetT * 7;
     for (let i = 0; i < n; i++) {
-      const speed = 5 + hash(i, 3) * 4;
-      // Strung along the coast round the legend's place, each on its own line out to sea, sailing on down the coast.
-      const z = lg.z0 - 300 + ((hash(i, 1) * span + this.fleetT * speed) % span);
-      const out = OUT_MIN + (OUT_MAX - OUT_MIN) * (0.15 + 0.85 * hash(i, 2));
+      const col = i % 2;
+      const z = lead - Math.floor(i / 2) * 68 - col * 30 + (hash(i, 1) - 0.5) * 10;
+      const out = OUT_MIN + 120 + col * 170 + 40 * Math.sin(z * 0.004 + col) + (hash(i, 2) - 0.5) * 20;
       const x = shore(Math.max(0, Math.min(c.finishZ, z))) + out;
-      const yaw = -0.08 + 0.16 * hash(i, 4);
+      const yaw = -0.03 + 0.06 * hash(i, 4);
       const rock = reduced ? 0 : 0.05 * Math.sin(time * (0.9 + hash(i, 5)) + i);
       tq.setFromAxisAngle(Y, -Math.PI / 2 + yaw);
       tm.compose(tv.set(x, sea + 0.4, -z), tq, ts.set(1.5, 1.5, 1.5));
@@ -280,8 +308,12 @@ export class GullhavenLegends {
       tm.compose(tv.set(x, sea + 2.5, -z), tq, ts.set(10 + d * 0.008, 1, 50 + d * 0.05));
       lie.setMatrixAt(i, tm);
       lie.setColorAt(i, tc.copy(LAMP).multiplyScalar(0.7 * lit));
+      // Its wake, a pale wedge of broken water astern.
+      tq.setFromAxisAngle(Y, yaw);
+      tm.compose(tv.set(x, sea + 0.8, -(z - 34)), tq, ts.set(7, 1, 52));
+      wake.setMatrixAt(i, tm);
     }
-    for (const m of [b, bl, lie]) {
+    for (const m of [b, bl, lie, wake]) {
       m.visible = true;
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
@@ -298,5 +330,6 @@ export class GullhavenLegends {
     this.hullMat.dispose();
     this.glowMat.dispose();
     this.lieMat.dispose();
+    this.wakeMat.dispose();
   }
 }

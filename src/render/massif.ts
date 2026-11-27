@@ -474,9 +474,11 @@ const VERT = /* glsl */ `
         float coastX = -30.0 + 0.45 * wob + 1900.0 * smoothstep(2400.0, 4800.0, fwd);
         float inland = coastX - p.x;
         float land = smoothstep(-20.0, 90.0, inland);
-        // (Round 9's feel pass: which vertices stand on the cliff's face, the coast's first 90 m inland. FRAG cuts the snow
-        // and the stepped light by it, between the vertices and not at a facet's edge.)
-        vFace = 1.0 - smoothstep(55.0, 95.0, inland);
+        // (Round 9's feel pass: which vertices stand on the cliff's face and its brow, the coast's first 240 m inland. FRAG
+        // cuts the snow and the stepped light by it, between the vertices and not at a facet's edge. The brow is the
+        // cliff's too: where the panorama's columns cross the coast, the moor's edge zigzags, and as snow over rock that
+        // zigzag was the comb of teeth the fifth critic still saw at 90 m.)
+        vFace = 1.0 - smoothstep(110.0, 240.0, inland);
         float moor = 40.0 + min(inland, 4000.0) * 0.09 + 460.0 * uRange.x * pow(clamp(rg, 0.0, 1.2), uRange.y) * smoothstep(150.0, 1500.0, inland);
         float hl = -0.22 * clamp(fwd, -900.0, 7000.0) + moor;
         hl = max(hl, uSeaY + 140.0 * smoothstep(0.0, 70.0, inland));
@@ -664,7 +666,7 @@ const FRAG = /* glsl */ `
     float wrap = smoothstep(-0.25, 0.6, dot(N, uLight));
     // Stepped, the volcano's bare ash broke into pale radial slabs along its gullies.
     float lit = uFlow > 0.0 && uPeak > 1.5 && uPeak < 2.5 && layer > 2.5 ? wrap * 0.6 : steps3(wrap);
-    lit = mix(lit, 0.34, cliffK);
+    lit = mix(lit, 0.14, cliffK);
     // Alpenglow: as the sun sinks the shadow climbs the ranges, the valleys go to shade first and the
     // snow still in the light takes the glow.
     float above = smoothstep(uGlowLine - 40.0, uGlowLine + 40.0, vPos.y + n1 * 70.0);
