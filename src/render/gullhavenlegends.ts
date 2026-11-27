@@ -31,7 +31,7 @@ const OUT_MIN = 140;
 /** How far ahead of the rider the keeper walks: past the rider's head from the chase lens. And his size. */
 const KEEPER_AHEAD = 30;
 const KEEPER_SCALE = 2.3;
-const KEEPER_SIDE = 4.5;
+const KEEPER_SIDE = 7;
 
 const tm = new Matrix4();
 const tq = new Quaternion();
@@ -126,7 +126,7 @@ export class GullhavenLegends {
   private readonly lieMat = glowMaterial(true);
   private keeper: Mesh | null = null;
   private keeperLamp: InstancedMesh | null = null;
-  private keeperPool: Mesh | null = null;
+  private keeperPool: InstancedMesh | null = null;
   private boats: InstancedMesh | null = null;
   private boatLamps: InstancedMesh | null = null;
   private boatLie: InstancedMesh | null = null;
@@ -171,7 +171,9 @@ export class GullhavenLegends {
     kl.visible = false;
     kl.setColorAt(0, tc.copy(LAMP));
     this.keeperLamp = kl;
-    const pool = new Mesh(new PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new MeshBasicMaterial({ color: LAMP, transparent: true, opacity: 0.3, blending: AdditiveBlending, depthWrite: false }));
+    // (A soft pool of his lamp's light, falling off from its heart: a plain square of it read to the sixth critic as a
+    // hard pale quad on the snow.)
+    const pool = new InstancedMesh(new PlaneGeometry(1, 1).rotateX(-Math.PI / 2), this.lieMat, 1);
     pool.frustumCulled = false;
     pool.renderOrder = 5;
     pool.visible = false;
@@ -261,9 +263,11 @@ export class GullhavenLegends {
     if (kl.instanceColor) kl.instanceColor.needsUpdate = true;
     const pool = this.keeperPool!;
     pool.visible = true;
-    pool.position.set(x + 0.3, y + 0.08, -zc);
-    pool.scale.set(12, 1, 12);
-    (pool.material as MeshBasicMaterial).opacity = 0.22 * fade;
+    tm.compose(tv.set(x + 0.3, y + 0.08, -zc), tq.identity(), ts.set(9, 1, 14));
+    pool.setMatrixAt(0, tm);
+    pool.setColorAt(0, tc.copy(LAMP).multiplyScalar(0.5 * fade));
+    pool.instanceMatrix.needsUpdate = true;
+    if (pool.instanceColor) pool.instanceColor.needsUpdate = true;
     if (Math.abs(zc - s.z) < 140) pushLocalLight(lx, ly, -zc, LAMP_LIN.r, LAMP_LIN.g, LAMP_LIN.b, 9, 0.9 * fade);
   }
 
