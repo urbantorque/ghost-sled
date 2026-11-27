@@ -200,31 +200,46 @@ values (`rockforms.ts` builds the forms, the stone material paints them).
   grain under the lacquer, low sideboards pinstriped in cream (`#F4E8CF`), a cowl over the nose that the boots go
   under, a cream comet streaking back over the cowl from a round head at its tip, the vermillion runners on steel
   shoes curling up into the cowl, and two steel push bars at its tail.
+- **The Whirl Saucer** is bentwood walnut with its vermillion rim (its blue sat by the speed charm's azure); **the
+  Wisp** a pearl deck on silver runners, trimmed in vermillion along its deck and across its tail (never the ghosts'
+  mint); **the Lodge Toboggan** carries vermillion rails down both sides and a cap across its tail, where the lens
+  behind sees it.
 - The rider's look is the player's to choose in the garage, inside the signal: the hat and the scarf are
   always vermillion with at most the beanie's cream or an ink accent, so whatever is worn, the rider is the
   one vermillion figure on the run. **Hats are told apart by their outline from behind** (the chase lens always
-  sees the back of the head; round 9, ten): the cuffed pom beanie; a low watch cap, plain red, a thick rolled cuff,
-  nothing on top; a plain crown and two big cream poms hung low beside the jaw on cords; a trapper's cream fur band
-  and long flaps; a hem of ink bobbles hanging across the nape; a chullo with a middling point and long
+  sees the back of the head; round 9, nine on the shelf and one kept): the cuffed pom beanie; a short flat-topped watch cap perched high on
+  the crown, a thick rolled cuff, the hair showing round it; a plain crown and two big cream poms hung low beside the jaw on cords; a trapper's cream fur band
+  and long flaps; a hem of ink bobbles hanging across the nape (kept, no longer sold); a chullo with a middling point and long
   cream-and-red braids behind the ears; a long stocking cap streaming back past one shoulder, a pom at its end; a
   broad knit band over the crown and two big fur muffs; a big quilted dome in fat rings with a cream ring under it;
   two long knit tails streaming back off the crown, poms at their ends. None is one of The Twelve's (no crown,
-  antlers, horns, fox ears, stovepipe or topknot).
+  antlers, horns, fox ears, stovepipe or topknot). A piece a critic could not tell from another at race distance is
+  kept for those who hold it and no longer sold.
 - **A scarf** (round 9): the knot and the wrap stay the classic vermillion; a scarf varies its form (two tails; one
   long and one short; four slim ribbons; one thick rope), what weights the ends (a big cream pom, a little paper
   lamp, a snowball, a drop, a point, flame tongues, a tassel, a long ink fringe, a bow at the throat) and a pattern
-  in cream or ink that runs along and across the knit (bars, bands, a rib, chevrons, a braid, dots, crescents).
+  in cream or ink that runs along and across the knit (bars, bands, a rib, chevrons, a braid, dots, crescents);
+  and the mountains' own ends: a red bell with a cream lip (the Old Run), cream swallowtails on four slim ribbons
+  (Gullhaven), a wide scalloped cream valance at each tip (Gablefall). A scarf a critic could not tell from another at
+  race distance is kept for those who hold it and no longer sold (the Chunky Rib, the Fringe Knit, the months' scarves).
   **Spirit Flow keeps the knit:** each stitch burns at its own value (an ink band stays dark in the flame, a cream
   bar burns white-gold), and only the far half of the tail glows past the bloom, so the flame's light never spreads
   over the coat.
 - **A trail** (round 9) is shapes and behaviours in the air behind and beside the sled, never a mark on the snow
   (section 4's one painted line stands): cut-paper flakes that flutter, petals that sail out flat, gold leaf that
   spirals up, two ribbons of light that climb off the runners and bend back, strings of paper bows flying from the
-  stern, embers rising in a column, moths of light circling, a paper lantern on a line; in the lantern's warm family
+  stern, embers rising in a column, moths of light circling, a paper lantern on a line; cream paper arcs ringing out
+  from each side of the sled and widening, a bell's peal (the Old Run); cream gulls hanging in the wind beside the
+  rider, wings beating (Gullhaven); paper pinwheels in cream and gold spinning as they pop out and drift (Gablefall); in
+  the lantern's warm family
   only (paper, cream, honey, gold, amber), never mint, rose, coral or vermillion (the drift's heat owns coral and
-  vermillion).
+  vermillion). No trail is a ring of light (that is a sky gate) or a disc of gold (a gift), and none lays a
+  translucent vermillion over the snow (over white it is the grudge's rose).
 - In the flow the rider's rim and scarf glow vermillion, building with the shown flow and full at
-  3.5; a snuff puts the glow out with a short puff, so the state is visible without reading the HUD.
+  3.5; a snuff puts the glow out with a short puff, so the state is visible without reading the HUD. The rim is laid
+  over the cloth, never added to it (added to the navy coat or a blue or pale sled it read magenta); the flame Spirit
+  Flow sheds off the scarf's tip is born half way to the flame's orange and its glow is that orange, so over white
+  snow and spray it stays warm.
 - After a crash the rider sits up dazed beside its upside-down sled, both in the results shot, with
   its head turned three-quarters to the lens and three gold-white stars circling the beanie.
 
@@ -540,8 +555,10 @@ Round 7:
   two easings, all zero under reduced motion.
 - **The garage is a place, not a sheet (round 9).** A sled-maker's workshop at dusk drawn by the game's own renderer:
   your rider on your sled on a stand, hats on wooden head blocks, a scarf rail, a door onto a snowy yard, the Lantern
-  Row in the rafters. The UI is one column at the reading edge (a sheet over the thumbs on a phone): the shelves as
-  tabs, one card, a strip of tiles. Every piece goes on your own rider before it is bought, and the camera goes to it
+  Row in the rafters. The UI is one kit9 sheet from the logo's side, as every room's (the left of a desk, the place keeping
+  the rider right of it; from the bottom on a phone, under the rider): "Garage" in italic 900 with a quiet Close as
+  every room has, the gifts in marigold with their word, the shelves as pills (the picked one pressed as settings'
+  quality is), the shelf's pieces as tiles, then the piece picked with its one action. Every piece goes on your own rider before it is bought, and the camera goes to it
   (a hat from behind, then its front; a trail out on the yard's loop). The vermillion is spent only on a purchase or a
   tier being fitted; buying one is a moment (a marigold gift opened on the rug, the piece put on, a cheer), skipped by a
   tap or a key, still under reduced motion.
@@ -855,17 +872,22 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   accent colour appears in three places only: the emblem disc before the name on the tag, a thin inner edge on the
   tag, and a ribbon in the wisp. Their word on the results has a rule in that accent.
 - **A sled's finish** (round 9) is a ground and a motif where the lens sees a sled (a pinstripe round the deck, stars
-  across the tail, a cream frame, burnt scrolls, a dark walnut frame round snow-white slats, a fine hex lattice, ruled
-  lines), painted over the sled and its fitted tiers together at their own value, so the grain and the hull's shading
+  across the tail, a cream frame, burnt scrolls, a walnut rim round a snow-white deck, a fine hex lattice, ruled
+  lines on an old vellum), painted over the sled and its fitted tiers together at their own value, so the grain and the hull's shading
   stay; the trim stays vermillion, and so do the scarf and beanie. No ground or line is the coat's ink navy or any
   locked role's colour (the dark is a warm umber), no motif is the finish line's ink-and-cream check, and no more
-  than one ground is a dark slate.
+  than one ground is a dark slate. At race distance a finish is its ground's hue and value; no two grounds share both.
 - **A sled's track** (round 9): five tiers built where the chase lens sees a sled, each sled its own (runner tails
-  swept up into handles or a skid ring, a quilted pad or a blanket roll, a crest board in one wood, a curled tail, low
+  swept up into handles or a skid ring, a quilted pad, a blanket roll across the tail high enough to show over the push bar, a crest board in one wood, a curled tail, low
   fins at the tail's corners, swept wings or curled handles); the fourth a post at the stern's right corner, low
   beside the rider's back, carrying a lit paper lamp (ribbed, palest at the waist, a dark cap and foot, section 14)
-  or another ornament; the fifth a cream inlay that burns with the scarf in the flow. A built-up sled is told from its
-  stock one in a chase still. A track never changes how a sled rides.
+  or another ornament; the fifth an inlay (the Pine Flyer's in the trim's red, down the runners' outsides, across
+  the tail and on the crest's face) that burns with the scarf in the flow. A built-up sled is told from its stock one
+  in a chase still. An ornament keeps its own colours under any finish. A track never changes how a sled rides.
+- **A month's chapter** (round 9, G6) is its ornament and its title: one object plainly its month, big enough to read
+  on the post (a rising sun, an icicled eave, a thaw-blue lantern, a blossom sprig, a brazier, a midsummer wheel, three
+  market lanterns, a paper fan, a crescent moon, a hollowed lantern lit amber, a snowman in a knit cap, a star
+  lantern), none of them one of The Twelve's hats (no crown, no stovepipe).
 - **Round 7.** Powder's rim takes the key light's colour and is what blooms in a plume. A dash throws a ring as the
   air opens, lays a wake of light off the runners and trails a comet's tail; the lantern's moments (a dash, a ward,
   a gate, a light taken, a lantern filled) each light the snow and the rider for a beat. A burst has a heart inside
@@ -1226,6 +1248,7 @@ stays the dark shape in the street.
 - **The set pieces as light.** The bells bronze, the next breathing, a rung one swinging and lighting the wall; the
   Labyrinth's dial sweeping its split, its lamp marigold while the rider is up on it; the Horseshoe's lanterns lighting
   down the hook with the hold.
+- **Its set:** Bell Tails, Bell Peals and the Timing Clock.
 - **Low** is a poster of it: spikes for twigs, one rail, the places drawn only within reach; on a held Low run about
   Pinecrest's GL calls, under them in the Labyrinth.
 
@@ -1263,6 +1286,7 @@ stays the dark shape in the street.
 - **The set pieces as light.** The lighthouse's beam a pool of lamplight swinging across the path at each mark, the next
   breathing; the Great Geo's far line two blue-banded poles with lamps, lit while the rider is in the air; the sea
   stacks' gaps in ink jaws with a pool in each, a stack in the sea off every gap.
+- **Its set:** Pennant Ribbons, Gulls and the Lighthouse.
 - **Low** is a poster of it: the fence's posts and rails with one pennant colour, one stack form, the places drawn
   only within reach; on a held Low run more GL calls than Pinecrest's and Ember's (the sea, the surf and the
   spindrift), timed in the round's proof.

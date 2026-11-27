@@ -4741,3 +4741,55 @@ straight through.
       pass, pale upright marks on the sea under the Great Geo and on the title (they read as posts), the far coast's
       pale streaks, soft figure-like shadows on the snow, and the strong bot's 42 to 50 m/s down the cut to the harbour.
     - Nobody has ridden it by hand, and nobody has listened to its score. ART.md 15 takes the world's text.
+
+401. **The garage's sets and open items built and merged** (`r9-g6`, 0a338a7 to 1c53d20, 7 commits, merged at ecb7254;
+    `notes/r9-g6.md`, frames under `shots/r9/g6/`; milestone 2's G6).
+    - *The months' chapters:* a month's chapter is its ornament and its title. Its scarf is cut (398's call), and so is
+      its trail: made twice as big, as the brief asked, the months' trails read to a blind critic as gold shards, broken
+      glass and stains, five as pairs of shop trails, and four of twelve were matched to their months. Pages 3 and 6
+      give 100 gifts each. Every month's ornament is a third bigger, nine reworked, none one of The Twelve's hats (an
+      icicled eave, not a crown; the snowman in a knit cap, not a stovepipe): matched to their months blind 6 of 12,
+      then 7 of 12. No chapter was ever on sale (they start in December 2026); a cut piece keeps its id under a new
+      source, `kept`, never sold or found, on the shelf only for a rider who holds it.
+    - *The pairs:* one of each base pair the critics could not tell apart is no longer sold, its owners keeping it (the
+      Bobble Hem, the Fringe Knit, the Chunky Rib, and Lantern Sparks, whose one way to show was Ember Peak's Lava
+      Drops); the Watch Cap perched high on the crown (it then paired with the Trapper). The Almanac Pages an old vellum,
+      told from Natural. Not settled: the Snowfield Frame with Basalt Hex and Glacier (at race size a finish reads only
+      by its ground), and the fifth tier from the fourth cold. The Pine Flyer's tiers read in order from behind to its
+      lamp (a blanket roll over the push bar, a taller crest).
+    - *The rider's colours (ART.md 1):* the flow's rim laid over the cloth (added to it, it read magenta toward the
+      grudge's rose); the Wisp pearl and silver with a vermillion trim (it was the ghosts' mint); the Whirl Saucer walnut
+      (its blue sat by the speed charm's azure); the Lodge Toboggan's vermillion rails and tail cap where the lens sees
+      them. The rose smear in the spray beside the rider was Spirit Flow's own flame off the scarf's tip, half vermillion
+      and translucent over white snow: it is born in the flame's orange now, its halo tighter and fainter
+      (`spiritflow.ts`, two shader lines). At the merge the main lane gave the Wisp's new silver runner the ghosts'
+      glowing list (`ghosts.ts`), so a ghost on the Wisp glows its runners as before.
+    - *The new mountains' sets:* the Old Run's Bell Tails, Bell Peals and the Timing Clock; Gullhaven's Pennant Ribbons,
+      Gulls and the Lighthouse; Gablefall's Market Awning, Pinwheels and the Gable House, its `SETS` row in already and
+      inert until its mountain is registered. Each ornament matched to its place blind. The mastery boards say where
+      each set opens ("at 4, 7 and 10 stars" on the Old Run's).
+    - *The garage's screens:* one `kit9` sheet from the logo's side as every room's, the workshop keeping the rider right
+      of it (the bottom on a phone), "Garage" in italic 900 with a quiet Close, the gifts in marigold with their word,
+      the shelves as pills, the pieces before the piece picked, one vermillion primary for a purchase or a tier; Escape,
+      Backspace and the pad's B close it alone, focus back on its door. A worn tile no longer also looks picked. The
+      family test across the title, results, rooms and garage: "mostly yes", the garage's frames 7 to 8 (5 to 7 before).
+    - *The economy, ridden again:* something worth having within one to three runs after all 100 runs for both pilots;
+      garage goals that are not lanterns at run 100, mid 25 and novice 48 (20 and 40 before); the dearest tracks the mid
+      pilot's Wisp at run 69 and Tea Tray at run 97. The chapters' sink 11,520 to 3,840 gifts, the base shop's 13,180 to
+      12,590; prices one table a kind.
+    - *Merged* clean; tsc clean; the full suite 116 files, 2,094 tests. Checked headless by the main lane on a desk and a phone (mid-50): the title's Garage door opens the sheet, Escape closes it to the title, the console clean; but focus fell to the page after Escape, not to the Garage door the lane found it on (to look into first in phase C).
+    - *The main lane's calls on the lane's questions:* the months' trails stay cut (a critic placed three at the shop
+      lane's size, and a chapter is plainer as one object and a title); the four base pieces stay kept, not sold; no
+      more pieces leave the shelves on race-size tiles alone this round: the pairs still failing (the Trapper with the
+      domed hats first, the striped scarves, the pale finishes, the fourth and fifth tiers, the lanterns among the
+      ornaments; notes section 12) go to the feel pass, where a person sees them in motion; Gablefall's row stays in; the
+      Lantern Row stays the five's towns (none of the new mountains finishes in a lamplit square); the sheet from the
+      logo's side stands, as every room's.
+    - *Carried to the feel pass, from the critics:* the scarf through the powder spray reads salmon and the rider milky;
+      the Twin Tails read as horns or a jester's cap; Lava Drops and Lamp Moths read as coins and lights to take; the
+      coat reads royal blue; the cream muffs and bow blow out in the workshop's light; Details' primary over its list,
+      quiet and secondary buttons alike, the phone's doors as tiles.
+    - *Only scripts have seen:* a real run opening a new mountain's set and the results saying "The Old Run's set";
+      Gablefall's set on its mountain; the flow's flame after its last change and the fifth tier's crest (the lane's own
+      look only); chapters on a real calendar; a kept piece worn in a run; the pad, touch, a screen reader, frame rate and
+      the new pieces' Low cost. ART.md 5, 10, 13 and 15 take the lane's text.
