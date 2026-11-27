@@ -29,8 +29,20 @@
   box-shadow: var(--focus), var(--shadow-primary);
 }
 
-.gs9-b-primary .gs-kbd {
+.gs9-b-primary .gs-kbd,
+.gs9-b-primary > .gs-kbd-only {
   margin-left: auto;
+}
+
+/* A key on a button is a keycap, never a pad's round cap (ART.md 10: a face button is round with a rim and no lip, so A
+   the button never reads as A the key): a pill at least half again as wide as it is tall, so one letter ("P") is a key
+   as "Space" is, and on the vermillion its lip in ink. Round 9, the feelui lane: Resume's P was a ringed circle. */
+.gs9-b .gs-kbd:not(.gs-pad-btn):not(.gs-pad-start) {
+  min-width: 2.8em;
+}
+
+.gs9-b-primary .gs-kbd:not(.gs-pad-btn):not(.gs-pad-start) {
+  box-shadow: inset 0 0 0 1px rgba(18, 25, 51, 0.32), inset 0 -2px 0 rgba(18, 25, 51, 0.3);
 }
 
 /* ---- the sheet ---- */

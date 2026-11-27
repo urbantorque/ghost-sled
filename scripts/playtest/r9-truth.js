@@ -373,6 +373,28 @@ async (page) => {
         await shoot(`${st}-title-daily`, { stage: st, screen: 'title-daily' });
       }
     }
+    // (Round 9, the feelui lane: `mtns` stages each get every mountain picked on their title, chip by chip as a player
+    // picks one (the veil crosses, the title is drawn again), each shot `<stage>-title-at-<id>`; a locked chip is
+    // pressed and shot with its quiet line saying what opens it, `locked` in the shot.)
+    for (const st of c.mtns || []) {
+      await go(st);
+      await page.waitForTimeout(3000);
+      const ids = await page.evaluate(() => Array.from(document.querySelectorAll('.gs9-chip')).map((b) => (b.dataset.fk || '').replace(/^m-/, '')));
+      for (const id of ids) {
+        await closeRooms();
+        const locked = await page.evaluate((id) => !!document.querySelector(`[data-fk="m-${id}"].is-locked`), id);
+        const sel = await page.evaluate((id) => !!document.querySelector(`[data-fk="m-${id}"].is-sel`), id);
+        if (!sel) {
+          await click(`[data-fk="m-${id}"]`, 4000);
+          // (The veil crosses while the app builds the mountain under it, seconds on a first build: the shot waits for
+          // the title to say it is there, then as long as a player's first look.)
+          if (!locked) await page.waitForFunction((id) => { const t = window.__gs.ui.title; return !t.travelling && t.model && t.model.selected === id; }, id, { timeout: 20000, polling: 100 }).catch(() => {});
+          await page.waitForTimeout(locked ? 700 : 2500);
+        }
+        await shoot(`${st}-title-at-${id}`, { stage: st, screen: 'title', mountain: id, locked });
+        if (locked) await page.waitForTimeout(3000);
+      }
+    }
     if (c.link) {
       for (const st of c.linkStages || ['fresh']) {
         await go(st, `&c=${c.link}`);

@@ -190,8 +190,6 @@ export class Title {
       if (block.classList.contains('gs9-pick') || block.classList.contains('gs9-doors')) for (const c of Array.from(block.querySelectorAll('.gs9-chip, .gs9-door, .gs9-seg'))) n = pushRect(out, n, c);
       else n = pushRect(out, n, block);
     }
-    const sound = this.el.querySelector('.gs9-sound');
-    if (sound) n = pushRect(out, n, sound);
     if (this.room) n = pushRect(out, n, this.room.el);
     return n;
   }
@@ -281,13 +279,13 @@ export class Title {
     if (how) main.append(how);
     this.aimEl = this.aim(m);
     main.append(this.aimEl);
-    if (!m.firstVisit) main.append(this.doors(m));
+    // A first visit has no doors (and so no Settings): one labelled Sound toggle stands where they will, at the column's
+    // foot, so a new player can mute before the first run starts any music. (Round 9, the feelui lane: in the top right
+    // corner it sat over the logo's last letter on a phone, where the logo is centred.)
+    main.append(m.firstVisit ? this.soundToggle() : this.doors(m));
     // While a room is open the screen under it stays inert (the room gives it back as it closes).
     if (this.room) main.inert = true;
     el.insertBefore(main, this.veil);
-    // A first visit has no doors (and so no Settings): one labelled Sound toggle keeps the top right, so a new player
-    // can mute before the first run starts any music.
-    if (m.firstVisit) el.insertBefore(this.soundToggle(), this.veil);
     // The column arrives from the logo's side once, top to bottom (ART.md 10: a screen comes and goes the way it is
     // built); a re-render (a mountain picked, the rivals in) swaps in place. Reduced motion: no movement (tokens.css).
     if (!this.entered) {
@@ -307,9 +305,19 @@ export class Title {
     const strip = h('div', 'gs9-strip');
     strip.setAttribute('role', 'group');
     strip.setAttribute('aria-label', 'Where you ride');
-    for (const c of pickerOrder(m.mountains)) strip.append(this.chip(c, c.id === m.selected));
-    // (Eight mountains do not fit one row on a 1280 desk or a 390 px phone with every name whole: two rows of four.)
-    strip.classList.toggle('is-many', m.mountains.length > STRIP_ONE_ROW);
+    const order = pickerOrder(m.mountains);
+    const at = order.findIndex((c) => c.id === m.selected);
+    // (Eight mountains do not fit one row on a 1280 desk or a 390 px phone with every name whole: two rows of four. The
+    // picked chip is twice as wide as the others in its row, and both rows end on one edge: screens.css. With the Daily,
+    // the Cup or a Trial chosen no chip is picked. Round 9, the feelui lane.)
+    const many = m.mountains.length > STRIP_ONE_ROW;
+    order.forEach((c, i) => {
+      const chip = this.chip(c, i === at);
+      if (many && at >= 0 && i < 8 && (i < 4) === (at < 4)) chip.classList.add('in-pick-row');
+      strip.append(chip);
+    });
+    strip.classList.toggle('is-many', many);
+    strip.classList.toggle('has-pick', many && at >= 0 && order.length === 8);
     // A mouse wheel turns the strip when it scrolls (a phone's five chips).
     strip.addEventListener(
       'wheel',
@@ -408,17 +416,15 @@ export class Title {
       out.append(seg);
     }
     // The mirror is a switch, on or off, as settings' switches are, apart from the hour's pair (one of two): drawn as a
-    // third pill beside them it read as a third hour. Round 9, the polish lane.
+    // third pill beside them it read as a third hour. Round 9, the polish lane. (A mirror not yet open says nothing here,
+    // the five's and the new mountains' alike: a new one's way in, its three home riders, is said on its board under
+    // them. Round 9, the feelui lane, DECISIONS 404: on the title it cost five words a new mountain's title did not have.)
     if (m.mirror) {
       const on = m.mirror.on;
       const b = b9(this.ctx, 'quiet', ['Mirrored', h('span', 'gs9-switch')], { fk: 'mirror', aria: `Ride ${name} mirrored`, cls: 'gs9-mirror', onClick: () => this.hd.onMirror?.(!on) });
       b.setAttribute('role', 'switch');
       b.setAttribute('aria-checked', String(on));
       out.append(b);
-    } else {
-      // (A new mountain's mirror not yet open says its way in, words and not a control. Round 9, the wiring lane.)
-      const way = mirrorWay(named);
-      if (way) out.append(way);
     }
     if (out.childElementCount === 1 && named.bestTime) out.classList.add('is-best-only');
     return out.childElementCount > 0 ? out : null;
@@ -594,7 +600,7 @@ export function titleAim(m: TitleModel, locked: MountainCard | null = null): { i
     const g = /^Pass (\d+) more ghosts? to unlock$/.exec(c.unlockText);
     const tw = /^Beat (\d+) more of The Twelve to unlock$/.exec(c.unlockText);
     if (g) return { icon: 'lock', text: `${g[1]} more ${g[1] === '1' ? 'ghost opens' : 'ghosts open'} ${c.name}`, tone: 'plain' };
-    if (tw) return { icon: 'lock', text: `Beat ${tw[1]} more of The Twelve to open ${c.name}`, tone: 'plain' };
+    if (tw) return { icon: 'lock', text: twelveAim(tw[1], c.name), tone: 'plain' };
     const what = c.unlockText.replace(/ to unlock$/, '').replace(/^Pass/, 'pass').replace(/^Beat/, 'beat');
     return { icon: 'lock', text: `${c.name}: ${what} to open it`, tone: 'plain' };
   }
@@ -604,7 +610,7 @@ export function titleAim(m: TitleModel, locked: MountainCard | null = null): { i
     .sort((a, b) => a.n - b.n)[0];
   if (byGhosts) return { icon: 'ghost', text: `${fmt(byGhosts.n)} more ${byGhosts.n === 1 ? 'ghost opens' : 'ghosts open'} ${byGhosts.c.name}`, tone: 'ghost' };
   const lf = m.mountains.find((x) => x.locked && /Twelve/.test(x.unlockText));
-  if (lf) return { icon: 'trophy', text: `Beat ${/(\d+)/.exec(lf.unlockText)?.[1] ?? 'more'} more of The Twelve to open ${lf.name}`, tone: 'plain' };
+  if (lf) return { icon: 'trophy', text: twelveAim(/(\d+)/.exec(lf.unlockText)?.[1] ?? '', lf.name), tone: 'plain' };
   const bar = m.spine?.bar;
   const next = bar?.next?.[0];
   // (How far, then the prize: "1,281 XP to the Crane's Memory charm". Round 9, the polish lane: with "Rider Rank 26:"
@@ -614,22 +620,11 @@ export function titleAim(m: TitleModel, locked: MountainCard | null = null): { i
   return { icon: 'book', text: 'Every page of the Almanac turned', tone: 'plain' };
 }
 
-/** Round 9 (M3): where the hour and the mirror stand, a new mountain's way to its mirror while it is shut: its home
- *  riders, beaten to the line (its board's row names them). Words, not a control, five at most: "Mirrored: beat its 3
- *  riders", then "Mirrored: 1 rider to beat". Nothing for a mountain whose mirror opens another way, or once it is open
- *  (the toggle stands there then). */
-export function mirrorWayText(c: Pick<MountainCard, 'mirrorRiders'>): string | null {
-  const r = c.mirrorRiders;
-  if (!r || r.open || r.of <= 0) return null;
-  const left = r.of - r.beaten;
-  return r.beaten > 0 ? `Mirrored: ${left} ${left === 1 ? 'rider' : 'riders'} to beat` : `Mirrored: beat its ${r.of} riders`;
-}
-
-function mirrorWay(c: MountainCard): HTMLElement | null {
-  const text = mirrorWayText(c);
-  if (!text) return null;
-  // (A reader hears the rest: where they are beaten, and what it opens.)
-  return h('span', 'gs9-how-way', ico9('lock'), h('span', '', text), sr(` to the line, to ride ${c.name} mirrored`));
+/** The finale's goal by The Twelve, in seven words: the place, then what opens it ("Lanternfall: beat 9 more of The
+ *  Twelve"). Round 9, the feelui lane, DECISIONS 404: "Beat 9 more of The Twelve to open Lanternfall" was nine, and with
+ *  eight chips the run-50 title went past its forty; the count and its word are kept. */
+function twelveAim(n: string, name: string): string {
+  return n ? `${name}: beat ${n} more of The Twelve` : `${name}: beat more of The Twelve`;
 }
 
 const MEDAL = ['', 'Bronze', 'Silver', 'Gold'] as const;

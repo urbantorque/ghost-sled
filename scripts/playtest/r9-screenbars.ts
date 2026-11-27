@@ -359,8 +359,10 @@ function main(): void {
     console.log(`\nWORDS (bars: the title at run 50 at most 40; the results' first view at most 35; a fresh title no worse than today)`);
     for (const [k, s] of Object.entries(S)) {
       // (Every shot; the bars only on theirs. Details is one level down: the 35 is the first view's.)
-      const bar = /-50-title(-ready)?$/.test(k) ? 40 : /-results-/.test(k) && !k.endsWith('-details') ? 35 : null;
-      console.log(`  ${k.padEnd(34)} ${String(s.figures.words).padStart(4)} words${bar ? `   bar ${bar}: ${s.figures.words <= bar ? 'MET' : `fails by ${s.figures.words - bar}`}` : ''}`);
+      // (Round 9, the feelui lane: "-title-at-<id>" is the run-50 title with that mountain picked, r9-truth.js `mtns`.)
+      // (A locked chip pressed is not a title picked: its line says what opens it, and the bar is not held to it.)
+      const bar = /-50-title(-ready|-at-[a-z]+)?$/.test(k) && !s.locked ? 40 : /-results-/.test(k) && !k.endsWith('-details') ? 35 : null;
+      console.log(`  ${k.padEnd(34)} ${String(s.figures.words).padStart(4)} words${bar ? `   bar ${bar}: ${s.figures.words <= bar ? 'MET' : `fails by ${s.figures.words - bar}`}` : ''}${s.locked ? '   (locked chip pressed)' : ''}`);
     }
     console.log(`\nONE THING TO PRESS (bar: one primary a screen, nothing else styled like one, no lone icons)`);
     for (const [k, s] of Object.entries(S)) {

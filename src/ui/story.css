@@ -121,10 +121,12 @@
   align-self: center;
 }
 
+/* The time in the word's italic 900, a step larger than its capitals so the figure stands as one (ART.md 10: the place,
+   its word and the time in italic 900). Round 9, the feelui lane: upright at 800 and a fifth smaller, it read as a
+   caption to the word. */
 .gs9-mo-time {
-  font-size: 0.8em;
-  font-style: normal;
-  font-weight: var(--fw-label);
+  font-size: 1.14em;
+  letter-spacing: -0.01em;
   text-transform: none;
 }
 
