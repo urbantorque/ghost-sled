@@ -1,13 +1,13 @@
 import { hash32, hashString } from './prng';
 
-/** The looks the world and the music are dressed for: the four, Lanternfall's own (round 7), the Old Run's and Gullhaven's
- *  (round 9, notes/r9-oldrun.md section 2, notes/r9-gullhaven.md). */
-export type BiomeId = 'alpine' | 'glacier' | 'volcanic' | 'blossom' | 'lantern' | 'oldrun' | 'gullhaven';
+/** The looks the world and the music are dressed for: the four, Lanternfall's own (round 7), the Old Run's, Gullhaven's
+ *  and Gablefall's (round 9, notes/r9-oldrun.md section 2, notes/r9-gullhaven.md, notes/r9-gablefall-world.md). */
+export type BiomeId = 'alpine' | 'glacier' | 'volcanic' | 'blossom' | 'lantern' | 'oldrun' | 'gullhaven' | 'gablefall';
 /** What a course is built as. Since Lanternfall's world was built this is the look itself; the name is kept for
  *  the sim's tables. (Round 9: and a new mountain that lays its own ground, under its own id, until its world lane makes
- *  it a look of its own: it borrows one meanwhile, LOOK below. The Old Run's is its own.) */
+ *  it a look of its own: it borrows one meanwhile, LOOK below. The Old Run's, Gullhaven's and Gablefall's are their own.) */
 export type CourseBiome = BiomeId;
-export type MountainId = 'pinecrest' | 'frostfang' | 'ember' | 'sakura' | 'lanternfall' | 'oldrun' | 'gullhaven' | 'daily';
+export type MountainId = 'pinecrest' | 'frostfang' | 'ember' | 'sakura' | 'lanternfall' | 'oldrun' | 'gullhaven' | 'gablefall' | 'daily';
 
 /** A new mountain's borrowed look, until its world lane gives it its own (round 9; Lanternfall's round 7 path). */
 const LOOK: Partial<Record<CourseBiome, BiomeId>> = {};
@@ -178,6 +178,25 @@ const BIOME_PARAMS: Record<CourseBiome, MountainParams> = {
     snowmanChance: 0,
     rampDistance: 4800,
   },
+  // Gablefall (round 9, notes/r9-gablefall.md): a hill town ridden on its roofs, laid by its own file (gablefall.ts). Its
+  // kit stands its own chimneys and lays its own lines, so nothing here lays a feature; its slope is the street's mean
+  // grade (a get-up's push and the far terrain read it), its ramp its own 2,800 m.
+  gablefall: {
+    biome: 'gablefall',
+    slope: 0.2,
+    wander: 0,
+    halfWidthStart: 12,
+    halfWidthEnd: 12,
+    density: 0,
+    kickerChance: 0,
+    dropChance: 0,
+    mogulChance: 0,
+    iceChance: 0,
+    ventChance: 0,
+    gateChance: 0,
+    snowmanChance: 0,
+    rampDistance: 2800,
+  },
 };
 
 /** Lanternfall's seed. Chosen among eight: its descent keeps every promise the fairness test makes of a
@@ -194,6 +213,11 @@ export const OLDRUN_LAB_SEED = OLDRUN_SEED;
 export const GULLHAVEN_SEED = 0x1f83d9ab;
 /** (The name its lab knew it by.) */
 export const GULLHAVEN_LAB_SEED = GULLHAVEN_SEED;
+/** Round 9: Gablefall's seed (SHA-256's eighth initial word, beside Gullhaven's seventh): its lab course, kept as the
+ *  mountain's own (no Daily's and no Cup's to 2040, tests/gablefall.test.ts; its rows are the ones the lab tuned). */
+export const GABLEFALL_SEED = 0x5be0cd19;
+/** (The name its lab knew it by.) */
+export const GABLEFALL_LAB_SEED = GABLEFALL_SEED;
 
 export const MOUNTAINS: readonly MountainDef[] = [
   { id: 'pinecrest', name: 'Pinecrest', tagline: 'Pine forest, soft powder, snowmen', seed: 0x51ed270b, unlockGhosts: 0 },
@@ -205,6 +229,8 @@ export const MOUNTAINS: readonly MountainDef[] = [
   // ?debug&m=, the pool generator, the graveyards' naming order).
   { id: 'oldrun', name: 'The Old Run', tagline: 'An old ice track: ride high on the glaze', seed: OLDRUN_SEED, unlockGhosts: 18 },
   { id: 'gullhaven', name: 'Gullhaven', tagline: 'A sea cape: pop off the gully lips, ride the wind', seed: GULLHAVEN_SEED, unlockGhosts: 32 },
+  // (The last of the three, and the first a player meets: at 8 ghosts, between Frostfang and Ember.)
+  { id: 'gablefall', name: 'Gablefall', tagline: 'A snowed-in town: ride its roofs down', seed: GABLEFALL_SEED, unlockGhosts: 8 },
 ];
 
 
@@ -216,6 +242,7 @@ const BIOME_BY_SEED = new Map<number, CourseBiome>([
   [LANTERNFALL_SEED, 'lantern'],
   [OLDRUN_LAB_SEED, 'oldrun'],
   [GULLHAVEN_LAB_SEED, 'gullhaven'],
+  [GABLEFALL_LAB_SEED, 'gablefall'],
 ]);
 
 const BIOMES: readonly BiomeId[] = ['alpine', 'glacier', 'volcanic', 'blossom'];

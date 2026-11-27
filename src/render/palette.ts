@@ -379,6 +379,28 @@ function base(): Palette {
 function biomeBase(biome: BiomeId): Palette {
   const p = base();
   switch (biome) {
+    case 'gablefall':
+      // What the chaos moods stand on at Gablefall (round 9, notes/r9-gablefall-world.md): white snow with a lilac-grey
+      // shade, the town's slate and stone for what is hard (chimneys are stone, never warm), no trees, and no hero, no
+      // peaks and no sea of cloud: a valley's low hills far off in the haze, the town's other half on them.
+      p.snowLit = c('#FAF8F6');
+      p.snowShade = c('#9A96C6');
+      p.snowDeep = c('#545C8E');
+      p.tall = c('#4A4E66');
+      p.tallDark = c('#2E3246');
+      p.low = c('#50546A');
+      p.lowLit = c('#7A7C94');
+      // (The props' accent is a painted door's deep green, never the rider's vermillion.)
+      p.accentProp = c('#2E4A4E');
+      // (A step deeper each than the sky's pale: a pale range on a pale sky left the third critic no far plane.)
+      p.ridge = [c('#C2C0D0'), c('#A2A2BA'), c('#82829E')];
+      p.massif.peak = 'hills';
+      p.massif.rock = c('#6A6880');
+      p.massif.sea = 0;
+      p.atmo.banner = 0;
+      p.atmo.slide = 0;
+      p.atmo.valleyColor = c('#D4D0DA');
+      return p;
     case 'alpine':
       return p;
     case 'gullhaven':
@@ -1007,6 +1029,54 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.snowfall = 0.03;
       p.sparkle = 0.9;
       return;
+    case 'gablefall':
+      // Gablefall (round 9, notes/r9-gablefall-world.md): a snowfall in a grey afternoon over a hill town. A low cloud
+      // over the whole sky, pale lilac-grey, the sun a soft pale glow through it ahead and to the left; the light high and
+      // soft, so the snow keeps its form but its shadows are faint, and the town's windows are lit against the grey. The
+      // snow falls the whole way down, the far side of the valley a pale ghost through it.
+      setSun(p, -22, 12, 38, 30);
+      p.lightMin = 32;
+      p.sunColor = c('#F6F0EA');
+      p.sunCore = new Color(1.6, 1.55, 1.5);
+      p.sunTint = 0.4;
+      // (The one light the frame has: the cloud bright where the sun is behind it. A glow too small left the sort's
+      // critic no light in the picture at all.)
+      p.sunSize = 2.4;
+      p.sunGlow = 0.82;
+      // (A pale coin of sun through the thinner cloud ahead: the frame's one light, which the roofs' shadows and the
+      // windows answer. With no disc the first critic found nothing in the picture lighting it.)
+      p.sunDisc = 0.55;
+      p.sunSoft = 0.7;
+      p.skyZenith = c('#6A6E8C');
+      p.skyMid = c('#9C9CB6');
+      p.skyHorizon = c('#DCD6D8');
+      p.skyBand = { color: null, fade: 28, k: 0 };
+      p.skyBelow = c('#C8C6D2');
+      p.skySpread = 0.7;
+      p.skyCurve = 0.62;
+      p.rim = c('#ECE8F0');
+      p.fog = c('#D8D4DE');
+      p.fogNear = 40;
+      p.fogFar = 760;
+      p.hemiSky = c('#A8AAC6');
+      p.massif.glow = c('#E8DCD8');
+      p.massif.glowK = 0.34;
+      p.massif.glowLine = -200;
+      p.massif.veil = 0.5;
+      // The snow cloud: a pale ceiling of soft billows over the whole sky, a little lighter low toward the hidden sun.
+      p.deck = { k: 0.62, lit: c('#B4B2C6'), shade: c('#7E8098'), glow: c('#D8D0D0'), edge: 0 };
+      p.clouds = { low: 0.25, high: 0, top: 0.15, lit: c('#E6E2E8'), shade: c('#9496AE'), rim: c('#EEE6E4'), shadow: 0 };
+      p.grade = { lift: c('#0C0E26'), gain: c('#FFF8F4'), saturation: 1.02, contrast: 1.16, grain: 0.8, foot: 0.32, shafts: 0, lens: 0.2, focal: 0.5, gust: 0, glitter: 0.18 };
+      p.poster.shafts = 0;
+      Object.assign(p.poster, { rim: 0.35, bands: 3, stripe: 0, rings: 0 });
+      p.atmo = { rays: 0, halo: 0, meteors: 0, banner: 0, slide: 0, sweep: 0, valley: 0.6, valleyColor: c('#D4D0DA'), drift: 0.45 };
+      // (Soft shadows under the cloud: the form of the roofs and the street's canyon, never the five's hard blue.)
+      p.shadowK = 0.7;
+      p.bloom = 0.34;
+      // (A steady fall, not a storm: heavier, its big flakes at the lens read to the critics as smudges on the glass.)
+      p.snowfall = 0.42;
+      p.sparkle = 0.45;
+      return;
     case 'alpine':
       // A bright ski day: a high white sun off to the right, deep cobalt over pale blue, teal pines and
       // short, sharp blue shadows.
@@ -1335,6 +1405,20 @@ function round7(p: Palette, biome: BiomeId): void {
       p.posterSunSat = 0.6;
       p.poster.foot = 0.42;
       return;
+    case 'gablefall':
+      // The far plane is the snowfall's lilac-grey, the valley's far side a pale ghost in it; the air thick below the lens
+      // where the valley falls to the river. The windows and the lamps tell in the grey day.
+      p.air = { far: c('#9090AC'), cool: c('#ECEAF6'), low: 0.6, scatter: 0.6 };
+      p.lamps = 0.55;
+      p.grade.exposure = 1;
+      p.grade.hi = c('#FFF8F2');
+      p.grade.lo = c('#E6E6F6');
+      p.grade.posterKey = 0.9;
+      p.grade.posterCool = 0.15;
+      p.posterSnowSat = 0.6;
+      p.posterSunSat = 0.5;
+      p.poster.foot = 0.4;
+      return;
     case 'alpine':
       p.air = { far: c('#6E9AE2'), cool: c('#E4ECFF'), low: 0.5, scatter: 1.1 };
       p.lamps = 0.2;
@@ -1526,6 +1610,11 @@ function visualLift(p: Palette, biome: BiomeId): void {
       // (The low sun's sheen on the wind-packed shelf seen toward it; under a storm deck the sky's fill is its slate.)
       p.lift = { bounce: 0.4, sun: 0.72, tint: c('#FFF6EA'), sky: 0.4, through: 0.4, sheen: 0.9 };
       return;
+    case 'gablefall':
+      // (Under a snow cloud the sky is the fill: a big soft sky light, little sun, no sheen; the snow bounces up under the
+      // eaves.)
+      p.lift = { bounce: 0.46, sun: 0.5, tint: c('#FFFFFF'), sky: 0.58, through: 0.3, sheen: 0.25 };
+      return;
     case 'alpine':
       p.lift = { bounce: 0.42, sun: 0.75, tint: c('#FFFFFF'), sky: 0.48, through: 0.6, sheen: 0.8 };
       return;
@@ -1601,6 +1690,50 @@ export interface JourneyStop {
  *  nowhere else. What belongs to a place rather than to the hour (a street's lamplight, a cavern's dark)
  *  is in PLACES below, keyed to the course's own sections. Round 7 restaged every row to ART.md 15. */
 export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
+  // Gablefall (round 9, notes/r9-gablefall-world.md): a grey afternoon in a snowfall, daylight all the way. The snow
+  // thickens over Church Hill into the Market (the far side of the valley goes, the windows tell more), then thins down
+  // the Water Stairs as the cloud breaks over the river, a pale sun through the gap, and the line is crossed in daylight
+  // with the snow still falling: a sequence of pictures, not one grey (ART.md 15, rule 5).
+  gablefall: [
+    {
+      from: 500, at: 1150, dusk: 0.05,
+      edit: (p) => {
+        p.fogFar = 560;
+        p.fog = c('#D2CEDC');
+        p.skyZenith = c('#62667E');
+        p.skyMid = c('#9294AE');
+        p.snowfall = 0.55;
+        p.lamps = 0.65;
+        p.massif.veil = 0.7;
+        p.sunGlow = 0.45;
+        p.sunDisc = 0.3;
+        p.shadowK = 0.55;
+        p.grade.contrast = 1.18;
+      },
+    },
+    {
+      from: 1900, at: 2500, dusk: 0.1,
+      edit: (p) => {
+        p.fogFar = 1000;
+        p.fog = c('#D2D0DA');
+        p.skyZenith = c('#747894');
+        p.skyMid = c('#A8A8C0');
+        p.skyHorizon = c('#E6E2E2');
+        p.deck.lit = c('#C8C6D6');
+        p.deck.glow = c('#ECE4DE');
+        p.snowfall = 0.34;
+        p.lamps = 0.5;
+        p.massif.veil = 0.4;
+        // (The cloud breaks over the river: a pale silver-gold sun through the gap, the shadows firm, the snow thinning.)
+        p.sunGlow = 1.05;
+        p.sunDisc = 0.85;
+        p.sunColor = c('#FFF0DC');
+        p.deck.k = 0.45;
+        p.shadowK = 0.85;
+        p.grade.hi = c('#FFF4E4');
+      },
+    },
+  ],
   // The Old Run (round 9, notes/r9-oldrun-world.md): a winter afternoon going down. The sun sinks through the wood over
   // the Hotel Straights and the Labyrinth, sets gold over the lake through the Horseshoe, and the line is crossed in the
   // first blue of the evening, the parapet's iron lamps lit.
@@ -3049,6 +3182,83 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       },
     ],
   },
+  // Gablefall at Evensong (round 9, notes/r9-gablefall-world.md): the same snowfall at the day's end. The cloud a deep
+  // blue-violet lit faintly warm from under by the town; the snow lilac-blue, its shade a deep slate; every window lit,
+  // the lamps over the doors and at the alleys' gates, the church's windows at the head of the town and the bridge's lamps
+  // at the line the warm light, the snow falling through it. No moon and no stars: it is still snowing.
+  gablefall: {
+    name: 'Evensong',
+    phrase: 'at Evensong',
+    dusk: 0.85,
+    start: (p) => {
+      setSun(p, -24, 4, 34, 22);
+      p.sunDisc = 0;
+      p.sunColor = c('#B8BEE0');
+      p.sunCore.setRGB(1.2, 1.2, 1.4);
+      p.sunGlow = 0.35;
+      p.sunSize = 1.6;
+      p.skyZenith = c('#1E2248');
+      p.skyMid = c('#3A3E6C');
+      p.skyHorizon = c('#7A6E8E');
+      p.skyBand = { color: c('#B8909A'), fade: 22, k: 0.35 };
+      p.skyBelow = c('#3E4270');
+      p.snowLit = c('#C6CCEA');
+      p.snowShade = c('#4A5294');
+      p.snowDeep = c('#2A3068');
+      p.rim = c('#D4D8F4');
+      p.fog = c('#4A4E7C');
+      p.fogNear = 30;
+      p.fogFar = 600;
+      p.hemiSky = c('#5A62A0');
+      p.air = { far: c('#3A3E6A'), cool: c('#D8DCF6'), low: 0.5, scatter: 0.8 };
+      // (The snow cloud low over the town, lit warm from under by its windows.)
+      p.deck = { k: 0.66, lit: c('#5C5A86'), shade: c('#262A50'), glow: c('#8E7A8C'), edge: 0 };
+      p.clouds = { low: 0.2, high: 0, top: 0.1, lit: c('#6A6890'), shade: c('#2E3258'), rim: c('#A890A0'), shadow: 0 };
+      p.ridge = [c('#5A5E8A'), c('#464A78'), c('#363A66')];
+      p.massif.rock = c('#2E3258');
+      p.massif.glow = c('#9A8494');
+      p.massif.glowK = 0.15;
+      p.massif.veil = 0.6;
+      p.atmo = { rays: 0, halo: 0, meteors: 0, banner: 0, slide: 0, sweep: 0, valley: 0.5, valleyColor: c('#4E5280'), drift: 0.4 };
+      p.stars = 0;
+      p.hazardDim = 0.88;
+      p.lamps = 1.4;
+      p.lampAir = 0.05;
+      p.lanternGlow = 0.8;
+      p.giftGlow = 0.45;
+      p.ghostGlow = 1.5;
+      p.heroRim = 1.4;
+      p.bloom = 0.52;
+      p.sparkle = 0.6;
+      p.snowfall = 0.6;
+      p.shadowK = 0.4;
+      p.grade = { ...p.grade, shafts: 0, saturation: 1.04, contrast: 1.1, exposure: 1.04, glitter: 0.15, hi: c('#F4EEFF'), lo: c('#DCE0FF'), flash: 0.45 };
+      Object.assign(p.poster, { steps: 2, bands: 4, stripe: 0, rim: 0.55, vignette: 0.24, shadow: c('#2C3270'), shadowK: 0.35 });
+    },
+    journey: [
+      {
+        // The night comes in over the Market, the snow thickest there.
+        from: 700, at: 1500, dusk: 0.95,
+        edit: (p) => {
+          p.skyZenith = c('#161A3C');
+          p.skyHorizon = c('#5E5878');
+          p.fogFar = 520;
+          p.snowfall = 0.75;
+          p.lamps = 1.55;
+        },
+      },
+      {
+        // The river: the bridge's lamps and the quay's windows the light at the line.
+        from: 2300, at: 2750, dusk: 1,
+        edit: (p) => {
+          p.fogFar = 700;
+          p.snowfall = 0.5;
+          p.lamps = 1.65;
+          p.lampAir = 0.07;
+        },
+      },
+    ],
+  },
   lantern: {
     name: 'First Light',
     phrase: 'at First Light',
@@ -3275,6 +3485,43 @@ const lamps = (p: Palette, k: number): void => {
  *  acts carry their places with them. A row is a place's own picture: its exposure and split tone, its
  *  air, and what lights it. Blended in over the section's own blend and out past its end. */
 export const PLACES: Record<BiomeId, Place[]> = {
+  // Gablefall (round 9, notes/r9-gablefall-world.md): its places graded over the hour's light. The church's nave at the
+  // head of the town, its windows lit; the close and the two market squares, the lamps and the shop windows telling
+  // round them; the street between the rows a step cooler and darker than the roofs over it (the slow way, down in the
+  // houses' shade); the quay and the river's ice open under the sky, the light at the line the day's own.
+  gablefall: [
+    {
+      kind: 'nave',
+      edit: (p) => {
+        p.grade.hi = c('#FFF4EA');
+        lamps(p, 0.6);
+      },
+    },
+    {
+      kind: 'square',
+      edit: (p) => {
+        p.grade.hi = c('#FFF2E4');
+        p.lift.bounce = 0.52;
+        lamps(p, 0.7);
+      },
+    },
+    {
+      // (The roofs and the street between them: the shade a step cooler, the windows telling in the grey.)
+      kind: 'rooftops',
+      edit: (p) => {
+        p.grade.lo = c('#DCE0F4');
+        lamps(p, 0.45);
+      },
+    },
+    {
+      kind: 'quay',
+      edit: (p) => {
+        p.grade.exposure = 1.03;
+        p.grade.lo = c('#E2E6F8');
+        p.air.low = 0.4;
+      },
+    },
+  ],
   // The Old Run (round 9, notes/r9-oldrun-world.md): its places graded over the hour's light. The start house and the
   // hotel above it in the warm light off the facade; the Hotel Straights' wood dappled, shafts between the trunks; the
   // Labyrinth's deep walls holding the shade, the lamps already telling there; the Horseshoe's stretch over the lake in

@@ -952,6 +952,8 @@ export class Sfx {
         puff(v, t + 0.14, 0.12, 2200, 600, 0.25);
         break;
       }
+      // (Round 9, Gablefall: a chimney's stones knock as a rock does.)
+      case 'chimney':
       case 'rock':
         this.knock(v, t, 2200, 0.16);
         thump(v, t, 620, 300, 0.09, 0.02);

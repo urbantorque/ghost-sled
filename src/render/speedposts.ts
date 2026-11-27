@@ -85,6 +85,8 @@ const STYLES: Record<BiomeId, Style> = {
   lantern: { weights: [3, 3, 3, 1], shaft: '#DCD6EE', band: '#7462C4', fence: '#B8B0D4', flags: ['#A894EA', '#E6E0F6'] },
   // (Gullhaven, round 9: Pinecrest's, never read: it stands no stakes, its fence is the run's strobe, gullhavenworld.ts.)
   gullhaven: { weights: [3, 2, 3, 2], shaft: '#F2EADB', band: '#5C7BD0', fence: '#D8C6AC', flags: ['#5F8FE6', '#E4ECFB'] },
+  // (Gablefall, round 9: Pinecrest's, never read: it stands no stakes, its house fronts are the run's strobe, gablefallworld.ts.)
+  gablefall: { weights: [3, 2, 3, 2], shaft: '#F2EADB', band: '#5C7BD0', fence: '#D8C6AC', flags: ['#5F8FE6', '#E4ECFB'] },
 };
 
 /** Every colour a post can wear (a test holds them clear of the locked roles). */
@@ -362,8 +364,8 @@ export class SpeedPosts {
   update(z: number): void {
     // (Round 9: the Old Run's strobe is its parapet's posts and iron lamps along the lip, oldrunworld.ts; nothing of
     // the five's stakes and slalom flags stands on its crest. Gullhaven's is its snow fence along the cliff's edge and the
-    // wall on the moor, gullhavenworld.ts.)
-    if (this.cap <= 0 || this.course.kit?.id === 'oldrun' || this.course.kit?.id === 'gullhaven') return;
+    // wall on the moor, gullhavenworld.ts. Gablefall's is its house fronts and their windows, gablefallworld.ts.)
+    if (this.cap <= 0 || this.course.kit?.id === 'oldrun' || this.course.kit?.id === 'gullhaven' || this.course.kit?.id === 'gablefall') return;
     // (Reduced motion: they stand still, no flap and no whip.)
     (this.mesh.material as ShaderMaterial).uniforms.uPostLive.value = reduced() ? 0 : 1;
     if (!(Math.abs(z - this.lastZ) < 120)) this.seek(z);

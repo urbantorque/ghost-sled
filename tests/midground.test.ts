@@ -5,6 +5,7 @@ import { Mood } from '../src/sim/chaos';
 import { courseFor } from '../src/sim/course';
 import { MOUNTAINS } from '../src/sim/mountains';
 import { isGullhaven, seaLevelOf } from '../src/render/gullhavenplan';
+import { isGablefall } from '../src/render/gablefallplan';
 
 // A tree's foot may sink into the ground (each is planted 1.5 m deep) but never hang over it. Trees
 // scatter along z between the mesh's rows and used to take the height of the row they were scattered
@@ -18,6 +19,15 @@ describe('midground forest', () => {
       const course = courseFor(m.seed);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mg = new Midground(course, getPalette(course.biome, Mood.None), 'high', 110) as any;
+      // (Round 9, Gablefall: no forest stands in its town or on its valley's far side, midground.ts's town, so there is no
+      // tree to stand: none in any window down the run.)
+      if (isGablefall(course)) {
+        for (let at = 100; at < course.finishZ; at += 300) {
+          mg.update(at, true);
+          for (let q = 0; q < mg.aT.length / 4; q++) expect(mg.aT[q * 4 + 3], `a tree at ${at}`).toBeLessThanOrEqual(0);
+        }
+        return;
+      }
       // (Round 9, Gullhaven: no forest stands on its moor or its cliff, so there is no tree to stand. Its mid-ground is
       // the sea cliff falling under the sea's level seaward, the water drawn over it, and the moor rising landward.)
       if (isGullhaven(course)) {

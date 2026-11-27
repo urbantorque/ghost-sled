@@ -160,6 +160,8 @@ interface Act {
   calm?: boolean;
   /** No drift of the pilot's own here. */
   noDrift?: boolean;
+  /** Round 9, Gablefall: still spring the lips on the way (the washing lines hang over the alleys a pop crosses). */
+  lips?: boolean;
 }
 
 /** telemetry.js's frozen novice, mid, expert and line pilots, without the ghost targeting; mid and expert know
@@ -220,6 +222,9 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
   // (Round 9, Gullhaven: a gully's lip on the line this rider rides there (kit.ts lips), crouched into and sprung at,
   // and the column of lift over its mouth held in the air. The five have no kit, and never come here.)
   const lifted = !!(c.kit && c.hasLift);
+  // (Round 9, Gablefall: a street between rows of roofs; a flight is aimed down on the line this rider rides, the ridge of
+  // its row, not the street's middle. The five have no kit, and never come here.)
+  const levels = !!(c.kit && c.hasLevels);
   const lipAhead = (s: AnySim): AnySim | null => {
     if (!c.kit || !c.kit.lips || kit.floor || skill === 'line' || skill === 'novice') return null;
     Object.assign(rider, { x: s.x, y: s.y, z: s.z, v: s.speed });
@@ -400,6 +405,30 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         const px = kit.pathX;
         return { x: (z: number) => px(c, p.path, z), noDrift: true };
       }
+      case 'awnings': {
+        // (Round 9, Gablefall.) Down in the market street, popping as soon as the sled is down and stomping each landing
+        // (the air's own habit), as down a street's hops: so many come down on the stalls' awnings.
+        if (!skilled) return null;
+        const mid = (z: number): number => c.centerX(z);
+        if (!s.grounded || s.y - c.baseY(s.z) > 1) return { x: mid, noDrift: true };
+        if (M.wait > 0) M.wait--;
+        if (p.z1 - s.z < v * 1.2 || M.wait > 0) return { x: mid, noDrift: true };
+        if (M.tap === 0) M.tap = 14 + Math.floor(mr() * 5 * sloppy);
+        if (--M.tap === 0) {
+          M.wait = 16;
+          return { x: mid, action: false, calm: true, noDrift: true };
+        }
+        return { x: mid, action: true, calm: true, noDrift: true };
+      }
+      case 'washing': {
+        // (Round 9, Gablefall.) Through the next line on this rider's row where it sags lowest, springing the alley's lip
+        // under it as always.
+        if (!skilled) return null;
+        const side = s.x >= c.centerX(s.z) ? 1 : -1;
+        const tw = p.targets.find((q: AnySim) => q.z > s.z + 1 && (q.x - c.centerX(q.z)) * side > 0);
+        if (!tw || tw.z - s.z > Math.max(45, s.speed * 1.6)) return null;
+        return { x: () => tw.x, noDrift: true, lips: true };
+      }
       case 'stacks': {
         // (Round 9, Gullhaven.) Through the next gap between the stacks, from a second and a half out.
         const t = p.targets.find((q: AnySim) => q.z > s.z + 1);
@@ -514,7 +543,7 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         const land = timeToLand(sim);
         P.flight = land.t;
         const room = c.halfWidth(land.z) - Math.abs(land.x - c.centerX(land.z));
-        const off = land.x - (lifted ? lineAt(land.z) : c.safeX(land.z));
+        const off = land.x - (lifted || levels ? lineAt(land.z) : c.safeX(land.z));
         // (The careful line spins nothing. It used to: it took the mid pilot's habit with its hands, each spin's
         // held key pushed it two to four metres off the line in the air, and it skipped down the landing face
         // unable to steer back, into the trees ten metres out. That was the pilot, not the landing.)
@@ -553,7 +582,7 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
       } else if ((skill === 'mid' || skill === 'expert') && !(piece && (piece.verb === 'steps' || piece.verb === 'carry'))) {
         // (Not over a set piece that is decided by its landings: this nudge is past the air's dead zone, so it
         // turns the sled as well as moving it, and a landing half way round is a sketchy one.)
-        const off = lifted ? liftOff(s, land) : land.x - c.safeX(land.z);
+        const off = lifted ? liftOff(s, land) : levels ? land.x - lineAt(land.z) : land.x - c.safeX(land.z);
         // (Gently, unless the landing is well off the line: then the line matters more than a square landing. Over a
         // gully's column always gently: a held key there spins the sled out of it.)
         const soft = (setUp && Math.abs(off) < 2) || (lifted && c.liftX(s.z) !== null);
@@ -592,7 +621,7 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
       return { steer: 4, action: false };
     }
     let ramp = !act ? nextRamp(s) : null;
-    const lip = !act && !ramp ? lipAhead(s) : null;
+    const lip = (!act || act.lips) && !ramp ? lipAhead(s) : null;
     let target = lineAt;
     // A kicker whose flight comes down on glass that is to be slid across is ridden round: a popped flight off
     // the one above Mirror Lake lands 110 m into its 270 m, and what is left is too short for a slide each way.
@@ -607,7 +636,7 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
     else if (aim) target = aim;
     // (Round 9, Gullhaven: a drift is for a bend in the line this rider rides, not the path's swing round a gully's head
     // while it holds the straight line past it. The five have no kit, and read the safe line as before.)
-    const lineB: (z: number) => number = c.kit && lifted ? lineAt : (z: number) => c.safeX(z);
+    const lineB: (z: number) => number = c.kit && (lifted || levels) ? lineAt : (z: number) => c.safeX(z);
     const bend = lineB(s.z + 24) - lineB(s.z + 4);
     const room = c.halfWidth(s.z) - Math.abs(s.x - c.centerX(s.z));
     // (Not on the Old Run's track: a drift there is a skid across a wall, not a turn.)
@@ -913,7 +942,7 @@ export function trickster(skill: 'mid' | 'expert', sim: AnySim, seed: number, ki
     // column toward its middle, and past it toward the line it comes down on.)
     const c9 = sim.course;
     const lx9 = c9.kit && c9.hasLift ? c9.liftX(s.z) : null;
-    const off = c9.kit && c9.hasLift ? (lx9 !== null ? s.x - lx9 : land.x - c9.lineFor(land.z, { x: s.x, y: s.y, z: s.z, v: s.speed, skill: skill === 'expert' ? 0.9 : 0.55, nerve: skill === 'expert' ? 0.7 : 0.3 })) : land.x - sim.course.safeX(land.z);
+    const off = c9.kit && (c9.hasLift || c9.hasLevels) ? (lx9 !== null ? s.x - lx9 : land.x - c9.lineFor(land.z, { x: s.x, y: s.y, z: s.z, v: s.speed, skill: skill === 'expert' ? 0.9 : 0.55, nerve: skill === 'expert' ? 0.7 : 0.3 })) : land.x - sim.course.safeX(land.z);
     let cruise = Math.abs(off) > 0.8 ? (off > 0 ? 3 : 5) : 4;
     // (Once the trick is in, a rider well off the line steers for it outright, as the classic pilots do: the landing
     // set squares the sled, and a landing among the trees ends a combo as surely as a fall.)

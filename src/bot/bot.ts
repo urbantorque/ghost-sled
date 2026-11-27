@@ -415,6 +415,8 @@ export class Bot {
   private reflex = false;
   /** Riding a set piece's gates (momentOff): no detours, a nearer look. */
   private inGates = false;
+  /** Round 9, Gablefall: down the market street for its awnings, off the roofs its kit line would ride. */
+  private inStreet = false;
   /** Round 9: a new mountain's line for this rider as it is (kit.ts lineFor), and the Old Run's track (the walls' yaw
    *  and the damped swing in its heading). Read once at construction; false on the five, so nothing below runs there. */
   private readonly kitLine: boolean;
@@ -424,6 +426,9 @@ export class Bot {
    *  passed to the flight model, undefined elsewhere so the five's flights are stepped exactly as before). */
   private readonly kitLips: boolean;
   private readonly lift: ((x: number, y: number, z: number) => number) | undefined;
+  /** Round 9: a street between rows of roofs (Gablefall's): a flight comes down on this rider's own line, the ridge of
+   *  its row or the street, as over Gullhaven's columns. False on every other course. */
+  private readonly levels: boolean;
   private readonly grad = { x: 0, z: 0 };
 
   constructor(
@@ -445,6 +450,7 @@ export class Bot {
     this.onTrack = this.course.layout.grammar === 'oldrun';
     this.kitLips = this.course.kit?.lips !== undefined;
     this.lift = this.course.hasLift ? (x, y, z) => this.course.liftAt(x, y, z) : undefined;
+    this.levels = this.course.hasLevels;
     this.rider.skill = this.t.skill;
     // (The fork coin's own odds, read, never drawn: a new mountain's bold choices are made by nerve as the rider goes.)
     this.rider.nerve = this.t.ambition * (0.2 + 0.8 * this.t.skill);
@@ -590,7 +596,7 @@ export class Bot {
     // (Down a slalom of sitting gates the line is the slalom itself, one smooth swing gate to gate.)
     const x = this.lines.safeX(z) + (this.slalom ? this.slalomOff(this.slalom, z) : this.off) + this.charmOff(z);
     // (Round 9: a new mountain's line for this rider as it is at this thought.)
-    return this.kitLine ? x + this.course.lineFor(z, this.rider) - this.lines.safeX(z) : x;
+    return this.kitLine && !this.inStreet ? x + this.course.lineFor(z, this.rider) - this.lines.safeX(z) : x;
   }
 
   /** The lane this rider rides for at each charm gate, chosen once its offers are dealt (-1 not yet). */
@@ -751,6 +757,15 @@ export class Bot {
       const t = p.targets[mo.at];
       return t && t.z - z < 70 ? t.x - this.lines.safeX(t.z) : null;
     }
+    // (Round 9, Gablefall: the next washing line on this rider's row where it sags lowest, off the ridge's line it rides;
+    // the market street's own middle for its awnings.)
+    if (p.verb === 'washing') {
+      const c = this.course;
+      const side = sim.s.x >= c.centerX(z) ? 1 : -1;
+      const t = p.targets.find((q) => q.z > z + 1 && (q.x - c.centerX(q.z)) * side > 0);
+      return t && t.z - z < 70 ? t.x - c.lineFor(t.z, this.rider) : null;
+    }
+    if (p.verb === 'awnings') return 0;
     if (p.verb === 'gates' || p.verb === 'beam') {
       // (Sitting gates are one line from the set piece's first metre to its last gate: a rider who left it
       // between gates popped there, and flew the next three.)
@@ -854,8 +869,10 @@ export class Bot {
         this.commitPop(apply, Math.max(apply + 12, this.tickAtZ(now, rel) + Math.round(gauss(this.rng) * this.t.timingSd * 0.5)));
         return true;
       }
+      // (Round 9, Gablefall: the market's awnings are stomped as a street's hops are, from as far as a flight fits.)
+      case 'awnings':
       case 'steps': {
-        if (p.style !== 'hops' || p.z1 - zp < v * 2.4 || now < this.momentWait) return false;
+        if ((p.verb === 'steps' && p.style !== 'hops') || p.z1 - zp < v * (p.verb === 'awnings' ? 1.2 : 2.4) || now < this.momentWait) return false;
         // Pop as soon as the sled is down and the street ahead is open to land on: three flights of a hundred
         // metres have to fit in the street, so the first leaves at its top and none waits for a perfect one.
         const R = apply + this.rng.int(13, 17);
@@ -917,13 +934,14 @@ export class Bot {
     const mOff = this.momentOff();
     const verb = mOff !== null ? this.sim.plays[this.sim.mo.active]?.verb : undefined;
     this.inGates = verb === 'gates' || verb === 'beam' || verb === 'stacks';
+    this.inStreet = verb === 'awnings';
     const piece = this.inGates ? this.sim.plays[this.sim.mo.active] : null;
     this.slalom = piece && piece.style === 'sit' ? piece : null;
     this.wake = verb === 'follow' ? this.sim.plays[this.sim.mo.active].path : null;
     // (A line to ride wants the runners on the snow: no pops for the fun of it meanwhile.)
     // (And a low flame not yet fed is carried on the snow to its brazier: no pop flies past it.)
     const feeding = verb === 'carry' && !(this.sim.mo.mask & 1);
-    this.onLine = verb === 'gates' || verb === 'follow' || verb === 'kindle' || verb === 'peal' || verb === 'glaze' || verb === 'beam' || verb === 'stacks' || feeding;
+    this.onLine = verb === 'gates' || verb === 'follow' || verb === 'kindle' || verb === 'peal' || verb === 'glaze' || verb === 'beam' || verb === 'stacks' || verb === 'washing' || feeding;
     this.feed = feeding ? (this.sim.plays[this.sim.mo.active].relight ?? null) : null;
     this.momentLine = mOff !== null;
     if (mOff !== null) {
@@ -982,8 +1000,25 @@ export class Bot {
       this.offRetarget = now + 90;
     }
     // (Round 9: a lip on the line is sprung whatever else the rider is about: it is the line.)
-    if (this.kitLips && !this.goal && !this.inGates) this.lookForLip(zp, speed, zEnd);
-    if (!this.goal && !this.cooling && !this.inGates && !this.onLine && this.thinks % 2 === 0) this.lookForGoals(zp, speed, zEnd);
+    // (Round 9, Gablefall: a roof's lip is sprung from the roofs, and a rider down in the street bound for a drift's foot
+    // rides for it and nothing else: a light off its line, or a lip it cannot reach yet, cost it the drift.)
+    const street = this.levels && this.atStreet();
+    const bound = street && this.driftBound(zp);
+    if (this.kitLips && !this.goal && !this.inGates && !street) this.lookForLip(zp, speed, zEnd);
+    if (!this.goal && !this.cooling && !this.inGates && !this.onLine && this.thinks % 2 === 0 && !bound) this.lookForGoals(zp, speed, zEnd);
+  }
+
+  /** Round 9, Gablefall: on the street's level (not up on a roof, an alley's floor or a drift). */
+  private atStreet(): boolean {
+    const s = this.sim.s;
+    return s.y - this.course.baseY(s.z) < 1;
+  }
+
+  /** Round 9, Gablefall: in the street with its line leaving the street's middle for a drift's foot ahead. */
+  private driftBound(zp: number): boolean {
+    const z = zp + 30;
+    const off = this.course.lineFor(z, this.rider) - this.course.centerX(z);
+    return off > 2 || off < -2;
   }
 
   /** Round 9: a lip on this rider's line (kit.ts lips) a second or two ahead, crouched into and sprung at its edge, if
@@ -1473,6 +1508,9 @@ export class Bot {
       return cmd;
     }
     if (s.speed < 11 || s.wobble > 0) return cmd;
+    // (Round 9, Gablefall: no tuck and no pop for the fun of it on the way to a drift's foot: a crouch limits the steering,
+    // and letting it go is a pop that flies past the foot.)
+    if (this.levels && this.atStreet() && this.driftBound(zp)) return cmd;
     // A mogul field bucks the sled about; good riders pop and fly over the start of it.
     const mz = this.mogulsAhead(s.z, s.speed * 0.45, s.speed * 1.3);
     if (mz > 0 && this.mogulTry !== mz) {
@@ -1865,7 +1903,7 @@ export class Bot {
     const L = this.lines;
     const d = runPlan(r0, plan, n, n, this.rotP, this.res);
     // (Round 9: on a kit's course, down on the line this rider rides, a gully's far shelf off its bold line.)
-    const aim = this.feed && this.feed.z > f.z ? this.feed.x - L.safeX(this.feed.z) : this.lift ? this.lineX(f.z) - L.safeX(f.z) : 0;
+    const aim = this.feed && this.feed.z > f.z ? this.feed.x - L.safeX(this.feed.z) : this.lift || this.levels ? this.lineX(f.z) - L.safeX(f.z) : 0;
     const off = f.x + d.lat - L.safeX(f.z) - aim;
     const ahead = off + (s.vx + d.vlat - s.vz * L.dir(f.z)) * 0.5;
     let cost = (off < 0 ? -off : off) + (ahead < 0 ? -ahead : ahead);

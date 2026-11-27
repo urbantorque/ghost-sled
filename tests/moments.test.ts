@@ -25,6 +25,7 @@ const VERBS_OF: Record<string, string[]> = {
   // Round 9: the Old Run's, appended to VERBS.
   oldrun: ['peal', 'split', 'glaze'],
   gullhaven: ['beam', 'soar', 'stacks'],
+  gablefall: ['chain', 'awnings', 'washing'],
 };
 
 // (Round 9: the Old Run's track, so the skilled pilots hold a height on its walls; nothing of it reaches the five.)

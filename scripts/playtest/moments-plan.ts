@@ -46,6 +46,13 @@ function holds(c: Course, p: MomentPlay): string {
       return p.row ? 'off the lip, stomped' : p.need > 0 ? `off the lip, ${(p.need / 60).toFixed(1)} s in the air` : `off the lip, down past ${Math.round(p.far - p.lip)} m`;
     case 'stacks':
       return `${p.targets.length} gaps ${p.targets[0]?.hw} m either side`;
+    // (Round 9, Gablefall.)
+    case 'chain':
+      return `${p.need} roofs in a row${p.row ? ', stomped' : ''}`;
+    case 'awnings':
+      return `${p.targets.length} stalls at ${p.targets.map((q) => Math.round(q.z)).join(' ')}, ${p.need} stomps${p.row ? ' in a row' : ''}`;
+    case 'washing':
+      return `${p.targets.length} lines at ${p.targets.map((q) => Math.round(q.z)).join(' ')}, ${p.targets[0]?.hw} m either side, need ${p.need}`;
     case 'glaze':
       return `${(p.need / 60).toFixed(1)} s on the glaze${p.row ? ' in one hold' : ''}${p.hw > 0 ? ` above ${p.hw} of the wall` : ''}`;
     case 'carry':

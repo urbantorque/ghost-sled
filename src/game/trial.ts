@@ -80,9 +80,10 @@ export function daysLeftWords(week: string, now: number): string {
   return days === 1 ? 'Last day' : `${days} days left`;
 }
 
-const NAMES: Readonly<Record<string, string>> = { pinecrest: 'Pinecrest', frostfang: 'Frostfang', ember: 'Ember Peak', sakura: 'Sakura Ridge', lanternfall: 'Lanternfall', oldrun: 'The Old Run', gullhaven: 'Gullhaven' };
+// (Round 9: "Old Run", as its chip says it: "Mirrored The Old Run in a Light Storm" was a word over the name's seven.)
+const NAMES: Readonly<Record<string, string>> = { pinecrest: 'Pinecrest', frostfang: 'Frostfang', ember: 'Ember Peak', sakura: 'Sakura Ridge', lanternfall: 'Lanternfall', oldrun: 'Old Run', gullhaven: 'Gullhaven', gablefall: 'Gablefall' };
 /** Each mountain's other hour after its name (almanac.ts HOUR_PHRASES). */
-const HOURS: Readonly<Record<string, string>> = { pinecrest: 'at Dusk', frostfang: 'at Noon', ember: 'at Night', sakura: 'in the Evening', lanternfall: 'at First Light', oldrun: 'by Lamplight', gullhaven: 'at Moonrise' };
+const HOURS: Readonly<Record<string, string>> = { pinecrest: 'at Dusk', frostfang: 'at Noon', ember: 'at Night', sakura: 'in the Evening', lanternfall: 'at First Light', oldrun: 'by Lamplight', gullhaven: 'at Moonrise', gablefall: 'at Evensong' };
 const MOOD_WORDS: Readonly<Record<number, string>> = {
   [Mood.Blizzard]: 'in a Blizzard',
   [Mood.Lantern]: 'on a Lantern Night',
@@ -107,12 +108,14 @@ const FAMILIES: readonly CharmFamily[] = ['speed', 'style', 'survival'];
  *  9). Written out, not read off MOUNTAINS, so what a build registers never moves a week. */
 export const FIVE_TURN: readonly string[] = ['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall'];
 export const EIGHT_TURN: readonly string[] = [...FIVE_TURN, 'gablefall', 'oldrun', 'gullhaven'];
-/** The ISO week from which the Trial turns over all eight. Null until the commit that registers the last of the three
- *  new mountains sets it to a week after that build ships (the main lane's, at release): every week before it keeps the
- *  five's turn, so no Trial already ridden changes. */
-export const EIGHT_FROM: string | null = null;
-/** Where the eight's turn starts, chosen with EIGHT_FROM so its first week is not the last five week's mountain. */
-export const EIGHT_START = 0;
+/** The ISO week from which the Trial turns over all eight. Set by the commit that registers the last of the three new
+ *  mountains (Gablefall's) to a placeholder week well after the round, past every week tests/five.test.ts folds in (to
+ *  2027-W40): the main lane sets it at release to a week after that build ships, with EIGHT_START. Every week before it
+ *  keeps the five's turn, so no Trial already ridden changes. */
+export const EIGHT_FROM: string | null = '2028-W01';
+/** Where the eight's turn starts, chosen with EIGHT_FROM so its first week is not the last five week's mountain (2027-W52
+ *  is Ember's; the eight open on Gablefall, the newest). */
+export const EIGHT_START = 5;
 
 /** The week's mountain, by its week index: the five's turn (2 a week, never the same twice running), then the eight's
  *  (3 a week, the same). */
@@ -172,6 +175,9 @@ export function trialFor(week: string): Trial {
   const def = MOUNTAINS.find((m) => m.id === mountain);
   if (def && !eventAllowed(event, eventsFor(def.seed))) event = ChaosEvent.None;
   if (sky === 'event' && event === ChaosEvent.None) sky = 'plain';
+  // (Round 9: and a clock week made plain so is given its family, as one rolled plain is: never a Cup on a named course.)
+  if (clock && !mirror && sky === 'plain' && !family) family = FAMILIES[hash32(seed, 0x7e04) % 3];
+  if (measure === 'clean' && family === 'speed') family = 'survival';
   const chaos: ChaosRoll = { mood, event, seed: hash32(seed, 0x7e07) };
   const hour = sky === 'hour';
   // (Haunted Hollow is said before the name, "Mirrored Haunted Pinecrest"; every other sky after it.)

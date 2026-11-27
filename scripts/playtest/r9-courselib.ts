@@ -456,6 +456,14 @@ export const MECHANICS: Record<string, Mechanic> = {
   // Gullhaven (notes/r9-gullhaven.md section 1): in the air inside a gully's column of lift, the sea wind holding the sled
   // over the mouth.
   gullhaven: ({ sim }) => !sim.s.grounded && sim.s.tumble === 0 && sim.course.liftAt(sim.s.x, sim.s.y, sim.s.z) > 0,
+  // Gablefall (notes/r9-gablefall.md section 1): on the roofs, 2 m or more over the street (notes/r9-ground.md section 12):
+  // over ground that high (a roof, an alley's floor, a drift's top), on it or in the air over it, never a pop in the street.
+  gablefall: ({ sim }) => {
+    const s = sim.s;
+    if (s.tumble > 0 || sim.course.streetAt(s.z) === null) return false;
+    const gy = sim.course.ground(s.x, s.z);
+    return gy - sim.course.baseY(s.z) >= 1.5 && s.y >= gy - 0.05;
+  },
 };
 
 export interface Flight {

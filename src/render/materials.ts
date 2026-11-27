@@ -920,13 +920,14 @@ const TRACK_GLSL = /* glsl */ `
   #endif
 `;
 
-export function makeSnowMaterial(track = false): ShaderMaterial {
+/** `street` (round 9, Gablefall's terrain, terrain.ts): the street's trodden snow over cobbles, under STREET. */
+export function makeSnowMaterial(track = false, street = false): ShaderMaterial {
   // (Round 8, second attempt: the wind's relief tiles, baked once on idle after the first frame. snowrelief.ts.)
   startReliefBake(() => shared.uSnowFx.value > 0);
   return new ShaderMaterial({
     lights: true,
     // (Round 8, the light lane: the lamps' air, LIGHT_GLSL fogged. The snow already reads the local lights.)
-    defines: { LAMP_AIR: 1, ...(track ? { TRACK: 1 } : {}) },
+    defines: { LAMP_AIR: 1, ...(track ? { TRACK: 1 } : {}), ...(street ? { STREET: 1 } : {}) },
     uniforms: { ...lightsUniforms(), ...shared, ...bands, ...rock, ...lake, ...iceMirror, ...relief },
     vertexShader: /* glsl */ `
       ${SHADOW_VERT_PARS}
@@ -1329,6 +1330,10 @@ export function makeSnowMaterial(track = false): ShaderMaterial {
         float groomK = vGroom * (1.0 - smoothstep(-2.2, -0.4, vEdge)) * (1.0 - ice) * (1.0 - bare);
         float powderK = (1.0 - groomK) * (1.0 - ice) * (1.0 - bare) * (1.0 - smoothstep(0.85, 1.0, vPaint.z));
         packed *= 1.0 - groomK;
+        #ifdef STREET
+          // (Gablefall's street is trodden over its cobbles, below: no runners' old tracks, which ran down it like rails.)
+          packed *= 1.0 - smoothstep(0.0, 0.05, vPaint.w);
+        #endif
         // The grain's dab, kept for the light below.
         vec4 grain = vec4(0.0);
         float grainK = 0.0;
@@ -1474,12 +1479,15 @@ export function makeSnowMaterial(track = false): ShaderMaterial {
           float cn = vnoise(cp) * 0.65 + vnoise(cp * 2.3 + 5.1) * 0.35;
           t *= 1.0 - smoothstep(0.5, 0.74, cn) * uCloudShadow;
         }
-        // A tree run's canopy: the light comes through the boughs overhead in soft pools.
+        // A tree run's canopy: the light comes through the boughs overhead in soft pools. (Gablefall's street rides the
+        // same channel, STREET below: it has no tree run.)
+        #ifndef STREET
         if (vPaint.w > 0.0) {
           vec2 dq = vWorldPos.xz + vec2(sin(vWorldPos.z * 0.05) * 3.0, 0.0);
           float pools = smoothstep(0.42, 0.66, vnoise(dq * vec2(0.26, 0.13)) * 0.62 + vnoise(dq * vec2(0.7, 0.42) + 6.0) * 0.38);
           t *= 1.0 - vPaint.w * (0.82 - 0.62 * pools);
         }
+        #endif
         // By day a low sunset sun warms lit snow to cream, never to peach: the snow takes only a
         // trace of the key's colour (the mood's grade adds warmth of its own), so the warm light reads
         // against the periwinkle shade while the snow itself stays white rather than sand. Night
@@ -1645,6 +1653,16 @@ export function makeSnowMaterial(track = false): ShaderMaterial {
           // lighter step now, and Low keeps the fine ribs off.)
           col = mix(col, col * coolG, gk * (0.14 + 0.2 * fineG * mix(0.0, 1.0, uSnowFx) + 0.12 * broadG * (1.0 - smoothstep(0.5, 1.2, fwz))));
         }
+        #ifdef STREET
+          // Round 9, Gablefall's street (terrain.ts aPaint.w, the street's share at the street's level): the snow trodden
+          // down by the town, a step cooler and duller than the roofs' fresh snow, the slow way. (Setts showing through it
+          // were tried in four passes: as bare stone on the line a sled rides they broke ART.md 4, and read to every critic
+          // as a grid, tiles or a lane of their own.)
+          if (vPaint.w > 0.002) {
+            float tro = vnoise(vec2(vSnow.x * 0.4, vWorldPos.z * 0.1) + 2.3) * 0.6 + vnoise(vec2(vSnow.x * 1.1, vWorldPos.z * 0.33) + 7.1) * 0.4;
+            col = mix(col, col * mix(vec3(0.9), uSnowShade / max(uSnowLit, vec3(0.05)), 0.4), vPaint.w * (0.3 + 0.12 * tro));
+          }
+        #endif
         col += uHemi * 0.07 * (0.5 + 0.5 * n.y);
         // Terrain gets almost no rim: the ground is always seen at grazing angles, where a rim term
         // turns the whole foreground into a cream wash.
@@ -1722,7 +1740,13 @@ export function makeSnowMaterial(track = false): ShaderMaterial {
             float ta = dp / max(abs(rr.x), 0.03);
             float hr = ta * rr.y;
             float zr = vWorldPos.z + rr.z * ta;
-            float tips = 16.5 + 7.0 * vnoise(vec2(zr * 0.07, sd + 2.0)) + 4.0 * abs(fract(zr * 0.21) - 0.5) + 2.5 * abs(fract(zr * 0.53 + 0.3) - 0.5);
+            // (Round 9, Gablefall's river: no treeline stands in its mirror, there is none; a roofline of gables drawn here
+            // read as a black sawtooth round the rider. Its ice mirrors the sky alone.)
+            #ifdef STREET
+              float tips = -1e4;
+            #else
+              float tips = 16.5 + 7.0 * vnoise(vec2(zr * 0.07, sd + 2.0)) + 4.0 * abs(fract(zr * 0.21) - 0.5) + 2.5 * abs(fract(zr * 0.53 + 0.3) - 0.5);
+            #endif
             float near = 1.0 - smoothstep(90.0, 340.0, ta);
             vec3 stood = mix(uLakeTrees, uFog, 0.12 + 0.5 * smoothstep(40.0, 240.0, ta));
             stood = mix(stood, mix(uSnowShade, uSnowLit, 0.45), smoothstep(10.5, 9.0, hr));

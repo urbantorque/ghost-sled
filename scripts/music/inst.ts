@@ -51,7 +51,7 @@ export interface PluckOpts {
   decay: number;
   /** Where the string is plucked, 0..0.5 of its length (near the bridge is thin and nasal). */
   pick: number;
-  body: 'guitar' | 'koto' | 'harp' | 'bass' | 'mando' | 'none';
+  body: 'guitar' | 'koto' | 'harp' | 'bass' | 'mando' | 'violin' | 'cello' | 'none';
   /** The string rings on after the note ends (a harp, a koto) instead of being damped. */
   ringOut?: boolean;
   /** A muted stroke: the hand on the strings. */
@@ -64,6 +64,9 @@ const BODY: Record<PluckOpts['body'], readonly EqBand[]> = {
   harp: [['hp', 60, 0.7], ['peak', 250, 1.5, 2], ['peak', 1800, 1, 1.5], ['lp', 7500, 0.7]],
   bass: [['hp', 34, 0.7], ['peak', 85, 1.6, 3.5], ['peak', 750, 1.2, 2.5], ['lp', 2600, 0.7]],
   mando: [['hp', 190, 0.7], ['peak', 900, 1.8, 4], ['peak', 2900, 1.5, 3], ['hishelf', 7000, 0.7, 2]],
+  // A string plucked on a bowed instrument (pizzicato): the same wood as the bow's (BOW_BODY), a little less bridge.
+  violin: [['hp', 185, 0.7], ['peak', 285, 3, 4], ['peak', 470, 3, 3], ['peak', 2600, 1.2, 3], ['lp', 8000, 0.7]],
+  cello: [['hp', 50, 0.7], ['peak', 105, 2.5, 4], ['peak', 190, 2.5, 3], ['peak', 1300, 1.2, 2], ['lp', 4200, 0.7]],
   none: [],
 };
 
@@ -519,6 +522,87 @@ export const churchBell = (): Inst =>
     track: 0.25,
     spread: 5,
   });
+
+/** A hand-bell's partials: its pitch against the note's, its level, and its ring as a share of the note's. */
+const HANDBELL: ReadonlyArray<readonly [ratio: number, amp: number, share: number]> = [[1, 1, 1], [2.63, 0.05, 0.3], [3, 0.42, 0.45], [5.4, 0.1, 0.2], [8.2, 0.04, 0.12], [11.6, 0.02, 0.08]];
+
+/**
+ * A hand-bell (round 9): a bronze cup on a handle, rung by a clapper on a spring. Hand-bells are tuned so the two
+ * strongest partials are the note and the twelfth over it (three times its frequency), with a few weak inharmonic
+ * ones over those that go first, so the tone mellows as it rings. No cup is quite round: each partial is a pair a
+ * fraction of a hertz apart, and the note beats slowly. A hard stroke wakes the upper partials more. The ringer
+ * damps the bell against the shoulder at the note's end, so the written length is the length rung: a long note
+ * rings on, a low bell for many seconds, and a short one is a dry tap. `decay`: seconds to -60 dB at A4.
+ */
+export function handBell(decay = 6): Inst {
+  return (n, rng) => {
+    const f0 = mtof(n.m);
+    const t60 = clamp(decay * Math.pow(440 / f0, 0.55), 0.9, 11);
+    const held = secs(n.dur);
+    const len = Math.min(held, secs(t60)) + secs(0.3);
+    const v = 0.3 + 0.7 * n.v;
+    const side = (cents: number, r: Rng): Float32Array => {
+      const out = new Float32Array(len);
+      const f = f0 * Math.pow(2, cents / 1200);
+      for (const [ratio, amp, share] of HANDBELL) {
+        const hard = Math.pow(0.35 + 0.65 * n.v, 1 + Math.log2(Math.max(1, ratio)) * 0.6);
+        // The pair: one a hair flat, one a hair sharp, a little unequal.
+        const split = 0.0006 * (0.7 + 0.6 * r.next());
+        ring(out, f * ratio * (1 - split), amp * hard * 0.55, (share * t60) / 6.9, r.next() * 0.5);
+        ring(out, f * ratio * (1 + split), amp * hard * 0.45, (share * t60) / 6.9, r.next() * 0.5);
+      }
+      // The clapper's knock.
+      const sn = secs(0.0025);
+      const knock = new Float32Array(Math.min(len, sn * 5));
+      for (let i = 0; i < knock.length; i++) knock[i] = r.bip() * Math.exp(-i / sn) * 0.1;
+      Biquad.design('hp', 1800, 0.7).run(knock);
+      Biquad.design('lp', 9000, 0.7).run(knock);
+      for (let i = 0; i < knock.length; i++) out[i] += knock[i];
+      // The shoulder, at the note's end.
+      const kd = Math.exp(-1 / (0.05 * SR));
+      let gd = 1;
+      for (let i = held; i < len; i++) {
+        gd *= kd;
+        out[i] *= gd;
+      }
+      for (let i = 0; i < 32 && i < len; i++) out[i] *= i / 32;
+      for (let i = 0; i < len; i++) out[i] *= v;
+      return fadeTail(out, 20);
+    };
+    return { l: side(-1.5, rng.fork(1)), r: side(1.5, rng.fork(2)) };
+  };
+}
+
+/**
+ * A toy piano (round 9): a small hammer strikes a steel rod held at one end, so the rod's overtones lie far from
+ * harmonic (a clamped bar's 6.27 and 17.55 over the note) and die almost at once while the note rings on a moment; a
+ * toy's rod is a little out with its own octave, which sits sharp (the tin in it). The action knocks in the little
+ * wooden case as the key goes down. There are no dampers: a note rings until it dies, whatever its written length.
+ */
+export function toyPiano(): Inst {
+  const rod = modal({
+    partials: [[1, 1, 1.5], [2.03, 0.14, 0.55], [6.27, 0.32, 0.14], [17.55, 0.06, 0.035]],
+    strike: { amp: 0.18, ms: 1, lo: 2500, hi: 13000 },
+    track: 0.5,
+    loose: 3,
+    eq: [['hp', 260, 0.7], ['peak', 820, 1.4, 3], ['peak', 2900, 1.5, 2.5], ['lp', 12500, 0.7]],
+    spread: 4,
+  });
+  return (n, rng) => {
+    const s = rod(n, rng.fork(1)) as Stereo;
+    const r = rng.fork(2);
+    const kn = Math.min(s.l.length, secs(0.04));
+    const knock = new Float32Array(kn);
+    for (let i = 0; i < kn; i++) knock[i] = r.bip() * Math.exp(-i / secs(0.006));
+    Biquad.design('bp', 520, 1.6).run(knock);
+    const g = 0.4 * (0.3 + 0.7 * n.v);
+    for (let i = 0; i < kn; i++) {
+      s.l[i] += knock[i] * g;
+      s.r[i] += knock[i] * g;
+    }
+    return s;
+  };
+}
 
 /** A glass rim or bowl: nearly pure, a slow beat between two close partials. */
 export const glass = (): Inst =>

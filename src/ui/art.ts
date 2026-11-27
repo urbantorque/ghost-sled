@@ -8,6 +8,17 @@ import { MOUNTAINS, biomeForSeed } from '../sim/mountains';
 const SIGNAL = '#FF4D2E';
 
 const RIDGES: Record<MountainCard['biome'], string> = {
+  // Gablefall (round 9, notes/r9-gablefall-world.md): a snowfall in a grey afternoon over a hill town of steep roofs
+  // stepping down to the river, the church's steeple at its head, windows lit; across the valley the town's other half
+  // and the viaduct's arches.
+  gablefall:
+    '<path d="M0 80V50l9-4 8 3 9-5 10 4 9-3 10 4 9-4 11 3 9-2 10 3 9-3 11 3 9-2 10 2 9-2 10 2v24z" fill="#F5F3FF" opacity=".18"/>' +
+    '<path d="M58 46h102v2.4H58zM62 48v10M74 48v10M86 48v10M98 48v10M110 48v10M122 48v10M134 48v10M146 48v10M158 48v10" fill="#F5F3FF" stroke="#F5F3FF" stroke-width="1.4" opacity=".26"/>' +
+    '<path d="M26 80V50h4V50l7.5-9 7.5 9V53l7.5-9 7.5 9V56l7.5-9 7.5 9V59l7.5-9 7.5 9V62l7.5-9 7.5 9V65l7.5-9 7.5 9V68l7.5-9 7.5 9V71l7.5-9 7.5 9V74l7.5-9 7.5 9V80z" fill="#121933" opacity=".82"/>' +
+    '<path d="M30 50l7.5-9 7.5 9M45 53l7.5-9 7.5 9M60 56l7.5-9 7.5 9M75 59l7.5-9 7.5 9M90 62l7.5-9 7.5 9M105 65l7.5-9 7.5 9M120 68l7.5-9 7.5 9M135 71l7.5-9 7.5 9M150 74l7.5-9 7.5 9" fill="none" stroke="#F5F3FF" stroke-width="2" stroke-linejoin="round" opacity=".9"/>' +
+    '<path d="M8 80V36h3l5-24 5 24h3v44z" fill="#121933" opacity=".9"/><path d="M11 36l5-24 5 24" fill="none" stroke="#F5F3FF" stroke-width="1.4" opacity=".8"/>' +
+    '<g fill="#FFC88A"><rect x="14.8" y="44" width="2.4" height="4" rx="1.2"/><rect x="33.5" y="54" width="2.4" height="3"/><rect x="48.5" y="57" width="2.4" height="3"/><rect x="54" y="57" width="2.4" height="3"/><rect x="63.5" y="60" width="2.4" height="3"/><rect x="84" y="63" width="2.4" height="3"/><rect x="93.5" y="66" width="2.4" height="3"/><rect x="114" y="69" width="2.4" height="3"/><rect x="123.5" y="72" width="2.4" height="3"/><rect x="144" y="75" width="2.4" height="3"/></g>' +
+    '<g fill="#F5F3FF" opacity=".75"><circle cx="40" cy="14" r="1"/><circle cx="62" cy="26" r="1.2"/><circle cx="88" cy="10" r=".9"/><circle cx="110" cy="30" r="1.1"/><circle cx="134" cy="16" r="1"/><circle cx="150" cy="36" r=".9"/><circle cx="28" cy="30" r=".8"/><circle cx="98" cy="40" r=".8"/><circle cx="74" cy="38" r=".9"/></g>',
   // Gullhaven (round 9, notes/r9-gullhaven-world.md): a storm deck over the sea with the low sun under its lifted edge, the
   // sun's path down the swell, and the cape's clifftop falling to the sea on the left, cut by a gully, the lighthouse on
   // its point.
@@ -79,6 +90,8 @@ const SKY: Readonly<Record<string, string>> = {
   oldrun: 'linear-gradient(180deg, #2a3a86 0%, #ffa86a 100%)',
   // Gullhaven: a slate storm deck over the sea, and the low sun's band of light under its edge.
   gullhaven: 'linear-gradient(180deg, #2a3450 0%, #4e5a7a 38%, #f2dcb8 56%, #e8b48a 100%)',
+  // Gablefall: a snowfall in a grey afternoon, a lilac-grey cloud low over the town paling to a warm grey at the hills.
+  gablefall: 'linear-gradient(180deg, #4a4e6e 0%, #8a8aa6 46%, #d8d0d0 100%)',
 };
 const SKY_ANY = 'linear-gradient(180deg, #1e2650 0%, #6a6aa8 100%)';
 

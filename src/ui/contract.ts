@@ -19,7 +19,7 @@ export interface MountainCard {
   name: string;
   tagline: string;
   /** The card's art: the course's biome, or 'lantern' for the finale (its own night and lights). */
-  biome: 'alpine' | 'glacier' | 'volcanic' | 'blossom' | 'lantern' | 'oldrun' | 'gullhaven';
+  biome: 'alpine' | 'glacier' | 'volcanic' | 'blossom' | 'lantern' | 'oldrun' | 'gullhaven' | 'gablefall';
   locked: boolean;
   /** e.g. "Pass 4 ghosts to unlock" */
   unlockText: string;

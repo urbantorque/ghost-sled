@@ -356,6 +356,36 @@ const GULLHAVEN: Song = {
   ]),
 };
 
+/**
+ * Gablefall (F major, 95): a winter march for the town on the hill. The verse is the street, in the relative minor (vi
+ * V IV III, its bass stepping down the hill); the chorus is the roofs over a bass that steps down with them. The hook
+ * is a hop and a stomp: a quick note off the eave, a leap up an octave held in the air, the landing stamped on the next
+ * beat, each roof a step under the last.
+ */
+const GABLEFALL: Song = {
+  intro: [I(), at(4, 7)],
+  verse: [at(5), at(4), at(3), at(2, undefined, 'M'), at(5), at(1), at(2, undefined, 'D'), at(5)],
+  chorus: [I(), at(4), at(5), I(), at(3), I(), at(4, 7), I()],
+  bridge: [at(5), at(3), I(), at(2, undefined, 'M')],
+  build: at(4, 7),
+  hook: line([
+    [0, 1, -3], [1, 3, 4], [4, 4, 2], [10, 1, 0], [11, 1, 1], [12, 4, 2],
+    [16, 1, -4], [17, 3, 3], [20, 4, 1], [26, 1, -1], [27, 1, 0], [28, 4, 1],
+    [32, 1, -5], [33, 3, 2], [36, 4, 0], [42, 1, -2], [43, 1, -1], [44, 4, 0],
+    [48, 1, -3], [49, 7, 7], [56, 4, 4],
+    [64, 1, -2], [65, 3, 5], [68, 4, 3], [74, 1, 2], [75, 1, 3], [76, 4, 5],
+    [80, 1, -3], [81, 3, 4], [84, 4, 2], [90, 1, 2], [91, 1, 4], [92, 4, 7],
+    [96, 1, 5], [97, 3, 8], [100, 4, 7], [104, 1, 2], [105, 3, 7], [108, 4, 6],
+    [112, 6, 7], [118, 1, 4], [119, 1, 2], [120, 8, 0],
+  ]),
+  answer: line([
+    [24, 2, 4], [26, 2, 6], [28, 4, 8],
+    [56, 2, 4, 1], [58, 2, 2], [60, 4, 6],
+    [88, 2, 3], [90, 2, 1], [92, 4, 3],
+    [120, 2, 5], [122, 2, 7], [124, 4, 9],
+  ]),
+};
+
 export const SONGS: Record<BiomeId, Song> = {
   alpine: PINECREST,
   glacier: FROSTFANG,
@@ -364,6 +394,7 @@ export const SONGS: Record<BiomeId, Song> = {
   lantern: LANTERNFALL,
   oldrun: OLDRUN,
   gullhaven: GULLHAVEN,
+  gablefall: GABLEFALL,
 };
 
 export function songFor(biome: BiomeId): Song {

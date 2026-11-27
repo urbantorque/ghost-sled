@@ -1,6 +1,7 @@
 import { Course, type Ledge } from '../sim/course';
 import { CREST_OUT, CREST_TOP, CREST_U, FLOOR, WALL, trackAt } from '../sim/oldrun';
 import { cleftAt, pointAt, seaLevelOf } from './gullhavenplan';
+import { townGround } from './gablefallplan';
 
 // What the ground is, as opposed to how high it is. The sim's ground() says how high every surface
 // stands; everything here is the look laid over it, and every number past `limit` (where a sled is
@@ -254,7 +255,8 @@ function moorRise(e: number, x: number, z: number): number {
 export function groundOf(c: Course): GroundFn {
   let f = drawers.get(c);
   if (!f) {
-    f = c.kit?.id === 'oldrun' ? (x, z) => crestGround(c, x, z) : c.kit?.id === 'gullhaven' ? (x, z) => cliffGround(c, x, z) : (x, z) => c.ground(x, z);
+    // (Round 9, Gablefall: the town's lanes behind its rows, the hillside under its church, gablefallplan.ts townGround.)
+    f = c.kit?.id === 'oldrun' ? (x, z) => crestGround(c, x, z) : c.kit?.id === 'gullhaven' ? (x, z) => cliffGround(c, x, z) : c.kit?.id === 'gablefall' ? (x, z) => townGround(c, x, z) : (x, z) => c.ground(x, z);
     drawers.set(c, f);
   }
   return f;
@@ -266,9 +268,10 @@ export function visualGround(c: Course, x: number, z: number): number {
   const off = x - c.centerX(z);
   const e = Math.abs(off) - c.halfWidth(z);
   let y = c.ground(x, z);
-  // (The Old Run's crest of snow past its lip, and Gullhaven's sea cliff past its fence: groundOf.)
+  // (The Old Run's crest of snow past its lip, Gullhaven's sea cliff past its fence and Gablefall's town: groundOf.)
   if (e > 0 && c.kit?.id === 'oldrun') return crestGround(c, x, z);
   if (e > 0 && c.kit?.id === 'gullhaven') return cliffGround(c, x, z);
+  if (e > 0 && c.kit?.id === 'gablefall') return townGround(c, x, z);
   if (e <= 0) return y;
   const sh = c.shapeAt(z);
   const wall = sh.wall;

@@ -980,7 +980,31 @@ export function obstacleGeometry(kind: ObstacleKind, p: Palette, low = false, bi
       return logGeometry(p);
     case 'snowman':
       return snowmanGeometry();
+    case 'chimney':
+      return chimneyGeometry();
   }
+}
+
+/** Round 9, Gablefall's chimney (notes/r9-gablefall-world.md): its model's half-width and height (props.ts scales it to
+ *  the sim's collider, its width by the collider's radius and its height by the collider's height). */
+export const CHIMNEY_MODEL_R = 0.6;
+export const CHIMNEY_MODEL_H = 2;
+
+/** A chimney stack on a roof beside the ridge: dressed stone in a cool grey-violet, a string course under a dark cap
+ *  slab, snow on the cap and two stubby pots in slate grey (hazards are never warm: no terracotta), squared and hard
+ *  against the snow (ART.md 3). The stack runs half a metre under its foot, so on the roof's pitch it never stands on
+ *  air; its corners stay within the collider's reach. */
+function chimneyGeometry(): BufferGeometry {
+  const stone = new Color('#5A5C72');
+  const dark = new Color('#3C3E52');
+  return merge([
+    part(kitBox(0.86, 2.1, 0.86), stone, { pos: [0, 0.5, 0] }),
+    part(kitBox(0.96, 0.13, 0.96), new Color('#464860'), { pos: [0, 1.3, 0] }),
+    part(kitBox(1.02, 0.12, 1.02), dark, { pos: [0, 1.62, 0] }),
+    part(new BoxGeometry(0.94, 0.1, 0.94), SNOW, { pos: [0, 1.73, 0] }),
+    part(new CylinderGeometry(0.1, 0.12, 0.3, 6), new Color('#44465C'), { pos: [-0.2, 1.85, 0.05] }),
+    part(new CylinderGeometry(0.1, 0.12, 0.24, 6), new Color('#44465C'), { pos: [0.21, 1.82, -0.06] }),
+  ]);
 }
 
 /** Natural size the geometry was modelled at, used to scale instances to collider size. */
@@ -995,6 +1019,8 @@ export function obstacleModelRadius(kind: ObstacleKind): number {
       return 1.9;
     case 'basalt':
       return BASALT_MODEL_R;
+    case 'chimney':
+      return CHIMNEY_MODEL_R;
     default:
       return 0;
   }

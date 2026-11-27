@@ -333,6 +333,28 @@ export function wood(decay = 0.09): Inst {
   };
 }
 
+/** A triangle's modes: a free bar's, high and far from harmonic, each split in two by the bends. [ratio, level, share
+ *  of the ring]. */
+const TRIANGLE: ReadonlyArray<readonly [number, number, number]> = [[1, 0.35, 0.8], [2.76, 0.7, 0.9], [2.81, 0.5, 0.85], [5.4, 0.8, 1], [5.47, 0.5, 0.9], [8.93, 0.6, 0.8], [9.05, 0.35, 0.7], [13.34, 0.45, 0.6], [18.64, 0.3, 0.45]];
+
+/** A triangle (round 9): a steel rod bent in three, struck with a beater; it shimmers high for seconds, the stroke a
+ *  bright tick in front. `decay`: seconds to -60 dB. Stereo. */
+export function triangle(decay = 1.6): Inst {
+  return (n, rng) => {
+    const f0 = mtof(n.m);
+    const len = secs(decay * 1.2);
+    const side = (r: Rng): Float32Array => {
+      const out = new Float32Array(len);
+      for (const [ratio, amp, share] of TRIANGLE) ring(out, f0 * ratio * (1 + r.bip() * 0.003), amp * Math.pow(0.35 + 0.65 * n.v, 1 + ratio * 0.05), (share * decay) / 6.9, r.next());
+      const st = burst(secs(0.01), r, 0.0012, 4000, 15000);
+      for (let i = 0; i < st.length; i++) out[i] += st[i] * 0.3 * (0.3 + 0.7 * n.v);
+      for (let i = 0; i < 8; i++) out[i] *= i / 8;
+      return fadeTail(out, 30);
+    };
+    return { l: side(rng.fork(1)), r: side(rng.fork(2)) };
+  };
+}
+
 /** A cymbal: hundreds of modes are noise with a metallic grain, so: clustered square partials and noise
  *  through a high band, bright at the stroke and darkening as it dies. Stereo. `soft`: rolled, no stroke. */
 export function cymbal(decay = 2.2, lo = 3200, soft = false): Inst {

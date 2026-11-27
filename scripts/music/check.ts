@@ -19,6 +19,11 @@ const pitched: Array<[string, I.Inst, number[]]> = [
   ['shaku', I.wind({ kind: 'shaku', breath: 0.6, vib: 0, scoop: 0 }), [62, 74]],
   ['squeezebox', I.reed({ reeds: [[-7, 0], [9, 0]], bright: 0.55, attack: 0.02, body: 'treble' }), [59, 71, 83]],
   ['bassreeds', I.reed({ reeds: [[0, 0], [3, 1]], bright: 0.4, attack: 0.03, body: 'bass' }), [33, 40, 47]],
+  ['pizz', I.pluck({ bright: 0.5, decay: 0.6, pick: 0.3, body: 'violin' }), [62, 74, 86]],
+  ['pizzbass', I.pluck({ bright: 0.35, decay: 1.4, pick: 0.28, body: 'cello' }), [36, 43, 50]],
+  ['harmonium', I.reed({ reeds: [[-3, 0], [4, 0]], bright: 0.22, attack: 0.08, sway: 0.15, body: 'treble' }), [53, 65, 77]],
+  ['handbell', I.handBell(), [53, 65, 77, 89]],
+  ['toypiano', I.toyPiano(), [72, 84, 96]],
   ['fmbell', I.fmBell({ ratio: 3.5, index: 1.2, decay: 2 }), [72, 84]],
   ['musicbox', I.musicBox(), [72, 84, 96]],
   ['bell', I.churchBell(), [60, 72]],
@@ -41,7 +46,7 @@ const pitched: Array<[string, I.Inst, number[]]> = [
 const unpitched: Array<[string, I.Inst]> = [
   ['kick', P.kick(P.KICK_TIGHT)], ['kickdeep', P.kick(P.KICK_DEEP)], ['boom', P.boom()], ['snare', P.snare(P.SNARE_CRISP)], ['snarebig', P.snare(P.SNARE_BIG)],
   ['claps', P.claps(5)], ['stomp', P.stomp()], ['hat', P.hat({ decay: 0.06, lo: 7000, metal: 0.7 })], ['shaker', P.shaker()], ['jingles', P.jingles()],
-  ['anvil', P.metal('anvil')], ['plate', P.metal('plate')], ['wood', P.wood()], ['cymbal', P.cymbal()], ['riser', P.riser()], ['chimes', P.chimes()], ['hiss', P.hiss()],
+  ['anvil', P.metal('anvil')], ['plate', P.metal('plate')], ['wood', P.wood()], ['cymbal', P.cymbal()], ['triangle', P.triangle()], ['riser', P.riser()], ['chimes', P.chimes()], ['hiss', P.hiss()],
 ];
 const rows: string[] = [];
 let worst = 0;

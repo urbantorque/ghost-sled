@@ -47,6 +47,15 @@ export interface KitRider {
   nerve: number;
 }
 
+/** A street between rows of houses (Gablefall, hook D): its sides at z, its level, and how far over its level a sled must
+ *  be to ride on past its sides (under that it is held to the street, the sim's levelHold). */
+export interface Street {
+  x0: number;
+  x1: number;
+  y: number;
+  hold: number;
+}
+
 export interface Kit {
   readonly id: KitId;
   /** Its descent, as course.ts lays a layout's. */
@@ -74,6 +83,8 @@ export interface Kit {
   lift?(c: Course, x: number, y: number, z: number): number;
   /** A lift column's middle at z, or null where there is none. */
   liftX?(c: Course, z: number): number | null;
+  /** The street at z, where rows stand either side of it (Gablefall), or null. */
+  street?(c: Course, z: number): Street | null;
   /** The obstacles this mountain stands on a chunk, after course.ts's own. */
   obstacles?(c: Course, chunk: Chunk, rng: Rng, p: Placer, diff: number): void;
   /** The spirit lights this mountain lays on a chunk, after course.ts's own. */
