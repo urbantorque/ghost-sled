@@ -90,7 +90,8 @@ export const shared = {
    *  Low skips it (setCloudShadows carries the tier). */
   uSnowFx: { value: 1 },
   /** Round 9 (Gullhaven): how much of the broad dunes and the wind slab's bands the snow carries (1 on every other
-   *  mountain). Seen from a long flight over a wide open moor they lay in even rings, and next to the sea read as sand. */
+   *  mountain). Seen from a long flight over a wide open moor they lay in even rings, and next to the sea read as sand.
+   *  Under 1, the near ripples' troughs are half as deep too (the feel pass: soft figure-like shadows). */
   uSnowBands: { value: 1 },
   /** Round 7, the air (fogColor): what the haze turns to in the far plane, what it cools to away from the
    *  sun, and x: how far the far colour comes in (1 is the palette's own reach), y: how much thicker the air
@@ -344,7 +345,9 @@ export function applyPalette(full: Palette): void {
   // hazards' feet and the hollows past the banks brim with it.
   shared.uMist.value.set((p.mist ? 0.5 + 0.3 * p.mistK : 0.58) * (1 - 0.5 * dense), 5 + 4 * dense + 3 * p.atmo.drift * (p.mist ? 1 : 0.4));
   shared.uMistDeep.value = p.massif.seaOcean > 0 ? 1 : 0;
-  shared.uSnowBands.value = p.massif.seaOcean > 0 ? 0.5 : 1;
+  // (Round 9's feel pass: 0.3 on Gullhaven, where at 0.5 the shelf seen from the air over a gully still lay in even
+  // wavy bands, read as contour lines.)
+  shared.uSnowBands.value = p.massif.seaOcean > 0 ? 0.3 : 1;
   mistDriftK = p.atmo.drift;
   shared.uMistDrift.value = cloudShadowsOn ? mistDriftK : 0;
   // Forward scatter toward the sun, strongest by day; a moon gets a little.
@@ -656,6 +659,12 @@ vec3 fogged(vec3 col, vec3 wp) {
   vec3 dv = wp - cameraPosition;
   float d = length(dv);
   float f = fogAmount(wp, d);
+  #ifdef DEEP_CLEAR
+    // (Round 9's feel pass, Gullhaven: what stands in the sea far under the cliff, its stacks and the clefts' walls,
+    // keeps the sea's own clear air out to a few kilometres, as the sea plane draws it (SEA_GLSL). Fogged to the sky's
+    // pale air a thousand metres down, the stacks stood on the dark water as pale posts, read as posts by the critics.)
+    f *= 1.0 - 0.9 * smoothstep(-30.0, -160.0, wp.y - (uFogFloor.x + uFogFloor.y * wp.z)) * (1.0 - smoothstep(2500.0, 6000.0, d));
+  #endif
   col = mix(col, uMistColor, mistAt(wp, d) * (1.0 - f));
   vec3 dir = dv / max(d, 0.001);
   #ifdef LAMP_AIR
@@ -1611,6 +1620,10 @@ export function makeSnowMaterial(track = false, street = false): ShaderMaterial 
         }
         // Periwinkle settles in the ripple troughs.
         // (Round 8: deeper in powder, where the wind has worked the snow.)
+        // (Round 9's feel pass, Gullhaven, where uSnowBands is under 1: half as deep. Under its low sun the troughs' lobes
+        // lay on the shelves as soft figure-like shadows, which critics read as cast by something not there; at a third, the
+        // next critic missed them as the fence's long shadows. On every other mountain the troughs are as they were.)
+        if (uSnowBands < 1.0) trough *= 0.5;
         col = mix(col, col * mix(vec3(1.0), uSnowShade / max(uSnowLit, vec3(0.05)), 0.5 + 0.2 * powderK * shadow), trough * (0.8 + 0.15 * powderK * shadow));
         // Wind-scoured patches: broad, soft-edged hollows a step cooler than the powder around them,
         // scattered over the near and middle run, so the groomed corridor under the lens is never one
@@ -1849,6 +1862,11 @@ export function makeSnowMaterial(track = false, street = false): ShaderMaterial 
           float polish = smoothstep(0.3, 0.75, vnoise(vec2(sq.x * 1.1, sq.y * 0.035)));
           // The sun path stays on the open glaze rather than blowing out across the banks.
           float open = mix(0.2, 1.0, smoothstep(0.82, 0.96, ng.y));
+          #ifdef STREET
+            // (Round 9's feel pass, Gablefall's river: under a snow cloud the sun is a pale coin, and its path on the ice is a
+            // breath of it. At full it lay across the river as a pale streak toward the lens, at both hours, five critics.)
+            aniso *= 0.12;
+          #endif
           col += uSunColor * aniso * (0.25 + 0.85 * polish) * iceM * shadow * open * 0.45;
           // Scratches glint only in and around the sun path (a wide lobe lit them across the whole
           // foreground as a fan of speed lines), barely at all elsewhere.
@@ -1883,10 +1901,13 @@ export function makeSnowMaterial(track = false, street = false): ShaderMaterial 
             // The glaze's edges, scribed: a thin bright line along its top and its foot where the polish starts, so
             // the band reads as a band at speed and from far down the run, in the light's own colour and the
             // snow's in the shade.
-            // (A hairline in the wall's own shares, a pixel or two, and gone where a pixel spans much of the wall: at
-            // the lens, seen along the wall, it widened with the anti-aliasing into a pale band the width of the frame.)
-            float tw = min(tAA * 1.1 + 0.008, 0.035);
-            float scribe = (1.0 - smoothstep(0.015, 0.05, tFw)) * vTrack.y * max(1.0 - smoothstep(tw * 0.4, tw, abs(tu - T_GLAZE_HI)), 0.6 * (1.0 - smoothstep(tw * 0.4, tw, abs(tu - T_GLAZE_LO))));
+            // (A hairline on screen, a pixel or two wherever it is, and gone where a pixel spans much of the wall. Round 9's
+            // feel pass: it was a hairline in the wall's own shares, never under about 0.015 of the wall, so 10 to 20 cm of
+            // ice; seen along the wall at the lens in a wall ride that was the pale band from the vanishing point to the
+            // frame's edge, ranked worst by the critics. It fades out within a few metres of the lens, where the band
+            // itself is plain.)
+            float tw = min(tFw * 1.5 + 0.0005, 0.035);
+            float scribe = (1.0 - smoothstep(0.015, 0.05, tFw)) * smoothstep(3.0, 9.0, dist) * vTrack.y * max(1.0 - smoothstep(tw * 0.4, tw, abs(tu - T_GLAZE_HI)), 0.6 * (1.0 - smoothstep(tw * 0.4, tw, abs(tu - T_GLAZE_LO))));
             // (A frost-white, cool and a step under the lit snow: never a painted guide line.)
             col = mix(col, mix(lit, uSnowShade, 0.22) * 0.96, scribe * 0.45 * tIn);
             // The ice in its three values (ART.md 15 rule 3): patches of white rime where the frost has dulled it, a
@@ -1986,6 +2007,11 @@ export function makeSnowMaterial(track = false, street = false): ShaderMaterial 
             q = mix(q, o / max(vec2(fwx, fwz) * 1.7, vec2(0.0005)), farG);
             float core = smoothstep(1.0, 0.0, length(q));
             float rays = (smoothstep(0.3, 0.0, abs(q.y)) * smoothstep(3.0, 0.0, abs(q.x)) + smoothstep(0.3, 0.0, abs(q.x)) * smoothstep(3.0, 0.0, abs(q.y))) * (1.0 - farG);
+            #ifdef TRACK
+              // (Round 9's feel pass, the Old Run's walls: a glint on ice is a point. Its rays on a wall at the lens read to the
+              // third critic as a four-point star stuck on the ice.)
+              rays *= 1.0 - tIn;
+            #endif
             vec2 ftilt = (vec2(hash13(vec3(cell, 2.3)), hash13(vec3(cell, 6.1))) - 0.5) * 2.2;
             float fm = facetMirror(n, ftilt, v);
             float on = smoothstep(0.94 - 0.1 * nightK - 0.03 * gather, 0.985 - 0.06 * nightK - 0.015 * gather, fm);
@@ -2149,7 +2175,9 @@ export function makeSnowMaterial(track = false, street = false): ShaderMaterial 
           #ifdef TRACK
             // (The pool is measured across the ground; up the Old Run's steep walls everything over or under the sled
             // was in it, a column of lamplight from the lip to the floor. It falls off with height too there.)
-            pool *= 1.0 - smoothstep(0.9, 2.6, abs(vWorldPos.y - uLanternLow.y));
+            // (Round 9's feel pass: within a metre and a half of the sled's height. Up to 2.6 m it lay along the wall behind a
+            // wall-riding sled as a long warm smear by Lamplight, the third critic.)
+            pool *= 1.0 - smoothstep(0.6, 1.5, abs(vWorldPos.y - uLanternLow.y));
           #endif
           vec3 lamp = lanternLamp(uLanternColor);
           // The lantern sits low, so it rakes the ripples too: crests facing the sled glow.
@@ -2233,6 +2261,9 @@ export interface ToonOptions {
   /** The visual lift: the hero's materials (the rider). On Low its painted rim is the frame's strongest
    *  (POSTER_GLSL); nothing else changes. */
   hero?: boolean;
+  /** Round 9, Gullhaven's rock (DEEP_CLEAR in LIGHT_GLSL fogged): what stands far under the course's floor, in the sea
+   *  under the cliff, keeps the sea's clear air instead of the sky's. */
+  deepClear?: boolean;
 }
 
 export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
@@ -2257,7 +2288,7 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
       uStoneSnow: shared.uSnowLit,
       uStoneShade: shared.uSnowShade,
     },
-    defines: { LAMP_AIR: 1, ...(opts.bob ? { BOB: 1 } : {}), ...(opts.clearFocus ? { CLEAR_FOCUS: 1 } : {}), ...(opts.coverageFade ? { COVERAGE_FADE: 1 } : {}), ...(opts.hazard ? { HAZARD: 1 } : {}), ...(opts.glowMask ? { GLOW_MASK: 1 } : {}), ...(opts.ice ? { ICE: 1 } : {}), ...(opts.aerial ? { AERIAL: 1 } : {}), ...(opts.cloth ? { CLOTH: 1 } : {}), ...(opts.stone || opts.hazard ? { STONE: 1 } : {}), ...(opts.hero ? { HERO: 1 } : {}) },
+    defines: { LAMP_AIR: 1, ...(opts.bob ? { BOB: 1 } : {}), ...(opts.clearFocus ? { CLEAR_FOCUS: 1 } : {}), ...(opts.coverageFade ? { COVERAGE_FADE: 1 } : {}), ...(opts.hazard ? { HAZARD: 1 } : {}), ...(opts.glowMask ? { GLOW_MASK: 1 } : {}), ...(opts.ice ? { ICE: 1 } : {}), ...(opts.aerial ? { AERIAL: 1 } : {}), ...(opts.cloth ? { CLOTH: 1 } : {}), ...(opts.stone || opts.hazard ? { STONE: 1 } : {}), ...(opts.hero ? { HERO: 1 } : {}), ...(opts.deepClear ? { DEEP_CLEAR: 1 } : {}) },
     vertexShader: /* glsl */ `
       ${SHADOW_VERT_PARS}
       #ifdef CLOTH

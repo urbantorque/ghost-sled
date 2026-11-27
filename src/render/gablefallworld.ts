@@ -68,7 +68,13 @@ const MULLION = C('#3A3446');
 const BUNTING = [C('#3E5C86'), C('#E8E2D4'), C('#4E6E5A'), C('#6A5A7E'), C('#E8E2D4')];
 const SHUTTERS = [C('#3E5A5A'), C('#3A4664'), C('#5A4A3E'), C('#4E5A44')];
 /** The lamps' light on the snow (linear). */
-const LAMP_LIN = new Color('#FFD2A0').convertSRGBToLinear();
+// (Round 9's feel pass: a step less orange, so a front a lamp lights reads as lamplit plaster at Evensong.)
+const LAMP_LIN = new Color('#FFDCB4').convertSRGBToLinear();
+/** Where a door's or a gate's lamp lays its light, from the wall out into the street and over the street (metres), and
+ *  its reach before update's 0.7. Round 9's feel pass: from the lamp itself, close to the wall and 2.8 m up, its light
+ *  washed both rows of fronts peach at Evensong (the fourth and fifth critics, and still there); low and out in the
+ *  street it is a pool on the snow before the door, the wall lit by it only near its foot. */
+const LAMP_AT: readonly [number, number, number] = [1.6, 1.1, 8];
 const DARK = C('#2A2E48');
 const ICE = C('#DCE8F6');
 /** A drift's boards: weathered timber, a step lighter and darker by the bay. */
@@ -267,7 +273,9 @@ function hazeMaterial(): ShaderMaterial {
         // (A window is painted in the lamp's colour: its glow keeps through the haze.)
         vGlow = step(0.9, color.r) * step(color.b, 0.35);
         vCol = color;
-        vLit = 0.86 + 0.14 * smoothstep(-0.1, 0.4, dot(normalize(normal), uSunDir)) + 0.05 * normal.y;
+        // (Round 9's feel pass: the faces a step apart, not two: a few pixels a house at the far side, lit and shaded faces
+        // and the snow between them read as speckle at the vanishing point.)
+        vLit = 0.92 + 0.08 * smoothstep(-0.1, 0.4, dot(normalize(normal), uSunDir)) + 0.04 * normal.y;
         gl_Position = projectionMatrix * viewMatrix * wp;
       }
     `,
@@ -596,7 +604,8 @@ export class GablefallWorld {
             // A lamp on a short iron bracket over the door, close to the wall and over a sled's head.
             const lx = at(zc, 0.24);
             s.box(at(zc, 0.1), by + 3.0, zc, 0.2, 0.06, 0.06, IRON, 0);
-            this.lamps.push([lx, by + 2.8, zc, 9]);
+            // (Its light is laid low and out in the street, LAMP_AT: round 9's feel pass.)
+            this.lamps.push([at(zc, LAMP_AT[0]), by + LAMP_AT[1], zc, LAMP_AT[2]]);
             s.box(lx, by + 2.6, zc, 0.28, 0.36, 0.28, LIT, 0);
             s.box(lx, by + 2.96, zc, 0.36, 0.08, 0.36, IRON, 0);
           }
@@ -680,7 +689,7 @@ export class GablefallWorld {
     const xs = at(zc, 0.05);
     s.quad([xs, by - 0.1, zc - 0.04], [xs, by - 0.1, zc + 0.04], [xs, y1 + hw - 0.1, zc + 0.04], [xs, y1 + hw - 0.1, zc - 0.04], IRON, out);
     if (!low && hash(id, 9) < 0.5) {
-      this.lamps.push([at(zc, 0.4), y1 + hw + 0.6, zc, 9]);
+      this.lamps.push([at(zc, LAMP_AT[0]), by + LAMP_AT[1], zc, LAMP_AT[2]]);
       s.box(at(zc, 0.4), y1 + hw + 0.5, zc, 0.26, 0.34, 0.26, LIT, 0);
       s.box(at(zc, 0.4), y1 + hw + 0.84, zc, 0.34, 0.08, 0.34, IRON, 0);
     }
@@ -814,10 +823,14 @@ export class GablefallWorld {
         // nave past the run's limit, so the start reads as a church's roof.
         // (They stand over the nave's snow by two metres: drawn to the eave's height they hid under the roof's fall and
         // the start read as a snowfield.)
+        // (Round 9's feel pass: 2.6 m over the nave's snow, a moulded cap and a crocketed point over it, so they line the
+        // nave as a church's pinnacles and the snow between reads as its roof; at a metre over it the start still read
+        // as a snowfield with posts along it.)
         const px = x + sd * 0.8;
         const pb = eave(z) - 1.2;
-        const ph = top(z) + 1 - pb;
+        const ph = top(z) + 2.6 - pb;
         s.box(px, pb, z, 0.5, ph, 0.5, PINNACLE, 0);
+        s.box(px, pb + ph - 0.9, z, 0.62, 0.14, 0.62, CHURCH_D, 0);
         s.box(px, pb + ph, z, 0.6, 0.12, 0.6, SNOW, 0);
         for (let j = 0; j < 4; j++) {
           const a: V3 = [px + (j === 0 || j === 3 ? -0.27 : 0.27), pb + ph + 0.12, z + (j < 2 ? -0.27 : 0.27)];
@@ -938,13 +951,13 @@ export class GablefallWorld {
         if (eave(z) - hillY(c, z) < 2.5 || eave(z + 7.2) - hillY(c, z + 7.2) < 2.5) continue;
         const xa = ex(z, sd) + sd * 0.8;
         const xb = ex(z + 7.2, sd) + sd * 0.8;
-        const ya = top(z) + 1.6;
-        const yb = top(z + 7.2) + 1.6;
+        const ya = top(z) + 3.0;
+        const yb = top(z + 7.2) + 3.0;
         for (let i = 0; i < 8; i++) {
           const u = (i + 0.5) / 8;
           const x = xa + (xb - xa) * u;
           const zz = z + 7.2 * u;
-          const y = ya + (yb - ya) * u - 0.9 * Math.sin(Math.PI * u);
+          const y = ya + (yb - ya) * u - 1.1 * Math.sin(Math.PI * u);
           s.tri([x, y, zz - 0.3], [x, y, zz + 0.3], [x, y - 0.6, zz], BUNTING[(i + (sd > 0 ? 2 : 0)) % BUNTING.length], [-sd, 0, 0]);
         }
       }
@@ -1316,11 +1329,15 @@ export class GablefallWorld {
       const f = hash(k, 92) < 0.5 ? -1 : 1;
       folk.push({ x: bx + x, y: deck + 0.05, z: -(fz + f * (BD / 2 - 1.1)), face: 0, coat: coats[k % coats.length], hat: hats[(k * 3) % hats.length] });
     }
+    // (Round 9's feel pass: along the quay a few, stood a step back from its edge, so the quay's lip takes their feet and
+    // the lens on the ice sees them from the waist. At its edge, a few metres from the lens, a still figure is boxes, and
+    // the quay's folk read to the critics as boxes at speed; set back behind the lip, the next critic found the quay empty.)
     for (let z = fz - 110; z < fz + 20; z += 2.6) {
       k++;
       if (low && k % 2) continue;
-      if (hash(k, 93) < 0.3 || Math.abs(z - fz) < 8) continue;
-      const x = c.centerX(z) - c.halfWidth(z) - c.edgeLimit(z) - 0.9 - hash(k, 94) * 1.2;
+      if (hash(k, 93) < 0.5 || Math.abs(z - fz) < 8) continue;
+      // (Between the quay's edge and its houses, which stand from 5.5 m back.)
+      const x = c.centerX(z) - c.halfWidth(z) - c.edgeLimit(z) - 1.4 - hash(k, 94) * 1.6;
       folk.push({ x, y: c.baseY(z) + QUAY_TOP + 0.12, z: -z, face: 1, coat: coats[k % coats.length], hat: hats[(k * 5) % hats.length] });
     }
     if (folk.length) {
@@ -1494,7 +1511,9 @@ export class GablefallWorld {
     // the sky: at the fog's colour alone the first critic found the far plain and the sky one value.)
     (this.haze.uniforms.uHaze.value as Color).copy(p.fog).lerp(p.air.far, 0.22);
     (this.haze.uniforms.uLight.value as Color).copy(p.snowLit);
-    this.haze.uniforms.uGlowK.value = 0.45 + 0.4 * lampK;
+    // (Round 9's feel pass: the far side's windows a breath by day and points of light from dusk, ART.md 12. Glowing all
+    // afternoon, a window to every few houses, they were the speckle the critics found at the vanishing point.)
+    this.haze.uniforms.uGlowK.value = 0.08 + 0.8 * Math.max(0, Math.min(1, (lampHour - 0.6) / 0.8));
     // The lamps' light on the snow by them: a street of soft amber pools with the grey between, stronger as the day goes.
     const pool = 0.12 + 0.18 * Math.max(0, Math.min(1, (lampHour - 0.4) / 1));
     // (One lamp in three lays its pool, so the street is pools with the blue between: every door's light together washed

@@ -269,8 +269,9 @@ export function filmValue(x: number): number {
 
 /** Each biome's signature mountain (massif.ts): a classic snow-capped summit, an ice fang, a
  *  smoking volcano or a symmetrical snow-capped cone. Round 9: or none, 'hills', the Old Run's low wooded ridges round
- *  its lake, with no hero at the track's vanishing point. */
-export type HeroPeak = 'summit' | 'fang' | 'volcano' | 'cone' | 'hills' | 'coast';
+ *  its lake, with no hero at the track's vanishing point; 'coast', Gullhaven's; 'vale', Gablefall's valley's low hills
+ *  in the snowfall (round 9's feel pass: on the Old Run's ridges they stood in its haze as peaks). */
+export type HeroPeak = 'summit' | 'fang' | 'volcano' | 'cone' | 'hills' | 'coast' | 'vale';
 
 const c = (hex: string) => new Color(hex);
 
@@ -394,7 +395,9 @@ function biomeBase(biome: BiomeId): Palette {
       p.accentProp = c('#2E4A4E');
       // (A step deeper each than the sky's pale: a pale range on a pale sky left the third critic no far plane.)
       p.ridge = [c('#C2C0D0'), c('#A2A2BA'), c('#82829E')];
-      p.massif.peak = 'hills';
+      // (Its own low, rounded hills: on the Old Run's ridges, the far plane read to the critics as peaks in the haze, and
+      // ART.md 15 says no peak here.)
+      p.massif.peak = 'vale';
       p.massif.rock = c('#6A6880');
       p.massif.sea = 0;
       p.atmo.banner = 0;
@@ -1823,7 +1826,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.clouds.shadow = 0;
         p.massif.glowK = 0.4;
         p.massif.glowLine = 200;
-        p.grade.shafts = 0.25;
+        // (Round 9's feel pass: no shafts once the sun is behind the ridge. At 0.25 they fanned over the outrun's snow and
+        // across the rider from the line, the third critic.)
+        p.grade.shafts = 0;
         p.grade.saturation = 1.06;
         p.grade.hi = c('#FFF0DC');
         p.grade.lo = c('#DCE0FF');
@@ -3048,7 +3053,8 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       // (The moon's shadows a little higher: low, the rider's lay detached beside the sled as a dark blob.)
       setSun(p, 22, 11, 40, 22);
       p.moon = true;
-      p.moonPhase = 0.35;
+      // (Round 9's feel pass: a half moon, ART.md 15. At 0.35 the third critic saw a crescent.)
+      p.moonPhase = 0.52;
       p.sunDisc = 1;
       p.sunColor = c('#C8D2F4');
       p.sunCore.setRGB(1.9, 1.95, 2.25);
@@ -3212,7 +3218,9 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.hemiSky = c('#5A62A0');
       p.air = { far: c('#3A3E6A'), cool: c('#D8DCF6'), low: 0.5, scatter: 0.8 };
       // (The snow cloud low over the town, lit warm from under by its windows.)
-      p.deck = { k: 0.66, lit: c('#5C5A86'), shade: c('#262A50'), glow: c('#8E7A8C'), edge: 0 };
+      // (Round 9's feel pass: the whole sky, k 0.86. At 0.66 the sixth critic saw broken cloud with clear deep-blue gaps,
+      // where Evensong is still the snowfall's one cloud.)
+      p.deck = { k: 0.86, lit: c('#5C5A86'), shade: c('#262A50'), glow: c('#8E7A8C'), edge: 0 };
       p.clouds = { low: 0.2, high: 0, top: 0.1, lit: c('#6A6890'), shade: c('#2E3258'), rim: c('#A890A0'), shadow: 0 };
       p.ridge = [c('#5A5E8A'), c('#464A78'), c('#363A66')];
       p.massif.rock = c('#2E3258');
@@ -3224,7 +3232,10 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.hazardDim = 0.88;
       p.lamps = 1.4;
       p.lampAir = 0.05;
-      p.lanternGlow = 0.8;
+      // (Round 9's feel pass: the sled's lantern low. At 0.8 it lit everything within 34 m of the sled (materials.ts
+      // lanternLight), and in a street six metres across that was both rows of fronts washed peach, which the critics read
+      // as the facades lit orange at night, five passes running. The town's own lamps and windows are the light.)
+      p.lanternGlow = 0.28;
       p.giftGlow = 0.45;
       p.ghostGlow = 1.5;
       p.heroRim = 1.4;

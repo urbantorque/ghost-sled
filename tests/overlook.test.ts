@@ -75,7 +75,7 @@ describe('overlook plan', () => {
           }
         }
         const own = getPalette(c.biome, Mood.None).massif;
-        expect(own.peak).toBe('hills');
+        expect(own.peak).toBe('vale');
         expect(own.sea + own.seaLake + own.seaOcean).toBe(0);
         return;
       }

@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, Mesh, NormalBlending, ShaderMaterial } from 'three';
+import { BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, Mesh, NormalBlending, ShaderMaterial, Vector3 } from 'three';
 import { Course } from '../sim/course';
 import { BUDGET, byTier, fx } from './fxhub';
 import { LANTERN_POOL_GLSL, shared } from './materials';
@@ -139,6 +139,8 @@ export class Trail {
         uIceMood: shared.uIceMood,
         uColor: { value: color ?? new Color('#8FF3E4') },
         uLife: { value: this.ghost ? 7 : 26 },
+        /** How strong the runners' frost scratches on ice are (setCourse: 1, but on the Old Run). */
+        uScratch: { value: 1 },
       },
       vertexShader: /* glsl */ `
         attribute float aAcross;
@@ -202,6 +204,7 @@ export class Trail {
         uniform float uIceMood;
         uniform vec3 uColor;
         uniform float uLife;
+        uniform float uScratch;
         varying float vAcross;
         varying float vSunSide;
         varying float vSunK;
@@ -353,7 +356,7 @@ export class Trail {
             A = kw + A * (1.0 - kw);
             // (Round 8's review loop, Pinecrest: on a glazed patch the two frost scratches ran from the sled to the frame's
             // foot as ruled white stripes. Fainter: a scratch in the glaze, not a line on it.)
-            float kc = cut * (0.36 + 0.4 * deep + 0.06 * D) * mix(1.0, 0.8, soft) * mix(1.0, 0.42, scr);
+            float kc = cut * (0.36 + 0.4 * deep + 0.06 * D) * mix(1.0, 0.8, soft) * mix(1.0, 0.42 * uScratch, scr);
             P = cutCol * kc + P * (1.0 - kc);
             A = kc + A * (1.0 - kc);
             float kwl = wallLit * 0.15;
@@ -385,7 +388,7 @@ export class Trail {
             A = kcl + A * (1.0 - kcl);
             // On ice, fine scratches either side of each runner's line, frost-white in the glaze.
             float hatch = smoothstep(0.55, 1.0, sin(x * 240.0 + nz * 9.0)) * (1.0 - smoothstep(0.03, 0.08, abs(a - ${RUNNER.toFixed(2)}))) * scr * (1.0 - smoothstep(0.004, 0.012, px));
-            float kh = hatch * 0.3;
+            float kh = hatch * 0.3 * uScratch;
             P = mix(uLit, vec3(1.0), 0.35) * kh + P * (1.0 - kh);
             A = kh + A * (1.0 - kh);
             vec3 col = P / max(A, 0.001);
@@ -420,6 +423,9 @@ export class Trail {
 
   setCourse(course: Course): void {
     this.course = course;
+    // (Round 9's feel pass, the Old Run: its ice is the whole track, and seen along a wall at the lens the runners' frost
+    // scratches ran as bright parallel streaks with kinks, read by the fourth critic as speed lines. Half as strong there.)
+    this.mat.uniforms.uScratch.value = course.kit?.id === 'oldrun' ? 0.5 : 1;
     this.clear();
   }
 
@@ -642,6 +648,8 @@ export class GhostTrails {
         uLife: { value: 7 },
         uWake: { value: 0 },
         uWakeG: { value: -1 },
+        /** How the light along a rut thins with distance: from x to y metres, to z of itself (setCourse). */
+        uThin: { value: new Vector3(25, 80, 0.5) },
       },
       vertexShader: /* glsl */ `
         attribute float aAcross;
@@ -679,6 +687,7 @@ export class GhostTrails {
         uniform float uFogFar;
         uniform vec3 uFocus;
         uniform float uLife;
+        uniform vec3 uThin;
         varying float vAcross;
         varying float vAge;
         varying vec3 vCol;
@@ -706,7 +715,7 @@ export class GhostTrails {
           vec3 col = mix(vCol * 1.6, pow(vCol, vec3(1.7)) * 0.85, day * 0.6);
           // Shown from just behind the rider onward, gone before the lens (the lower third is the snow's).
           float nearK = zr > 1.0 ? smoothstep(zr * 0.7, zr * 1.35, zf) : 1.0;
-          float alpha = (core * mix(0.62, 0.5, day) + glow * mix(0.3, 0.14, day)) * fade * sqrt(fade) * nearK * (1.0 - fogF) * mix(1.0, 0.5, smoothstep(25.0, 80.0, d));
+          float alpha = (core * mix(0.62, 0.5, day) + glow * mix(0.3, 0.14, day)) * fade * sqrt(fade) * nearK * (1.0 - fogF) * mix(1.0, uThin.z, smoothstep(uThin.x, uThin.y, d));
           if (vWake > 0.0) {
             // The slipstream you ride in behind this ghost: a soft sheet of its light over its track,
             // densest just behind it and reaching back under your sled, with chevrons of brighter light
@@ -759,10 +768,17 @@ export class GhostTrails {
     this.mesh = new Mesh(this.geo, this.mat);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 1;
+    this.setCourse(course);
   }
 
   setCourse(course: Course): void {
     this.course = course;
+    // (Round 9's feel pass, the Old Run: every ghost rides the same glaze down the same straights, so their lights ran on
+    // as straight lines converging on the vanishing point, speed lines down the fall line on Low most of all (ART.md 4).
+    // There a ghost's light keeps to the near track and is gone by 55 m. Every other course as it was.)
+    const thin = this.mat.uniforms.uThin.value as Vector3;
+    if (course.kit?.id === 'oldrun') thin.set(16, 55, 0);
+    else thin.set(25, 80, 0.5);
     this.clear();
   }
 
