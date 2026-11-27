@@ -4073,7 +4073,13 @@ export class App {
 
   private frameTitle(dt: number): void {
     // Picking the hero also sets where the reel starts.
-    if (this.attract.focus < 0) this.attract.focus = this.pickAttractHero();
+    if (this.attract.focus < 0) {
+      this.attract.focus = this.pickAttractHero();
+      // (A hero picked moves the reel to its moment, a jump of up to 2 km on the title's first pick, when the reel takes
+      // its shot: the lens cuts with it, as at a loop's cut. Round 9, the feelui lane: eased, Gullhaven's title showed the
+      // course with no rider for a second soon after it opened.)
+      if (this.attract.focus >= 0) this.reelLensCut = true;
+    }
     this.attract.tick += dt * 60;
     const tick = this.attract.tick;
     this.ghostPoses.clear();
