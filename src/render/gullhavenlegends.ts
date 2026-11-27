@@ -312,9 +312,10 @@ export class GullhavenLegends {
       tm.compose(tv.set(x, sea + 2.5, -z), tq, ts.set(10 + d * 0.008, 1, 50 + d * 0.05));
       lie.setMatrixAt(i, tm);
       lie.setColorAt(i, tc.copy(LAMP).multiplyScalar(0.7 * lit));
-      // Its wake, a pale wedge of broken water astern.
+      // Its wake, a short pale wedge of broken water astern, 3 to 27 m behind the hull. (52 m long, a column's wakes
+      // reached nearly to the boat astern, and from the air they joined the lamps like a wire: probe gull-fleet-wire.)
       tq.setFromAxisAngle(Y, yaw);
-      tm.compose(tv.set(x, sea + 0.8, -(z - 34)), tq, ts.set(7, 1, 52));
+      tm.compose(tv.set(x, sea + 0.8, -(z - 15)), tq, ts.set(9, 1, 24));
       wake.setMatrixAt(i, tm);
     }
     for (const m of [b, bl, lie, wake]) {
