@@ -1,4 +1,4 @@
-import { ROSTER } from '../bot/roster';
+import { HOME_RIDERS, ROSTER, type Rider } from '../bot/roster';
 import { MOODS, Mood } from '../sim/chaos';
 import { courseFor } from '../sim/course';
 import { planMoments } from '../sim/moments';
@@ -45,6 +45,24 @@ const LEGEND_NAMES = ['first legend', 'second legend'];
 
 let catalogue: Sticker[] | null = null;
 
+/** A mountain's home riders (round 9: the new mountains' own, bot/roster.ts HOME_RIDERS; none on the five). */
+function homeOf(mountainId: string): readonly Rider[] {
+  const mi = MOUNTAINS.findIndex((m) => m.id === mountainId);
+  return HOME_RIDERS.filter((r) => r.home === mi);
+}
+
+/** The signature riders whose records a mountain's rival stickers ask you to beat: The Twelve, and (round 9) the
+ *  mountain's own home riders after them. */
+function rivalsOn(mountainId: string): readonly Rider[] {
+  return [...ROSTER, ...homeOf(mountainId)];
+}
+
+/** A rival sticker's id. A home rider's is marked as one ('rv:gablefall:wren.home'): Gablefall's Wren Slater has the key
+ *  of The Twelve's Old Wren, who rides there too. */
+function rivalId(mountainId: string, r: Rider): string {
+  return `rv:${mountainId}:${r.key}${ROSTER.includes(r) ? '' : '.home'}`;
+}
+
 /** Everything there is to see, in album order: each mountain's stickers, then the rest. */
 export function albumCatalogue(): readonly Sticker[] {
   if (catalogue) return catalogue;
@@ -53,8 +71,10 @@ export function albumCatalogue(): readonly Sticker[] {
     for (const s of planMoments(courseFor(m.seed))) for (let v = 0; v < s.variants; v++) out.push({ id: `v:${m.id}:${s.key}:${v}`, mountain: m.id, group: 'variant', name: `${s.name}, ${v + 1} of ${s.variants}`, hint: `${s.line} (its variants come by turn)` });
     for (let slot = 1; slot <= 2; slot++) out.push({ id: `l:${m.id}:${slot}`, mountain: m.id, group: 'legend', name: `${m.name}'s ${LEGEND_NAMES[slot - 1]}`, hint: 'About one run in ten meets a legend' });
     for (const mood of MOODS) if (mood.id !== Mood.None) out.push({ id: `m:${m.id}:${mood.id}`, mountain: m.id, group: 'mood', name: `${mood.name} on ${m.name}`, hint: `Finish ${m.name} in ${mood.name}` });
-    for (const r of ROSTER) if (riderTimeOn(r, m.id) !== null) out.push({ id: `rv:${m.id}:${r.key}`, mountain: m.id, group: 'rival', name: `${r.name} on ${m.name}`, hint: `Beat ${r.name}'s record on ${m.name} to the line` });
-    out.push({ id: `x:${m.id}`, mountain: m.id, group: 'mirror', name: `Mirror ${m.name}`, hint: `Finish ${m.name} mirrored (an Almanac page opens it)` });
+    for (const r of rivalsOn(m.id)) if (riderTimeOn(r, m.id) !== null) out.push({ id: rivalId(m.id, r), mountain: m.id, group: 'rival', name: `${r.name} on ${m.name}`, hint: `Beat ${r.name}'s record on ${m.name} to the line` });
+    // (Round 9: a new mountain's mirror opens when its riders are beaten, almanac.ts mirrorOpen.)
+    const how = homeOf(m.id).length ? `beating its ${homeOf(m.id).length} riders to the line opens it` : 'an Almanac page opens it';
+    out.push({ id: `x:${m.id}`, mountain: m.id, group: 'mirror', name: `Mirror ${m.name}`, hint: `Finish ${m.name} mirrored (${how})` });
   }
   for (const k of TRICK_KEYS) out.push({ id: `t:${k}`, mountain: '', group: 'trick', name: TRICK_NAMES[k] ?? TRICKS.find((t) => t.key === k)?.name ?? k, hint: 'Land it' });
   for (const r of ROSTER) out.push({ id: `w:${r.key}`, mountain: '', group: 'duel', name: r.name, hint: `Beat ${r.name} in a duel` });
@@ -94,9 +114,9 @@ export function stickersFor(a: AlbumSave | undefined, run: AlbumRun): string[] {
     for (const q of run.moments) if (q.won) ids.push(`v:${m}:${q.key}:${q.variant}`);
     if (run.legend > 0) ids.push(`l:${m}:${run.legend}`);
     if (run.finished && run.mood !== Mood.None) ids.push(`m:${m}:${run.mood}`);
-    if (run.finished && run.time !== null) for (const r of ROSTER) {
+    if (run.finished && run.time !== null) for (const r of rivalsOn(m)) {
       const t = riderTimeOn(r, m);
-      if (t !== null && run.time < t) ids.push(`rv:${m}:${r.key}`);
+      if (t !== null && run.time < t) ids.push(rivalId(m, r));
     }
     if (run.mirror && run.finished) ids.push(`x:${m}`);
   }

@@ -28,6 +28,12 @@ export const FINISH_STEP_S = 1.6;
 export const APEX_MIN_AIR_S = 0.45;
 /** The most frames one run keeps waiting for its settlement. */
 export const MAX_PENDING = 24;
+/** Round 9: set pieces whose height is a flight, by key: Gullhaven's Great Geo (its sticker's frame from the column, as
+ *  the mountain's lane asked). Its frame is taken this long after the sled leaves the lip (the set piece's step at the
+ *  takeoff, n 0), out over the cleft with the lens stepped out to the sea, in place of the one on the shelf before it;
+ *  its flights last 4.3 to 6.5 s. */
+export const FLIGHT_PIECES: ReadonlySet<string> = new Set(['greatgeo']);
+export const FLIGHT_DELAY_S = 1.6;
 
 /** What the shots need to know of the run. */
 export interface ShotCtx {
@@ -69,7 +75,9 @@ export function aimFor(e: SimEvent, c: ShotCtx): Aim | null {
       const id = `v:${c.mountain}:${p.key}:${p.variant}`;
       if (c.held(id)) return null;
       if (e.phase === 'start') return { ids: [id], delay: PIECE_DELAY_S };
-      // The last step is the set piece at its height; a win with no frame yet takes the frame it is won on.
+      // The last step is the set piece at its height; a win with no frame yet takes the frame it is won on. (A flight's
+      // height is in the air, FLIGHT_PIECES.)
+      if (e.phase === 'step' && FLIGHT_PIECES.has(p.key)) return e.n === 0 ? { ids: [id], delay: FLIGHT_DELAY_S } : null;
       if (e.phase === 'step') return e.of > 0 && e.n === e.of ? { ids: [id], delay: 0 } : null;
       return { ids: [id], delay: 0, keep: true };
     }

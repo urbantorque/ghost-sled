@@ -14,6 +14,10 @@ import { PAGES, pageAt } from './almanac';
 export interface RankSave {
   xp: number;
   claimed: number;
+  /** Round 9 (M3): rewards told that no page turned in their settle gave (almanac.ts owedRewards): a new mountain's other
+   *  hour on a page turned before the page held it, and its mirror once its home riders are all beaten to the line
+   *  ('hour:<id>', 'mirror:<id>'). Written only once it holds one. */
+  told?: string[];
 }
 
 /** A monthly chapter's progress, by month key ('2026-12'). */
@@ -105,7 +109,10 @@ export function readRank(v: unknown): RankSave | null {
   const xp = Math.floor(num(v.xp, 0, 1e9) ?? 0);
   // A page cannot be opened before it is turned.
   const claimed = Math.min(Math.floor(num(v.claimed, 0, PAGES) ?? 0), pageAt(xp).page);
-  return xp > 0 ? { xp, claimed } : null;
+  // (Round 9: what was told, in its known shapes, once each.)
+  const told: string[] = [];
+  if (Array.isArray(v.told)) for (const k of v.told as unknown[]) if (typeof k === 'string' && /^(hour|mirror):[a-z]{1,24}$/.test(k) && !told.includes(k)) told.push(k);
+  return xp > 0 ? { xp, claimed, ...(told.length ? { told: told.slice(0, 32) } : {}) } : null;
 }
 
 export function readChapters(v: unknown): Record<string, ChapterSave> | null {

@@ -554,6 +554,23 @@
   text-shadow: var(--halo);
 }
 
+/* (Round 9, M3: a new mountain's way to its mirror while it is shut: words in the hour pair's place, not a control.) */
+.gs9-how-way {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: var(--fs-s);
+  font-weight: var(--fw-label);
+  color: rgba(245, 243, 255, 0.78);
+  text-shadow: var(--halo);
+}
+
+.gs9-how-way .gs9-i {
+  width: 14px;
+  height: 14px;
+  opacity: 0.8;
+}
+
 .gs9-seg {
   display: inline-flex;
   gap: 3px;

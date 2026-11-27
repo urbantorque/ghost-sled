@@ -1,6 +1,8 @@
-import { ROSTER } from '../bot/roster';
+import { HOME_RIDERS, ROSTER } from '../bot/roster';
+import { MOUNTAINS } from '../sim/mountains';
 import type { SaveData } from './save';
 import { SCARVES, type Source, TRAILS, chapterPieces } from './garage';
+import { readMastery } from './mastery';
 import { PAINTS } from './paints';
 
 // The Almanac (round 8, G4): Rider Rank's track. Every run pays experience into one rank (rank.ts), and each
@@ -84,7 +86,9 @@ const c = (charm: string): Reward => ({ kind: 'charm', charm });
 const t = (title: string): Reward => ({ kind: 'title', title });
 const f = (trick: string): Reward => ({ kind: 'flourish', trick });
 
-/** The fifty pages. Pages 1 to 10 each open something that changes play. */
+/** The fifty pages. Pages 1 to 10 each open something that changes play. (Round 9: the three new mountains' other hours
+ *  joined pages that held only a charm or gifts, each between the five's hours as its mountain opens between theirs:
+ *  Gablefall's on 16, the Old Run's on 23, Gullhaven's on 29. ADDED_HOURS.) */
 export const ALMANAC: readonly Page[] = (
   [
     [{ kind: 'gate', gates: 2 }, c('slip')],
@@ -102,20 +106,20 @@ export const ALMANAC: readonly Page[] = (
     [c('whirl')],
     [f('spin')],
     [{ kind: 'mirror', mountain: 'frostfang' }, t('Glass Walker')],
-    [c('quick')],
+    [{ kind: 'hour', mountain: 'gablefall' }, c('quick')],
     [{ kind: 'garage', shelf: 'scarf', id: 'almanacknot' }],
     [{ kind: 'hour', mountain: 'ember' }],
     [c('festival')],
     [{ kind: 'mirror', mountain: 'ember' }, t('Ash Runner')],
     [{ kind: 'open', mountain: 'lanternfall' }, f('backflip')],
     [{ kind: 'legs', legs: 6 }, c('stone')],
-    [{ kind: 'gifts', gifts: 200 }],
+    [{ kind: 'hour', mountain: 'oldrun' }, { kind: 'gifts', gifts: 200 }],
     [{ kind: 'hour', mountain: 'sakura' }],
     [{ kind: 'mirror', mountain: 'sakura' }, t('Petal Chaser')],
     [c('memory')],
     [f('railGrab')],
     [{ kind: 'garage', shelf: 'trail', id: 'almanacmoth' }],
-    [c('frost')],
+    [{ kind: 'hour', mountain: 'gullhaven' }, c('frost')],
     [{ kind: 'mirror', mountain: 'lanternfall' }, t('Mirror Walker')],
     [f('lanternReach')],
     [{ kind: 'hour', mountain: 'lanternfall' }],
@@ -170,15 +174,67 @@ export function featureOpen(d: Pick<SaveData, 'rank'>, feature: Feature): boolea
 }
 
 /** A mirror opens on its page, or once every one of The Twelve who calls that mountain home has fallen in a duel:
- *  a mountain you have finished with gives you its mirror (and Lanternfall's, after the King, is somewhere to go). */
+ *  a mountain you have finished with gives you its mirror (and Lanternfall's, after the King, is somewhere to go).
+ *  Round 9 (DECISIONS 397): a new mountain has no page and none of The Twelve at home; its mirror opens once its three
+ *  home riders are beaten to the line (its mastery board's row), told on that run's results (owedRewards). */
 export function mirrorOpen(d: Pick<SaveData, 'rank' | 'twelve'>, mountain: string): boolean {
   if (rewardsOpened(d).some((r) => r.kind === 'mirror' && r.mountain === mountain)) return true;
+  if (told(d, `mirror:${mountain}`)) return true;
   const mi = MOUNTAIN_ORDER.indexOf(mountain);
   const home = ROSTER.filter((r) => r.home === mi);
   return home.length > 0 && home.every((r) => d.twelve?.beaten.includes(r.key));
 }
 
 const MOUNTAIN_ORDER = ['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall'];
+
+/** Round 9: a new mountain's home riders (bot/roster.ts HOME_RIDERS) and how many of them a save has beaten to the line
+ *  there (its mastery board's rider row), or null for a mountain whose mirror opens another way (the five's). */
+export function homeRiders(d: Pick<SaveData, 'mastery'>, mountain: string): { beaten: number; of: number } | null {
+  const mi = MOUNTAINS.findIndex((m) => m.id === mountain);
+  const home = HOME_RIDERS.filter((r) => r.home === mi);
+  if (mi < 0 || home.length === 0) return null;
+  const held = readMastery(d.mastery?.[mountain]).riders;
+  return { beaten: home.filter((r) => held.includes(r.key)).length, of: home.length };
+}
+
+/** Round 9 (M3): the new mountains' other hours and the pages they joined. A save that had turned a page before it held
+ *  its hour is owed the hour, told once on its next results (owedRewards); the hour opens once told, never silently. */
+export const ADDED_HOURS: Readonly<Record<string, number>> = { gablefall: 16, oldrun: 23, gullhaven: 29 };
+
+/** Whether a save has been told a reward that no page turned in that settle gave it (RankSave.told: 'hour:<id>',
+ *  'mirror:<id>'). */
+export function told(d: Pick<SaveData, 'rank'>, key: string): boolean {
+  return d.rank?.told?.includes(key) ?? false;
+}
+
+/** A reward a save is owed and has not been told: where it came from, as the results' card says it. */
+export interface OwedReward {
+  key: string;
+  /** The Almanac's page it is on (0 for a mirror, which is a mastery board's). */
+  page: number;
+  from: string;
+  reward: Reward;
+}
+
+/** What a save is owed that no page turned on this run gives it: a new mountain's hour on a page turned before the page
+ *  held it (the lowest first, one a run, as pages open one a run), and a new mountain's mirror once all its home riders
+ *  are beaten to the line (every one, on the run that beat the last of them). */
+export function owedRewards(d: Pick<SaveData, 'rank' | 'mastery'>): OwedReward[] {
+  const out: OwedReward[] = [];
+  const opened = pagesOpened(d);
+  const hours = Object.entries(ADDED_HOURS)
+    .filter(([m, page]) => page <= opened && !told(d, `hour:${m}`))
+    .sort((a, b) => a[1] - b[1]);
+  if (hours.length) {
+    const [m, page] = hours[0];
+    out.push({ key: `hour:${m}`, page, from: `New on Rider Rank ${page}`, reward: { kind: 'hour', mountain: m } });
+  }
+  for (const m of MOUNTAINS) {
+    const h = homeRiders(d, m.id);
+    if (h && h.beaten >= h.of && !told(d, `mirror:${m.id}`)) out.push({ key: `mirror:${m.id}`, page: 0, from: `${m.name}'s riders beaten`, reward: { kind: 'mirror', mountain: m.id } });
+  }
+  return out;
+}
 
 /** The page that opens Lanternfall to ride and explore (its King and the last race still wait for eleven of The
  *  Twelve): about run 40 for the mid pilot and run 70 for the novice in the bars' careers. */
@@ -190,7 +246,8 @@ export function almanacOpens(d: Pick<SaveData, 'rank'>, mountain: string): boole
 }
 
 export function hourOpen(d: Pick<SaveData, 'rank'>, mountain: string): boolean {
-  return rewardsOpened(d).some((r) => r.kind === 'hour' && r.mountain === mountain);
+  // (Round 9: a new mountain's hour once its page is open and the save has been told it, ADDED_HOURS.)
+  return rewardsOpened(d).some((r) => r.kind === 'hour' && r.mountain === mountain) && (ADDED_HOURS[mountain] === undefined || told(d, `hour:${mountain}`));
 }
 
 /** The Long Night's legs open (0 before page 10). */

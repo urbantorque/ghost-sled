@@ -58,7 +58,7 @@ import { charmGatesOf, charmPoolOf, firstRunOf } from './charmpool';
 import { lanternSignals } from './charmsignals';
 import { ALL_CHARMS, CHARMS } from '../sim/charms';
 import { TRICKS } from '../sim/tricks';
-import { CHAPTER_EXTRAS, GARAGE_EXTRAS, type GarageExtra, almanacOpens, featureOpen, hourOpen, legsOpen, mirrorOpen, monthsOpen, shelfExtras } from './almanac';
+import { CHAPTER_EXTRAS, GARAGE_EXTRAS, type GarageExtra, almanacOpens, featureOpen, homeRiders, hourOpen, legsOpen, mirrorOpen, monthsOpen, shelfExtras } from './almanac';
 import { type Trial, type TrialOutcome, type TrialTally, type TrialTargets, daysLeftWords, figureShort, figureText, newTally, startWords, settleTrial, stageWords, tallyStep, trialConfig, trialFor, trialKey, trialMedalNow, trialMountain, trialTargets, trialValue } from './trial';
 import { type Night, depthWords, mirrorKey, nightBeat, nightDepth, nightLeg, nightOn, settleLongNight, startNight } from './modes';
 import { showNightBeat } from '../ui/nightbeat';
@@ -982,6 +982,8 @@ export class App {
           get stars() {
             return stars();
           },
+          // (Round 9, M3: a new mountain's mirror and its riders, for its board and the title's hour pair.)
+          ...this.mirrorRidersOf(m.id),
         };
       }),
       selected: tp ? 'trial' : this.mountain.id,
@@ -1756,6 +1758,13 @@ export class App {
   private mirrorOpenHere(): boolean {
     const named = MOUNTAINS.some((m) => m === this.mountain);
     return named && (mirrorOpen(this.save.data, this.mountain.id) || (DEV_ON && DEV.has('mirror')));
+  }
+
+  /** Round 9 (M3): a new mountain's way to its mirror, its home riders beaten to the line (almanac.ts homeRiders), for
+   *  its card: nothing for a mountain whose mirror opens another way. */
+  private mirrorRidersOf(id: string): Pick<MountainCard, 'mirrorRiders'> {
+    const h = homeRiders(this.save.data, id);
+    return h ? { mirrorRiders: { ...h, open: mirrorOpen(this.save.data, id) } } : {};
   }
 
   /** The picture and the sound mirrored, or not (world.ts setMirrored, the audio's last node). */
