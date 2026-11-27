@@ -1527,6 +1527,9 @@ export class ChaseCamera {
   snap(t: CamTarget): void {
     this.initialized = false;
     this.lastSpeed = NaN;
+    // (The title reel's cut: the lens faces the hero's way at once, where the eased travel direction would swing it
+    // round from the end of the shot over a second. Round 9, the feelui lane.)
+    if (this.mode === 'orbit') this.dirS.copy(t.dir);
     this.update(t, 1 / 60);
   }
 

@@ -4068,6 +4068,8 @@ export class App {
 
   private reelTmp = emptyPose();
   private reelHero = emptyPose();
+  /** The title reel has cut back to its start: the lens cuts with it on the first frame that has its hero. */
+  private reelLensCut = false;
 
   private frameTitle(dt: number): void {
     // Picking the hero also sets where the reel starts.
@@ -4120,7 +4122,8 @@ export class App {
         allDone = false;
       }
     }
-    if (allDone || tick > this.reel.end || (this.reel.staged && focus !== null && focus.z > this.shot.to)) {
+    const cut = allDone || tick > this.reel.end || (this.reel.staged && focus !== null && focus.z > this.shot.to);
+    if (cut) {
       // (A soft dip over the cut, so the loop reads as an edit and not as a jump.)
       this.ui.titleCut();
       this.ghosts.resetRace();
@@ -4129,6 +4132,9 @@ export class App {
       // The next frame picks again, back to the same opening moment.
       this.attract.tick = this.reel.from;
       this.attract.focus = -1;
+      // (And the lens cuts with it, on the first frame that has its hero. Round 9, the feelui lane: eased back, it
+      // glided down the course for about half a second with no rider in the picture, 260 m on Gullhaven's short loop.)
+      this.reelLensCut = true;
     }
     const snap = this.view;
     if (focus) {
@@ -4157,6 +4163,12 @@ export class App {
     snap.crashed = false;
     // The colour script's time for this shot (the run takes the light back when it starts).
     this.world.journeyAt = this.shot.light ?? snap.z;
+    // (The loop's first frame with its hero: the ground there made fresh and the lens put on the hero, as the run's reel
+    // cuts, under the title's dip.)
+    if (this.reelLensCut && !cut && focus) {
+      this.reelLensCut = false;
+      this.world.reelCut(snap);
+    }
     this.world.frame({
       mode: 'title',
       snap,
