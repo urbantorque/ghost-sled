@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, Mesh, NormalBlending, ShaderMaterial } from 'three';
+import { BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, Mesh, NormalBlending, ShaderMaterial, Vector3 } from 'three';
 import { Course } from '../sim/course';
 import { BUDGET, byTier, fx } from './fxhub';
 import { LANTERN_POOL_GLSL, shared } from './materials';
@@ -642,6 +642,8 @@ export class GhostTrails {
         uLife: { value: 7 },
         uWake: { value: 0 },
         uWakeG: { value: -1 },
+        /** How the light along a rut thins with distance: from x to y metres, to z of itself (setCourse). */
+        uThin: { value: new Vector3(25, 80, 0.5) },
       },
       vertexShader: /* glsl */ `
         attribute float aAcross;
@@ -679,6 +681,7 @@ export class GhostTrails {
         uniform float uFogFar;
         uniform vec3 uFocus;
         uniform float uLife;
+        uniform vec3 uThin;
         varying float vAcross;
         varying float vAge;
         varying vec3 vCol;
@@ -706,7 +709,7 @@ export class GhostTrails {
           vec3 col = mix(vCol * 1.6, pow(vCol, vec3(1.7)) * 0.85, day * 0.6);
           // Shown from just behind the rider onward, gone before the lens (the lower third is the snow's).
           float nearK = zr > 1.0 ? smoothstep(zr * 0.7, zr * 1.35, zf) : 1.0;
-          float alpha = (core * mix(0.62, 0.5, day) + glow * mix(0.3, 0.14, day)) * fade * sqrt(fade) * nearK * (1.0 - fogF) * mix(1.0, 0.5, smoothstep(25.0, 80.0, d));
+          float alpha = (core * mix(0.62, 0.5, day) + glow * mix(0.3, 0.14, day)) * fade * sqrt(fade) * nearK * (1.0 - fogF) * mix(1.0, uThin.z, smoothstep(uThin.x, uThin.y, d));
           if (vWake > 0.0) {
             // The slipstream you ride in behind this ghost: a soft sheet of its light over its track,
             // densest just behind it and reaching back under your sled, with chevrons of brighter light
@@ -759,10 +762,17 @@ export class GhostTrails {
     this.mesh = new Mesh(this.geo, this.mat);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 1;
+    this.setCourse(course);
   }
 
   setCourse(course: Course): void {
     this.course = course;
+    // (Round 9's feel pass, the Old Run: every ghost rides the same glaze down the same straights, so their lights ran on
+    // as straight lines converging on the vanishing point, speed lines down the fall line on Low most of all (ART.md 4).
+    // There a ghost's light keeps to the near track and is gone by 55 m. Every other course as it was.)
+    const thin = this.mat.uniforms.uThin.value as Vector3;
+    if (course.kit?.id === 'oldrun') thin.set(16, 55, 0);
+    else thin.set(25, 80, 0.5);
     this.clear();
   }
 

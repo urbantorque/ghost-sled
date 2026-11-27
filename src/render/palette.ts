@@ -269,8 +269,9 @@ export function filmValue(x: number): number {
 
 /** Each biome's signature mountain (massif.ts): a classic snow-capped summit, an ice fang, a
  *  smoking volcano or a symmetrical snow-capped cone. Round 9: or none, 'hills', the Old Run's low wooded ridges round
- *  its lake, with no hero at the track's vanishing point. */
-export type HeroPeak = 'summit' | 'fang' | 'volcano' | 'cone' | 'hills' | 'coast';
+ *  its lake, with no hero at the track's vanishing point; 'coast', Gullhaven's; 'vale', Gablefall's valley's low hills
+ *  in the snowfall (round 9's feel pass: on the Old Run's ridges they stood in its haze as peaks). */
+export type HeroPeak = 'summit' | 'fang' | 'volcano' | 'cone' | 'hills' | 'coast' | 'vale';
 
 const c = (hex: string) => new Color(hex);
 
@@ -394,7 +395,9 @@ function biomeBase(biome: BiomeId): Palette {
       p.accentProp = c('#2E4A4E');
       // (A step deeper each than the sky's pale: a pale range on a pale sky left the third critic no far plane.)
       p.ridge = [c('#C2C0D0'), c('#A2A2BA'), c('#82829E')];
-      p.massif.peak = 'hills';
+      // (Its own low, rounded hills: on the Old Run's ridges, the far plane read to the critics as peaks in the haze, and
+      // ART.md 15 says no peak here.)
+      p.massif.peak = 'vale';
       p.massif.rock = c('#6A6880');
       p.massif.sea = 0;
       p.atmo.banner = 0;
@@ -3224,7 +3227,10 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.hazardDim = 0.88;
       p.lamps = 1.4;
       p.lampAir = 0.05;
-      p.lanternGlow = 0.8;
+      // (Round 9's feel pass: the sled's lantern low. At 0.8 it lit everything within 34 m of the sled (materials.ts
+      // lanternLight), and in a street six metres across that was both rows of fronts washed peach, which the critics read
+      // as the facades lit orange at night, five passes running. The town's own lamps and windows are the light.)
+      p.lanternGlow = 0.28;
       p.giftGlow = 0.45;
       p.ghostGlow = 1.5;
       p.heroRim = 1.4;

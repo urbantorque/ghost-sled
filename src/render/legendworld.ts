@@ -193,6 +193,9 @@ export class LegendWorld {
     const sim = ctx.sim;
     const lg = sim?.legend;
     if (!sim || !lg || ctx.mode !== 'run' || !OWN.has(lg.key)) return;
+    // (Round 9's feel pass: Gullhaven's Herring Lights share the Lantern Fleet's key; its world draws them,
+    // gullhavenlegends.ts. Here they rose as Pinecrest's lanterns from a lake that is not there.)
+    if (lg.key === 'fleet' && ctx.course.kit?.id === 'gullhaven') return;
     const s = ctx.s;
     if (s.z < lg.z0 - REACH_IN || s.z > lg.z1 + REACH_OUT) return;
     const st = sim.lg;

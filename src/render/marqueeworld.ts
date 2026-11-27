@@ -730,7 +730,9 @@ export class MarqueeWorld {
       // the storm's kind, drawn with them); a ribbon is a lane of pools; a sky legend is lanterns rising
       // either side of the place.
       const lg = sim.legend;
-      if (lg && lg.key !== 'rising' && lg.key !== 'lamplighter' && !this.legends.owns(lg.key) && s.z > lg.z0 - SHOW_M && s.z < lg.z1 + 120) {
+      // (Round 9's feel pass: Gullhaven's two legends are its world's, gullhavenlegends.ts.)
+      const ownWorld = c.kit?.id === 'gullhaven' && (lg?.key === 'keeper' || lg?.key === 'fleet');
+      if (lg && lg.key !== 'rising' && lg.key !== 'lamplighter' && !this.legends.owns(lg.key) && !ownWorld && s.z > lg.z0 - SHOW_M && s.z < lg.z1 + 120) {
         const col = LEGEND_COL[lg.key] ?? LIGHT;
         if (lg.kind === 'runner' && lg.path && sim.lg.phase < 3) {
           const head = sim.lg.phase === 2 ? sim.lg.head : lg.z0 + LEGEND_AHEAD;

@@ -2036,6 +2036,8 @@ export class Particles {
 export class Weather {
   readonly points: Points;
   private mat: ShaderMaterial;
+  /** How much of the tier's near layer this fall keeps (configure: 1 but on Gablefall). */
+  private nearK = 1;
   private lastCam = new Vector3();
   private lastT = -1;
   private tmp = new Vector3();
@@ -2084,6 +2086,8 @@ export class Weather {
         uBig: { value: 1 },
         /** The layers' shares of the flakes: below x the near layer, from y on the far one. */
         uLayers: { value: new Vector2(0.06, 0.66) },
+        /** Round 9's feel pass (Gablefall): how far a snowflake is kept from being darker than the air behind it. */
+        uPale: { value: 0 },
       },
       vertexShader: /* glsl */ `
         attribute float aSeed;
@@ -2202,6 +2206,7 @@ export class Weather {
         uniform float uStreak;
         uniform float uKind;
         uniform float uAdd;
+        uniform float uPale;
         varying float vAlpha;
         varying float vSeed;
         varying vec2 vAxis;
@@ -2243,6 +2248,9 @@ export class Weather {
                 col = uColor * (0.75 + 0.6 * vSeed) * (0.6 + 0.9 * vFlip) * (1.0 + 1.2 * smoothstep(0.6, 0.0, d));
               }
             } else if (uKind > 2.5) col = uColor * (0.8 + 0.4 * vSeed);
+            // (Round 9's feel pass, Gablefall: a flake against its pale snow-cloud sky was a step darker than the sky, and the
+            // near ones read to every critic as smudges on the lens. Where the palette asks, never darker than the air.)
+            if (uKind < 0.5) col = mix(col, max(col, uFog * 1.04), uPale);
           }
           if (a < 0.01) discard;
           gl_FragColor = vec4(linearToOutputTexel(vec4(col, 1.0)).rgb * a, a * (1.0 - add));
@@ -2255,8 +2263,12 @@ export class Weather {
   }
 
   /** kind: 0 snow, 1 petals, 2 embers (and ash), 3 wisps. */
-  configure(opts: { density: number; kind: number; color: Color; streak: number; size: number; alpha: number; fall: Vector3; additive: boolean }): void {
+  configure(opts: { density: number; kind: number; color: Color; streak: number; size: number; alpha: number; fall: Vector3; additive: boolean; near?: number; pale?: number }): void {
     const u = this.mat.uniforms;
+    // (Round 9's feel pass: the near layer's share, scaled, and the flakes' paleness, Gablefall's own; every other fall
+    // as it was.)
+    this.nearK = opts.near ?? 1;
+    u.uPale.value = opts.pale ?? 0;
     u.uDensity.value = opts.density;
     u.uKind.value = opts.kind;
     u.uColor.value.copy(opts.color);
@@ -2288,7 +2300,7 @@ export class Weather {
     // Low: the same three layers with less in the far box, each flake a little larger.
     const low = fx.tier === 0;
     this.mat.uniforms.uBig.value = low ? 1.35 : 1;
-    (this.mat.uniforms.uLayers.value as Vector2).set(low ? 0.08 : 0.06, low ? 0.8 : 0.66);
+    (this.mat.uniforms.uLayers.value as Vector2).set((low ? 0.08 : 0.06) * this.nearK, low ? 0.8 : 0.66);
     const t = shared.uTime.value;
     const dt = t - this.lastT;
     if (this.lastT < 0 || dt > 0.25 || dt < 0) camVel.set(0, 0, 0);

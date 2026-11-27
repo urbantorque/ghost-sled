@@ -168,10 +168,11 @@ describe('the composed places', () => {
     for (const m of NAMED.filter((q) => courseFor(q.seed).kit)) {
       const own = getPalette(courseFor(m.seed).biome, Mood.None).massif;
       expect(peaks.has(own.peak), m.id).toBe(false);
-      // (Gablefall's far hills are the Old Run's low ones, but dry and in its own stone, behind its snowfall: its look past
-      // the banks is its world's, the town's other half and the viaduct across the valley, gablefallworld.ts valley.)
+      // (Gablefall's far hills are low and rounded, its own valley's ('vale': on the Old Run's ridges they read as peaks in
+      // its haze, round 9's feel pass), dry and behind its snowfall: its look past the banks is its world's, the town's
+      // other half and the viaduct across the valley, gablefallworld.ts valley.)
       if (courseFor(m.seed).kit?.id === 'gablefall') {
-        expect(own.peak, m.id).toBe('hills');
+        expect(own.peak, m.id).toBe('vale');
         expect(own.sea + own.seaLake + own.seaOcean, m.id).toBe(0);
         continue;
       }

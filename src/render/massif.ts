@@ -36,10 +36,10 @@ const HERO_AZ = 24;
 export const VOLCANO_TOP = 1040;
 /** The sea of clouds' level relative to the lens (metres). */
 const SEA_Y = -330;
-const PEAK_ID: Record<HeroPeak, number> = { summit: 0, fang: 1, volcano: 2, cone: 3, hills: 3, coast: 3 };
+const PEAK_ID: Record<HeroPeak, number> = { summit: 0, fang: 1, volcano: 2, cone: 3, hills: 3, coast: 3, vale: 3 };
 /** How much of each hero's patch is ever above the sea of clouds (see the hero in VERT). */
-// (The Old Run's hills and Gullhaven's coast have no hero: its patch closes to a point and draws nothing.)
-const HERO_REACH: Record<HeroPeak, number> = { summit: 0.86, fang: 0.6, volcano: 0.72, cone: 0.56, hills: 0, coast: 0 };
+// (The Old Run's hills, Gullhaven's coast and Gablefall's vale have no hero: its patch closes to a point and draws nothing.)
+const HERO_REACH: Record<HeroPeak, number> = { summit: 0.86, fang: 0.6, volcano: 0.72, cone: 0.56, hills: 0, coast: 0, vale: 0 };
 /** How far Frostfang's needle curves over at its tip (metres), away from the sun's side. */
 const FANG_LEAN = 360;
 /** How each mountain's ranges stand round its hero: crest height, how sharply the peaks rise out of
@@ -56,6 +56,9 @@ const RANGE: Record<HeroPeak, [number, number, number, number]> = {
   hills: [0.34, 0.75, 1.9, 0.2],
   // (Round 9: Gullhaven's coast, massif.ts VERT's coast: the moors and the hills behind them, broad and low.)
   coast: [0.4, 1.1, 1.7, 0.3],
+  // (Round 9's feel pass: Gablefall's valley, low rounded hills a little over the lens's level, long and soft, the finer
+  // octaves faint. On the Old Run's ridges its far plane read to the critics as peaks in the snowfall's haze.)
+  vale: [0.06, 0.38, 3.2, 0.08],
 };
 
 /** 2D simplex noise (Ashima Arts / Stefan Gustavson, MIT), shared by the panorama, the sky dome's
@@ -612,6 +615,12 @@ const FRAG = /* glsl */ `
     // drew icicle teeth on a frosted cake, the second critic.)
     float hold = uCoast > 0.5 ? 0.62 : 0.36 - 0.12 * smoothstep(snowLine, snowLine + 600.0, vPos.y);
     float snow = smoothstep(hold, hold + 0.06, slope + n2 * 0.08 + n1 * 0.04) * smoothstep(snowLine - 12.0, snowLine + 12.0, vPos.y);
+    // (Round 9's feel pass, Gullhaven's coast: the sea cliffs, under the moor's edge 140 m over the sea, are one flat
+    // value of bare rock. Far off, the panorama's facets span a cliff from its top to its foot, gentle enough to take snow
+    // on their upper half and each lit on its own step: pale teeth and stripes down every cliff, the frosted cake the
+    // critics kept finding. A gentle low moor keeps its snow and its light.)
+    float cliffK = uCoast > 0.5 ? (1.0 - smoothstep(uSeaY + 110.0, uSeaY + 135.0, vPos.y)) * (1.0 - smoothstep(0.78, 0.92, slope)) : 0.0;
+    snow *= 1.0 - cliffK;
     float ice = 0.0;
     float crater = 0.0;
     if (layer > 2.5) {
@@ -649,6 +658,7 @@ const FRAG = /* glsl */ `
     float wrap = smoothstep(-0.25, 0.6, dot(N, uLight));
     // Stepped, the volcano's bare ash broke into pale radial slabs along its gullies.
     float lit = uFlow > 0.0 && uPeak > 1.5 && uPeak < 2.5 && layer > 2.5 ? wrap * 0.6 : steps3(wrap);
+    lit = mix(lit, 0.34, cliffK);
     // Alpenglow: as the sun sinks the shadow climbs the ranges, the valleys go to shade first and the
     // snow still in the light takes the glow.
     float above = smoothstep(uGlowLine - 40.0, uGlowLine + 40.0, vPos.y + n1 * 70.0);
@@ -1050,7 +1060,7 @@ export class Massif {
   }
 
   /** The hero summit's height (metres from the lens's level), where its banner leaves the ridge. */
-  private static readonly SUMMIT_Y: Record<HeroPeak, number> = { summit: 1500, fang: 2100, volcano: VOLCANO_TOP - 20, cone: 1300, hills: 400, coast: 400 };
+  private static readonly SUMMIT_Y: Record<HeroPeak, number> = { summit: 1500, fang: 2100, volcano: VOLCANO_TOP - 20, cone: 1300, hills: 400, coast: 400, vale: 250 };
 
   private placePlume(): void {
     const show = this.tier !== 'low' && this.banner > 0.01;

@@ -18,6 +18,7 @@ import { Mood } from '../sim/chaos';
 import { LOW_BOLD, type StillFigure, crowdColors, stillCrowd } from './crowd';
 import type { Particles } from './particles';
 import { GullhavenPieces } from './gullhavenpieces';
+import { GullhavenLegends } from './gullhavenlegends';
 import { momentPlays } from '../sim/moments';
 import type { Detail } from './postfx/tiers';
 import { reduced } from '../ui/motion';
@@ -441,6 +442,8 @@ export class GullhavenWorld {
   /** The three set pieces' props (gullhavenpieces.ts): the lighthouse's marks and its beam on the path, the Great Geo's
    *  far line, the stacks' gaps on the shore road. */
   private readonly pieces: GullhavenPieces;
+  /** Its two legends, the Beacon Keeper and the Herring Lights (gullhavenlegends.ts, round 9's feel pass). */
+  private readonly legends = new GullhavenLegends();
 
   constructor(particles: Particles | null, sea: SeaUniforms) {
     this.root.name = 'gullhaven-world';
@@ -452,7 +455,9 @@ export class GullhavenWorld {
     // the clefts' walls took the snow's pale shade and read as white posts.)
     // (Not the stone shader: it lays snow on whatever faces up, and from the cliff top a stack is all ledges and crown;
     // its beds are the form's own three values, rockforms.ts.)
-    this.rockMat = makeToonMaterial({ coolShade: 0.12, doubleSided: true, rim: 0.12 });
+    // (Round 9's feel pass: and it keeps the sea's clear air far under the cliff, materials.ts DEEP_CLEAR. Fogged to the
+    // sky's pale air a thousand metres down, the stacks under the Great Geo and on the title still read as posts.)
+    this.rockMat = makeToonMaterial({ coolShade: 0.12, doubleSided: true, rim: 0.12, deepClear: true });
     // (The fence's timber is pale and weathered, its shade its own: with a light of its own it read to the second critic
     // as lit from nowhere, and orange under the moon; dark against the low sun its posts rake their shadows to the lens.)
     this.fenceMat = makeToonMaterial({ coolShade: 0.3 });
@@ -492,6 +497,7 @@ export class GullhavenWorld {
 
   reset(): void {
     this.pieces.reset();
+    this.legends.reset();
   }
 
   /** The set pieces' named moments this frame (a run's only): a mark ridden in the beam, a gap threaded, the Great Geo
@@ -562,6 +568,7 @@ export class GullhavenWorld {
     // (The set pieces' props are built from the plays on the first frame: a run's own, or the course's on the title.)
     this.pieces.lantern = this.light;
     this.root.add(this.pieces.root);
+    this.root.add(this.legends.root);
   }
 
   // ------------------------------------------------------------------ the fence
@@ -1448,7 +1455,7 @@ export class GullhavenWorld {
 
   // ------------------------------------------------------------------ each frame
 
-  update(_dt: number, time: number, mode: ViewMode, s: Snap, sim: Sim | null, camera: PerspectiveCamera, p: Palette): void {
+  update(dt: number, time: number, mode: ViewMode, s: Snap, sim: Sim | null, camera: PerspectiveCamera, p: Palette): void {
     if (!this.course) return;
     const live = reduced() ? 0 : 1;
     const low = this.detail === 'low';
@@ -1484,6 +1491,8 @@ export class GullhavenWorld {
     if (this.fire && Math.abs(this.fire[2] - s.z) < 220) pushLocalLight(this.fire[0], this.fire[1], -this.fire[2], FIRE_LIN.r, FIRE_LIN.g, FIRE_LIN.b, 22, 0.6 * (0.85 + 0.15 * Math.sin(time * 9 * live)));
     if (this.light && Math.abs(this.light[2] - s.z) < 400) pushLocalLight(this.light[0], this.light[1], -this.light[2], 1, 0.97, 0.9, 30, 0.3 + 0.5 * Math.min(1, lampK));
     this.pieces.update(this.course, time, s, sim, mode === 'run', low, reduced(), lampK);
+    const course = this.course;
+    this.legends.update(course, time, dt, s, sim, mode === 'run', low, reduced(), this.sea, (z) => shoreX(course, z, this.sea));
     if (lit <= 0.02) return;
     for (const [x, y, z, r] of this.lamps) if (z > s.z - 30 && z < s.z + 160) pushLocalLight(x, y, -z, LAMP_LIN.r, LAMP_LIN.g, LAMP_LIN.b, r, 0.5 * Math.min(1, lit));
   }
